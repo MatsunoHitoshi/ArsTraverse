@@ -158,6 +158,7 @@ export const migrationRouter = createTRPCRouter({
           graphData: {
             not: "null",
           },
+          isDeleted: false,
         },
       });
 
@@ -179,6 +180,22 @@ export const migrationRouter = createTRPCRouter({
             );
             console.log(
               `Skipping TopicSpace ${topicSpace.id} due to invalid data format.`,
+            );
+            continue;
+          }
+
+          const nodeData = await ctx.db.graphNode.findMany({
+            where: {
+              topicSpaceId: topicSpace.id,
+            },
+          });
+
+          if (nodeData.length > 0) {
+            logs.push(
+              `Skipping TopicSpace ${topicSpace.id} due to existing nodes.`,
+            );
+            console.log(
+              `Skipping TopicSpace ${topicSpace.id} due to existing nodes.`,
             );
             continue;
           }
