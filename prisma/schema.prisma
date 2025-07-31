@@ -131,6 +131,8 @@ model GraphNode {
   relationshipsFrom GraphRelationship[] @relation("fromNode")
   relationshipsTo   GraphRelationship[] @relation("toNode")
 
+  createdAt DateTime? @default(now())
+  updatedAt DateTime? @updatedAt
   deletedAt DateTime?
 }
 
@@ -150,6 +152,9 @@ model GraphRelationship {
   toNode     GraphNode @relation("toNode", fields: [toNodeId], references: [id], onDelete: Cascade)
   toNodeId   String
 
+
+  createdAt DateTime? @default(now())
+  updatedAt DateTime? @updatedAt
   deletedAt DateTime?
 }
 

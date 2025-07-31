@@ -1,5 +1,31 @@
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
-import type { GraphDocument } from "../kg";
+import type { PropertyTypeForFrontend } from "@/app/const/types";
+
+export type PrevNodeType = {
+  id: number;
+  name: string;
+  label: string;
+  properties: PropertyTypeForFrontend;
+  neighborLinkCount?: number;
+  visible?: boolean;
+  clustered?: { x: number; y: number };
+  nodeColor?: string;
+};
+
+export type PrevRelationshipType = {
+  id: number;
+  sourceName: string;
+  sourceId: number;
+  type: string;
+  targetName: string;
+  targetId: number;
+  properties: PropertyTypeForFrontend;
+};
+
+export type PrevGraphDocument = {
+  nodes: PrevNodeType[];
+  relationships: PrevRelationshipType[];
+};
 
 export const migrationRouter = createTRPCRouter({
   unifyGraphData: publicProcedure.mutation(async ({ ctx }) => {
@@ -19,7 +45,7 @@ export const migrationRouter = createTRPCRouter({
       logs.push(`Found ${documentGraphs.length} DocumentGraphs to migrate.`);
 
       for (const docGraph of documentGraphs) {
-        const graphData = docGraph.dataJson as GraphDocument;
+        const graphData = docGraph.dataJson as PrevGraphDocument;
         if (!graphData?.nodes || !graphData?.relationships) {
           logs.push(
             `Skipping DocumentGraph ${docGraph.id} due to invalid data format.`,
@@ -39,6 +65,8 @@ export const migrationRouter = createTRPCRouter({
                   label: node.label,
                   properties: node.properties ?? {},
                   documentGraphId: docGraph.id,
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
                 },
               });
               oldToNewNodeIdMap.set(node.id, newNode.id);
@@ -61,6 +89,8 @@ export const migrationRouter = createTRPCRouter({
                   fromNodeId: sourceId,
                   toNodeId: targetId,
                   documentGraphId: docGraph.id,
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
                 },
               });
             }
@@ -87,7 +117,7 @@ export const migrationRouter = createTRPCRouter({
       logs.push(`Found ${topicSpaces.length} TopicSpaces to migrate.`);
 
       for (const topicSpace of topicSpaces) {
-        const graphData = topicSpace.graphData as GraphDocument;
+        const graphData = topicSpace.graphData as PrevGraphDocument;
         if (!graphData?.nodes || !graphData?.relationships) {
           logs.push(
             `Skipping TopicSpace ${topicSpace.id} due to invalid data format.`,
@@ -107,6 +137,8 @@ export const migrationRouter = createTRPCRouter({
                   label: node.label,
                   properties: node.properties ?? {},
                   topicSpaceId: topicSpace.id,
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
                 },
               });
               oldToNewNodeIdMap.set(node.id, newNode.id);
@@ -129,6 +161,8 @@ export const migrationRouter = createTRPCRouter({
                   fromNodeId: sourceId,
                   toNodeId: targetId,
                   topicSpaceId: topicSpace.id,
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
                 },
               });
             }
@@ -150,7 +184,6 @@ export const migrationRouter = createTRPCRouter({
         error instanceof Error ? error.message : String(error);
       logs.push("An unexpected error occurred during the migration process.");
       logs.push(errorMessage);
-      // tRPCではエラーを投げるのが一般的
       throw new Error(logs.join("\n"));
     }
   }),

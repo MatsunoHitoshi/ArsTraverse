@@ -1,0 +1,7 @@
+-- AlterTable
+ALTER TABLE "GraphNode" ADD COLUMN     "createdAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "updatedAt" TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE "GraphRelationship" ADD COLUMN     "createdAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "updatedAt" TIMESTAMP(3);

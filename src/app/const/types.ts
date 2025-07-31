@@ -59,3 +59,35 @@ export const EntityTypeMap = {
   NODE: "ノード",
   EDGE: "エッジ",
 };
+
+export type GraphDocumentForFrontend = {
+  nodes: NodeTypeForFrontend[];
+  relationships: RelationshipTypeForFrontend[];
+};
+
+export type NodeTypeForFrontend = {
+  id: string;
+  name: string;
+  label: string;
+  properties: PropertyTypeForFrontend;
+  topicSpaceId?: string;
+  documentGraphId?: string;
+  neighborLinkCount?: number;
+  visible?: boolean;
+  clustered?: { x: number; y: number };
+  nodeColor?: string;
+};
+
+export type RelationshipTypeForFrontend = {
+  id: string;
+  type: string;
+  properties: PropertyTypeForFrontend;
+  sourceId: string;
+  targetId: string;
+  topicSpaceId?: string;
+  documentGraphId?: string;
+};
+
+export type PropertyTypeForFrontend = {
+  [K in string]: string;
+};
