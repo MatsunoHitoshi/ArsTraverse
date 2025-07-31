@@ -263,7 +263,7 @@ export const migrationRouter = createTRPCRouter({
                 );
               },
               {
-                timeout: 30000, // 30秒のタイムアウト
+                timeout: 50000, // 50秒のタイムアウト
               },
             );
           } catch (error) {
