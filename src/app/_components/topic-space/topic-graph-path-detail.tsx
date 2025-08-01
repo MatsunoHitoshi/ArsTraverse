@@ -1,7 +1,7 @@
 "use client";
 import { api } from "@/trpc/react";
 import { TabsContainer } from "../tab/tab";
-import type { GraphDocument } from "@/server/api/routers/kg";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 import type { DocumentResponse } from "@/app/const/types";
 import { useEffect, useState } from "react";
 import { TopicGraphDocumentList } from "../list/topic-graph-document-list";
@@ -26,15 +26,15 @@ export const TopicGraphPathDetail = ({
   });
   const [selectedDocumentId, setSelectedDocumentId] = useState<string>("");
   const [selectedGraphData, setSelectedGraphData] =
-    useState<GraphDocument | null>(null);
+    useState<GraphDocumentForFrontend | null>(null);
   const [nodeSearchQuery, setNodeSearchQuery] = useState<string>("");
-  const [pathData, setPathData] = useState<GraphDocument>();
+  const [pathData, setPathData] = useState<GraphDocumentForFrontend>();
 
   useEffect(() => {
     setSelectedGraphData(
       (topicSpace?.sourceDocuments.find((document) => {
         return document.id === selectedDocumentId;
-      })?.graph?.dataJson as GraphDocument) ?? null,
+      })?.graph?.dataJson as GraphDocumentForFrontend) ?? null,
     );
   }, [selectedDocumentId, topicSpace]);
 
@@ -66,9 +66,9 @@ export const TopicGraphPathDetail = ({
           </div>
           <Toolbar setNodeSearchQuery={setNodeSearchQuery} />
           <RelationPathSearch
-            defaultStartNodeId={Number(startId)}
-            defaultEndNodeId={Number(endId)}
-            graphData={topicSpace.graphData as GraphDocument}
+            defaultStartNodeId={startId}
+            defaultEndNodeId={endId}
+            graphData={topicSpace.graphData as GraphDocumentForFrontend}
             setPathData={setPathData}
             pathData={pathData}
           />
@@ -85,7 +85,7 @@ export const TopicGraphPathDetail = ({
           </div>
 
           <GraphSummaryGenerator
-            graphData={topicSpace.graphData as GraphDocument}
+            graphData={topicSpace.graphData as GraphDocumentForFrontend}
             defaultStartNodeId={startId}
             defaultEndNodeId={endId}
           />
@@ -94,7 +94,7 @@ export const TopicGraphPathDetail = ({
         <div className="col-span-2 h-full overflow-scroll">
           {topicSpace.graphData ? (
             <MultiDocumentGraphDetailViewer
-              graphDocument={topicSpace.graphData as GraphDocument}
+              graphDocument={topicSpace.graphData as GraphDocumentForFrontend}
               selectedGraphData={selectedGraphData ?? undefined}
               selectedPathData={pathData ?? undefined}
               topicSpaceId={id}

@@ -1,8 +1,9 @@
-import type { GraphDocument } from "@/server/api/routers/kg";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { Modal } from "./modal";
 import { Button } from "../button/button";
 import { Input } from "@headlessui/react";
 import clsx from "clsx";
+import { getNodeByIdForFrontend } from "@/app/_utils/kg/filter";
 
 export const NodeLinkEditModal = ({
   isOpen,
@@ -14,11 +15,13 @@ export const NodeLinkEditModal = ({
 }: {
   isOpen: boolean;
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  graphDocument: GraphDocument | null;
-  setGraphDocument: React.Dispatch<React.SetStateAction<GraphDocument | null>>;
-  additionalGraph: GraphDocument | undefined;
+  graphDocument: GraphDocumentForFrontend | null;
+  setGraphDocument: React.Dispatch<
+    React.SetStateAction<GraphDocumentForFrontend | null>
+  >;
+  additionalGraph: GraphDocumentForFrontend | undefined;
   setAdditionalGraph: React.Dispatch<
-    React.SetStateAction<GraphDocument | undefined>
+    React.SetStateAction<GraphDocumentForFrontend | undefined>
   >;
 }) => {
   return (
@@ -106,7 +109,12 @@ export const NodeLinkEditModal = ({
                   className="flex flex-row items-center rounded-xl bg-slate-900 p-2"
                 >
                   <div className="rounded-xl border border-slate-500 p-2 text-xs text-gray-400">
-                    {relationship.sourceName}
+                    {
+                      getNodeByIdForFrontend(
+                        relationship.sourceId,
+                        graphDocument?.nodes ?? [],
+                      )?.name
+                    }
                   </div>
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -161,7 +169,12 @@ export const NodeLinkEditModal = ({
                     />
                   </svg>
                   <div className="rounded-xl border border-slate-700 bg-slate-700 p-2 text-xs text-gray-400">
-                    {relationship.targetName}
+                    {
+                      getNodeByIdForFrontend(relationship.targetId, [
+                        ...(graphDocument?.nodes ?? []),
+                        ...(additionalGraph?.nodes ?? []),
+                      ])?.name
+                    }
                   </div>
                 </div>
               ))}
@@ -187,7 +200,7 @@ export const NodeLinkEditModal = ({
           type="button"
           className="text-sm"
           onClick={() => {
-            const newGraphDocument: GraphDocument = {
+            const newGraphDocument: GraphDocumentForFrontend = {
               nodes: [
                 ...(graphDocument?.nodes ?? []),
                 ...(additionalGraph?.nodes ?? []),

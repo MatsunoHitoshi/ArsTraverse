@@ -3,32 +3,37 @@ import { z } from "zod";
 
 import { createTRPCRouter, publicProcedure } from "../trpc";
 import OpenAI from "openai";
-import type { GraphDocument } from "./kg";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 import type {
-  NodeType,
-  RelationshipType,
-} from "@/app/_utils/kg/get-nodes-and-relationships-from-result";
+  NodeTypeForFrontend,
+  RelationshipTypeForFrontend,
+} from "@/app/const/types";
+import {
+  formGraphDataForFrontend,
+  formNodeDataForFrontend,
+  formRelationshipDataForFrontend,
+} from "@/app/_utils/kg/frontend-properties";
 
-function isGraphDocument(data: unknown): data is GraphDocument {
+function isGraphDocument(data: unknown): data is GraphDocumentForFrontend {
   return (
     typeof data === "object" &&
     data !== null &&
     "nodes" in data &&
     "relationships" in data &&
-    Array.isArray((data as GraphDocument).nodes) &&
-    Array.isArray((data as GraphDocument).relationships)
+    Array.isArray((data as GraphDocumentForFrontend).nodes) &&
+    Array.isArray((data as GraphDocumentForFrontend).relationships)
   );
 }
 
 // 出力データ構造のイメージ
 interface ContextKnowledge {
   summary: string;
-  nodeDetails: NodeType;
+  nodeDetails: NodeTypeForFrontend;
   relatedNodes: {
-    relationship: RelationshipType;
-    node: NodeType;
+    relationship: RelationshipTypeForFrontend;
+    node: NodeTypeForFrontend;
   }[];
-  graphSubset: GraphDocument;
+  graphSubset: GraphDocumentForFrontend;
 }
 
 export const mcpRouter = createTRPCRouter({
@@ -48,6 +53,10 @@ export const mcpRouter = createTRPCRouter({
           id: topicSpaceId,
           isDeleted: false,
         },
+        include: {
+          graphNodes: true,
+          graphRelationships: true,
+        },
       });
 
       if (!topicSpace) {
@@ -57,11 +66,14 @@ export const mcpRouter = createTRPCRouter({
         });
       }
 
-      if (!isGraphDocument(topicSpace.graphData)) {
+      const graphData = {
+        nodes: topicSpace.graphNodes,
+        relationships: topicSpace.graphRelationships,
+      };
+
+      if (!isGraphDocument(graphData)) {
         return []; // グラフデータがない場合は空配列を返す
       }
-
-      const graphData = topicSpace.graphData;
 
       const matchedNodes = graphData.nodes.filter((node) => {
         // 名前の一致をチェック
@@ -103,6 +115,10 @@ export const mcpRouter = createTRPCRouter({
           id: topicSpaceId,
           isDeleted: false,
         },
+        include: {
+          graphNodes: true,
+          graphRelationships: true,
+        },
       });
 
       if (!topicSpace) {
@@ -112,14 +128,17 @@ export const mcpRouter = createTRPCRouter({
         });
       }
 
-      if (!isGraphDocument(topicSpace.graphData)) {
+      const graphData = {
+        nodes: topicSpace.graphNodes,
+        relationships: topicSpace.graphRelationships,
+      };
+
+      if (!isGraphDocument(graphData)) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Graph data is missing or invalid in the TopicSpace.",
         });
       }
-
-      const graphData = topicSpace.graphData;
 
       // 3. グラフデータを処理
       const mainNode = graphData.nodes.find((n) => String(n.id) === nodeId);
@@ -131,27 +150,22 @@ export const mcpRouter = createTRPCRouter({
       }
 
       const relatedRelationships = graphData.relationships.filter(
-        (l) => String(l.sourceId) === nodeId || String(l.targetId) === nodeId,
+        (l) => String(l.fromNodeId) === nodeId || String(l.toNodeId) === nodeId,
       );
 
       const relatedNodeIds = new Set(
         relatedRelationships.map((l) =>
-          String(l.sourceId) === nodeId ? l.targetId : l.sourceId,
+          String(l.fromNodeId) === nodeId ? l.toNodeId : l.fromNodeId,
         ),
       );
 
-      const relatedNodesWithDetails = Array.from(relatedNodeIds)
-        .map((id) => {
-          const node = graphData.nodes.find((n) => n.id === id);
-          const relationship = relatedRelationships.find(
-            (l) => l.sourceId === id || l.targetId === id,
-          );
-          return { node, relationship };
-        })
-        .filter(
-          (item): item is { node: NodeType; relationship: RelationshipType } =>
-            !!item.node && !!item.relationship,
+      const relatedNodesWithDetails = Array.from(relatedNodeIds).map((id) => {
+        const node = graphData.nodes.find((n) => n.id === id);
+        const relationship = relatedRelationships.find(
+          (l) => l.fromNodeId === id || l.toNodeId === id,
         );
+        return { node, relationship };
+      });
 
       const responseData = {
         nodeDetails: mainNode,
@@ -174,12 +188,12 @@ export const mcpRouter = createTRPCRouter({
       context += "関連情報:\n";
       responseData.relatedNodes.forEach(({ relationship }) => {
         const sourceNode = responseData.graphSubset.nodes.find(
-          (n) => n.id === relationship.sourceId,
+          (n) => n?.id === relationship?.fromNodeId,
         );
         const targetNode = responseData.graphSubset.nodes.find(
-          (n) => n.id === relationship.targetId,
+          (n) => n?.id === relationship?.toNodeId,
         );
-        context += `- (${sourceNode?.name})-[${relationship.type}]->(${targetNode?.name})\n`;
+        context += `- (${sourceNode?.name})-[${relationship?.type}]->(${targetNode?.name})\n`;
       });
 
       const completion = await openai.chat.completions.create({
@@ -205,9 +219,19 @@ export const mcpRouter = createTRPCRouter({
       // 5. 指定された形式で返却
       const result: ContextKnowledge = {
         summary,
-        nodeDetails: responseData.nodeDetails,
-        relatedNodes: responseData.relatedNodes,
-        graphSubset: responseData.graphSubset,
+        nodeDetails: formNodeDataForFrontend(responseData.nodeDetails),
+        relatedNodes: responseData.relatedNodes
+          .filter(({ node, relationship }) => node && relationship)
+          .map(({ node, relationship }) => ({
+            node: formNodeDataForFrontend(node!),
+            relationship: formRelationshipDataForFrontend(relationship!),
+          })),
+        graphSubset: formGraphDataForFrontend({
+          ...responseData.graphSubset,
+          nodes: responseData.graphSubset.nodes.filter(
+            (node): node is NonNullable<typeof node> => node !== undefined,
+          ),
+        }),
       };
 
       return result;

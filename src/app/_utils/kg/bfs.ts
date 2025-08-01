@@ -1,61 +1,42 @@
-import type { GraphDocument } from "@/server/api/routers/kg";
-import type {
-  NodeType,
-  RelationshipType,
-} from "./get-nodes-and-relationships-from-result";
 import { getNeighborNodes } from "./get-tree-layout-data";
+import type {
+  GraphDocumentForFrontend,
+  NodeTypeForFrontend,
+  RelationshipTypeForFrontend,
+} from "@/app/const/types";
 
 export const nodePathSearch = (
-  graphData: GraphDocument,
-  startId: number,
-  endId: number,
+  graph: GraphDocumentForFrontend,
+  startId: string,
+  endId: string,
   cutOff?: number,
 ) => {
-  const isReached = (path: GraphDocument) => {
+  const isReached = (path: {
+    nodes: NodeTypeForFrontend[];
+    relationships: RelationshipTypeForFrontend[];
+  }) => {
     const firstNode = path.nodes[0];
     const lastNode = path.nodes[path.nodes.length - 1];
     return firstNode?.id === startId && lastNode?.id === endId;
   };
-  // const directionalResult = directionalBfs(graphData, startId, endId);
-  // console.log("directional:", directionalResult);
-  const nonDirectionalResult = nonDirectionalBfs(
-    graphData,
-    startId,
-    endId,
-    cutOff,
-  );
-  console.log("nonDirectional:", nonDirectionalResult);
+
+  const nonDirectionalResult = nonDirectionalBfs(graph, startId, endId, cutOff);
 
   return isReached(nonDirectionalResult)
     ? nonDirectionalResult
     : { nodes: [], relationships: [] };
-
-  // if (isReached(directionalResult) && isReached(nonDirectionalResult)) {
-  //   return directionalResult.nodes.length <= nonDirectionalResult.nodes.length
-  //     ? directionalResult
-  //     : nonDirectionalResult;
-  // } else if (
-  //   !isReached(directionalResult) &&
-  //   !isReached(nonDirectionalResult)
-  // ) {
-  //   return { nodes: [], relationships: [] };
-  // } else {
-  //   return isReached(directionalResult)
-  //     ? directionalResult
-  //     : nonDirectionalResult;
-  // }
 };
 
 const nonDirectionalBfs = (
-  graphData: GraphDocument,
-  startId: number,
-  endId: number,
+  graph: GraphDocumentForFrontend,
+  startId: string,
+  endId: string,
   cutOff?: number,
 ) => {
-  const visited = new Set<number>();
-  const queue: number[][] = [[startId]];
-  const nodes: NodeType[] = [];
-  const endNode = graphData.nodes.find((n) => n.id === endId);
+  const visited = new Set<string>();
+  const queue: string[][] = [[startId]];
+  const nodes: NodeTypeForFrontend[] = [];
+  const endNode = graph.nodes.find((n) => n.id === endId);
 
   while (queue.length > 0) {
     const path = queue.shift();
@@ -64,16 +45,16 @@ const nonDirectionalBfs = (
     const node = path[path.length - 1]!;
     if (!visited.has(node)) {
       visited.add(node);
-      const currentNode = graphData.nodes.find((n) => n.id === node);
+      const currentNode = graph.nodes.find((n) => n.id === node);
       if (currentNode) {
         nodes.push(currentNode);
         if (node === endId) {
-          return getOptimalPath(graphData, nodes);
+          return getOptimalPath(graph, nodes);
         }
-        const neighbors = graphData.relationships
+        const neighbors = graph.relationships
           .filter((r) => r.sourceId === node || r.targetId === node)
           .map((r) => (r.sourceId === node ? r.targetId : r.sourceId))
-          .filter((id): id is number => id !== undefined);
+          .filter((id): id is string => id !== undefined);
         if (cutOff && path.length > cutOff) {
           return { nodes: [], relationships: [] };
         }
@@ -81,7 +62,7 @@ const nonDirectionalBfs = (
         if (neighbors.includes(endId) && endNode) {
           const nodesEnd = nodes.concat([endNode]);
 
-          return getOptimalPath(graphData, nodesEnd);
+          return getOptimalPath(graph, nodesEnd);
         }
         for (const neighbor of neighbors) {
           queue.push([...path, neighbor]);
@@ -89,64 +70,25 @@ const nonDirectionalBfs = (
       }
     }
   }
-  return getOptimalPath(graphData, nodes);
+  return getOptimalPath(graph, nodes);
 };
 
-// const directionalBfs = (
-//   graphData: GraphDocument,
-//   startId: number,
-//   endId: number,
-// ) => {
-//   const visited = new Set<number>();
-//   const queue: number[][] = [[startId]];
-//   const nodes: NodeType[] = [];
-//   const endNode = graphData.nodes.find((n) => n.id === endId);
-
-//   while (queue.length > 0) {
-//     const path = queue.shift();
-//     if (!path) continue;
-
-//     const node = path[path.length - 1]!;
-//     if (!visited.has(node)) {
-//       visited.add(node);
-//       const currentNode = graphData.nodes.find((n) => n.id === node);
-//       if (currentNode) {
-//         nodes.push(currentNode);
-//         if (node === endId) {
-//           return getOptimalPath(graphData, nodes);
-//         }
-
-//         const neighbors = graphData.relationships
-//           .filter((r) => r.sourceId === node)
-//           .map((r) => r.targetId)
-//           .filter((id): id is number => id !== undefined);
-
-//         for (const neighbor of neighbors) {
-//           queue.push([...path, neighbor]);
-//         }
-//         if (neighbors.includes(endId) && endNode) {
-//           const nodesEnd = nodes.concat([endNode]);
-//           return getOptimalPath(graphData, nodesEnd);
-//         }
-//       }
-//     }
-//   }
-//   return getOptimalPath(graphData, nodes);
-// };
-
-const getOptimalPath = (graphData: GraphDocument, nodes: NodeType[]) => {
+const getOptimalPath = (
+  graph: GraphDocumentForFrontend,
+  nodes: NodeTypeForFrontend[],
+) => {
   const optimalPath = {
-    nodes: [] as NodeType[],
-    relationships: [] as RelationshipType[],
+    nodes: [] as NodeTypeForFrontend[],
+    relationships: [] as RelationshipTypeForFrontend[],
   };
-  const shortestPath = [nodes[nodes.length - 1]] as NodeType[];
+  const shortestPath = [nodes[nodes.length - 1]] as NodeTypeForFrontend[];
   const reverseNodes = nodes.reverse();
   reverseNodes.forEach((node, index) => {
     if (node.id !== shortestPath[0]?.id) {
       console.log("skip");
     } else {
       const reachedNodes = reverseNodes.slice(index + 1);
-      const neighbors = getNeighborNodes(graphData, node.id, "BOTH");
+      const neighbors = getNeighborNodes(graph, node.id, "BOTH");
       const pathNode = neighbors.find((neighbor) => {
         return reachedNodes.some((reached) => {
           return reached.id === neighbor.id;
@@ -160,19 +102,19 @@ const getOptimalPath = (graphData: GraphDocument, nodes: NodeType[]) => {
     }
   });
   optimalPath.nodes = shortestPath;
-  optimalPath.relationships = getPathRelationships(graphData, shortestPath);
+  optimalPath.relationships = getPathRelationships(graph, shortestPath);
   return optimalPath;
 };
 
 const getPathRelationships = (
-  graphData: GraphDocument,
-  pathNodes: NodeType[],
+  graph: GraphDocumentForFrontend,
+  pathNodes: NodeTypeForFrontend[],
 ) => {
-  const pathRelationships = [] as RelationshipType[];
+  const pathRelationships = [] as RelationshipTypeForFrontend[];
   pathNodes.forEach((node, index) => {
     if (index !== 0) {
       const prevNode = pathNodes[index - 1];
-      const edges = graphData.relationships.filter((relationship) => {
+      const edges = graph.relationships.filter((relationship) => {
         return (
           (relationship.sourceId === node.id &&
             relationship.targetId === prevNode?.id) ||

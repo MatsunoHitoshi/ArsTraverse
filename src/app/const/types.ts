@@ -7,10 +7,6 @@ import type {
   Activity,
 } from "@prisma/client";
 import type { SimulationNodeDatum, SimulationLinkDatum } from "d3";
-import type {
-  NodeType,
-  RelationshipType,
-} from "@/app/_utils/kg/get-nodes-and-relationships-from-result";
 
 export interface TopicSpaceResponse extends TopicSpace {
   sourceDocuments: DocumentResponseWithGraphData[] | null;
@@ -19,8 +15,12 @@ export interface TopicSpaceResponse extends TopicSpace {
   tags?: Tag[];
 }
 
+export interface DocumentGraphResponse extends DocumentGraph {
+  dataJson: GraphDocumentForFrontend;
+}
+
 export interface DocumentResponseWithGraphData extends SourceDocument {
-  graph?: DocumentGraph | null;
+  graph?: DocumentGraphResponse | null;
   topicSpaces?: TopicSpaceResponse[];
   tags?: Tag[];
 }
@@ -30,13 +30,15 @@ export interface DocumentResponse extends SourceDocument {
   tags?: Tag[];
 }
 
-export interface CustomNodeType extends SimulationNodeDatum, NodeType {}
+export interface CustomNodeType
+  extends SimulationNodeDatum,
+    NodeTypeForFrontend {}
 export interface CustomLinkType
   extends SimulationLinkDatum<CustomNodeType>,
-    RelationshipType {}
+    RelationshipTypeForFrontend {}
 
 export type TreeNode = {
-  id: number;
+  id: string;
   name: string;
   children?: TreeNode[];
   label?: string;

@@ -1,6 +1,6 @@
 import { NodeLinkList } from "@/app/_components/list/node-link-list";
 import { useRef, useState } from "react";
-import type { GraphDocument } from "@/server/api/routers/kg";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 import type { CustomNodeType, CustomLinkType } from "@/app/const/types";
 import { D3ForceGraph } from "@/app/_components/d3/force/graph";
 import { GraphInfoPanel } from "@/app/_components/d3/force/graph-info-panel";
@@ -15,7 +15,7 @@ export const MultiDocumentGraphViewer = ({
   topicSpaceId,
   refetch,
 }: {
-  graphDocument: GraphDocument;
+  graphDocument: GraphDocumentForFrontend;
   topicSpaceId: string;
   refetch: () => void;
 }) => {

@@ -5,7 +5,7 @@ import { Button } from "../button/button";
 import { storageUtils } from "@/app/_utils/supabase/supabase";
 import { BUCKETS } from "@/app/_utils/supabase/const";
 import { api } from "@/trpc/react";
-import type { GraphDocument } from "@/server/api/routers/kg";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { Switch } from "@headlessui/react";
 import { Textarea } from "../textarea";
 import type { Document } from "@langchain/core/documents";
@@ -14,7 +14,9 @@ import { DocumentUploadTipsModal } from "../tips/document-upload-tips-modal";
 type DocumentFormProps = {
   file: File | null;
   setFile: React.Dispatch<SetStateAction<File | null>>;
-  setGraphDocument: React.Dispatch<SetStateAction<GraphDocument | null>>;
+  setGraphDocument: React.Dispatch<
+    SetStateAction<GraphDocumentForFrontend | null>
+  >;
   setDocumentUrl: React.Dispatch<SetStateAction<string | null>>;
   documentUrl: string | null;
 };
@@ -48,7 +50,9 @@ export const DocumentForm = ({
       {
         onSuccess: (res) => {
           console.log("res client", res);
-          setGraphDocument(res.data.graph);
+          if (res.data.graph) {
+            setGraphDocument(res.data.graph);
+          }
           setIsProcessing(false);
         },
         onError: (e) => {

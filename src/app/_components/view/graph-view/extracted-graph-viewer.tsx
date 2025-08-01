@@ -2,10 +2,9 @@
 import { useEffect, useRef, useState } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { DocumentForm } from "@/app/_components/form/document-form";
-import type { GraphDocument } from "@/server/api/routers/kg";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { D3ForceGraph } from "@/app/_components/d3/force/graph";
 import type { CustomNodeType, CustomLinkType } from "@/app/const/types";
-import EXAMPLE_DATA from "@/app/const/example-graph.json";
 import { Toolbar } from "@/app/_components/toolbar/toolbar";
 import { useRouter } from "next/navigation";
 import { Button } from "@/app/_components/button/button";
@@ -17,10 +16,8 @@ export const ExtractedGraphViewer = () => {
   const { data: session } = useSession();
   const [file, setFile] = useState<File | null>(null);
   const [documentUrl, setDocumentUrl] = useState<string | null>(null);
-  const [isUseExample, setIsUseExample] = useState<boolean>(false);
-  const [graphDocument, setGraphDocument] = useState<GraphDocument | null>(
-    isUseExample ? EXAMPLE_DATA : null,
-  );
+  const [graphDocument, setGraphDocument] =
+    useState<GraphDocumentForFrontend | null>(null);
   const [isLinkFiltered, setIsLinkFiltered] = useState<boolean>(false);
   const [nodeSearchQuery, setNodeSearchQuery] = useState<string>("");
   const submitSourceDocumentWithGraph =
@@ -41,7 +38,7 @@ export const ExtractedGraphViewer = () => {
   const hasGraphData = searchParams.get("has-graph-data");
 
   const submit = (
-    graphDocument: GraphDocument,
+    graphDocument: GraphDocumentForFrontend,
     fileName: string,
     documentUrl: string,
   ) => {
@@ -53,7 +50,7 @@ export const ExtractedGraphViewer = () => {
       },
       {
         onSuccess: (res) => {
-          router.push(`/graph/${res.id}`);
+          router.push(`/graph/${res?.id}`);
         },
         onError: (e) => {
           console.log(e);
@@ -67,7 +64,9 @@ export const ExtractedGraphViewer = () => {
       const stGraph = localStorage.getItem("graphDocument");
       const fileName = localStorage.getItem("fileName");
       const url = localStorage.getItem("fileUrl");
-      const graph = stGraph ? (JSON.parse(stGraph) as GraphDocument) : null;
+      const graph = stGraph
+        ? (JSON.parse(stGraph) as GraphDocumentForFrontend)
+        : null;
 
       if (graph && fileName && url) submit(graph, fileName, url);
 
@@ -76,10 +75,6 @@ export const ExtractedGraphViewer = () => {
       localStorage.removeItem("fileUrl");
     }
   }, []);
-
-  useEffect(() => {
-    setGraphDocument(isUseExample ? EXAMPLE_DATA : null);
-  }, [isUseExample]);
 
   const [innerWidth, innerHeight] = useWindowSize();
   const graphAreaWidth = (innerWidth ?? 100) - 18;
@@ -93,8 +88,6 @@ export const ExtractedGraphViewer = () => {
             <Toolbar
               isLinkFiltered={isLinkFiltered}
               setIsLinkFiltered={setIsLinkFiltered}
-              isUseExample={isUseExample}
-              setIsUseExample={setIsUseExample}
               setNodeSearchQuery={setNodeSearchQuery}
               rightArea={
                 <div className="flex flex-row items-center gap-2">

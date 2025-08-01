@@ -1,4 +1,4 @@
-import type { GraphDocument } from "@/server/api/routers/kg";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { useState } from "react";
 import { Button } from "../button/button";
 import { api } from "@/trpc/react";
@@ -10,7 +10,7 @@ import Markdown from "react-markdown";
 import { TextToSpeech } from "./text-to-speech";
 
 type GraphSummaryGeneratorProps = {
-  graphData: GraphDocument;
+  graphData: GraphDocumentForFrontend;
   defaultStartNodeId: string;
   defaultEndNodeId: string;
 };

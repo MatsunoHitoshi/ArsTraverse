@@ -11,8 +11,9 @@ import {
   DisclosureButton,
   DisclosurePanel,
 } from "@headlessui/react";
-import type { GraphDocument } from "@/server/api/routers/kg";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { usePathname, useRouter } from "next/navigation";
+import { getNodeByIdForFrontend } from "@/app/_utils/kg/filter";
 
 type GraphInfoPanelProps = {
   focusedNode: CustomNodeType | undefined;
@@ -20,7 +21,7 @@ type GraphInfoPanelProps = {
   setFocusNode: React.Dispatch<
     React.SetStateAction<CustomNodeType | undefined>
   >;
-  graphDocument: GraphDocument;
+  graphDocument: GraphDocumentForFrontend;
   topicSpaceId?: string;
   // maxHeight: number;
 };
@@ -41,15 +42,11 @@ export const GraphInfoPanel = ({
       link.sourceId === focusedNode?.id || link.targetId === focusedNode?.id
     );
   });
-  const getNodeById = (id: number) => {
-    return graphNodes.find((node) => {
-      return node.id === id;
-    });
-  };
+
   const neighborNodes = neighborLinks.map((link) => {
     const neighborId =
       link.targetId === focusedNode?.id ? link.sourceId : link.targetId;
-    return getNodeById(neighborId);
+    return getNodeByIdForFrontend(neighborId, graphNodes);
   });
 
   return (
@@ -189,13 +186,19 @@ export const GraphInfoPanel = ({
                 <div className="font-semibold text-orange-500">
                   <div className="flex w-max flex-col items-center">
                     <div className="flex w-max flex-col items-center justify-center truncate rounded-md bg-white p-1 text-sm">
-                      {focusedLink.sourceName}
+                      {
+                        getNodeByIdForFrontend(focusedLink.sourceId, graphNodes)
+                          ?.name
+                      }
                     </div>
                     <div>|</div>
                     <div className="truncate text-sm">{focusedLink.type}</div>
                     <div>↓</div>
                     <div className="flex w-max flex-col items-center justify-center truncate rounded-md bg-white p-1 text-sm">
-                      {focusedLink.targetName}
+                      {
+                        getNodeByIdForFrontend(focusedLink.targetId, graphNodes)
+                          ?.name
+                      }
                     </div>
                   </div>
                 </div>
@@ -251,7 +254,7 @@ export const PropertiesSummaryPanel = ({
           <div key={index} className="flex flex-row gap-1">
             <div className="w-32 text-xs text-slate-400">{key}</div>
             <div className="w-full truncate">
-              {value.startsWith("http://") || value.startsWith("https://") ? (
+              {value?.startsWith("http://") || value?.startsWith("https://") ? (
                 <a
                   href={value}
                   target="_blank"
@@ -297,7 +300,7 @@ export const PropertiesDetailPanel = ({
         <div key={index} className="flex flex-row gap-2">
           <div className="w-32 text-sm text-slate-400">{key}</div>
           <div className="w-full whitespace-pre-wrap">
-            {value.startsWith("http://") || value.startsWith("https://") ? (
+            {value?.startsWith("http://") || value?.startsWith("https://") ? (
               <a
                 href={value}
                 target="_blank"

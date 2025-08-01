@@ -11,7 +11,7 @@ import {
 } from "d3";
 import { D3ZoomProvider } from "../zoom";
 import type { TreeNode } from "@/app/const/types";
-import type { GraphDocument } from "@/server/api/routers/kg";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { useRouter } from "next/navigation";
 
 type D3RadialTreeProps = {
@@ -21,7 +21,7 @@ type D3RadialTreeProps = {
   height: number;
   data: TreeNode;
   nodeSearchQuery: string;
-  selectedGraphData?: GraphDocument | null;
+  selectedGraphData?: GraphDocumentForFrontend | null;
   treeRadius: number;
   toolComponent?: React.ReactNode;
   setCurrentScale: React.Dispatch<React.SetStateAction<number>>;

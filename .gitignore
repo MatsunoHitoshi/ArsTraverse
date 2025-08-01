@@ -58,3 +58,6 @@ yarn-error.log*
 
 # db backup data
 /db-backup
+
+# prisma logs
+/prisma/logs

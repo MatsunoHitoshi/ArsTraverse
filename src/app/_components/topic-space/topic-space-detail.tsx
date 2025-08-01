@@ -2,7 +2,7 @@
 import { api } from "@/trpc/react";
 import { useSession } from "next-auth/react";
 import { TabsContainer } from "../tab/tab";
-import type { GraphDocument } from "@/server/api/routers/kg";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 import {
   FileTextIcon,
   GraphIcon,
@@ -28,7 +28,6 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
   const { data: session } = useSession();
   const { data: topicSpace, refetch } = api.topicSpaces.getById.useQuery({
     id: id,
-    withDocumentGraph: false,
   });
   const detachDocument = api.topicSpaces.detachDocument.useMutation();
 
@@ -228,7 +227,7 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
         <div className="h-full overflow-scroll">
           {topicSpace.graphData ? (
             <MultiDocumentGraphViewer
-              graphDocument={topicSpace.graphData as GraphDocument}
+              graphDocument={topicSpace.graphData as GraphDocumentForFrontend}
               topicSpaceId={id}
               refetch={refetch}
             />

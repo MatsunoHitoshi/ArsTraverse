@@ -1,13 +1,42 @@
+import type {
+  NodeTypeForFrontend,
+  RelationshipTypeForFrontend,
+} from "@/app/const/types";
 import { GraphChangeType } from "@prisma/client";
 import type {
-  NodeType,
-  RelationshipType,
+  NodeDiffType,
+  RelationshipDiffType,
 } from "./get-nodes-and-relationships-from-result";
 
+const shapeRelationshipData = (
+  relationship: RelationshipTypeForFrontend,
+): RelationshipTypeForFrontend => {
+  return {
+    id: relationship.id,
+    type: relationship.type,
+    properties: relationship.properties,
+    targetId: relationship.sourceId,
+    sourceId: relationship.targetId,
+    documentGraphId: relationship.documentGraphId,
+    topicSpaceId: relationship.topicSpaceId,
+  };
+};
+
+const shapeNodeData = (node: NodeTypeForFrontend): NodeTypeForFrontend => {
+  return {
+    id: node.id,
+    name: node.name,
+    label: node.label,
+    properties: node.properties,
+    topicSpaceId: node.topicSpaceId,
+    documentGraphId: node.documentGraphId,
+  };
+};
+
 export const diffNodes = (
-  originalNodes: NodeType[],
-  updatedNodes: NodeType[],
-) => {
+  originalNodes: NodeTypeForFrontend[],
+  updatedNodes: NodeTypeForFrontend[],
+): NodeDiffType[] => {
   const diffNodes = originalNodes
     .map((node) => {
       const sameIdNode = updatedNodes.find(
@@ -21,8 +50,8 @@ export const diffNodes = (
       if (sameIdNode && isUpdated) {
         return {
           type: GraphChangeType.UPDATE,
-          original: node,
-          updated: sameIdNode,
+          original: shapeNodeData(node),
+          updated: shapeNodeData(sameIdNode),
         };
       }
       return null;
@@ -34,7 +63,8 @@ export const diffNodes = (
       if (!originalNodes.some((originalNode) => originalNode.id === node.id)) {
         return {
           type: GraphChangeType.ADD,
-          updated: node,
+          original: null,
+          updated: shapeNodeData(node),
         };
       }
       return null;
@@ -46,7 +76,8 @@ export const diffNodes = (
       if (!updatedNodes.some((updatedNode) => updatedNode.id === node.id)) {
         return {
           type: GraphChangeType.REMOVE,
-          original: node,
+          original: shapeNodeData(node),
+          updated: null,
         };
       }
       return null;
@@ -57,9 +88,9 @@ export const diffNodes = (
 };
 
 export const diffRelationships = (
-  originalRelationships: RelationshipType[],
-  updatedRelationships: RelationshipType[],
-) => {
+  originalRelationships: RelationshipTypeForFrontend[],
+  updatedRelationships: RelationshipTypeForFrontend[],
+): RelationshipDiffType[] => {
   const diffRelationships = originalRelationships
     .map((relationship) => {
       const sameIdRelationship = updatedRelationships.find(
@@ -75,8 +106,8 @@ export const diffRelationships = (
       if (sameIdRelationship && isUpdated) {
         return {
           type: GraphChangeType.UPDATE,
-          original: relationship,
-          updated: sameIdRelationship,
+          original: shapeRelationshipData(relationship),
+          updated: shapeRelationshipData(sameIdRelationship),
         };
       }
       return null;
@@ -92,7 +123,8 @@ export const diffRelationships = (
       ) {
         return {
           type: GraphChangeType.ADD,
-          updated: relationship,
+          original: null,
+          updated: shapeRelationshipData(relationship),
         };
       }
       return null;
@@ -108,7 +140,8 @@ export const diffRelationships = (
       ) {
         return {
           type: GraphChangeType.REMOVE,
-          original: relationship,
+          original: shapeRelationshipData(relationship),
+          updated: null,
         };
       }
       return null;

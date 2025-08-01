@@ -1,15 +1,9 @@
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { z } from "zod";
-import {
-  exportJson,
-  writeFile,
-  writeLocalFileFromUrl,
-} from "@/app/_utils/sys/file";
+import { exportJson, writeLocalFileFromUrl } from "@/app/_utils/sys/file";
 import type {
   NodeDiffType,
-  NodeType,
   RelationshipDiffType,
-  RelationshipType,
 } from "@/app/_utils/kg/get-nodes-and-relationships-from-result";
 import { textInspect } from "@/app/_utils/text/text-inspector";
 import {
@@ -18,13 +12,21 @@ import {
   fuseGraphs,
 } from "@/app/_utils/kg/data-disambiguation";
 import { env } from "@/env";
-import { GraphChangeEntityType, GraphChangeRecordType } from "@prisma/client";
+import {
+  GraphChangeEntityType,
+  GraphChangeRecordType,
+  GraphChangeType,
+} from "@prisma/client";
 import { diffNodes, diffRelationships } from "@/app/_utils/kg/diff";
-import { shapeGraphData } from "@/app/_utils/kg/shape";
 import type { Extractor } from "@/server/lib/extractors/base";
 import { AssistantsApiExtractor } from "@/server/lib/extractors/assistants";
 import { LangChainExtractor } from "@/server/lib/extractors/langchain";
 import { getNeighborNodes } from "@/app/_utils/kg/get-tree-layout-data";
+import {
+  formGraphDataForFrontend,
+  formNodeDataForFrontend,
+  formRelationshipDataForFrontend,
+} from "@/app/_utils/kg/frontend-properties";
 // import type { Prisma } from "@prisma/client";
 // import { GraphDataStatus } from "@prisma/client";
 // import { stripGraphData } from "@/app/_utils/kg/data-strip";
@@ -49,14 +51,9 @@ const IntegrateGraphInputSchema = z.object({
 });
 
 const GetRelatedNodesInputSchema = z.object({
-  nodeId: z.number(),
+  nodeId: z.string(),
   topicSpaceId: z.string(),
 });
-
-export type GraphDocument = {
-  nodes: NodeType[];
-  relationships: RelationshipType[];
-};
 
 export type NodeSchema = {
   entity: string;
@@ -101,8 +98,35 @@ export const kgRouter = createTRPCRouter({
             data: { graph: null, error: "グラフ抽出エラー" },
           };
         }
+
+        const normalizedNodesAndRelationships = {
+          ...nodesAndRelationships,
+          nodes: nodesAndRelationships.nodes.map((n) => ({
+            id: n.id,
+            name: n.name,
+            label: n.label,
+            properties: n.properties ?? {},
+            documentGraphId: null,
+            topicSpaceId: null,
+            createdAt: null,
+            updatedAt: null,
+            deletedAt: null,
+          })),
+          relationships: nodesAndRelationships.relationships.map((r) => ({
+            id: r.id,
+            type: r.type,
+            properties: r.properties ?? {},
+            fromNodeId: r.sourceId,
+            toNodeId: r.targetId,
+            documentGraphId: null,
+            topicSpaceId: null,
+            createdAt: null,
+            updatedAt: null,
+            deletedAt: null,
+          })),
+        };
         const disambiguatedNodesAndRelationships = dataDisambiguation(
-          nodesAndRelationships,
+          normalizedNodesAndRelationships,
         );
 
         if (env.NODE_ENV === "development") {
@@ -117,7 +141,9 @@ export const kgRouter = createTRPCRouter({
         }
 
         return {
-          data: { graph: disambiguatedNodesAndRelationships },
+          data: {
+            graph: formGraphDataForFrontend(disambiguatedNodesAndRelationships),
+          },
         };
       } catch (error) {
         return {
@@ -158,6 +184,8 @@ export const kgRouter = createTRPCRouter({
         where: { id: input.topicSpaceId, isDeleted: false },
         include: {
           admins: true,
+          graphNodes: true,
+          graphRelationships: true,
         },
       });
 
@@ -169,21 +197,26 @@ export const kgRouter = createTRPCRouter({
         throw new Error("TopicSpace not found");
       }
 
-      const prevGraphData = topicSpace.graphData as GraphDocument;
+      const prevGraphData = {
+        nodes: topicSpace.graphNodes,
+        relationships: topicSpace.graphRelationships,
+      };
 
+      const labelCheck = false;
       const updatedGraphData = await fuseGraphs({
-        sourceGraph: input.graphDocument as GraphDocument,
-        targetGraph: prevGraphData,
-        labelCheck: false,
+        sourceGraph: prevGraphData,
+        targetGraph: input.graphDocument,
+        labelCheck,
       });
 
       const newGraphWithProperties = attachGraphProperties(
         updatedGraphData,
         prevGraphData,
+        labelCheck,
       );
-      const shapedGraphData = shapeGraphData(newGraphWithProperties);
+      // const shapedGraphData = shapeGraphData(newGraphWithProperties);
 
-      if (!shapedGraphData) {
+      if (!newGraphWithProperties) {
         throw new Error("Graph fusion failed");
       }
 
@@ -196,11 +229,50 @@ export const kgRouter = createTRPCRouter({
         },
       });
 
-      const nodeDiffs = diffNodes(prevGraphData.nodes, shapedGraphData.nodes);
-      const relationshipDiffs = diffRelationships(
-        prevGraphData.relationships,
-        shapedGraphData.relationships,
+      // ノードの差分から追加されたノードを作成
+      const nodeDiffs = diffNodes(
+        prevGraphData.nodes.map((node) => formNodeDataForFrontend(node)),
+        newGraphWithProperties.nodes.map((node) =>
+          formNodeDataForFrontend(node),
+        ),
       );
+      const addedNodesData = nodeDiffs
+        .filter((diff) => diff.type === GraphChangeType.ADD)
+        .map((node) => ({
+          id: node.updated?.id,
+          name: node.updated?.name ?? "",
+          label: node.updated?.label ?? "",
+          properties: node.updated?.properties ?? {},
+          topicSpaceId: topicSpace.id,
+        }));
+      await ctx.db.graphNode.createMany({
+        data: addedNodesData,
+      });
+
+      // リレーションシップの差分から追加されたリレーションシップを作成
+      const relationshipDiffs = diffRelationships(
+        prevGraphData.relationships.map((r) =>
+          formRelationshipDataForFrontend(r),
+        ),
+        newGraphWithProperties.relationships.map((r) =>
+          formRelationshipDataForFrontend(r),
+        ),
+      );
+      const addedRelationshipsData = relationshipDiffs
+        .filter((diff) => diff.type === GraphChangeType.ADD)
+        .map((relationship) => ({
+          id: relationship.updated?.id,
+          type: relationship.updated?.type ?? "",
+          properties: relationship.updated?.properties ?? {},
+          fromNodeId: relationship.updated?.sourceId ?? "",
+          toNodeId: relationship.updated?.targetId ?? "",
+          topicSpaceId: topicSpace.id,
+        }));
+      await ctx.db.graphRelationship.createMany({
+        data: addedRelationshipsData,
+      });
+
+      // 詳細な変更差分の履歴保存
       const nodeChangeHistories = nodeDiffs.map((diff: NodeDiffType) => {
         return {
           changeType: diff.type,
@@ -227,13 +299,14 @@ export const kgRouter = createTRPCRouter({
         data: [...nodeChangeHistories, ...relationshipChangeHistories],
       });
 
-      const updatedTopicSpace = await ctx.db.topicSpace.update({
-        where: { id: input.topicSpaceId },
-        data: { graphData: shapedGraphData },
-      });
+      // 古い処理なので、ここでは更新しない
+      // const updatedTopicSpace = await ctx.db.topicSpace.update({
+      //   where: { id: input.topicSpaceId },
+      //   data: { graphData: newGraphWithProperties },
+      // });
 
       return {
-        data: updatedTopicSpace,
+        data: topicSpace,
       };
     }),
 
@@ -244,35 +317,55 @@ export const kgRouter = createTRPCRouter({
 
       const topicSpace = await ctx.db.topicSpace.findFirst({
         where: { id: topicSpaceId, isDeleted: false },
+        include: {
+          graphNodes: true,
+          graphRelationships: true,
+        },
       });
       if (!topicSpace) {
         throw new Error("TopicSpace not found");
       }
 
-      const graphData = topicSpace.graphData as GraphDocument;
+      const graphData = {
+        nodes: topicSpace.graphNodes,
+        relationships: topicSpace.graphRelationships,
+      };
       const sourceNode = graphData.nodes.find((node) => node.id === nodeId) ?? {
         id: nodeId,
         name: "",
         label: "",
         properties: {},
       };
-      const neighborNodes = getNeighborNodes(graphData, nodeId, "BOTH");
+      const neighborNodes = getNeighborNodes(
+        formGraphDataForFrontend(graphData),
+        nodeId,
+        "BOTH",
+      );
       const sourceLinks = graphData.relationships.filter(
-        (l) => l.sourceId === nodeId || l.targetId === nodeId,
+        (l) => l.fromNodeId === nodeId || l.toNodeId === nodeId,
       );
       const neighborLinks = graphData.relationships.filter(
         (l) =>
-          neighborNodes.some((node) => l.sourceId === node.id) &&
-          neighborNodes.some((node) => l.targetId === node.id),
+          neighborNodes.some((node) => l.fromNodeId === node.id) &&
+          neighborNodes.some((node) => l.toNodeId === node.id),
       );
 
-      return {
-        nodes:
-          neighborNodes.length !== 0
-            ? [sourceNode, ...neighborNodes]
-            : [sourceNode],
+      const unifiedGraphData = {
+        nodes: [sourceNode, ...neighborNodes],
         relationships: [...sourceLinks, ...neighborLinks],
       };
+
+      return formGraphDataForFrontend({
+        ...unifiedGraphData,
+        nodes: unifiedGraphData.nodes.map((node) => ({
+          documentGraphId: null,
+          topicSpaceId: null,
+          createdAt: null,
+          updatedAt: null,
+          deletedAt: null,
+          ...node,
+        })),
+      });
     }),
 
   // graphFusion: publicProcedure.mutation(async ({ ctx }) => {

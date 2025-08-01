@@ -1,5 +1,4 @@
-import type { NodeType } from "@/app/_utils/kg/get-nodes-and-relationships-from-result";
-import type { GraphDocument } from "@/server/api/routers/kg";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 import {
   forceSimulation,
   forceLink,
@@ -18,17 +17,12 @@ import {
 } from "../extension/drag-editor-extension";
 
 import type { CustomNodeType, CustomLinkType } from "@/app/const/types";
+import { getNodeByIdForFrontend } from "@/app/_utils/kg/filter";
 
 // export interface CustomNodeType extends SimulationNodeDatum, NodeType {}
 // export interface CustomLinkType
 //   extends SimulationLinkDatum<CustomNodeType>,
 //     RelationshipType {}
-
-const getNodeById = (id: number, nodes: NodeType[]) => {
-  return nodes.find((node) => {
-    return node.id === id;
-  });
-};
 
 const linkFilter = (nodes: CustomNodeType[], links: CustomLinkType[]) => {
   const filteredNodes = nodes.filter((node) => {
@@ -88,9 +82,9 @@ export const D3ForceGraph = ({
   svgRef: React.RefObject<SVGSVGElement>;
   height: number;
   width: number;
-  graphDocument: GraphDocument;
-  selectedGraphData?: GraphDocument;
-  selectedPathData?: GraphDocument;
+  graphDocument: GraphDocumentForFrontend;
+  selectedGraphData?: GraphDocumentForFrontend;
+  selectedPathData?: GraphDocumentForFrontend;
   toolComponent?: React.ReactNode;
   tagFilterOption?: TopicGraphFilterOption;
   nodeSearchQuery?: string;
@@ -111,7 +105,7 @@ export const D3ForceGraph = ({
   >;
   onNodeContextMenu?: (node: CustomNodeType) => void;
   onLinkContextMenu?: (link: CustomLinkType) => void;
-  onGraphUpdate?: (additionalGraph: GraphDocument) => void;
+  onGraphUpdate?: (additionalGraph: GraphDocumentForFrontend) => void;
   graphIdentifier?: string;
 }) => {
   const { nodes, relationships } = graphDocument;
@@ -120,8 +114,14 @@ export const D3ForceGraph = ({
 
   const newLinks = useMemo(() => {
     return initLinks.map((d) => {
-      const source = getNodeById(d.sourceId, initNodes) as CustomNodeType;
-      const target = getNodeById(d.targetId, initNodes) as CustomNodeType;
+      const source = getNodeByIdForFrontend(
+        d.sourceId,
+        initNodes,
+      ) as CustomNodeType;
+      const target = getNodeByIdForFrontend(
+        d.targetId,
+        initNodes,
+      ) as CustomNodeType;
       return {
         ...d,
         source: source,
@@ -286,8 +286,14 @@ export const D3ForceGraph = ({
                   .map((relationship) => relationship.id)
                   .includes(graphLink.id);
 
-                const sourceNode = getNodeById(modSource.id, graphNodes);
-                const targetNode = getNodeById(modTarget.id, graphNodes);
+                const sourceNode = getNodeByIdForFrontend(
+                  modSource.id,
+                  graphNodes,
+                );
+                const targetNode = getNodeByIdForFrontend(
+                  modTarget.id,
+                  graphNodes,
+                );
                 const sourceNodeVisible = sourceNode?.visible ?? false;
                 const targetNodeVisible = targetNode?.visible ?? false;
 

@@ -2,7 +2,10 @@
 import { api } from "@/trpc/react";
 import { TabsContainer } from "../tab/tab";
 import { useWindowSize } from "@/app/_hooks/use-window-size";
-import type { GraphDocument } from "@/server/api/routers/kg";
+import type {
+  DocumentResponseWithGraphData,
+  GraphDocumentForFrontend,
+} from "@/app/const/types";
 import type {
   DocumentResponse,
   TopicGraphFilterOption,
@@ -49,33 +52,39 @@ export const TopicGraphEditor = ({
 
   const [selectedDocumentId, setSelectedDocumentId] = useState<string>("");
   const [selectedGraphData, setSelectedGraphData] =
-    useState<GraphDocument | null>(null);
+    useState<GraphDocumentForFrontend | null>(null);
   const [isLinkFiltered, setIsLinkFiltered] = useState<boolean>(false);
   const [nodeSearchQuery, setNodeSearchQuery] = useState<string>("");
-  const [pathData, setPathData] = useState<GraphDocument>();
+  const [pathData, setPathData] = useState<GraphDocumentForFrontend>();
   const [isClustered, setIsClustered] = useState<boolean>(false);
-  const [graphData, setGraphData] = useState<GraphDocument>();
+  const [graphData, setGraphData] = useState<GraphDocumentForFrontend>();
 
   useEffect(() => {
     console.log("graphData: ", topicSpace?.graphData);
-    setGraphData(topicSpace?.graphData as GraphDocument);
+    setGraphData(topicSpace?.graphData as GraphDocumentForFrontend);
   }, [topicSpace]);
 
   useEffect(() => {
     setSelectedGraphData(
       (topicSpace?.sourceDocuments?.find((document) => {
         return document.id === selectedDocumentId;
-      })?.graph?.dataJson as GraphDocument) ?? null,
+      })?.graph?.dataJson as GraphDocumentForFrontend) ?? null,
     );
   }, [selectedDocumentId, topicSpace]);
 
   useEffect(() => {
     const clusteredGraphData = {
-      ...(topicSpace?.graphData as GraphDocument),
+      ...(topicSpace?.graphData as GraphDocumentForFrontend),
     };
     if (isClustered) {
       const documents = topicSpace?.sourceDocuments ?? [];
-      setGraphData(circleColor(clusteredGraphData, documents));
+      setGraphData(
+        // TODO: JsonValueのカラムを消した後に 型を修正する
+        circleColor(
+          clusteredGraphData,
+          documents as DocumentResponseWithGraphData[],
+        ),
+      );
     } else if (graphData?.nodes) {
       clusteredGraphData.nodes.forEach((node) => {
         node.clustered = { x: 0, y: 0 };

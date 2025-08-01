@@ -1,4 +1,4 @@
-import type { GraphDocument } from "@/server/api/routers/kg";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { Button } from "../../button/button";
 import { ChevronRightIcon, Pencil2Icon } from "../../icons";
 import { usePathname, useRouter } from "next/navigation";
@@ -27,7 +27,7 @@ export const NodePropertiesDetail = ({
   const extractKG = api.kg.extractKG.useMutation();
   const [isExtracting, setIsExtracting] = useState<boolean>(false);
   const [newGraphDocument, setNewGraphDocument] =
-    useState<GraphDocument | null>(null);
+    useState<GraphDocumentForFrontend | null>(null);
 
   const [onEdit, setOnEdit] = useState<boolean>(false);
 

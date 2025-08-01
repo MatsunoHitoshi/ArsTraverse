@@ -1,6 +1,6 @@
 import { NodeLinkList } from "@/app/_components/list/node-link-list";
 import { useRef, useState } from "react";
-import type { GraphDocument } from "@/server/api/routers/kg";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 import type { CustomNodeType, CustomLinkType } from "@/app/const/types";
 import { D3ForceGraph } from "@/app/_components/d3/force/graph";
 import { GraphInfoPanel } from "../../d3/force/graph-info-panel";
@@ -22,13 +22,13 @@ export const MultiDocumentGraphDetailViewer = ({
   selectedGraphData,
   nodeSearchQuery,
 }: {
-  graphDocument: GraphDocument;
+  graphDocument: GraphDocumentForFrontend;
   topicSpaceId: string;
   isGraphFullScreen?: boolean;
   setIsGraphFullScreen?: React.Dispatch<React.SetStateAction<boolean>>;
   isClustered?: boolean;
-  selectedPathData?: GraphDocument;
-  selectedGraphData?: GraphDocument;
+  selectedPathData?: GraphDocumentForFrontend;
+  selectedGraphData?: GraphDocumentForFrontend;
   nodeSearchQuery: string;
 }) => {
   const [innerWidth, innerHeight] = useWindowSize();

@@ -1,40 +1,27 @@
-import type { GraphDocument } from "@/server/api/routers/kg";
-import type {
-  NodeType,
-  RelationshipType,
-} from "./get-nodes-and-relationships-from-result";
+import { createId } from "@/app/_utils/cuid/cuid";
+import type { NodeTypeForFrontend } from "@/app/const/types";
+import type { GraphNode, GraphRelationship } from "@prisma/client";
 
-// const generateSystemMessageForNodes = () => {
-//   return `
-// Your task is to identify if there are duplicated nodes and if so merge them into one node. Only merge the nodes that refer to the same entity.
-// You will be given different datasets of nodes and some of these nodes may be duplicated or refer to the same entity.
-// The datasets contains nodes in the form [ENTITY_ID, TYPE, PROPERTIES]. When you have completed your task please give me the
-// resulting nodes in the same format. Only return the nodes and relationships no other text. If there is no duplicated nodes return the original nodes.
-//   `;
-// };
-
-const deleteDuplicatedRelationships = (relationships: RelationshipType[]) => {
+const deleteDuplicatedRelationships = (relationships: GraphRelationship[]) => {
   const filteredRelationships = relationships.filter((relationship, index) => {
     return (
       index ===
       relationships.findIndex(
         (r) =>
-          r.sourceId === relationship.sourceId &&
-          r.targetId === relationship.targetId &&
+          r.fromNodeId === relationship.fromNodeId &&
+          r.toNodeId === relationship.toNodeId &&
           r.type === relationship.type,
       )
     );
   });
-  const mergedRelationships = filteredRelationships.map(
-    (relationship, index) => ({
-      ...relationship,
-      id: index,
-    }),
-  );
+  const mergedRelationships = filteredRelationships.map((relationship) => ({
+    ...relationship,
+    id: createId(),
+  }));
   return mergedRelationships;
 };
 
-const deleteDuplicatedNodes = (nodes: NodeType[]) => {
+const deleteDuplicatedNodes = (nodes: GraphNode[]) => {
   const filteredNodes = nodes.filter((node, index) => {
     return (
       index ===
@@ -44,7 +31,10 @@ const deleteDuplicatedNodes = (nodes: NodeType[]) => {
   return filteredNodes;
 };
 
-export const mergerNodes = (graph: GraphDocument, mergeNodes: NodeType[]) => {
+export const mergerNodes = (
+  graph: { nodes: GraphNode[]; relationships: GraphRelationship[] },
+  mergeNodes: NodeTypeForFrontend[],
+) => {
   const margeTargetNode = mergeNodes[0];
   const margeSourceNodes = mergeNodes.slice(1);
 
@@ -55,31 +45,29 @@ export const mergerNodes = (graph: GraphDocument, mergeNodes: NodeType[]) => {
   const newRelationships = graph.relationships
     .map((sRelationship) => {
       if (
-        margeSourceNodes.some((mNode) => mNode.id === sRelationship.targetId) &&
-        margeSourceNodes.some((mNode) => mNode.id === sRelationship.sourceId)
+        margeSourceNodes.some((mNode) => mNode.id === sRelationship.toNodeId) &&
+        margeSourceNodes.some((mNode) => mNode.id === sRelationship.fromNodeId)
       ) {
         return undefined;
       } else if (
-        margeSourceNodes.some((mNode) => mNode.id === sRelationship.targetId)
+        margeSourceNodes.some((mNode) => mNode.id === sRelationship.toNodeId)
       ) {
         return {
           ...sRelationship,
-          targetId: margeTargetNode.id,
-          targetName: margeTargetNode.name,
+          toNodeId: margeTargetNode.id,
         };
       } else if (
-        margeSourceNodes.some((mNode) => mNode.id === sRelationship.sourceId)
+        margeSourceNodes.some((mNode) => mNode.id === sRelationship.fromNodeId)
       ) {
         return {
           ...sRelationship,
-          sourceId: margeTargetNode.id,
-          sourceName: margeTargetNode.name,
+          fromNodeId: margeTargetNode.id,
         };
       } else {
         return sRelationship;
       }
     })
-    .filter((r) => !!r);
+    .filter((r): r is GraphRelationship => !!r);
 
   const newNodes = graph.nodes.filter((node) => {
     return !margeSourceNodes.some(
@@ -90,30 +78,31 @@ export const mergerNodes = (graph: GraphDocument, mergeNodes: NodeType[]) => {
     );
   });
 
-  const disambiguatedGraph = dataDisambiguation({
-    nodes: newNodes,
-    relationships: newRelationships,
-  });
+  // const disambiguatedGraph = dataDisambiguation({
+  //   nodes: newNodes,
+  //   relationships: newRelationships,
+  // });
+  // return disambiguatedGraph;
 
-  return disambiguatedGraph;
+  return { nodes: newNodes, relationships: newRelationships };
 };
 
 const mergerGraphsWithDuplicatedNodeName = (p: {
-  sourceGraph: GraphDocument;
-  targetGraph: GraphDocument;
+  sourceGraph: { nodes: GraphNode[]; relationships: GraphRelationship[] }; //大元のグラフ
+  targetGraph: { nodes: GraphNode[]; relationships: GraphRelationship[] }; //追加するグラフ
   labelCheck: boolean;
 }) => {
-  const { sourceGraph, targetGraph, labelCheck } = p;
-  const duplicatedSourceNodes = sourceGraph.nodes.filter((sourceNode) => {
-    return targetGraph.nodes.some((targetNode) => {
+  const { targetGraph, sourceGraph, labelCheck } = p;
+  const duplicatedTargetNodes = targetGraph.nodes.filter((sourceNode) => {
+    return sourceGraph.nodes.some((targetNode) => {
       return (
         targetNode.name === sourceNode.name &&
         (labelCheck ? targetNode.label === sourceNode.label : true)
       );
     });
   });
-  const additionalNodes = sourceGraph.nodes.filter((sourceNode) => {
-    return !targetGraph.nodes.some((targetNode) => {
+  const additionalNodes = targetGraph.nodes.filter((sourceNode) => {
+    return !sourceGraph.nodes.some((targetNode) => {
       return (
         targetNode.name === sourceNode.name &&
         (labelCheck ? targetNode.label === sourceNode.label : true)
@@ -121,66 +110,77 @@ const mergerGraphsWithDuplicatedNodeName = (p: {
     });
   });
 
-  const newNodes = targetGraph.nodes;
-  const newRelationships = targetGraph.relationships;
-  const nodeIdRecords: { prevId: number; newId: number }[] = [];
+  const newNodes = [...sourceGraph.nodes];
+  const newRelationships = [...sourceGraph.relationships];
+  const nodeIdRecords: { prevId: string; newId: string }[] = [];
 
-  duplicatedSourceNodes.map((dNode) => {
+  duplicatedTargetNodes.map((dNode) => {
     const prevId = dNode.id;
     const newId = newNodes.find((nn) => {
       return (
         nn.name === dNode.name && (labelCheck ? nn.label === dNode.label : true)
       );
     })?.id;
-    nodeIdRecords.push({ prevId: prevId, newId: newId ?? 0 });
+    if (newId) {
+      nodeIdRecords.push({ prevId: prevId, newId: newId });
+    }
   });
+
   additionalNodes.map((additionalNode) => {
     const prevId = additionalNode.id;
-    const newId =
-      newNodes.reduce((max, current) => Math.max(max, current.id), 0) + 1;
+    const newId = createId();
     nodeIdRecords.push({ prevId: prevId, newId: newId });
     newNodes.push({ ...additionalNode, id: newId });
   });
-  sourceGraph.relationships.map((sRelationship) => {
-    const newId =
-      newRelationships.reduce((max, current) => Math.max(max, current.id), 0) +
-      1;
-    newRelationships.push({
-      ...sRelationship,
-      id: newId,
-      sourceId:
-        nodeIdRecords.find((rec) => {
-          return rec.prevId === sRelationship.sourceId;
-        })?.newId ?? 0,
-      targetId:
-        nodeIdRecords.find((rec) => {
-          return rec.prevId === sRelationship.targetId;
-        })?.newId ?? 0,
-    });
+
+  targetGraph.relationships.map((tRelationship) => {
+    const newSourceId = nodeIdRecords.find(
+      (rec) => rec.prevId === tRelationship.fromNodeId,
+    )?.newId;
+    const newTargetId = nodeIdRecords.find(
+      (rec) => rec.prevId === tRelationship.toNodeId,
+    )?.newId;
+
+    const newId = createId();
+    if (newSourceId && newTargetId) {
+      newRelationships.push({
+        ...tRelationship,
+        id: newId,
+        fromNodeId: newSourceId,
+        toNodeId: newTargetId,
+      });
+    }
   });
 
   return { nodes: newNodes, relationships: newRelationships };
 };
 
-const simpleMerge = (graphDocument: GraphDocument) => {
-  const { nodes, relationships } = graphDocument;
+const simpleMerge = (graph: {
+  nodes: GraphNode[];
+  relationships: GraphRelationship[];
+}) => {
+  const { nodes, relationships } = graph;
   const mergedRelationships = deleteDuplicatedRelationships(relationships);
   const mergedNodes = deleteDuplicatedNodes(nodes);
   return { nodes: mergedNodes, relationships: mergedRelationships };
 };
 
-export const dataDisambiguation = (graphDocument: GraphDocument) => {
-  const disambiguatedGraph = simpleMerge(graphDocument);
+export const dataDisambiguation = (graph: {
+  nodes: GraphNode[];
+  relationships: GraphRelationship[];
+}) => {
+  const disambiguatedGraph = simpleMerge(graph);
   return disambiguatedGraph;
 };
 
 export const attachGraphProperties = (
-  newGraph: GraphDocument,
-  prevGraph: GraphDocument,
+  newGraph: { nodes: GraphNode[]; relationships: GraphRelationship[] },
+  prevGraph: { nodes: GraphNode[]; relationships: GraphRelationship[] },
+  labelCheck: boolean,
 ) => {
   const newNodesWithProperties = newGraph.nodes.map((nn) => {
     const matchedPrevNode = prevGraph.nodes.find((pn) => {
-      return pn.name === nn.name;
+      return pn.name === nn.name && (labelCheck ? pn.label === nn.label : true);
     });
     if (!!matchedPrevNode && !!matchedPrevNode.properties) {
       return { ...nn, properties: matchedPrevNode.properties };
@@ -206,49 +206,10 @@ export const attachGraphProperties = (
 };
 
 export const fuseGraphs = async (p: {
-  sourceGraph: GraphDocument;
-  targetGraph: GraphDocument;
+  sourceGraph: { nodes: GraphNode[]; relationships: GraphRelationship[] }; //大元のグラフ
+  targetGraph: { nodes: GraphNode[]; relationships: GraphRelationship[] }; //追加するグラフ
   labelCheck: boolean;
 }) => {
   const graph = mergerGraphsWithDuplicatedNodeName(p);
-  const disambiguatedGraph = dataDisambiguation(graph);
-  return disambiguatedGraph;
-  // const openai = new OpenAI();
-  // const assistant = await openai.beta.assistants.create({
-  //   name: "Graph Database Assistant",
-  //   instructions:
-  //     "You are a top-tier algorithm designed for extracting information in structured formats to build a knowledge graph. Your task is to identify the Nodes and Relations requested with the user prompt from a given file.",
-  //   model: "gpt-4o",
-  //   temperature: 0.0,
-  // });
-
-  // const thread = await openai.beta.threads.create({
-  //   messages: [
-  //     {
-  //       role: "user",
-  //       content: "prompt",
-  //     },
-  //   ],
-  // });
-
-  // const run = await openai.beta.threads.runs.createAndPoll(thread.id, {
-  //   assistant_id: assistant.id,
-  // });
-
-  // const messages = await openai.beta.threads.messages.list(thread.id, {
-  //   run_id: run.id,
-  // });
-  // const message = messages.data.pop()!;
-
-  // if (message?.content[0]!.type === "text") {
-  //   const { text } = message.content[0];
-  //   console.log(text.value);
-
-  //   const nodesAndRelationships = getNodesAndRelationshipsFromResult(
-  //     text.value,
-  //   );
-  //   return nodesAndRelationships;
-  // }
-
-  // return null;
+  return graph;
 };

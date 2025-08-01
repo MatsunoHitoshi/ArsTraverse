@@ -1,5 +1,5 @@
 import type { CustomLinkType, CustomNodeType } from "@/app/const/types";
-import type { GraphDocument } from "@/server/api/routers/kg";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { api } from "@/trpc/react";
 import { useRef, useState } from "react";
 import { NodeLinkEditModal } from "../../modal/node-link-edit-modal";
@@ -21,8 +21,10 @@ const AdditionalGraphViewer = ({
 }: {
   topicSpaceId: string;
   refetch: () => void;
-  graphDocument: GraphDocument | null;
-  setGraphDocument: React.Dispatch<React.SetStateAction<GraphDocument | null>>;
+  graphDocument: GraphDocumentForFrontend | null;
+  setGraphDocument: React.Dispatch<
+    React.SetStateAction<GraphDocumentForFrontend | null>
+  >;
 }) => {
   const integrateGraph = api.kg.integrateGraph.useMutation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -61,7 +63,7 @@ const AdditionalGraphViewer = ({
 
   // graph編集用の変数
   const [additionalGraph, setAdditionalGraph] = useState<
-    GraphDocument | undefined
+    GraphDocumentForFrontend | undefined
   >();
   const [isNodeLinkAttachModalOpen, setIsNodeLinkAttachModalOpen] =
     useState<boolean>(false);
@@ -69,7 +71,7 @@ const AdditionalGraphViewer = ({
     useState<boolean>(false);
   const [isLinkPropertyEditModalOpen, setIsLinkPropertyEditModalOpen] =
     useState<boolean>(false);
-  const onGraphUpdate = (additionalGraph: GraphDocument) => {
+  const onGraphUpdate = (additionalGraph: GraphDocumentForFrontend) => {
     console.log("onGraphUpdate", additionalGraph);
     setAdditionalGraph(additionalGraph);
     setIsNodeLinkAttachModalOpen(true);

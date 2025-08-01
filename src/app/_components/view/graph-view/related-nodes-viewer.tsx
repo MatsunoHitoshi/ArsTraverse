@@ -36,8 +36,6 @@ export const RelatedNodesAndLinksViewer = ({
     return <div className="mt-6">Loading...</div>;
   }
 
-  console.log("relatedNodesAndLinks: ", relatedNodesAndLinks);
-
   return (
     <ContainerSizeProvider
       containerRef={containerRef}

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "../button/button";
 import { CheckboxInput } from "../input/checkbox-input";
 import { MergeNodesForm } from "../form/merge-nodes-form";
-import type { GraphDocument } from "@/server/api/routers/kg";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { PropertiesSummaryPanel } from "../d3/force/graph-info-panel";
 
 type NodesSortType = "name" | "centrality" | "none";
@@ -21,7 +21,7 @@ export const NodeLinkList = ({
   nodeSearchQuery,
   toolComponent,
 }: {
-  graphDocument: GraphDocument;
+  graphDocument: GraphDocumentForFrontend;
   setIsListOpen: (isListOpen: boolean) => void;
   topicSpaceId: string;
   focusedNode: CustomNodeType | undefined;
@@ -47,7 +47,7 @@ export const NodeLinkList = ({
         (a, b) => (b.neighborLinkCount ?? 0) - (a.neighborLinkCount ?? 0),
       );
     } else {
-      return graphNodes.sort((a, b) => a.id - b.id);
+      return graphNodes;
     }
   }, [sortType, graphDocument]);
 

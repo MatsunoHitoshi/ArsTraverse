@@ -1,11 +1,11 @@
 import type {
-  NodeType,
-  RelationshipType,
-} from "@/app/_utils/kg/get-nodes-and-relationships-from-result";
+  NodeTypeForFrontend,
+  RelationshipTypeForFrontend,
+} from "@/app/const/types";
 
 export type NodesAndRelationships = {
-  nodes: NodeType[];
-  relationships: RelationshipType[];
+  nodes: NodeTypeForFrontend[];
+  relationships: RelationshipTypeForFrontend[];
 };
 
 export interface Extractor {

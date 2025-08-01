@@ -1,4 +1,9 @@
-import type { CustomLinkType, CustomNodeType } from "@/app/const/types";
+import { getNodeByIdForFrontend } from "@/app/_utils/kg/filter";
+import type {
+  CustomLinkType,
+  CustomNodeType,
+  NodeTypeForFrontend,
+} from "@/app/const/types";
 import { useEffect, useRef, useState } from "react";
 
 const nodeHighlightedText = (
@@ -67,10 +72,12 @@ export const GraphSyncedText = ({
   focusedLink,
   focusedNode,
   text,
+  graphNodes,
 }: {
   focusedLink: CustomLinkType | undefined;
   focusedNode: CustomNodeType | undefined;
   text: string;
+  graphNodes: NodeTypeForFrontend[];
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [connectionLine, setConnectionLine] = useState<{
@@ -110,11 +117,20 @@ export const GraphSyncedText = ({
   if (!focusedNode?.name && !focusedLink) {
     return <div className="whitespace-pre-wrap">{text}</div>;
   }
+  if (!focusedLink?.sourceId || !focusedLink?.targetId) {
+    return <div className="whitespace-pre-wrap">{text}</div>;
+  }
 
   const searchTerms = [
     { identifier: "node", value: focusedNode?.name },
-    { identifier: "source", value: focusedLink?.sourceName },
-    { identifier: "target", value: focusedLink?.targetName },
+    {
+      identifier: "source",
+      value: getNodeByIdForFrontend(focusedLink.sourceId, graphNodes)?.name,
+    },
+    {
+      identifier: "target",
+      value: getNodeByIdForFrontend(focusedLink.targetId, graphNodes)?.name,
+    },
   ];
 
   return (

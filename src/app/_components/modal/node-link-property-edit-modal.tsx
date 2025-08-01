@@ -1,10 +1,11 @@
-import type { GraphDocument } from "@/server/api/routers/kg";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { Modal } from "./modal";
 import { Button } from "../button/button";
 import { Input } from "@headlessui/react";
 import clsx from "clsx";
 import type { CustomNodeType, CustomLinkType } from "@/app/const/types";
 import { useEffect, useState } from "react";
+import { getNodeByIdForFrontend } from "@/app/_utils/kg/filter";
 
 export const NodePropertyEditModal = ({
   isOpen,
@@ -15,8 +16,10 @@ export const NodePropertyEditModal = ({
 }: {
   isOpen: boolean;
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  graphDocument: GraphDocument | null;
-  setGraphDocument: React.Dispatch<React.SetStateAction<GraphDocument | null>>;
+  graphDocument: GraphDocumentForFrontend | null;
+  setGraphDocument: React.Dispatch<
+    React.SetStateAction<GraphDocumentForFrontend | null>
+  >;
   graphNode: CustomNodeType | undefined;
 }) => {
   const [graphNodeField, setGraphNodeField] = useState<
@@ -40,7 +43,7 @@ export const NodePropertyEditModal = ({
         relationship.targetId !== graphNodeField?.id,
     );
 
-    const newGraphDocument: GraphDocument = {
+    const newGraphDocument: GraphDocumentForFrontend = {
       nodes: newNodes ?? [],
       relationships: newRelationships ?? [],
     };
@@ -123,7 +126,7 @@ export const NodePropertyEditModal = ({
                     node.id === graphNodeField.id ? graphNodeField : node,
                   ) ?? [];
 
-                const newGraphDocument: GraphDocument = {
+                const newGraphDocument: GraphDocumentForFrontend = {
                   nodes: newNodes,
                   relationships: [...(graphDocument?.relationships ?? [])],
                 };
@@ -157,8 +160,10 @@ export const LinkPropertyEditModal = ({
 }: {
   isOpen: boolean;
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  graphDocument: GraphDocument | null;
-  setGraphDocument: React.Dispatch<React.SetStateAction<GraphDocument | null>>;
+  graphDocument: GraphDocumentForFrontend | null;
+  setGraphDocument: React.Dispatch<
+    React.SetStateAction<GraphDocumentForFrontend | null>
+  >;
   graphLink: CustomLinkType | undefined;
 }) => {
   const [graphLinkField, setGraphLinkField] = useState<
@@ -176,7 +181,7 @@ export const LinkPropertyEditModal = ({
       (relationship) => relationship.id !== graphLinkField?.id,
     );
 
-    const newGraphDocument: GraphDocument = {
+    const newGraphDocument: GraphDocumentForFrontend = {
       nodes: [...(graphDocument?.nodes ?? [])],
       relationships: newRelationships ?? [],
     };
@@ -191,7 +196,12 @@ export const LinkPropertyEditModal = ({
       <div className="flex flex-col gap-4">
         <div className="flex flex-row items-center rounded-xl bg-slate-900 p-2">
           <div className="rounded-xl border border-slate-500 p-2 text-xs text-gray-400">
-            {graphLinkField.sourceName}
+            {
+              getNodeByIdForFrontend(
+                graphLinkField.sourceId,
+                graphDocument?.nodes ?? [],
+              )?.name
+            }
           </div>
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -234,7 +244,12 @@ export const LinkPropertyEditModal = ({
             />
           </svg>
           <div className="rounded-xl border border-slate-700 bg-slate-700 p-2 text-xs text-gray-400">
-            {graphLinkField.targetName}
+            {
+              getNodeByIdForFrontend(
+                graphLinkField.targetId,
+                graphDocument?.nodes ?? [],
+              )?.name
+            }
           </div>
         </div>
 
@@ -268,7 +283,7 @@ export const LinkPropertyEditModal = ({
                       : relationship,
                   ) ?? [];
 
-                const newGraphDocument: GraphDocument = {
+                const newGraphDocument: GraphDocumentForFrontend = {
                   nodes: [...(graphDocument?.nodes ?? [])],
                   relationships: newRelationships,
                 };
@@ -317,7 +332,10 @@ const DeleteNodeLinkModal = ({
           <Button
             type="button"
             className="text-sm !text-error-red"
-            onClick={onDelete}
+            onClick={() => {
+              onDelete();
+              setIsOpen(false);
+            }}
           >
             削除する
           </Button>

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { UrlCopy } from "../url-copy/url-copy";
 import { env } from "@/env";
 import { D3ForceGraph } from "../d3/force/graph";
-import type { GraphDocument } from "@/server/api/routers/kg";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { useWindowSize } from "@/app/_hooks/use-window-size";
 import { api } from "@/trpc/react";
 import { exportTxt } from "@/app/_utils/sys/svg";
@@ -35,7 +35,7 @@ export const DocumentDetail = ({ documentId }: { documentId: string }) => {
         svgRef={svgRef}
         width={graphAreaWidth}
         height={graphAreaHeight}
-        graphDocument={document.graph?.dataJson as GraphDocument}
+        graphDocument={document.graph.dataJson}
         currentScale={currentScale}
         setCurrentScale={setCurrentScale}
         isLargeGraph={false}

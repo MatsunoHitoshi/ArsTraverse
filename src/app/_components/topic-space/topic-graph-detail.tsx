@@ -3,7 +3,7 @@ import { api } from "@/trpc/react";
 import { TabsContainer } from "../tab/tab";
 import type { CustomLinkType, CustomNodeType } from "@/app/const/types";
 import { useWindowSize } from "@/app/_hooks/use-window-size";
-import type { GraphDocument } from "@/server/api/routers/kg";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 import type {
   DocumentResponse,
   DocumentResponseWithGraphData,
@@ -31,14 +31,14 @@ export const circlePosition = (
 };
 
 export const circleColor = (
-  clusteredGraphData: GraphDocument,
+  clusteredGraphData: GraphDocumentForFrontend,
   documents: DocumentResponseWithGraphData[],
 ) => {
   const documentIdArray = documents.map((d) => d.id);
   documents.forEach((document, index) => {
-    const documentGraph = document.graph?.dataJson as GraphDocument;
+    const documentGraph = document.graph?.dataJson;
     clusteredGraphData.nodes.forEach((node) => {
-      if (documentGraph.nodes.map((n) => n.name).includes(node.name)) {
+      if (documentGraph?.nodes.map((n) => n.name).includes(node.name)) {
         node.clustered = node.clustered ?? { x: 0, y: 0 };
         node.clustered = {
           x:
@@ -107,12 +107,12 @@ export const TopicGraphDetail = ({
   const graphAreaHeight = (innerHeight ?? 300) - (session ? 160 : 108);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string>("");
   const [selectedGraphData, setSelectedGraphData] =
-    useState<GraphDocument | null>(null);
+    useState<GraphDocumentForFrontend | null>(null);
   const [isLinkFiltered, setIsLinkFiltered] = useState<boolean>(false);
   const [nodeSearchQuery, setNodeSearchQuery] = useState<string>("");
-  const [pathData, setPathData] = useState<GraphDocument>();
+  const [pathData, setPathData] = useState<GraphDocumentForFrontend>();
   const [isClustered, setIsClustered] = useState<boolean>(false);
-  const [graphData, setGraphData] = useState<GraphDocument>();
+  const [graphData, setGraphData] = useState<GraphDocumentForFrontend>();
   const svgRef = useRef<SVGSVGElement>(null);
   const [currentScale, setCurrentScale] = useState<number>(1);
   const [focusedNode, setFocusedNode] = useState<CustomNodeType | undefined>(
@@ -122,25 +122,33 @@ export const TopicGraphDetail = ({
     undefined,
   );
   useEffect(() => {
-    setGraphData(topicSpace?.graphData as GraphDocument);
+    setGraphData(topicSpace?.graphData);
   }, [topicSpace]);
 
   useEffect(() => {
     setSelectedGraphData(
       (topicSpace?.sourceDocuments?.find((document) => {
         return document.id === selectedDocumentId;
-      })?.graph?.dataJson as GraphDocument) ?? null,
+      })?.graph?.dataJson as GraphDocumentForFrontend) ?? null,
     );
   }, [selectedDocumentId, topicSpace]);
 
   useEffect(() => {
+    if (!topicSpace?.graphData) return;
+
     const clusteredGraphData = {
-      ...(topicSpace?.graphData as GraphDocument),
+      ...topicSpace.graphData,
     };
     if (isClustered) {
       const documents = topicSpace?.sourceDocuments ?? [];
-      setGraphData(circleColor(clusteredGraphData, documents));
-    } else if (graphData?.nodes) {
+      // TODO: JsonValueのカラムを消した後に 型を修正する
+      setGraphData(
+        circleColor(
+          clusteredGraphData,
+          documents as DocumentResponseWithGraphData[],
+        ),
+      );
+    } else if (clusteredGraphData.nodes) {
       clusteredGraphData.nodes.forEach((node) => {
         node.clustered = { x: 0, y: 0 };
         node.nodeColor = undefined;

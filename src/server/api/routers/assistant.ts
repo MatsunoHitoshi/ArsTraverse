@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import type {
-  NodeType,
-  RelationshipType,
-} from "@/app/_utils/kg/get-nodes-and-relationships-from-result";
+  NodeTypeForFrontend,
+  RelationshipTypeForFrontend,
+} from "@/app/const/types";
 import OpenAI from "openai";
 import { storageUtils } from "@/app/_utils/supabase/supabase";
 import { BUCKETS } from "@/app/_utils/supabase/const";
@@ -26,8 +26,9 @@ export const assistantRouter = createTRPCRouter({
     .input(GenerateGraphSummarySchema)
     .mutation(async function* ({ input }) {
       const sanitizedGraphData = {
-        nodes: input.graphData.nodes as NodeType[],
-        relationships: input.graphData.relationships as RelationshipType[],
+        nodes: input.graphData.nodes as NodeTypeForFrontend[],
+        relationships: input.graphData
+          .relationships as RelationshipTypeForFrontend[],
       };
 
       const openai = new OpenAI();
@@ -111,8 +112,9 @@ export const assistantRouter = createTRPCRouter({
     .input(GenerateGraphSummarySchema)
     .mutation(async function* ({ input }) {
       const sanitizedGraphData = {
-        nodes: input.graphData.nodes as NodeType[],
-        relationships: input.graphData.relationships as RelationshipType[],
+        nodes: input.graphData.nodes as NodeTypeForFrontend[],
+        relationships: input.graphData
+          .relationships as RelationshipTypeForFrontend[],
       };
 
       const openai = new OpenAI();

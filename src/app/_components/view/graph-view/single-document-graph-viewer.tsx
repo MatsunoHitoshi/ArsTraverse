@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import type { GraphDocument } from "@/server/api/routers/kg";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { D3ForceGraph } from "@/app/_components/d3/force/graph";
 import type { CustomNodeType, CustomLinkType } from "@/app/const/types";
 import { Toolbar } from "@/app/_components/toolbar/toolbar";
@@ -28,7 +28,7 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
     id: graphId,
   });
   const updateGraph = api.documentGraph.updateGraph.useMutation();
-  const defaultGraphData: GraphDocument = graphData?.dataJson as GraphDocument;
+  const defaultGraphData = graphData?.dataJson;
   const [isEditor, setIsEditor] = useState<boolean>(false);
   const [isLinkFiltered, setIsLinkFiltered] = useState<boolean>(false);
   const [nodeSearchQuery, setNodeSearchQuery] = useState<string>("");
@@ -44,11 +44,10 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
     undefined,
   );
 
-  const [graphDocument, setGraphDocument] = useState<GraphDocument | null>(
-    null,
-  );
+  const [graphDocument, setGraphDocument] =
+    useState<GraphDocumentForFrontend | null>(null);
   useEffect(() => {
-    setGraphDocument(defaultGraphData);
+    setGraphDocument(defaultGraphData ?? null);
   }, [defaultGraphData]);
   const [isGraphUpdated, setIsGraphUpdated] = useState<boolean>(false);
   useEffect(() => {
@@ -76,7 +75,7 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
   };
 
   const [additionalGraph, setAdditionalGraph] = useState<
-    GraphDocument | undefined
+    GraphDocumentForFrontend | undefined
   >();
   const [isNodeLinkAttachModalOpen, setIsNodeLinkAttachModalOpen] =
     useState<boolean>(false);
@@ -87,7 +86,7 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
 
   const [textPanelFull, setTextPanelFull] = useState<boolean>(false);
 
-  const onGraphFormUpdate = (additionalGraph: GraphDocument) => {
+  const onGraphFormUpdate = (additionalGraph: GraphDocumentForFrontend) => {
     console.log("onGraphUpdate", additionalGraph);
     if (isEditor) {
       setAdditionalGraph(additionalGraph);
@@ -241,6 +240,7 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
                         focusedLink={focusedLink}
                         focusedNode={focusedNode}
                         text={graphData.sourceDocument.text}
+                        graphNodes={defaultGraphData?.nodes ?? []}
                       />
                     </div>
                   </div>

@@ -1,7 +1,11 @@
-import type { GraphDocument } from "@/server/api/routers/kg";
-import type { GraphChangeType } from "@prisma/client";
+import type { GraphChangeType, Prisma } from "@prisma/client";
+import { createId } from "../cuid/cuid";
+import type {
+  NodeTypeForFrontend,
+  RelationshipTypeForFrontend,
+} from "@/app/const/types";
 
-export type PropertyType = {
+export type PropertyTypeForFrontend = {
   [K in string]: string;
 };
 
@@ -10,7 +14,7 @@ const itemSanitize = (item: string) => {
 };
 
 const extractProperties = (list: string[]) => {
-  const properties: PropertyType = {};
+  const properties: Prisma.JsonValue = {};
   list.map((item) => {
     const keyValue = itemSanitize(item);
     const res = keyValue.split(":");
@@ -23,45 +27,30 @@ const extractProperties = (list: string[]) => {
   return properties;
 };
 
-export type NodeType = {
-  id: number;
-  name: string;
-  label: string;
-  properties: PropertyType;
-  neighborLinkCount?: number;
-  visible?: boolean;
-  clustered?: { x: number; y: number };
-  nodeColor?: string;
-};
-
-export type RelationshipType = {
-  id: number;
-  sourceName: string;
-  sourceId: number;
-  type: string;
-  targetName: string;
-  targetId: number;
-  properties: PropertyType;
-};
-
 export type NodeDiffType = {
   type: GraphChangeType;
-  original?: NodeType;
-  updated?: NodeType;
+  original: NodeTypeForFrontend | null;
+  updated: NodeTypeForFrontend | null;
 };
 
 export type RelationshipDiffType = {
   type: GraphChangeType;
-  original?: RelationshipType;
-  updated?: RelationshipType;
+  original: RelationshipTypeForFrontend | null;
+  updated: RelationshipTypeForFrontend | null;
+};
+
+type NodeJson = {
+  name: string;
+  label: string;
+  properties: Prisma.JsonValue;
 };
 
 export const createExtraNode = (
   targetName: string,
-  nodesJson: NodeType[] | undefined,
-): NodeType => {
-  const newNode: NodeType = {
-    id: nodesJson?.length ?? 0,
+  nodesJson: NodeJson[] | undefined,
+): NodeTypeForFrontend => {
+  const newNode: NodeTypeForFrontend = {
+    id: createId(),
     name: targetName,
     label: "ExtraNode",
     properties: {},
@@ -123,10 +112,8 @@ export const getNodesAndRelationshipsFromResult = (result: string) => {
 
     return {
       id: index,
-      sourceName: sourceName,
       sourceId: source.id,
       type: itemSanitize(relationship[1] ?? ""),
-      targetName: targetName,
       targetId: target.id,
       properties: properties,
     };

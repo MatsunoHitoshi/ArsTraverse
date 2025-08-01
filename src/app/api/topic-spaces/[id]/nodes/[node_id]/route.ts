@@ -1,4 +1,4 @@
-import type { GraphDocument } from "@/server/api/routers/kg";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { api } from "@/trpc/server";
 import { NextResponse } from "next/server";
 
@@ -13,7 +13,7 @@ export const GET = async (
       // filterOption: { type: "tag", value: "main", cutOff: "1" },
     });
 
-    const graphData = res.graphData as GraphDocument;
+    const graphData = res.graphData as GraphDocumentForFrontend;
 
     const tagFilteredNodes = graphData.nodes.filter((node) => {
       if (node.properties.tag) {
@@ -23,18 +23,14 @@ export const GET = async (
       }
     });
 
-    const sourceNode = tagFilteredNodes.find(
-      (node) => node.id === parseInt(node_id),
-    ) ?? {
+    const sourceNode = tagFilteredNodes.find((node) => node.id === node_id) ?? {
       id: parseInt(node_id),
       name: "",
       label: "",
       properties: {},
     };
     const sourceLinks = graphData.relationships.filter(
-      (link) =>
-        link.sourceId === parseInt(node_id) ||
-        link.targetId === parseInt(node_id),
+      (link) => link.sourceId === node_id || link.targetId === node_id,
     );
     const neighborNodes = tagFilteredNodes.filter((node) =>
       sourceLinks?.some(

@@ -2,8 +2,9 @@ import { drag, type Simulation } from "d3";
 import type { D3DragEvent } from "d3";
 import * as d3 from "d3";
 import type { CustomLinkType, CustomNodeType } from "@/app/const/types";
-import type { GraphDocument } from "@/server/api/routers/kg";
-import type { RelationshipType } from "@/app/_utils/kg/get-nodes-and-relationships-from-result";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
+import type { RelationshipTypeForFrontend } from "@/app/const/types";
+import { createId } from "@/app/_utils/cuid/cuid";
 
 export interface DragState {
   isDragging: boolean;
@@ -24,10 +25,10 @@ export const dragEditorExtension = ({
   tempLineRef: React.RefObject<SVGLineElement>;
   tempCircleRef: React.RefObject<SVGCircleElement>;
   simulation: Simulation<CustomNodeType, CustomLinkType>;
-  graphDocument: GraphDocument;
+  graphDocument: GraphDocumentForFrontend;
   dragState: DragState;
   setDragState: React.Dispatch<React.SetStateAction<DragState>>;
-  onGraphUpdate?: (additionalGraph: GraphDocument) => void;
+  onGraphUpdate?: (additionalGraph: GraphDocumentForFrontend) => void;
   graphIdentifier: string;
 }) => {
   let dragStateInExtension = dragState;
@@ -64,9 +65,11 @@ export const dragEditorExtension = ({
   ) => {
     if (!onGraphUpdate) return;
 
-    const newNodeId = Math.max(...graphDocument.nodes.map((n) => n.id)) + 1;
-    const newRelationshipId =
-      Math.max(...graphDocument.relationships.map((r) => r.id)) + 1;
+    // const newNodeId = Math.max(...graphDocument.nodes.map((n) => n.id)) + 1;
+    //  const newRelationshipId =
+    //   Math.max(...graphDocument.relationships.map((r) => r.id)) + 1;
+    const newNodeId = createId();
+    const newRelationshipId = createId();
 
     const newNode: CustomNodeType = {
       id: newNodeId,
@@ -77,17 +80,15 @@ export const dragEditorExtension = ({
       y: targetY,
     };
 
-    const newRelationship: RelationshipType = {
+    const newRelationship: RelationshipTypeForFrontend = {
       id: newRelationshipId,
-      sourceName: sourceNode.name,
       sourceId: sourceNode.id,
       type: "CONNECTS",
-      targetName: newNode.name,
       targetId: newNode.id,
       properties: {},
     };
 
-    const additionalGraph: GraphDocument = {
+    const additionalGraph: GraphDocumentForFrontend = {
       nodes: [newNode],
       relationships: [newRelationship],
     };
@@ -102,20 +103,19 @@ export const dragEditorExtension = ({
   ) => {
     if (!onGraphUpdate) return;
 
-    const newRelationshipId =
-      Math.max(...graphDocument.relationships.map((r) => r.id)) + 1;
+    // const newRelationshipId =
+    //   Math.max(...graphDocument.relationships.map((r) => r.id)) + 1;
+    const newRelationshipId = createId();
 
-    const newRelationship: RelationshipType = {
+    const newRelationship: RelationshipTypeForFrontend = {
       id: newRelationshipId,
-      sourceName: sourceNode.name,
       sourceId: sourceNode.id,
       type: "CONNECTS",
-      targetName: targetNode.name,
       targetId: targetNode.id,
       properties: {},
     };
 
-    const additionalGraph: GraphDocument = {
+    const additionalGraph: GraphDocumentForFrontend = {
       nodes: [],
       relationships: [newRelationship],
     };

@@ -6,16 +6,19 @@ import {
   publicProcedure,
 } from "@/server/api/trpc";
 import type {
-  NodeType,
-  RelationshipType,
-} from "@/app/_utils/kg/get-nodes-and-relationships-from-result";
-import { shapeGraphData } from "@/app/_utils/kg/shape";
+  NodeTypeForFrontend,
+  RelationshipTypeForFrontend,
+} from "@/app/const/types";
 import { BUCKETS } from "@/app/_utils/supabase/const";
 import { storageUtils } from "@/app/_utils/supabase/supabase";
 import { env } from "@/env";
 import { getTextFromDocumentFile } from "@/app/_utils/text/text";
 import { inspectFileTypeFromUrl } from "@/app/_utils/sys/file";
 import { DocumentType } from "@prisma/client";
+import {
+  formDocumentGraphForFrontend,
+  formGraphDataForFrontend,
+} from "@/app/_utils/kg/frontend-properties";
 
 const SourceDocumentSchema = z.object({
   name: z.string(),
@@ -67,14 +70,22 @@ export const sourceDocumentRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const document = await ctx.db.sourceDocument.findFirst({
         where: { id: input.id, isDeleted: false },
-        include: { user: true, graph: true },
+        include: {
+          user: true,
+          graph: { include: { graphNodes: true, graphRelationships: true } },
+        },
       });
       if (document?.user.id !== ctx.session?.user.id) {
         throw new Error("Document not found");
       }
 
+      if (!document?.graph) {
+        throw new Error("Graph not found");
+      }
+
       return {
         ...document,
+        graph: formDocumentGraphForFrontend(document.graph),
         text: await getTextFromDocumentFile(
           document.url,
           document.documentType,
@@ -87,12 +98,23 @@ export const sourceDocumentRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const document = await ctx.db.sourceDocument.findFirst({
         where: { id: input.id, isDeleted: false },
-        include: { user: true },
+        include: {
+          user: true,
+          graph: { include: { graphNodes: true, graphRelationships: true } },
+        },
       });
       if (!document) {
         throw new Error("Document not found");
       }
-      return document;
+
+      if (!document.graph) {
+        throw new Error("Graph not found");
+      }
+
+      return {
+        ...document,
+        graph: formDocumentGraphForFrontend(document.graph),
+      };
     }),
 
   getListBySession: protectedProcedure.query(({ ctx }) => {
@@ -148,18 +170,43 @@ export const sourceDocumentRouter = createTRPCRouter({
           user: { connect: { id: ctx.session.user.id } },
         },
       });
-      const sanitizedGraphData = shapeGraphData({
-        nodes: input.dataJson.nodes as NodeType[],
-        relationships: input.dataJson.relationships as RelationshipType[],
-      });
-      const graph = await ctx.db.documentGraph.create({
+      // const sanitizedGraphData = shapeGraphData({
+      //   nodes: input.dataJson.nodes as NodeType[],
+      //   relationships: input.dataJson.relationships as RelationshipType[],
+      // });
+
+      const documentGraph = await ctx.db.documentGraph.create({
         data: {
-          dataJson: sanitizedGraphData,
           user: { connect: { id: ctx.session.user.id } },
           sourceDocument: { connect: { id: document.id } },
+          // 後ほどカラムが消える
+          dataJson: {},
         },
       });
-      return graph;
+
+      await ctx.db.graphNode.createMany({
+        data: input.dataJson.nodes.map((node: NodeTypeForFrontend) => ({
+          id: node.id,
+          name: node.name,
+          label: node.label,
+          properties: node.properties ?? {},
+          documentGraphId: documentGraph.id,
+        })),
+      });
+      await ctx.db.graphRelationship.createMany({
+        data: input.dataJson.relationships.map(
+          (relationship: RelationshipTypeForFrontend) => ({
+            id: relationship.id,
+            fromNodeId: relationship.sourceId,
+            toNodeId: relationship.targetId,
+            type: relationship.type,
+            properties: relationship.properties ?? {},
+            documentGraphId: documentGraph.id,
+          }),
+        ),
+      });
+
+      return documentGraph;
     }),
 
   update: protectedProcedure

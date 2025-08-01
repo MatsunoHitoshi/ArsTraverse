@@ -1,4 +1,4 @@
-import type { PropertyType } from "@/app/_utils/kg/get-nodes-and-relationships-from-result";
+import type { PropertyTypeForFrontend } from "@/app/_utils/kg/get-nodes-and-relationships-from-result";
 import type { CustomNodeType } from "@/app/const/types";
 import React, { useState } from "react";
 import { Button } from "../button/button";
@@ -21,7 +21,9 @@ export const NodePropertiesForm = ({
   width?: "short" | "long";
 }) => {
   const updateProperty = api.topicSpaces.updateGraphProperties.useMutation();
-  const [properties, setProperties] = useState<PropertyType>(node.properties);
+  const [properties, setProperties] = useState<PropertyTypeForFrontend>(
+    node.properties,
+  );
 
   const submit = () => {
     updateProperty.mutate(

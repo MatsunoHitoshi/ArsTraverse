@@ -1,35 +1,41 @@
-import type { TreeNode } from "@/app/const/types";
-import type { GraphDocument } from "@/server/api/routers/kg";
 import type {
-  NodeType,
-  RelationshipType,
-} from "./get-nodes-and-relationships-from-result";
+  GraphDocumentForFrontend,
+  NodeTypeForFrontend,
+  RelationshipTypeForFrontend,
+  TreeNode,
+} from "@/app/const/types";
 
 export const getTreeLayoutData = (
-  graphData: GraphDocument,
-  nodeId: number,
+  graph: GraphDocumentForFrontend,
+  nodeId: string,
   edgeType: EdgeType,
 ) => {
-  const centerNode = graphData.nodes.find((node) => node.id === nodeId);
+  const centerNode = graph.nodes.find((node) => node.id === nodeId);
   if (!centerNode) return null;
-  let treeData: TreeNode = centerNode;
+  let treeData: TreeNode = centerNode as unknown as TreeNode;
 
-  treeData = buildTreeNode(graphData, centerNode, edgeType, 2);
+  treeData = buildTreeNode(graph, centerNode, edgeType, 2);
 
   return treeData;
 };
 
-export const sourceLinks = (links: RelationshipType[], nodeId: number) =>
+export const sourceLinks = (
+  links: RelationshipTypeForFrontend[],
+  nodeId: string,
+) =>
   links.filter((link) => {
     return link.sourceId === nodeId;
   });
 
-export const targetLinks = (links: RelationshipType[], nodeId: number) =>
+export const targetLinks = (
+  links: RelationshipTypeForFrontend[],
+  nodeId: string,
+) =>
   links.filter((link) => {
     return link.targetId === nodeId;
   });
 
-const getNodeById = (id: number, nodes: NodeType[]) => {
+const getNodeById = (id: string, nodes: NodeTypeForFrontend[]) => {
   return nodes.find((node) => {
     return node.id === id;
   });
@@ -37,84 +43,66 @@ const getNodeById = (id: number, nodes: NodeType[]) => {
 
 export type EdgeType = "IN" | "OUT" | "BOTH";
 export const getNeighborNodes = (
-  graphData: GraphDocument,
-  nodeId: number,
+  graph: GraphDocumentForFrontend,
+  nodeId: string,
   edgeType: EdgeType,
-): NodeType[] => {
+): NodeTypeForFrontend[] => {
   switch (edgeType) {
     case "IN":
-      const inNodes = targetLinks(graphData.relationships, nodeId).map(
-        (link) => {
-          return getNodeById(link.sourceId, graphData.nodes);
-        },
-      );
+      const inNodes = targetLinks(graph.relationships, nodeId).map((link) => {
+        return getNodeById(link.sourceId, graph.nodes);
+      });
       return inNodes
-        .filter((node): node is NodeType => {
+        .filter((node): node is NodeTypeForFrontend => {
           return node !== undefined;
         })
-        .filter((node, index) => {
-          return (
-            index ===
-            inNodes.findIndex((n) => {
-              return node?.id === n?.id;
-            })
-          );
+        .filter((node, index, self) => {
+          return index === self.findIndex((n) => n.id === node.id);
         });
     case "OUT":
-      const outNodes = sourceLinks(graphData.relationships, nodeId).map(
-        (link) => {
-          return getNodeById(link.targetId, graphData.nodes);
-        },
-      );
-      const filteredOutNodes = outNodes
-        .filter((node): node is NodeType => {
+      const outNodes = sourceLinks(graph.relationships, nodeId).map((link) => {
+        return getNodeById(link.targetId, graph.nodes);
+      });
+      return outNodes
+        .filter((node): node is NodeTypeForFrontend => {
           return node !== undefined;
         })
-        .filter((node, index) => {
-          return (
-            index ===
-            outNodes.findIndex((n) => {
-              return node?.id === n?.id;
-            })
-          );
+        .filter((node, index, self) => {
+          return index === self.findIndex((n) => n.id === node.id);
         });
-      return filteredOutNodes;
     case "BOTH":
-      const bothNodes = targetLinks(graphData.relationships, nodeId)
+      const bothNodes = targetLinks(graph.relationships, nodeId)
         .map((link) => {
-          return getNodeById(link.sourceId, graphData.nodes);
+          return getNodeById(link.sourceId, graph.nodes);
         })
         .concat(
-          sourceLinks(graphData.relationships, nodeId).map((link) => {
-            return getNodeById(link.targetId, graphData.nodes);
+          sourceLinks(graph.relationships, nodeId).map((link) => {
+            return getNodeById(link.targetId, graph.nodes);
           }),
         );
       return bothNodes
-        .filter((node): node is NodeType => {
+        .filter((node): node is NodeTypeForFrontend => {
           return node !== undefined;
         })
-        .filter((node, index) => {
-          return (
-            index ===
-            bothNodes.findIndex((n) => {
-              return node?.id === n?.id;
-            })
-          );
+        .filter((node, index, self) => {
+          return index === self.findIndex((n) => n.id === node.id);
         });
   }
 };
 
 export const buildTreeNode = (
-  graphData: GraphDocument,
-  node: NodeType,
+  graph: GraphDocumentForFrontend,
+  node: NodeTypeForFrontend,
   edgeType: EdgeType,
   depth: number,
 ): TreeNode => {
-  if (depth === 0) return { ...node, children: [] };
+  if (depth === 0) return { id: node.id, name: node.name, children: [] };
   return {
-    ...node,
-    children: getNeighborNodes(graphData, node.id, edgeType).map((child) =>
-      buildTreeNode(graphData, child, edgeType, depth - 1),
+    id: node.id,
+    name: node.name,
+    label: node.label,
+    children: getNeighborNodes(graph, node.id, edgeType).map((child) =>
+      buildTreeNode(graph, child, edgeType, depth - 1),
     ),
   };
 };

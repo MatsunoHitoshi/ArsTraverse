@@ -2,7 +2,7 @@
 import { api } from "@/trpc/react";
 import { TabsContainer } from "../tab/tab";
 import { useWindowSize } from "@/app/_hooks/use-window-size";
-import type { GraphDocument } from "@/server/api/routers/kg";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 import type { DocumentResponse } from "@/app/const/types";
 import { useEffect, useRef, useState } from "react";
 import { TopicGraphDocumentList } from "../list/topic-graph-document-list";
@@ -26,7 +26,7 @@ export const TreeViewer = ({
   });
   const { data: treeData, refetch } = api.treeGraph.getByNodeId.useQuery({
     topicSpaceId: topicSpaceId,
-    nodeId: Number(nodeId),
+    nodeId: nodeId,
     edgeType: edgeType,
   });
   const [innerWidth, innerHeight] = useWindowSize();
@@ -34,7 +34,7 @@ export const TreeViewer = ({
   const graphAreaHeight = (innerHeight ?? 300) - 128;
   const [selectedDocumentId, setSelectedDocumentId] = useState<string>("");
   const [selectedGraphData, setSelectedGraphData] =
-    useState<GraphDocument | null>(null);
+    useState<GraphDocumentForFrontend | null>(null);
   const [nodeSearchQuery, setNodeSearchQuery] = useState<string>("");
   const [treeRadius, setTreeRadius] = useState<number>(80);
   const [currentScale, setCurrentScale] = useState<number>(1);
@@ -49,7 +49,7 @@ export const TreeViewer = ({
     setSelectedGraphData(
       (topicSpace?.sourceDocuments?.find((document) => {
         return document.id === selectedDocumentId;
-      })?.graph?.dataJson as GraphDocument) ?? null,
+      })?.graph?.dataJson as GraphDocumentForFrontend) ?? null,
     );
   }, [selectedDocumentId, topicSpace]);
 

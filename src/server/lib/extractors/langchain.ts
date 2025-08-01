@@ -11,6 +11,7 @@ import type {
   NodesAndRelationships,
   TransformerSchema,
 } from "./base";
+import { createId } from "@/app/_utils/cuid/cuid";
 
 export class LangChainExtractor implements Extractor {
   async extract(
@@ -42,7 +43,7 @@ export class LangChainExtractor implements Extractor {
       nodes.push(...graphDocument.nodes);
       relationships.push(...graphDocument.relationships);
     });
-    const newNodes = nodes.map((node, index) => {
+    const newNodes = nodes.map((node) => {
       console.log("id: ", node.id);
       console.log("type: ", node.type);
       console.log("lc_attributes: ", node.lc_attributes);
@@ -53,7 +54,7 @@ export class LangChainExtractor implements Extractor {
       console.log("properties: ", node.properties);
       console.log("---");
       return {
-        id: index,
+        id: createId(),
         name: node.id as string,
         label: node.type,
         properties: node.properties,
@@ -61,7 +62,7 @@ export class LangChainExtractor implements Extractor {
     });
     const nodesAndRelationships = {
       nodes: newNodes,
-      relationships: relationships.map((relationship, index) => {
+      relationships: relationships.map((relationship) => {
         const source =
           newNodes.find((newNode) => {
             return newNode.name === relationship.source.id;
@@ -71,7 +72,7 @@ export class LangChainExtractor implements Extractor {
             return newNode.name === relationship.target.id;
           }) ?? createExtraNode(relationship.target.id as string, newNodes);
         return {
-          id: index,
+          id: createId(),
           sourceName: relationship.source.id as string,
           sourceId: source.id,
           type: relationship.type,

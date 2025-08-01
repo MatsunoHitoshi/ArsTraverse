@@ -74,11 +74,11 @@ export const DocumentAttachModal = ({
   const submit: SubmitHandler<DocumentAttachForm> = (
     data: DocumentAttachForm,
   ) => {
-    const filteredData = data.documents.filter((documentId) => {
+    const attachDocumentIds = data.documents.filter((documentId) => {
       return documentId !== "";
     });
     attachDocuments.mutate(
-      { id: topicSpaceId, documents: filteredData },
+      { id: topicSpaceId, documentIds: attachDocumentIds },
       {
         onSuccess: (res) => {
           setIsOpen(false);

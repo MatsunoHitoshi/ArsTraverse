@@ -1,17 +1,20 @@
-import type { GraphDocument } from "@/server/api/routers/kg";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 import React, { useEffect, useState } from "react";
 import { SelectInput } from "../input/select-input";
 import { nodePathSearch } from "@/app/_utils/kg/bfs";
 import { ChevronRightIcon } from "../icons";
+import { formGraphDataForFrontend } from "@/app/_utils/kg/frontend-properties";
 
 type SelectBoxOption = { id: string; label: string };
 
 type RelationPathSearchProps = {
-  defaultStartNodeId?: number;
-  defaultEndNodeId?: number;
-  graphData: GraphDocument;
-  setPathData: React.Dispatch<React.SetStateAction<GraphDocument | undefined>>;
-  pathData: GraphDocument | undefined;
+  defaultStartNodeId?: string;
+  defaultEndNodeId?: string;
+  graphData: GraphDocumentForFrontend;
+  setPathData: React.Dispatch<
+    React.SetStateAction<GraphDocumentForFrontend | undefined>
+  >;
+  pathData: GraphDocumentForFrontend | undefined;
 };
 
 export const RelationPathSearch = ({
@@ -30,8 +33,8 @@ export const RelationPathSearch = ({
     if (!!defaultEndNodeId && !!defaultStartNodeId) {
       const path = nodePathSearch(
         graphData,
-        Number(defaultStartNodeId),
-        Number(defaultEndNodeId),
+        defaultStartNodeId,
+        defaultEndNodeId,
       );
       setIsPathNotFound(path.nodes.length == 0 ? true : false);
       setPathData(path);
@@ -39,8 +42,8 @@ export const RelationPathSearch = ({
     if (!!startNode && !!endNode) {
       const path = nodePathSearch(
         graphData,
-        Number(startNode.id || defaultStartNodeId),
-        Number(endNode.id || defaultEndNodeId),
+        startNode.id ?? defaultStartNodeId,
+        endNode.id ?? defaultEndNodeId,
       );
       setIsPathNotFound(path.nodes.length == 0 ? true : false);
       setPathData(path);

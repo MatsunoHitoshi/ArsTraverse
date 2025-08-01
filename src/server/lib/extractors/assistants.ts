@@ -41,7 +41,7 @@ Nodes: ["alice", "Person", {"age": 25, "occupation": "lawyer", "name":"Alice"}],
 Relationships: ["alice", "roommate", "bob", {"start": 2021}], ["alice", "owns", "alice.com", {}], ["bob", "owns", "bob.com", {}]
     `;
 };
-
+// 型が合わなくなったので、一旦使わない
 export class AssistantsApiExtractor implements Extractor {
   async extract(
     localFilePath: string,
@@ -100,7 +100,8 @@ export class AssistantsApiExtractor implements Extractor {
       const nodesAndRelationships = getNodesAndRelationshipsFromResult(
         text.value,
       );
-      return nodesAndRelationships;
+      // 型が合わなくなったので、一旦使わない
+      return { nodes: [], relationships: [] };
     }
     return null;
   }
