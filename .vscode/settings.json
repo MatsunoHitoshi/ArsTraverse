@@ -1,7 +1,8 @@
 {
-  "deno.enablePaths": ["supabase/functions"],
+  "deno.enablePaths": ["./supabase/functions"],
   "deno.lint": true,
   "deno.unstable": true,
+  "deno.enable": true,
   "[typescript]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode",
     "editor.formatOnSave": true

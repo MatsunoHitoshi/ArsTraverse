@@ -120,7 +120,7 @@ model GraphNode {
   name          String
   label         String
   properties    Json                         @default("{}")
-  nameEmbedding Unsupported("vector(1536)")?
+  nameEmbedding Unsupported("vector(384)")?
 
   documentGraph   DocumentGraph? @relation("DocumentGraphNodes", fields: [documentGraphId], references: [id])
   documentGraphId String?
