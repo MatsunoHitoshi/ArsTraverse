@@ -3,5 +3,11 @@
     "app/api/**/*": {
       "maxDuration": 60
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/node-name-embedding",
+      "schedule": "*/10 * * * *"
+    }
+  ]
 }
