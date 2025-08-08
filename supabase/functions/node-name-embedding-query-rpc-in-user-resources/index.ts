@@ -6,23 +6,37 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { supabaseAdmin } from "../_shared/pg-client.ts";
 import { getEmbedding } from "../_shared/get-embedding.ts";
+import { appUserAuth } from "../_shared/app-user-auth.ts";
+
+type ResourceType = "documentGraph" | "topicSpace";
 
 console.log("loading function...");
 
 Deno.serve(
   async (req: { json: () => PromiseLike<{ query: any }> | { query: any } }) => {
-    const { name } = await req.json();
+    const { name, resourceType, resourceId } = await req.json();
+    const userId = await appUserAuth(req);
+    if (!userId) {
+      return new Response("Unauthorized", { status: 401 });
+    }
 
     const embedding = await getEmbedding(name);
 
+    const val = {
+      user_id: userId,
+      resource_type: resourceType as ResourceType,
+      resource_id: resourceId,
+      query_embedding: embedding,
+      match_threshold: 0.0, // 閾値
+      match_count: 10, // 検索結果数
+    };
+
+    console.log("val: ", val);
+
     // RPCでストアード・ファンクションを呼び出す。
     const { data: nodes, error } = await supabaseAdmin.rpc(
-      "nodes_name_vector_search_dot",
-      {
-        query_embedding: embedding,
-        match_threshold: 0.0, // 閾値
-        match_count: 10, // 検索結果数
-      },
+      "nodes_name_vector_search_dot_in_resources",
+      val,
     );
 
     console.log("nodes", nodes);

@@ -4,30 +4,14 @@
 
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { HfInference } from "npm:@huggingface/inference";
-import { supabase } from "../_shared/pg-client.ts";
+import { supabaseAdmin } from "../_shared/pg-client.ts";
+import { getEmbedding } from "../_shared/get-embedding.ts";
 
 console.log("loading function...");
 
-// Hugging Face Inference クライアントを初期化
-const hf = new HfInference(Deno.env.get("HUGGINGFACE_API_KEY"));
-
-async function getEmbedding(text: string): Promise<number[]> {
-  try {
-    const response = await hf.featureExtraction({
-      model: "sentence-transformers/all-MiniLM-L6-v2",
-      inputs: text,
-    });
-    return Array.from(response);
-  } catch (error) {
-    console.error("Error getting embedding:", error);
-    throw error;
-  }
-}
-
 Deno.serve(async (req) => {
-  // 全件のノードを取得
-  const { data: nodes, error: nodesError } = await supabase
+  // 全件のノードを取得（サービスロールを使用）
+  const { data: nodes, error: nodesError } = await supabaseAdmin
     .from("GraphNode")
     .select("name, id")
     .is("nameEmbedding", null)
@@ -72,7 +56,7 @@ Deno.serve(async (req) => {
 
       const embedding = await getEmbedding(node.name);
 
-      const { data: updatedNodeData, error: updateError } = await supabase
+      const { data: updatedNodeData, error: updateError } = await supabaseAdmin
         .from("GraphNode")
         .update({
           nameEmbedding: embedding,
