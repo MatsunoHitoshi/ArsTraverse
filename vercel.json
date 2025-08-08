@@ -7,7 +7,7 @@
   "crons": [
     {
       "path": "/api/cron/node-name-embedding",
-      "schedule": "*/5 * * * *"
+      "schedule": "*/1 * * * *"
     }
   ]
 }
