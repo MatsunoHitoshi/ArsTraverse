@@ -4,21 +4,26 @@
 
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import {
-  env,
-  pipeline,
-} from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.5.0";
+import { HfInference } from "npm:@huggingface/inference";
 import { supabase } from "../_shared/pg-client.ts";
-
-env.useBrowserCache = false;
-env.allowLocalModels = false;
 
 console.log("loading function...");
 
-const pipe = await pipeline(
-  "feature-extraction", // ベクトル化
-  "Supabase/gte-small", // モデルの指定
-);
+// Hugging Face Inference クライアントを初期化
+const hf = new HfInference(Deno.env.get("HUGGINGFACE_API_KEY"));
+
+async function getEmbedding(text: string): Promise<number[]> {
+  try {
+    const response = await hf.featureExtraction({
+      model: "sentence-transformers/all-MiniLM-L6-v2",
+      inputs: text,
+    });
+    return Array.from(response);
+  } catch (error) {
+    console.error("Error getting embedding:", error);
+    throw error;
+  }
+}
 
 Deno.serve(async (req) => {
   // 全件のノードを取得
@@ -65,11 +70,7 @@ Deno.serve(async (req) => {
         `Processing node: ${node.name} (${processedCount + 1}/${nodes.length})`,
       );
 
-      const output = await pipe(node.name, {
-        pooling: "mean",
-        normalize: true,
-      });
-      const embedding = Array.from(output.data);
+      const embedding = await getEmbedding(node.name);
 
       const { data: updatedNodeData, error: updateError } = await supabase
         .from("GraphNode")
