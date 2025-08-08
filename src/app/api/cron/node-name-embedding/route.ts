@@ -15,7 +15,10 @@ export const GET = async (_request: Request, {}) => {
     );
 
     if (!res.ok) {
-      throw new Error(`HTTP error! status: ${res.status}`);
+      return NextResponse.json(
+        { error: "Failed to process embeddings" },
+        { status: 500 },
+      );
     }
 
     const data = (await res.json()) as { message: string; results?: unknown[] };
