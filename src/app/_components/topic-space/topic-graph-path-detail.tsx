@@ -68,7 +68,7 @@ export const TopicGraphPathDetail = ({
           <RelationPathSearch
             defaultStartNodeId={startId}
             defaultEndNodeId={endId}
-            graphData={topicSpace.graphData as GraphDocumentForFrontend}
+            graphData={topicSpace.graphData}
             setPathData={setPathData}
             pathData={pathData}
           />
@@ -85,7 +85,7 @@ export const TopicGraphPathDetail = ({
           </div>
 
           <GraphSummaryGenerator
-            graphData={topicSpace.graphData as GraphDocumentForFrontend}
+            graphData={topicSpace.graphData}
             defaultStartNodeId={startId}
             defaultEndNodeId={endId}
           />
@@ -94,7 +94,7 @@ export const TopicGraphPathDetail = ({
         <div className="col-span-2 h-full overflow-scroll">
           {topicSpace.graphData ? (
             <MultiDocumentGraphDetailViewer
-              graphDocument={topicSpace.graphData as GraphDocumentForFrontend}
+              graphDocument={topicSpace.graphData}
               selectedGraphData={selectedGraphData ?? undefined}
               selectedPathData={pathData ?? undefined}
               topicSpaceId={id}

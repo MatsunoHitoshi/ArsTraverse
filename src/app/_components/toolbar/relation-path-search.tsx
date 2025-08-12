@@ -3,7 +3,6 @@ import React, { useEffect, useState } from "react";
 import { SelectInput } from "../input/select-input";
 import { nodePathSearch } from "@/app/_utils/kg/bfs";
 import { ChevronRightIcon } from "../icons";
-import { formGraphDataForFrontend } from "@/app/_utils/kg/frontend-properties";
 
 type SelectBoxOption = { id: string; label: string };
 
@@ -27,7 +26,6 @@ export const RelationPathSearch = ({
   const [startNode, setStartNode] = useState<SelectBoxOption>();
   const [endNode, setEndNode] = useState<SelectBoxOption>();
   const [isPathNotFound, setIsPathNotFound] = useState<boolean>(false);
-  console.log(pathData);
 
   useEffect(() => {
     if (!!defaultEndNodeId && !!defaultStartNodeId) {
@@ -51,19 +49,19 @@ export const RelationPathSearch = ({
   }, [startNode, endNode]);
 
   const options = graphData.nodes.map((node) => {
-    return { id: String(node.id), label: node.name };
+    return { id: node.id, label: node.name };
   });
 
   useEffect(() => {
     if (options && defaultStartNodeId && defaultEndNodeId) {
       setStartNode(
         options.find((o) => {
-          return o.id === String(defaultStartNodeId);
+          return o.id === defaultStartNodeId;
         }),
       );
       setEndNode(
         options.find((o) => {
-          return o.id === String(defaultEndNodeId);
+          return o.id === defaultEndNodeId;
         }),
       );
     }

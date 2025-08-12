@@ -13,6 +13,7 @@ import {
 } from "@/app/_utils/kg/data-disambiguation";
 import type {
   NodeTypeForFrontend,
+  RelationshipTypeForFrontend,
   TopicGraphFilterOption,
 } from "@/app/const/types";
 import { nodePathSearch } from "@/app/_utils/kg/bfs";
@@ -346,7 +347,7 @@ export const topicSpaceRouter = createTRPCRouter({
         input.endId,
       );
 
-      const newLinks: GraphRelationship[] = [];
+      const newLinks: RelationshipTypeForFrontend[] = [];
       const nodesWithNeighbors = pathData.nodes
         .map((node) => {
           const neighbors = getNeighborNodes(
@@ -362,12 +363,17 @@ export const topicSpaceRouter = createTRPCRouter({
                 (link.toNodeId === neighbor.id && link.fromNodeId === node.id)
               );
             });
-            newLinks.push(...additionalLinks);
+            newLinks.push(
+              ...additionalLinks.map((link) =>
+                formRelationshipDataForFrontend(link),
+              ),
+            );
           });
 
           return [...neighbors, node];
         })
         .flat();
+
       const uniqueNodes = [
         ...new Set(nodesWithNeighbors.map((node) => node.id)),
       ].map((id) => nodesWithNeighbors.find((node) => node.id === id));
@@ -377,8 +383,10 @@ export const topicSpaceRouter = createTRPCRouter({
 
       return {
         ...topicSpace,
-        nodes: uniqueNodes,
-        relationships: uniqueLinks,
+        graphData: {
+          nodes: uniqueNodes.filter((node) => node !== undefined),
+          relationships: uniqueLinks.filter((link) => link !== undefined),
+        },
       };
     }),
 
