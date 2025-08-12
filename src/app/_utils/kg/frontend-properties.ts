@@ -177,7 +177,9 @@ export const formNodeDataForFrontend = (
   node: GraphNode,
 ): NodeTypeForFrontend => {
   return {
-    ...node,
+    id: node.id,
+    name: node.name,
+    label: node.label,
     properties: node.properties as PropertyTypeForFrontend,
     topicSpaceId: node.topicSpaceId ?? undefined,
     documentGraphId: node.documentGraphId ?? undefined,
@@ -188,7 +190,8 @@ export const formRelationshipDataForFrontend = (
   relationship: GraphRelationship,
 ): RelationshipTypeForFrontend => {
   return {
-    ...relationship,
+    id: relationship.id,
+    type: relationship.type,
     sourceId: relationship.fromNodeId,
     targetId: relationship.toNodeId,
     properties: relationship.properties as PropertyTypeForFrontend,
