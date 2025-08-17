@@ -121,6 +121,7 @@ model GraphNode {
   label         String
   properties    Json                         @default("{}")
   nameEmbedding Unsupported("vector(384)")?
+  transEEmbedding Unsupported("vector(50)")?
 
   documentGraph   DocumentGraph? @relation("DocumentGraphNodes", fields: [documentGraphId], references: [id])
   documentGraphId String?
@@ -143,6 +144,7 @@ model GraphRelationship {
 
   documentGraph   DocumentGraph? @relation("DocumentGraphEdges", fields: [documentGraphId], references: [id])
   documentGraphId String?
+  transEEmbedding Unsupported("vector(50)")?
 
   topicSpace   TopicSpace? @relation("TopicSpaceEdges", fields: [topicSpaceId], references: [id])
   topicSpaceId String?
@@ -180,6 +182,7 @@ model TopicSpace {
   tags             Tag[]
   activities       Activity[]
   graphFusionQueue GraphFusionQueue[]
+  graphEmbeddingQueues GraphEmbeddingQueue[]
 }
 
 enum GraphDataStatus {
@@ -283,4 +286,31 @@ model GraphFusionQueue {
   additionalGraphId String
   // targetGraph DocumentGraph @relation("TargetGraph", fields: [targetGraphId], references: [id])
   // targetGraphId String
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model GraphEmbeddingQueue {
+  id           String    @id @default(cuid())
+  
+  status       JobStatus @default(PENDING)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  startedAt    DateTime?
+  completedAt  DateTime?
+  error        String?   @db.Text
+  processedEpochs Int?      @default(0)
+  modelStatePath  String?
+
+  topicSpace TopicSpace @relation(fields: [topicSpaceId], references: [id], onDelete: Cascade)
+  topicSpaceId String
+
+
+  @@index([status])
+  @@index([topicSpaceId])
 }
