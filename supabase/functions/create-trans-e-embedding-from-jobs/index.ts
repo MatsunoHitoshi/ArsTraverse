@@ -10,7 +10,7 @@ const corsHeaders = {
 };
 
 const TOTAL_EPOCHS = 200;
-const EPOCHS_PER_BATCH = 40;
+const EPOCHS_PER_BATCH = 20;
 
 // 文脈情報をエンコードするヘルパー関数
 function encodeContextualInfo(context: any): number[] {
@@ -133,6 +133,8 @@ async function getJobToProcess(supabaseAdmin: any) {
     .order("createdAt")
     .limit(1);
 
+  console.log("pendingJobs: ", pendingJobs);
+
   if (pendingJobs && pendingJobs.length > 0) {
     return pendingJobs[0];
   }
@@ -146,6 +148,8 @@ async function getJobToProcess(supabaseAdmin: any) {
     .lt("updatedAt", staleTime)
     .order("createdAt")
     .limit(1);
+
+  console.log("staleJobs: ", staleJobs);
 
   return staleJobs && staleJobs.length > 0 ? staleJobs[0] : null;
 }
@@ -240,6 +244,12 @@ async function processJob(supabaseAdmin: any, job: any) {
     // TransEインスタンスを作成
     const transE = new TransE(config);
 
+    // 初期化を実行（埋め込みの準備）
+    console.log(
+      `Starting initialization with ${entities.length} entities and ${relations.length} relations`,
+    );
+    transE.initialize(entities, relations);
+
     // 既存のモデル状態を復元（ある場合）
     if (processedEpochs > 0 && modelStatePath) {
       try {
@@ -252,11 +262,112 @@ async function processJob(supabaseAdmin: any, job: any) {
           const modelState = JSON.parse(await modelData.text());
           transE.loadModel(modelState);
           console.log("Model state restored successfully");
+
+          // 復元後の状態をチェック
+          const restoredEntityEmbeddings = transE.getAllEntityEmbeddings();
+          const restoredRelationEmbeddings = transE.getAllRelationEmbeddings();
+          console.log(
+            `After restoration: ${restoredEntityEmbeddings.size} entities, ${restoredRelationEmbeddings.size} relations`,
+          );
         }
       } catch (error) {
         console.warn("Failed to restore model state, starting fresh:", error);
+        // 復元に失敗した場合は新しく初期化
+        console.log("Re-initializing embeddings after restoration failure...");
+        transE.initialize(entities, relations);
       }
+    } else {
+      // 新規学習の場合は初期化のみ
+      console.log("Starting fresh training - no model state to restore");
     }
+
+    // 初期化後の状態を詳細にチェック
+    const entityEmbeddings = transE.getAllEntityEmbeddings();
+    const relationEmbeddings = transE.getAllRelationEmbeddings();
+
+    console.log(`Initialization completed. Verification:`);
+    console.log(
+      `- Expected entities: ${entities.length}, Actual: ${entityEmbeddings.size}`,
+    );
+    console.log(
+      `- Expected relations: ${relations.length}, Actual: ${relationEmbeddings.size}`,
+    );
+
+    // 初期化の問題をチェック
+    const missingEntities = entities.filter(
+      (entity) => !entityEmbeddings.has(entity),
+    );
+    const missingRelations = relations.filter(
+      (relation) => !relationEmbeddings.has(relation),
+    );
+
+    if (missingEntities.length > 0) {
+      console.warn(
+        `Missing entity embeddings after initialization: ${missingEntities.length}`,
+      );
+      console.warn(`Sample missing entities:`, missingEntities.slice(0, 5));
+    }
+
+    if (missingRelations.length > 0) {
+      console.warn(
+        `Missing relation embeddings after initialization: ${missingRelations.length}`,
+      );
+      console.warn(`Sample missing relations:`, missingRelations.slice(0, 5));
+    }
+
+    // 初期化が不完全な場合はエラー
+    if (
+      entityEmbeddings.size !== entities.length ||
+      relationEmbeddings.size !== relations.length
+    ) {
+      throw new Error(
+        `Initialization incomplete. Expected: ${entities.length} entities, ${relations.length} relations. ` +
+          `Actual: ${entityEmbeddings.size} entities, ${relationEmbeddings.size} relations. ` +
+          `Missing: ${missingEntities.length} entities, ${missingRelations.length} relations`,
+      );
+    }
+
+    console.log(
+      `Initialization verified successfully. All embeddings are ready.`,
+    );
+
+    // 学習開始前の最終チェック
+    console.log(`Final verification before training:`);
+    const finalEntityEmbeddings = transE.getAllEntityEmbeddings();
+    const finalRelationEmbeddings = transE.getAllRelationEmbeddings();
+
+    // トリプレットの各要素が埋め込みを持っているかチェック
+    const tripletsWithMissingEmbeddings = triplets.filter((triplet) => {
+      const hasHead = finalEntityEmbeddings.has(triplet.head);
+      const hasTail = finalEntityEmbeddings.has(triplet.tail);
+      const hasRelation = finalRelationEmbeddings.has(triplet.relation);
+
+      if (!hasHead || !hasTail || !hasRelation) {
+        console.warn(`Triplet with missing embeddings:`, {
+          triplet,
+          hasHead,
+          hasTail,
+          hasRelation,
+        });
+        return true;
+      }
+      return false;
+    });
+
+    if (tripletsWithMissingEmbeddings.length > 0) {
+      console.error(
+        `Found ${tripletsWithMissingEmbeddings.length} triplets with missing embeddings before training`,
+      );
+      console.error(
+        `This indicates an initialization problem. Aborting training.`,
+      );
+      throw new Error(
+        `Cannot start training: ${tripletsWithMissingEmbeddings.length} triplets have missing embeddings. ` +
+          `Initialization verification failed.`,
+      );
+    }
+
+    console.log(`All triplets verified. Training can proceed safely.`);
 
     // 学習を実行
     let finalLoss = 0;
@@ -271,11 +382,16 @@ async function processJob(supabaseAdmin: any, job: any) {
     if (newProcessedEpochs >= TOTAL_EPOCHS) {
       // 学習完了 - 埋め込みを保存
       console.log("Training complete. Saving final embeddings...");
+      const saveStartTime = Date.now();
 
       const entityEmbeddings = transE.getAllEntityEmbeddings();
       const relationEmbeddings = transE.getAllRelationEmbeddings();
 
-      // 各ノードの埋め込みをデータベースに保存
+      // バッチ書き込み用のデータを準備
+      const nodeUpdates = [];
+      const relationUpdates = [];
+
+      // 各ノードの埋め込みを準備
       for (const [nodeId, baseEmbedding] of entityEmbeddings) {
         // ノードの文脈情報を取得
         const node = nodes.find((n) => n.id === nodeId);
@@ -295,33 +411,24 @@ async function processJob(supabaseAdmin: any, job: any) {
           `Node ${nodeId} embedding: Base=${baseEmbedding.length}, Contextual=${contextualEmbedding.length}`,
         );
 
-        // 埋め込みをデータベースに保存
-        const { error: updateError } = await supabaseAdmin
-          .from("GraphNode")
-          .update({
-            transEEmbedding: contextualEmbedding,
-            // 最小限のメタデータのみ保存（重複情報は除外）
-            // embeddingContext: {
-            //   generatedAt: new Date().toISOString(),
-            //   embeddingType: "contextual_transE",
-            //   baseDimensions: config.dimensions,
-            //   totalDimensions: contextualEmbedding.length,
-            // },
-          })
-          .eq("id", nodeId);
-
-        if (updateError) {
-          console.error(
-            `Failed to update embedding for node ID: ${nodeId}`,
-            updateError,
-          );
-          // 個別のエラーでも処理を継続
-        }
+        // バッチ更新用のデータを準備
+        nodeUpdates.push({
+          id: nodeId,
+          transEEmbedding: contextualEmbedding,
+          // 最小限のメタデータのみ保存（重複情報は除外）
+          // embeddingContext: {
+          //   generatedAt: new Date().toISOString(),
+          //   algorithm: "TransE",
+          //   version: "1.0",
+          //   baseDimensions: baseEmbedding.length,
+          //   contextualDimensions: contextualEmbedding.length,
+          // },
+        });
       }
 
-      // 各リレーションの埋め込みをデータベースに保存
+      // 各リレーションの埋め込みを準備
       for (const [relationType, baseEmbedding] of relationEmbeddings) {
-        // リレーションの文脈情報を取得（最初に見つかったものを使用）
+        // リレーションの文脈情報を取得
         const edge = edges.find((e) => e.type === relationType);
         if (!edge) {
           console.warn(`Edge not found for type: ${relationType}`);
@@ -330,7 +437,7 @@ async function processJob(supabaseAdmin: any, job: any) {
 
         // 文脈情報を含む埋め込みを生成
         const contextualEmbedding = generateContextualEmbedding(baseEmbedding, {
-          type: relationType,
+          type: edge.type,
           properties: edge.properties,
           topicSpaceId: topicSpaceId,
         });
@@ -339,29 +446,245 @@ async function processJob(supabaseAdmin: any, job: any) {
           `Relation ${relationType} embedding: Base=${baseEmbedding.length}, Contextual=${contextualEmbedding.length}`,
         );
 
-        // 同じtypeを持つ全てのリレーションに埋め込みを適用
-        const { error: updateError } = await supabaseAdmin
-          .from("GraphRelationship")
-          .update({
-            transEEmbedding: contextualEmbedding,
-            // 最小限のメタデータのみ保存（重複情報は除外）
-            // embeddingContext: {
-            //   generatedAt: new Date().toISOString(),
-            //   embeddingType: "contextual_transE",
-            //   baseDimensions: config.dimensions,
-            //   totalDimensions: contextualEmbedding.length,
-            // },
-          })
-          .eq("type", relationType)
-          .eq("topicSpaceId", topicSpaceId);
+        // バッチ更新用のデータを準備
+        relationUpdates.push({
+          id: edge.id,
+          transEEmbedding: contextualEmbedding,
+          // 最小限のメタデータのみ保存（重複情報は除外）
+          // embeddingContext: {
+          //   generatedAt: new Date().toISOString(),
+          //   algorithm: "TransE",
+          //   version: "1.0",
+          //   baseDimensions: baseEmbedding.length,
+          //   contextualDimensions: contextualEmbedding.length,
+          // },
+        });
+      }
 
-        if (updateError) {
-          console.error(
-            `Failed to update embedding for relation type: ${relationType}`,
-            updateError,
-          );
-          // 個別のエラーでも処理を継続
+      console.log(
+        `Prepared ${nodeUpdates.length} node updates and ${relationUpdates.length} relation updates`,
+      );
+
+      // データの整合性チェック
+      const invalidNodes = nodeUpdates.filter(
+        (item) =>
+          !item.id ||
+          !item.transEEmbedding ||
+          !Array.isArray(item.transEEmbedding),
+      );
+      const invalidRelations = relationUpdates.filter(
+        (item) =>
+          !item.id ||
+          !item.transEEmbedding ||
+          !Array.isArray(item.transEEmbedding),
+      );
+
+      if (invalidNodes.length > 0) {
+        console.warn(
+          `Found ${invalidNodes.length} invalid node updates:`,
+          invalidNodes.slice(0, 3),
+        );
+      }
+      if (invalidRelations.length > 0) {
+        console.warn(
+          `Found ${invalidRelations.length} invalid relation updates:`,
+          invalidRelations.slice(0, 3),
+        );
+      }
+
+      // 有効なデータのみを処理
+      const validNodeUpdates = nodeUpdates.filter(
+        (item) =>
+          item.id &&
+          item.transEEmbedding &&
+          Array.isArray(item.transEEmbedding),
+      );
+      const validRelationUpdates = relationUpdates.filter(
+        (item) =>
+          item.id &&
+          item.transEEmbedding &&
+          Array.isArray(item.transEEmbedding),
+      );
+
+      console.log(
+        `Processing ${validNodeUpdates.length} valid node updates and ${validRelationUpdates.length} valid relation updates`,
+      );
+
+      // バッチ書き込みを実行（ノード）
+      if (validNodeUpdates.length > 0) {
+        console.log(
+          `Saving ${validNodeUpdates.length} node embeddings in batches...`,
+        );
+        const batchSize = 50; // 100から50に削減してネットワーク負荷を軽減
+        const batches = [];
+
+        for (let i = 0; i < validNodeUpdates.length; i += batchSize) {
+          const batch = validNodeUpdates.slice(i, i + batchSize);
+          batches.push(batch);
         }
+
+        // 並列処理でバッチ書き込みを実行（最大2つまで並列に制限）
+        const maxConcurrent = 2; // 3から2に削減してネットワーク負荷を軽減
+        for (let i = 0; i < batches.length; i += maxConcurrent) {
+          const concurrentBatches = batches.slice(i, i + maxConcurrent);
+          console.log(
+            `Processing node batches ${i + 1}-${Math.min(i + maxConcurrent, batches.length)} of ${batches.length} concurrently`,
+          );
+
+          const batchPromises = concurrentBatches.map(
+            async (batch, batchIndex) => {
+              // 各アイテムを個別に更新（リトライ機能付き）
+              const updatePromises = batch.map(async (item) => {
+                try {
+                  const success = await updateWithRetry(
+                    supabaseAdmin,
+                    "GraphNode",
+                    item.id,
+                    { transEEmbedding: item.transEEmbedding },
+                  );
+
+                  if (!success) {
+                    console.warn(
+                      `Failed to update node ${item.id} after retries, skipping...`,
+                    );
+                    return 0; // 失敗した場合は0を返す（スキップ）
+                  }
+
+                  return 1;
+                } catch (error) {
+                  console.warn(
+                    `Exception updating node ${item.id}, skipping...:`,
+                    error.message,
+                  );
+                  return 0; // エラーの場合も0を返す（スキップ）
+                }
+              });
+
+              try {
+                const results = await Promise.all(updatePromises);
+                const successCount = results.reduce(
+                  (sum, count) => sum + count,
+                  0,
+                );
+                const failedCount = batch.length - successCount;
+
+                if (failedCount > 0) {
+                  console.warn(
+                    `Batch ${i + batchIndex + 1}: ${successCount} succeeded, ${failedCount} failed`,
+                  );
+                }
+
+                return successCount;
+              } catch (error) {
+                console.error(
+                  `Batch ${i + batchIndex + 1} failed completely:`,
+                  error,
+                );
+                return 0; // バッチ全体が失敗した場合は0を返す
+              }
+            },
+          );
+
+          const results = await Promise.all(batchPromises);
+          const totalProcessed = results.reduce((sum, count) => sum + count, 0);
+          console.log(
+            `Completed ${totalProcessed} node embeddings in this round`,
+          );
+        }
+        console.log("All node embeddings saved successfully");
+      }
+
+      // バッチ書き込みを実行（リレーション）
+      if (validRelationUpdates.length > 0) {
+        console.log(
+          `Saving ${validRelationUpdates.length} relation embeddings in batches...`,
+        );
+        const batchSize = 50; // 100から50に削減してネットワーク負荷を軽減
+        const batches = [];
+
+        for (let i = 0; i < validRelationUpdates.length; i += batchSize) {
+          const batch = validRelationUpdates.slice(i, i + batchSize);
+          batches.push(batch);
+        }
+
+        // 並列処理でバッチ書き込みを実行（最大2つまで並列に制限）
+        const maxConcurrent = 2; // 3から2に削減してネットワーク負荷を軽減
+        for (let i = 0; i < batches.length; i += maxConcurrent) {
+          const concurrentBatches = batches.slice(i, i + maxConcurrent);
+          console.log(
+            `Processing relation batches ${i + 1}-${Math.min(i + maxConcurrent, batches.length)} of ${batches.length} concurrently`,
+          );
+
+          const batchPromises = concurrentBatches.map(
+            async (batch, batchIndex) => {
+              // 各アイテムを個別に更新（リトライ機能付き）
+              const updatePromises = batch.map(async (item) => {
+                try {
+                  const success = await updateWithRetry(
+                    supabaseAdmin,
+                    "GraphRelationship",
+                    item.id,
+                    { transEEmbedding: item.transEEmbedding },
+                  );
+
+                  if (!success) {
+                    console.warn(
+                      `Failed to update relation ${item.id} after retries, skipping...`,
+                    );
+                    return 0; // 失敗した場合は0を返す（スキップ）
+                  }
+
+                  return 1;
+                } catch (error) {
+                  console.warn(
+                    `Exception updating relation ${item.id}, skipping...:`,
+                    error.message,
+                  );
+                  return 0; // エラーの場合も0を返す（スキップ）
+                }
+              });
+
+              try {
+                const results = await Promise.all(updatePromises);
+                const successCount = results.reduce(
+                  (sum, count) => sum + count,
+                  0,
+                );
+                const failedCount = batch.length - successCount;
+
+                if (failedCount > 0) {
+                  console.warn(
+                    `Batch ${i + batchIndex + 1}: ${successCount} succeeded, ${failedCount} failed`,
+                  );
+                }
+
+                return successCount;
+              } catch (error) {
+                console.error(
+                  `Batch ${i + batchIndex + 1} failed completely:`,
+                  error,
+                );
+                return 0; // バッチ全体が失敗した場合は0を返す
+              }
+            },
+          );
+
+          const results = await Promise.all(batchPromises);
+          const totalProcessed = results.reduce((sum, count) => sum + count, 0);
+          console.log(
+            `Completed ${totalProcessed} relation embeddings in this round`,
+          );
+        }
+        console.log("All relation embeddings saved successfully");
+      }
+
+      const saveElapsedTime = Date.now() - saveStartTime;
+      console.log(`Database save completed in ${saveElapsedTime}ms`);
+
+      if (saveElapsedTime > 8000) {
+        console.warn(
+          `Warning: Database save took ${saveElapsedTime}ms, approaching CPU time limit`,
+        );
       }
 
       // ジョブを完了としてマーク
@@ -481,4 +804,72 @@ async function processJob(supabaseAdmin: any, job: any) {
 
     throw error;
   }
+}
+
+// リトライ機能付きの更新関数
+async function updateWithRetry(
+  supabaseAdmin: any,
+  table: string,
+  id: string,
+  data: any,
+  maxRetries: number = 3,
+  baseDelay: number = 1000,
+): Promise<boolean> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const { error: updateError } = await supabaseAdmin
+        .from(table)
+        .update(data)
+        .eq("id", id);
+
+      if (updateError) {
+        // データベースエラーの場合はリトライしない
+        if (
+          updateError.message.includes("constraint") ||
+          updateError.message.includes("not-null") ||
+          updateError.message.includes("foreign key")
+        ) {
+          throw updateError;
+        }
+
+        // ネットワークエラーの場合はリトライ
+        if (attempt < maxRetries) {
+          const delay = baseDelay * Math.pow(2, attempt - 1); // 指数バックオフ
+          console.warn(
+            `Attempt ${attempt} failed for ${table} ${id}, retrying in ${delay}ms:`,
+            updateError.message,
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        }
+        throw updateError;
+      }
+
+      return true; // 成功
+    } catch (error) {
+      if (attempt === maxRetries) {
+        throw error;
+      }
+
+      // ネットワークエラーの場合はリトライ
+      if (
+        error.message.includes("error sending request") ||
+        error.message.includes("fetch") ||
+        error.message.includes("network")
+      ) {
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        console.warn(
+          `Network error on attempt ${attempt} for ${table} ${id}, retrying in ${delay}ms:`,
+          error.message,
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        continue;
+      }
+
+      // その他のエラーは即座に投げる
+      throw error;
+    }
+  }
+
+  return false;
 }

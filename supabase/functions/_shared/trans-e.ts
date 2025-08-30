@@ -65,17 +65,30 @@ export class TransE {
   }
 
   /**
-   * ベクトルの加算
+   * 2つのベクトルを加算する
    */
   private addVectors(vector1: number[], vector2: number[]): number[] {
+    // ベクトルデータの型チェック（本番環境での安全性のため復活）
+    if (!Array.isArray(vector1) || !Array.isArray(vector2)) {
+      throw new Error(
+        `Invalid vector format: vector1 is ${typeof vector1}, vector2 is ${typeof vector2}`,
+      );
+    }
+
+    if (vector1.length !== vector2.length) {
+      throw new Error(
+        `Vector length mismatch: vector1 length is ${vector1.length}, vector2 length is ${vector2.length}`,
+      );
+    }
+
     return vector1.map((val, i) => val + vector2[i]);
   }
 
   /**
-   * ベクトルの減算
+   * 2つのベクトルを減算する
    */
   private subtractVectors(vector1: number[], vector2: number[]): number[] {
-    // ベクトルデータの型チェック
+    // ベクトルデータの型チェック（本番環境での安全性のため復活）
     if (!Array.isArray(vector1) || !Array.isArray(vector2)) {
       throw new Error(
         `Invalid vector format: vector1 is ${typeof vector1}, vector2 is ${typeof vector2}`,
@@ -103,15 +116,31 @@ export class TransE {
    */
   initialize(entities: string[], relations: string[]): void {
     // 既存の埋め込みがある場合は初期化をスキップ
-    if (this.entityEmbeddings.size > 0 || this.relationEmbeddings.size > 0) {
+    if (this.entityEmbeddings.size > 0 && this.relationEmbeddings.size > 0) {
       console.log(
         `Skipping initialization - existing embeddings found: ${this.entityEmbeddings.size} entities, ${this.relationEmbeddings.size} relations`,
       );
+
+      // 既存の埋め込みの状態を確認（本番環境での安全性のため）
+      const sampleEntity = Array.from(this.entityEmbeddings.entries())[0];
+      const sampleRelation = Array.from(this.relationEmbeddings.entries())[0];
+
+      if (sampleEntity) {
+        console.log(
+          `Sample entity embedding: ${sampleEntity[0]} -> ${sampleEntity[1].length} dimensions`,
+        );
+      }
+      if (sampleRelation) {
+        console.log(
+          `Sample relation embedding: ${sampleRelation[0]} -> ${sampleRelation[1].length} dimensions`,
+        );
+      }
+
       return;
     }
 
     console.log(
-      `Initializing new model with ${entities.length} entities and ${relations.length} relations`,
+      `Initializing TransE with ${entities.length} entities and ${relations.length} relations`,
     );
 
     // エンティティ埋め込みの初期化
@@ -130,11 +159,13 @@ export class TransE {
       );
     });
 
-    // 初期正規化
-    this.normalizeAllEmbeddings();
-
     console.log(
       `Initialization complete. Embedding dimensions: ${this.config.dimensions}`,
+    );
+
+    // 初期化後の状態確認（本番環境での安全性のため）
+    console.log(
+      `Final state: ${this.entityEmbeddings.size} entities, ${this.relationEmbeddings.size} relations`,
     );
   }
 
@@ -147,7 +178,7 @@ export class TransE {
   }
 
   /**
-   * 負例を生成
+   * 負例トリプレットを生成する
    */
   private generateNegativeTriplet(
     positiveTriplet: Triplet,
@@ -155,18 +186,43 @@ export class TransE {
   ): Triplet {
     const negativeTriplet = { ...positiveTriplet };
 
+    // 実際に埋め込みが存在するエンティティのみを対象とする（本番環境での安全性のため）
+    const availableEntities = entities.filter((entity) =>
+      this.entityEmbeddings.has(entity),
+    );
+
+    if (availableEntities.length === 0) {
+      throw new Error(
+        `No available entities with embeddings found. ` +
+          `Requested entities: ${entities.length}, ` +
+          `Entities with embeddings: ${this.entityEmbeddings.size}`,
+      );
+    }
+
+    // 正例のheadとtailの両方と異なるエンティティのみを対象とする
+    const validEntities = availableEntities.filter(
+      (entity) =>
+        entity !== positiveTriplet.head && entity !== positiveTriplet.tail,
+    );
+
+    if (validEntities.length === 0) {
+      throw new Error(
+        `No valid entities available for negative sampling. ` +
+          `Positive triplet: ${JSON.stringify(positiveTriplet)}, ` +
+          `Available entities: ${availableEntities.length}`,
+      );
+    }
+
     // 50%の確率でheadまたはtailをランダムなエンティティに置換
     if (Math.random() < 0.5) {
-      let newHead: string;
-      do {
-        newHead = entities[Math.floor(Math.random() * entities.length)];
-      } while (newHead === positiveTriplet.head);
+      // headを置換（正例のheadとtailの両方と異なるエンティティを選択）
+      const newHead =
+        validEntities[Math.floor(Math.random() * validEntities.length)];
       negativeTriplet.head = newHead;
     } else {
-      let newTail: string;
-      do {
-        newTail = entities[Math.floor(Math.random() * entities.length)];
-      } while (newTail === positiveTriplet.tail);
+      // tailを置換（正例のheadとtailの両方と異なるエンティティを選択）
+      const newTail =
+        validEntities[Math.floor(Math.random() * validEntities.length)];
       negativeTriplet.tail = newTail;
     }
 
@@ -174,18 +230,51 @@ export class TransE {
   }
 
   /**
-   * 単一のトリプレットで学習
+   * 単一のトリプレットで学習を行う
    */
   private trainTriplet(
     positiveTriplet: Triplet,
     negativeTriplet: Triplet,
   ): number {
-    const headPos = this.entityEmbeddings.get(positiveTriplet.head)!;
-    const relation = this.relationEmbeddings.get(positiveTriplet.relation)!;
-    const tailPos = this.entityEmbeddings.get(positiveTriplet.tail)!;
+    const headPos = this.entityEmbeddings.get(positiveTriplet.head);
+    const relation = this.relationEmbeddings.get(positiveTriplet.relation);
+    const tailPos = this.entityEmbeddings.get(positiveTriplet.tail);
 
-    const headNeg = this.entityEmbeddings.get(negativeTriplet.head)!;
-    const tailNeg = this.entityEmbeddings.get(negativeTriplet.tail)!;
+    const headNeg = this.entityEmbeddings.get(negativeTriplet.head);
+    const tailNeg = this.entityEmbeddings.get(negativeTriplet.tail);
+
+    // 埋め込みの存在チェック（本番環境での安全性のため復活）
+    if (!headPos || !relation || !tailPos || !headNeg || !tailNeg) {
+      const missingEmbeddings = [];
+      if (!headPos) missingEmbeddings.push(`head: ${positiveTriplet.head}`);
+      if (!relation)
+        missingEmbeddings.push(`relation: ${positiveTriplet.relation}`);
+      if (!tailPos) missingEmbeddings.push(`tail: ${positiveTriplet.tail}`);
+      if (!headNeg)
+        missingEmbeddings.push(`negative head: ${negativeTriplet.head}`);
+      if (!tailNeg)
+        missingEmbeddings.push(`negative tail: ${negativeTriplet.tail}`);
+
+      // より詳細なエラー情報を提供
+      const availableEntities = Array.from(this.entityEmbeddings.keys()).slice(
+        0,
+        5,
+      );
+      const availableRelations = Array.from(
+        this.relationEmbeddings.keys(),
+      ).slice(0, 5);
+
+      throw new Error(
+        `Missing embeddings for triplet training: ${missingEmbeddings.join(
+          ", ",
+        )}. ` +
+          `Available entities: ${this.entityEmbeddings.size}, relations: ${this.relationEmbeddings.size}. ` +
+          `Sample available entities: [${availableEntities.join(", ")}]. ` +
+          `Sample available relations: [${availableRelations.join(", ")}]. ` +
+          `Positive triplet: ${JSON.stringify(positiveTriplet)}, ` +
+          `Negative triplet: ${JSON.stringify(negativeTriplet)}`,
+      );
+    }
 
     // 正例のスコア: ||h + r - t||
     const positiveScore = this.distance(
@@ -238,6 +327,26 @@ export class TransE {
     const headNeg = this.entityEmbeddings.get(negativeTriplet.head)!;
     const tailNeg = this.entityEmbeddings.get(negativeTriplet.tail)!;
 
+    // 埋め込みの存在チェック（本番環境での安全性のため復活）
+    if (!headPos || !relation || !tailPos || !headNeg || !tailNeg) {
+      const missingEmbeddings = [];
+      if (!headPos)
+        missingEmbeddings.push(`positive head: ${positiveTriplet.head}`);
+      if (!relation)
+        missingEmbeddings.push(`relation: ${positiveTriplet.relation}`);
+      if (!tailPos)
+        missingEmbeddings.push(`positive tail: ${positiveTriplet.tail}`);
+      if (!headNeg)
+        missingEmbeddings.push(`negative head: ${negativeTriplet.head}`);
+      if (!tailNeg)
+        missingEmbeddings.push(`negative tail: ${negativeTriplet.tail}`);
+
+      throw new Error(
+        `Missing embeddings for update: ${missingEmbeddings.join(", ")}. ` +
+          `Available entities: ${this.entityEmbeddings.size}, relations: ${this.relationEmbeddings.size}`,
+      );
+    }
+
     // 正例の勾配計算（修正版）
     if (positiveScore > 0) {
       // 勾配の大きさを制限（数値安定性のため）
@@ -288,21 +397,83 @@ export class TransE {
   }
 
   /**
-   * バッチ学習を実行
+   * バッチで学習を行う
    */
   trainBatch(triplets: Triplet[], entities: string[]): number {
+    // 渡されたentities配列と実際の埋め込みの整合性をチェック（本番環境での安全性のため）
+    const missingEntities = entities.filter(
+      (entity) => !this.entityEmbeddings.has(entity),
+    );
+    if (missingEntities.length > 0) {
+      console.warn(
+        `Warning: ${missingEntities.length} entities in the entities array do not have embeddings: ` +
+          `${missingEntities.slice(0, 5).join(", ")}${missingEntities.length > 5 ? "..." : ""}. ` +
+          `Entities array size: ${entities.length}, Available embeddings: ${this.entityEmbeddings.size}`,
+      );
+    }
+
+    // 実際に埋め込みが存在するエンティティのみを使用
+    const availableEntities = entities.filter((entity) =>
+      this.entityEmbeddings.has(entity),
+    );
+
+    if (availableEntities.length === 0) {
+      throw new Error(
+        `No entities with embeddings available for training. ` +
+          `Entities array size: ${entities.length}, Available embeddings: ${this.entityEmbeddings.size}`,
+      );
+    }
+
+    console.log(
+      `Training batch with ${triplets.length} triplets using ${availableEntities.length}/${entities.length} available entities`,
+    );
+
     let totalLoss = 0;
+    let processedTriplets = 0;
+    let skippedTriplets = 0;
 
     triplets.forEach((triplet) => {
-      const negativeTriplet = this.generateNegativeTriplet(triplet, entities);
-      const loss = this.trainTriplet(triplet, negativeTriplet);
-      totalLoss += loss;
+      try {
+        // トリプレットの全エンティティとリレーションに埋め込みが存在するかチェック
+        if (
+          !this.entityEmbeddings.has(triplet.head) ||
+          !this.entityEmbeddings.has(triplet.tail) ||
+          !this.relationEmbeddings.has(triplet.relation)
+        ) {
+          console.warn(
+            `Skipping triplet due to missing embeddings: head=${triplet.head}, relation=${triplet.relation}, tail=${triplet.tail}`,
+          );
+          skippedTriplets++;
+          return;
+        }
+
+        const negativeTriplet = this.generateNegativeTriplet(
+          triplet,
+          availableEntities,
+        );
+        const loss = this.trainTriplet(triplet, negativeTriplet);
+        totalLoss += loss;
+        processedTriplets++;
+      } catch (error) {
+        console.warn(
+          `Error processing triplet ${JSON.stringify(triplet)}: ${error.message}. Skipping...`,
+        );
+        skippedTriplets++;
+      }
     });
 
-    // バッチ処理後の正規化は削除（学習の安定性のため）
-    // this.normalizeAllEmbeddings();
+    if (processedTriplets === 0) {
+      throw new Error(
+        `No triplets could be processed in this batch. ` +
+          `Total triplets: ${triplets.length}, Skipped: ${skippedTriplets}`,
+      );
+    }
 
-    return totalLoss / triplets.length;
+    console.log(
+      `Batch completed: ${processedTriplets} processed, ${skippedTriplets} skipped out of ${triplets.length} total`,
+    );
+
+    return totalLoss / processedTriplets;
   }
 
   /**
@@ -328,8 +499,56 @@ export class TransE {
       `- First relation dimensions: ${Array.from(this.relationEmbeddings.values())[0]?.length || "N/A"}`,
     );
 
+    // 渡された配列と実際の埋め込みの整合性をチェック（本番環境での安全性のため）
+    const missingEntities = entities.filter(
+      (entity) => !this.entityEmbeddings.has(entity),
+    );
+    const missingRelations = relations.filter(
+      (relation) => !this.relationEmbeddings.has(relation),
+    );
+
+    if (missingEntities.length > 0) {
+      console.warn(
+        `Warning: ${missingEntities.length} entities in the entities array do not have embeddings: ` +
+          `${missingEntities.slice(0, 5).join(", ")}${missingEntities.length > 5 ? "..." : ""}. ` +
+          `Entities array size: ${entities.length}, Available embeddings: ${this.entityEmbeddings.size}`,
+      );
+    }
+
+    if (missingRelations.length > 0) {
+      console.warn(
+        `Warning: ${missingRelations.length} relations in the relations array do not have embeddings: ` +
+          `${missingRelations.slice(0, 5).join(", ")}${missingRelations.length > 5 ? "..." : ""}. ` +
+          `Relations array size: ${relations.length}, Available embeddings: ${this.relationEmbeddings.size}`,
+      );
+    }
+
+    // 実際に埋め込みが存在するエンティティとリレーションのみを使用
+    const availableEntities = entities.filter((entity) =>
+      this.entityEmbeddings.has(entity),
+    );
+    const availableRelations = relations.filter((relation) =>
+      this.relationEmbeddings.has(relation),
+    );
+
+    if (availableEntities.length === 0) {
+      throw new Error(
+        `No entities with embeddings available for training. ` +
+          `Entities array size: ${entities.length}, Available embeddings: ${this.entityEmbeddings.size}`,
+      );
+    }
+
+    if (availableRelations.length === 0) {
+      throw new Error(
+        `No relations with embeddings available for training. ` +
+          `Relations array size: ${relations.length}, Available embeddings: ${this.relationEmbeddings.size}`,
+      );
+    }
+
     console.log(
-      `Starting TransE training with ${triplets.length} triplets, ${entities.length} entities, ${relations.length} relations`,
+      `Starting TransE training with ${triplets.length} triplets, ` +
+        `${availableEntities.length}/${entities.length} available entities, ` +
+        `${availableRelations.length}/${relations.length} available relations`,
     );
 
     for (let epoch = 0; epoch < this.config.epochs; epoch++) {
@@ -350,8 +569,16 @@ export class TransE {
         );
         const batch = shuffledTriplets.slice(start, end);
 
-        const batchLoss = this.trainBatch(batch, entities);
-        totalLoss += batchLoss;
+        try {
+          const batchLoss = this.trainBatch(batch, availableEntities);
+          totalLoss += batchLoss;
+        } catch (error) {
+          console.warn(
+            `Error in batch ${i + 1}/${batchCount}: ${error.message}. Continuing with next batch...`,
+          );
+          // バッチエラーの場合はスキップして続行
+          continue;
+        }
       }
 
       const avgLoss = totalLoss / batchCount;
