@@ -124,6 +124,7 @@ export const NodePropertiesDetail = ({
             <RelatedNodesAndLinksViewer
               node={node}
               topicSpaceId={topicSpaceId}
+              className="flex flex-col gap-1 rounded-md border border-gray-600"
             />
 
             {onEdit && enableEdit && refetch ? (

@@ -20,7 +20,7 @@ export const TopicSpaceList = ({
     <div className="flex flex-col gap-3">
       {topicSpaces.length == 0 ? (
         <div className="flex flex-row items-center justify-between p-3">
-          <div>ドキュメントマップがありません</div>
+          <div>リポジトリがありません</div>
           <Button
             className="flex flex-row items-center gap-1"
             onClick={() => {
@@ -28,7 +28,7 @@ export const TopicSpaceList = ({
             }}
           >
             <PlusIcon width={16} height={16} color="white" />
-            <div className="text-sm">新規ドキュメントマップ</div>
+            <div className="text-sm">新規リポジトリ</div>
           </Button>
         </div>
       ) : (

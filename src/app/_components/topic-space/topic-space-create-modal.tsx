@@ -81,11 +81,7 @@ export const TopicSpaceCreateModal = ({
   if (!filteredDocuments || !session) return null;
 
   return (
-    <Modal
-      isOpen={isOpen}
-      setIsOpen={setIsOpen}
-      title="ドキュメントマップを作成"
-    >
+    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title="リポジトリを作成">
       <form onSubmit={methods.handleSubmit(submit, isInValid)}>
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">

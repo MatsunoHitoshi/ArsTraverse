@@ -3,7 +3,7 @@ import Image from "next/image";
 import { Button } from "../button/button";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { DashboardIcon, MixerHorizontalIcon } from "../icons";
+import { DashboardIcon } from "../icons";
 import { loginProhibited } from "@/app/const/page-config";
 import { usePathname } from "next/navigation";
 
@@ -13,9 +13,9 @@ export const Header = () => {
   const pathname = usePathname();
   const isLoginProhibited = loginProhibited(pathname);
   return (
-    <div className="z-20 w-full p-2">
-      <div className="flex h-14 w-full flex-row items-center justify-between rounded-2xl bg-slate-700 p-2 text-slate-50">
-        <div className="text-lg font-semibold">
+    <div className="z-20 w-full p-1">
+      <div className="flex h-12 w-full flex-row items-center justify-between rounded-2xl bg-slate-700 text-slate-50">
+        <div className="text-md font-semibold">
           <Button
             className="!py-0"
             onClick={() => {
@@ -33,7 +33,7 @@ export const Header = () => {
         </div>
 
         {isLoginProhibited ? (
-          <div className="flex flex-row items-center gap-1">
+          <div className="flex flex-row items-center gap-1 px-2">
             <a href="/" target="_blank" rel="noopener noreferrer">
               <Button theme="transparent" size="small">
                 ツールへ移動
@@ -50,7 +50,7 @@ export const Header = () => {
                 SignUp/SignIn
               </Button>
             ) : (
-              <div className="flex flex-row items-center gap-1">
+              <div className="flex flex-row items-center gap-1 px-2">
                 <div className="flex flex-row items-center">
                   <Button
                     onClick={() => {

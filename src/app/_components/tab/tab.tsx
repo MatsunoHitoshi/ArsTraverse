@@ -3,6 +3,7 @@ import {
   DashboardIcon,
   FileTextIcon,
   GearIcon,
+  Pencil2Icon,
   PlusIcon,
   StackIcon,
 } from "../icons";
@@ -12,6 +13,7 @@ import { TopicSpaceCreateModal } from "../topic-space/topic-space-create-modal";
 import { useSession } from "next-auth/react";
 import type { Session } from "next-auth";
 import Link from "next/link";
+import { api } from "@/trpc/react";
 
 const Tab = ({
   label,
@@ -56,12 +58,17 @@ export const Tabs = ({ session }: { session: Session | null }) => {
 
         <div className="flex flex-row items-end text-sm">
           <Tab
+            label="ワークスペース"
+            icon={<Pencil2Icon width={16} height={16} color="white" />}
+            path={"/workspaces"}
+          />
+          <Tab
             label="ドキュメント"
             icon={<FileTextIcon width={16} height={16} color="white" />}
             path={"/documents"}
           />
           <Tab
-            label="ドキュメントマップ"
+            label="リポジトリ"
             icon={<StackIcon width={16} height={16} color="white" />}
             path={"/topic-spaces"}
           />
@@ -83,6 +90,20 @@ export const TabsContainer = ({ children }: { children: React.ReactNode }) => {
   const { data: session } = useSession();
   const [topicSpaceCreateModalOpen, setTopicSpaceCreateModalOpen] =
     useState<boolean>(false);
+
+  const { mutate: createEmptyWorkspace } =
+    api.workspace.createEmpty.useMutation();
+
+  const moveToNewWorkspace = () => {
+    createEmptyWorkspace(
+      {},
+      {
+        onSuccess: (res) => {
+          router.push(`/workspaces/${res?.id}`);
+        },
+      },
+    );
+  };
 
   const NewContentButton = () => {
     switch (location.pathname) {
@@ -119,7 +140,19 @@ export const TabsContainer = ({ children }: { children: React.ReactNode }) => {
             }}
           >
             <PlusIcon width={16} height={16} color="white" />
-            <div className="text-sm">新規ドキュメントマップ</div>
+            <div className="text-sm">新規リポジトリ</div>
+          </Button>
+        );
+      case "/workspaces":
+        return (
+          <Button
+            className="flex flex-row items-center gap-1"
+            onClick={() => {
+              moveToNewWorkspace();
+            }}
+          >
+            <PlusIcon width={16} height={16} color="white" />
+            <div className="text-sm">新規ワークスペース</div>
           </Button>
         );
       default:

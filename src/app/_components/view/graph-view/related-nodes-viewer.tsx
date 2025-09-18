@@ -3,13 +3,23 @@ import { D3ForceGraph } from "../../d3/force/graph";
 import { api } from "@/trpc/react";
 import { useEffect, useRef, useState } from "react";
 import { ContainerSizeProvider } from "@/providers/container-size";
+import { ChevronLeftIcon } from "../../icons";
+import { Button } from "../../button/button";
 
 export const RelatedNodesAndLinksViewer = ({
   node,
   topicSpaceId,
+  className,
+  height,
+  width,
+  onClose,
 }: {
   node: CustomNodeType;
   topicSpaceId: string;
+  className?: string;
+  height?: number;
+  width?: number;
+  onClose?: () => void;
 }) => {
   const { data: relatedNodesAndLinks } = api.kg.getRelatedNodes.useQuery({
     nodeId: node.id,
@@ -17,7 +27,8 @@ export const RelatedNodesAndLinksViewer = ({
   });
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState<number>(400);
+  const [containerWidth, setContainerWidth] = useState<number>(width ?? 400);
+  const [containerHeight, setContainerHeight] = useState<number>(height ?? 400);
   const [currentScale, setCurrentScale] = useState<number>(1);
   const [focusedNode, setFocusedNode] = useState<CustomNodeType | undefined>(
     undefined,
@@ -40,12 +51,13 @@ export const RelatedNodesAndLinksViewer = ({
     <ContainerSizeProvider
       containerRef={containerRef}
       setContainerWidth={setContainerWidth}
-      className="flex flex-col gap-1 rounded-md border border-gray-600"
+      setContainerHeight={setContainerHeight}
+      className={className}
     >
       <D3ForceGraph
         graphDocument={relatedNodesAndLinks}
         svgRef={svgRef}
-        height={500}
+        height={containerHeight - 2}
         width={containerWidth - 2}
         currentScale={currentScale}
         setCurrentScale={setCurrentScale}
@@ -54,7 +66,23 @@ export const RelatedNodesAndLinksViewer = ({
         setFocusedNode={setFocusedNode}
         focusedLink={focusedLink}
         setFocusedLink={setFocusedLink}
-        toolComponent={<></>}
+        toolComponent={
+          onClose && (
+            <div
+              className={`absolute !w-[${containerWidth}px] bg-slate-950/20 p-2 backdrop-blur-sm`}
+            >
+              <Button
+                className="z-10 !h-8 !w-8 bg-transparent !p-2 text-sm hover:bg-slate-50/10"
+                onClick={() => {
+                  setFocusedNode(undefined);
+                  onClose();
+                }}
+              >
+                <ChevronLeftIcon width={16} height={16} color="white" />
+              </Button>
+            </div>
+          )
+        }
       />
     </ContainerSizeProvider>
   );

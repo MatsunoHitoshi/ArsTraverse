@@ -26,7 +26,7 @@ export const DeleteRecordModal = ({
       case "sourceDocument":
         return "ドキュメント";
       case "topicSpace":
-        return "ドキュメントマップ";
+        return "リポジトリ";
     }
   };
 

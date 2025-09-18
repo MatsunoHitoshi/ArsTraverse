@@ -1,4 +1,7 @@
-import type { GraphDocumentForFrontend } from "@/app/const/types";
+import type {
+  FocusedPosition,
+  GraphDocumentForFrontend,
+} from "@/app/const/types";
 import {
   forceSimulation,
   forceLink,
@@ -78,6 +81,11 @@ export const D3ForceGraph = ({
   onNodeContextMenu,
   onGraphUpdate,
   graphIdentifier = "graph",
+  defaultPosition = {
+    x: 0,
+    y: 0,
+  },
+  isDirectedLinks = true,
 }: {
   svgRef: React.RefObject<SVGSVGElement>;
   height: number;
@@ -95,6 +103,7 @@ export const D3ForceGraph = ({
   isGraphFullScreen?: boolean;
   isEditor?: boolean;
   isLargeGraph: boolean;
+  defaultPosition?: FocusedPosition;
   focusedNode: CustomNodeType | undefined;
   setFocusedNode: React.Dispatch<
     React.SetStateAction<CustomNodeType | undefined>
@@ -107,6 +116,7 @@ export const D3ForceGraph = ({
   onLinkContextMenu?: (link: CustomLinkType) => void;
   onGraphUpdate?: (additionalGraph: GraphDocumentForFrontend) => void;
   graphIdentifier?: string;
+  isDirectedLinks?: boolean;
 }) => {
   const { nodes, relationships } = graphDocument;
   const initLinks = relationships as CustomLinkType[];
@@ -130,8 +140,12 @@ export const D3ForceGraph = ({
     });
   }, [initLinks, initNodes]);
 
-  const [currentTransformX, setCurrentTransformX] = useState<number>(0);
-  const [currentTransformY, setCurrentTransformY] = useState<number>(0);
+  const [currentTransformX, setCurrentTransformX] = useState<number>(
+    defaultPosition.x,
+  );
+  const [currentTransformY, setCurrentTransformY] = useState<number>(
+    defaultPosition.y,
+  );
   const [graphNodes, setGraphNodes] = useState<CustomNodeType[]>(initNodes);
   const [graphLinks, setGraphLinks] = useState<CustomLinkType[]>(newLinks);
   const tempLineRef = useRef<SVGLineElement>(null);
@@ -361,7 +375,9 @@ export const D3ForceGraph = ({
                         //         ? `url(#gradient-${graphLink.id})`
                         //         : "white"
                         // }
-                        strokeWidth={isFocused ? 3 : 2}
+                        strokeWidth={
+                          (isFocused ? 2 : 1.2) * (isDirectedLinks ? 1 : 1.5)
+                        }
                         strokeOpacity={
                           isFocused
                             ? 1
@@ -371,11 +387,21 @@ export const D3ForceGraph = ({
                                 (distance(graphLink) * distance(graphLink) || 1)
                         }
                         // strokeOpacity={isFocused ? 1 : isGradient ? 0.3 : 0.4}
+                        strokeDasharray={isDirectedLinks ? "5,5" : undefined}
                         x1={modSource.x}
                         y1={modSource.y}
                         x2={modTarget.x}
                         y2={modTarget.y}
-                      />
+                      >
+                        {isDirectedLinks && (
+                          <animate
+                            attributeName="stroke-dashoffset"
+                            values="0;-10"
+                            dur="1s"
+                            repeatCount="indefinite"
+                          />
+                        )}
+                      </line>
                       {/* <defs>
                       <linearGradient
                         id={`gradient-${graphLink.id}`}

@@ -5,6 +5,7 @@ import type {
   TopicSpace,
   Tag,
   Activity,
+  Workspace,
 } from "@prisma/client";
 import type { SimulationNodeDatum, SimulationLinkDatum } from "d3";
 
@@ -28,6 +29,10 @@ export interface DocumentResponse extends SourceDocument {
   graph?: { id: string } | null;
   topicSpaces?: TopicSpaceResponse[];
   tags?: Tag[];
+}
+
+export interface WorkspaceResponse extends Workspace {
+  referencedTopicSpaces?: TopicSpaceResponse[];
 }
 
 export interface CustomNodeType
@@ -92,4 +97,9 @@ export type RelationshipTypeForFrontend = {
 
 export type PropertyTypeForFrontend = {
   [K in string]: string;
+};
+
+export type FocusedPosition = {
+  x: number;
+  y: number;
 };

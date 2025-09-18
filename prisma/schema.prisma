@@ -61,6 +61,12 @@ model User {
   documentGraphs       DocumentGraph[]
   topicSpaces          TopicSpace[]
   graphChangeHistories GraphChangeHistory[]
+  
+  // ワークスペース関連
+  workspaces      Workspace[]          @relation("WorkspaceCurator")
+  collaboratedWorkspaces Workspace[]        @relation("WorkspaceCollaborators")
+  writingHistoryChanges WritingHistory[]    @relation("WritingHistoryChangedBy")
+  
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
 }
@@ -183,6 +189,9 @@ model TopicSpace {
   activities       Activity[]
   graphFusionQueue GraphFusionQueue[]
   graphEmbeddingQueues GraphEmbeddingQueue[]
+  
+  // ワークスペースから参照される
+  referencedByWorkspaces Workspace[] @relation("WorkspaceReferencedTopicSpaces")
 }
 
 enum GraphDataStatus {
@@ -201,6 +210,7 @@ model Tag {
 
   topicSpaces     TopicSpace[]
   sourceDocuments SourceDocument[]
+  workspaces      Workspace[] @relation("WorkspaceTags")
 }
 
 model GraphChangeHistory {
@@ -313,4 +323,74 @@ model GraphEmbeddingQueue {
 
   @@index([status])
   @@index([topicSpaceId])
+}
+
+// キュレーターがトピックについての情報を参照しながら文章を執筆できるワークスペース
+model Workspace {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  
+  // ワークスペースの状態
+  status      WorkspaceStatus @default(DRAFT)
+  
+  // 執筆中の文章内容
+  content     Json?
+  
+  // 参照しているトピックスペース
+  referencedTopicSpaces TopicSpace[] @relation("WorkspaceReferencedTopicSpaces")
+  
+  // ワークスペースの所有者（キュレーター）
+  user     User     @relation("WorkspaceCurator", fields: [userId], references: [id], onDelete: Cascade)
+  userId   String
+  
+  // 共同編集者
+  collaborators User[] @relation("WorkspaceCollaborators")
+  
+  // ワークスペースのタグ
+  tags        Tag[]   @relation("WorkspaceTags")
+  
+  // 執筆履歴
+  writingHistory WritingHistory[]
+  
+  // 作成・更新日時
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  isDeleted   Boolean  @default(false)
+  
+  @@index([userId])
+  @@index([status])
+  @@index([isDeleted])
+}
+
+// ワークスペースの状態
+enum WorkspaceStatus {
+  DRAFT       // 下書き
+  IN_PROGRESS // 執筆中
+  REVIEW      // レビュー中
+  PUBLISHED   // 公開済み
+  ARCHIVED    // アーカイブ
+}
+
+// 執筆履歴
+model WritingHistory {
+  id          String   @id @default(cuid())
+  // どのワークスペースの履歴か
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String
+  // 変更前の内容
+  previousContent Json?
+  // 変更後の内容
+  currentContent  Json?
+  // 変更の説明
+  changeDescription String?
+  // 変更を行ったユーザー
+  changedBy    User     @relation("WritingHistoryChangedBy", fields: [changedById], references: [id])
+  changedById  String
+  // 変更日時
+  createdAt   DateTime @default(now())
+  
+  @@index([workspaceId])
+  @@index([changedById])
+  @@index([createdAt])
 }

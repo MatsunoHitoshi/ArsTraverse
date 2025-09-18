@@ -115,7 +115,7 @@ export const DocumentAttachModal = ({
     <Modal
       isOpen={isOpen}
       setIsOpen={setIsOpen}
-      title="ドキュメントマップにドキュメントを追加"
+      title="リポジトリにドキュメントを追加"
     >
       <form onSubmit={methods.handleSubmit(submit, isInValid)}>
         <div className="flex flex-col gap-3">

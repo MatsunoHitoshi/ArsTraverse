@@ -30,6 +30,7 @@ export const MultiDocumentGraphViewer = ({
   const [isListOpen, setIsListOpen] = useState(false);
   const [focusedNode, setFocusedNode] = useState<CustomNodeType>();
   const [focusedLink, setFocusedLink] = useState<CustomLinkType>();
+  const [isDirectedLinks, setIsDirectedLinks] = useState(true);
   //   const [tags, setTags] = useState<TagOption>();
   //   const nodeLabels = Array.from(
   //     new Set(graphDocument.nodes.map((n) => n.label)),
@@ -85,6 +86,7 @@ export const MultiDocumentGraphViewer = ({
           setFocusedNode={setFocusedNode}
           focusedLink={focusedLink}
           setFocusedLink={setFocusedLink}
+          isDirectedLinks={isDirectedLinks}
           toolComponent={
             <>
               <GraphTool
@@ -93,6 +95,8 @@ export const MultiDocumentGraphViewer = ({
                 setIsListOpen={setIsListOpen}
                 isListOpen={isListOpen}
                 isLargeGraph={isLargeGraph}
+                isDirectedLinks={isDirectedLinks}
+                setIsDirectedLinks={setIsDirectedLinks}
               />
               <GraphInfoPanel
                 focusedNode={focusedNode}

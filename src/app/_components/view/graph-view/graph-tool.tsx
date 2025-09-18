@@ -3,10 +3,8 @@ import {
   EnterFullScreenIcon,
   ExitFullScreenIcon,
   ListBulletIcon,
-  ShareIcon,
 } from "../../icons";
 import { type TagOption, TagsInput } from "../../input/tags-input";
-import { exportSvg } from "@/app/_utils/sys/svg";
 import { ExportGraphButton } from "../../d3/export-graph-button";
 
 export const GraphTool = ({
@@ -22,6 +20,8 @@ export const GraphTool = ({
   isLargeGraph,
   isGraphFullScreen = false,
   setIsGraphFullScreen,
+  isDirectedLinks = true,
+  setIsDirectedLinks,
 }: {
   setIsGraphFullScreen?: React.Dispatch<React.SetStateAction<boolean>>;
   isGraphFullScreen?: boolean;
@@ -35,6 +35,8 @@ export const GraphTool = ({
   tagOptions?: TagOption[];
   tagFilterOption?: TopicGraphFilterOption | undefined;
   isLargeGraph: boolean;
+  isDirectedLinks?: boolean;
+  setIsDirectedLinks?: React.Dispatch<React.SetStateAction<boolean>>;
 }) => {
   return (
     <>
@@ -47,6 +49,37 @@ export const GraphTool = ({
         >
           <ListBulletIcon width={16} height={16} color="white" />
         </button>
+
+        {!!setIsDirectedLinks ? (
+          <button
+            onClick={() => {
+              setIsDirectedLinks(!isDirectedLinks);
+            }}
+            className="rounded-lg bg-black/20 p-2 backdrop-blur-sm"
+          >
+            <svg width={16} height={16}>
+              <line
+                x1="0"
+                y1="0"
+                x2="20"
+                y2="20"
+                stroke="white"
+                strokeWidth="2"
+                strokeDasharray={isDirectedLinks ? "5,5" : undefined}
+              />
+              {isDirectedLinks && (
+                <animate
+                  attributeName="stroke-dashoffset"
+                  values="0;-10"
+                  dur="1s"
+                  repeatCount="indefinite"
+                />
+              )}
+            </svg>
+          </button>
+        ) : (
+          <></>
+        )}
         {!!setIsGraphFullScreen ? (
           <button
             onClick={() => {

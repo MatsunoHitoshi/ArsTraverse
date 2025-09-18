@@ -1,6 +1,7 @@
 import type { ZoomBehavior } from "d3";
 import React, { useEffect } from "react";
 import { select, zoom } from "d3";
+import { FocusedPosition } from "@/app/const/types";
 
 type D3ZoomProvider = {
   setCurrentScale: React.Dispatch<React.SetStateAction<number>>;

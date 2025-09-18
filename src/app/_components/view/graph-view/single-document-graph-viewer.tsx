@@ -114,6 +114,7 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
   };
 
   if (!graphData) return null;
+
   return (
     <div>
       <div className="flex h-full w-full flex-row p-2">
@@ -129,7 +130,7 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
               setIsEditing={setIsEditor}
               setNodeSearchQuery={setNodeSearchQuery}
               rightArea={
-                <div className="flex w-full max-w-[300px] flex-row items-center gap-4">
+                <div className="flex w-full flex-row items-center gap-4">
                   <UrlCopy
                     messagePosition="inButton"
                     className="flex !h-8 !w-8 flex-row items-center justify-center px-0 py-0"
@@ -138,7 +139,7 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
                       <Link2Icon height={16} width={16} color="white" />
                     </div>
                   </UrlCopy>
-                  <div className="w-full truncate">
+                  <div className="w-full max-w-[200px] truncate">
                     参照：
                     {graphData.sourceDocument.url.includes("/input-txt/") ? (
                       <button

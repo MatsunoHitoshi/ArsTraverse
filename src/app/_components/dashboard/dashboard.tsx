@@ -91,7 +91,7 @@ export const Dashboard = () => {
 
           <div className="flex flex-col gap-1">
             <div className="flex flex-row items-center justify-between">
-              <div className="text-lg font-semibold">ドキュメントマップ</div>
+              <div className="text-lg font-semibold">リポジトリ</div>
               <Button
                 onClick={() => {
                   console.log("topicSpaceCreateModalOpen -> true");

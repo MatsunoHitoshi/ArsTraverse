@@ -41,16 +41,16 @@ export const DocumentUploadTipsModal = ({
               </div>
             </div>
             <div className="text-sm">
-              それぞれのドキュメントから生成された知識グラフを統合するために、「ドキュメントマップ」を作成します。
+              それぞれのドキュメントから生成された知識グラフを統合するために、「リポジトリ」を作成します。
             </div>
           </div>
           <div className="flex flex-col gap-1">
             <div className="flex flex-row items-start gap-2 text-orange-500">
               <div>Step3</div>
-              <div className="font-bold">ドキュメントマップを統合する</div>
+              <div className="font-bold">リポジトリを統合する</div>
             </div>
             <div className="text-sm">
-              ドキュメントマップにそれぞれのドキュメントを追加すると、自動で知識グラフが統合されます。
+              リポジトリにそれぞれのドキュメントを追加すると、自動で知識グラフが統合されます。
             </div>
           </div>
         </div>

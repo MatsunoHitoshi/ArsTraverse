@@ -69,7 +69,7 @@ export const Documents = ({ id }: { id?: string }) => {
           {id && document ? (
             <DocumentDetail documentId={id} />
           ) : (
-            <div className="rounded-md border border-slate-400 p-4">
+            <div className="m-4 rounded-md border border-slate-400 p-4">
               ドキュメントを選択してください
             </div>
           )}

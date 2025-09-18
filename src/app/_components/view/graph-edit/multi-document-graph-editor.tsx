@@ -39,6 +39,7 @@ export const MultiDocumentGraphEditor = ({
   const graphAreaWidth =
     (2 * (innerWidth ?? 100)) / (isGraphFullScreen ? 2 : 3) - 22;
   const graphAreaHeight = (innerHeight ?? 300) - 128;
+  const [isDirectedLinks, setIsDirectedLinks] = useState(true);
 
   const searchParams = useSearchParams();
   const isList = searchParams.get("list") === "true";
@@ -112,6 +113,7 @@ export const MultiDocumentGraphEditor = ({
           selectedGraphData={selectedGraphData}
           isLinkFiltered={isLinkFiltered}
           nodeSearchQuery={nodeSearchQuery}
+          isDirectedLinks={isDirectedLinks}
           toolComponent={
             <>
               <GraphTool
@@ -127,6 +129,8 @@ export const MultiDocumentGraphEditor = ({
                 tagFilterOption={tagFilterOption}
                 isGraphFullScreen={isGraphFullScreen}
                 setIsGraphFullScreen={setIsGraphFullScreen}
+                isDirectedLinks={isDirectedLinks}
+                setIsDirectedLinks={setIsDirectedLinks}
               />
               <GraphInfoPanel
                 focusedNode={focusedNode}

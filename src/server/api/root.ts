@@ -10,6 +10,7 @@ import { topicSpaceChangeHistoryRouter } from "./routers/topic-space-change-hist
 import { mcpRouter } from "./routers/mcp";
 import { migrationRouter } from "./routers/migration/unify-graph-data";
 import { graphEmbeddingRouter } from "./routers/graph-embedding";
+import { workspaceRouter } from "./routers/workspace";
 
 /**
  * This is the primary router for your server.
@@ -28,6 +29,7 @@ export const appRouter = createTRPCRouter({
   mcp: mcpRouter,
   migration: migrationRouter,
   graphEmbedding: graphEmbeddingRouter,
+  workspace: workspaceRouter,
 });
 
 // export type definition of API

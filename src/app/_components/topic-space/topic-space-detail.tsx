@@ -194,7 +194,7 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
                             onClick={() => onDetachDocument(document.id)}
                           >
                             <div className="text-error-red">
-                              ドキュメントマップから削除
+                              リポジトリから削除
                             </div>
                           </DocumentListMenuButton>
                           <DocumentListMenuButton
