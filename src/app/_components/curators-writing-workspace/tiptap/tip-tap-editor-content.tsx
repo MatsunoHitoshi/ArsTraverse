@@ -6,26 +6,24 @@ import {
   type Editor,
 } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
-import { EntityHighlight } from "./entity-highlight-extension";
-import { TextCompletionMark } from "./text-completion-mark";
-// import { TeiElement, TeiAttribute } from "./tei-extensions";
-// import { TeiTagButton } from "./tei-tag-panel";
-import { TeiStyles } from "./tei-styles";
-// import { PersNameContent } from "./tiptap/tei/pers-name-node";
-// import { PersNameButton } from "./pers-name-button";
-// import { TeiConverter } from "./tei-converter";
+import { EntityHighlight } from "./extensions/entity-highlight-extension";
+import { TextCompletionMark } from "./extensions/text-completion-mark";
+import { TeiStyles } from "./tei/tei-styles";
 import { performHighlightUpdate } from "@/app/_utils/tiptap/auto-highlight";
 import {
   performTextCompletionSuggestion,
   confirmTextCompletion,
-  clearTextCompletionMarks,
+  clearAndDeleteTextCompletionMarks,
 } from "@/app/_utils/tiptap/text-completion";
 import { api } from "@/trpc/react";
+import { CustomNodeType } from "@/app/const/types";
+import { TiptapEditorToolBar } from "./tools/tool-bar";
+import { TeiCustomTagHighlight } from "./tei/tei-custom-tag-highlight-extension";
 
 interface TipTapEditorContentProps {
   content: JSONContent;
   onUpdate: (content: JSONContent) => void;
-  entityNames: string[];
+  entities: CustomNodeType[];
   onEntityClick?: (entityName: string) => void;
   workspaceId: string;
 }
@@ -33,7 +31,7 @@ interface TipTapEditorContentProps {
 export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
   content,
   onUpdate,
-  entityNames,
+  entities,
   onEntityClick,
   workspaceId,
 }) => {
@@ -109,7 +107,9 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
         clearTimeout(updateTimeoutRef.current);
       }
       updateTimeoutRef.current = setTimeout(() => {
-        // console.log("XML content: ", TeiConverter.toTei(content));
+        // const html = editor?.getHTML();
+        // console.log("HTML: ", html);
+        // console.log("converted body: ", TeiConverter.toTeiBody(html));
         onUpdate(content);
       }, DEBOUNCE_TIME);
     },
@@ -121,9 +121,11 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
       StarterKit,
       EntityHighlight,
       TextCompletionMark,
+      TeiCustomTagHighlight("pers-name"),
+      TeiCustomTagHighlight("place-name"),
       // TeiElement,
       // TeiAttribute,
-      // PersNameContent,
+      // PersNameComponent,
     ],
     content,
     onUpdate: ({ editor }) => {
@@ -135,9 +137,12 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
     },
     onSelectionUpdate: () => {
       // カーソル移動時にテキスト提案モードを無効化
-      if (isTextSuggestionMode) {
-        disableTextSuggestionMode();
-      }
+      setTimeout(() => {
+        if (isTextSuggestionMode) {
+          console.log("カーソル移動時にテキスト提案モードを無効化!!");
+          disableTextSuggestionMode();
+        }
+      }, 100);
     },
     editorProps: {
       handleKeyDown: (view, event) => {
@@ -160,7 +165,6 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
                     setIsTextSuggestionMode(true);
                     performTextCompletionSuggestion(
                       editor,
-                      entityNames,
                       isUpdatingTextCompletionSuggestionRef,
                       suggestion,
                     );
@@ -175,20 +179,22 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
                 },
               );
             } else {
-              setIsTextSuggestionMode(false);
+              console.log("confirmTextCompletion");
               confirmTextCompletion(
                 editor,
                 isUpdatingTextCompletionSuggestionRef,
               );
+              setIsTextSuggestionMode(false);
             }
           }
 
           return true; // イベントを処理したことを示す
-        }
-
-        // Tab以外のキーが押された場合、テキスト提案モードを無効化
-        if (isTextSuggestionMode) {
-          disableTextSuggestionMode();
+        } else {
+          // Tab以外のキーが押された場合、テキスト提案モードを無効化
+          if (isTextSuggestionMode) {
+            console.log("Tabキー以外が押された!!");
+            disableTextSuggestionMode();
+          }
         }
 
         return false; // 他のキーは通常通り処理
@@ -201,7 +207,10 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
   const disableTextSuggestionMode = useCallback(() => {
     if (isTextSuggestionMode && editor) {
       setIsTextSuggestionMode(false);
-      clearTextCompletionMarks(editor, isUpdatingTextCompletionSuggestionRef);
+      clearAndDeleteTextCompletionMarks(
+        editor,
+        isUpdatingTextCompletionSuggestionRef,
+      );
     }
   }, [isTextSuggestionMode, editor, isUpdatingTextCompletionSuggestionRef]);
 
@@ -221,7 +230,7 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
 
   // エンティティ名のハイライトを適用
   useEffect(() => {
-    if (!editor || entityNames.length === 0) return;
+    if (!editor || entities.length === 0) return;
 
     // エディタの準備が完了してからハイライトを適用
     const applyHighlightsWithDelay = () => {
@@ -233,7 +242,7 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
         if (editor.isDestroyed) return;
         performHighlightUpdate(
           editor,
-          entityNames,
+          entities,
           isUpdatingHighlightsRef,
           (entityName) => handleNewHighlight(editor, entityName),
         );
@@ -258,7 +267,7 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
         clearTimeout(debounceTimeout);
       }
     };
-  }, [editor, entityNames, handleNewHighlight]);
+  }, [editor, entities, handleNewHighlight]);
 
   // クリーンアップ処理を改善
   useEffect(() => {
@@ -286,15 +295,14 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
 
     // テキスト提案モードがアクティブな場合、マウスクリックで無効化
     if (isTextSuggestionMode) {
+      console.log(
+        "テキスト提案モードがアクティブな場合、マウスクリックで無効化!!",
+      );
       disableTextSuggestionMode();
     }
 
     // ハイライトされたエンティティのクリック処理
-    if (
-      target.classList.contains("bg-yellow-200") &&
-      target.dataset.entityName &&
-      onEntityClick
-    ) {
+    if (target.dataset.entityName && onEntityClick) {
       e.preventDefault();
       e.stopPropagation();
 
@@ -315,79 +323,78 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
   }
 
   return (
-    <div className="relative h-full overflow-y-hidden">
-      {/* TEIタグ挿入ボタン */}
-      {/* <div className="absolute right-2 top-2 z-10 flex gap-2">
-        {editor && <TeiTagButton editor={editor} />}
-        {editor && <PersNameButton editor={editor} />}
-      </div> */}
-
-      <EditorContent
-        ref={editorRef}
-        editor={editor}
-        className="h-full min-h-[200px] overflow-y-scroll rounded-md border border-gray-600 bg-slate-800 p-3 text-white focus-within:outline-none"
-        onClick={handleClick}
-      />
-      {isSuggestionLoading && cursorPosition && (
-        <div
-          className="pointer-events-none absolute z-10"
-          style={{
-            left: `${cursorPosition.x}px`,
-            top: `${cursorPosition.y}px`,
-          }}
-        >
-          <div className="flex items-center space-x-1 rounded-md bg-slate-700/60 px-2 py-1 shadow-lg">
-            <div className="h-3 w-3 animate-spin rounded-full border border-white border-t-transparent"></div>
-            <span className="text-xs text-white">生成中...</span>
+    <div className="relative flex h-full flex-col gap-1">
+      <div className="text-white">
+        <TiptapEditorToolBar editor={editor} />
+      </div>
+      <div className="h-full overflow-y-hidden">
+        <EditorContent
+          ref={editorRef}
+          editor={editor}
+          className="h-full min-h-[200px] overflow-y-scroll rounded-md border border-gray-600 bg-slate-800 p-3 text-white focus-within:outline-none"
+          onClick={handleClick}
+        />
+        {isSuggestionLoading && cursorPosition && (
+          <div
+            className="pointer-events-none absolute z-10"
+            style={{
+              left: `${cursorPosition.x}px`,
+              top: `${cursorPosition.y}px`,
+            }}
+          >
+            <div className="flex items-center space-x-1 rounded-md bg-slate-700/60 px-2 py-1 shadow-lg">
+              <div className="h-3 w-3 animate-spin rounded-full border border-white border-t-transparent"></div>
+              <span className="text-xs text-white">生成中...</span>
+            </div>
           </div>
-        </div>
-      )}
-      <TeiStyles />
-      <style jsx global>{`
-        .ProseMirror {
-          outline: none;
-          height: 100%;
-          min-height: 200px;
-          color: white;
-          font-family: inherit;
-          line-height: 1.6;
-        }
+        )}
+        <TeiStyles />
+        <style jsx global>{`
+          .ProseMirror {
+            outline: none;
+            height: 100%;
+            min-height: 200px;
+            color: white;
+            font-family: inherit;
+            line-height: 1.6;
+          }
 
-        .ProseMirror p {
-          margin: 0.5em 0;
-        }
+          .ProseMirror p {
+            margin: 0.5em 0;
+          }
 
-        .ProseMirror p:first-child {
-          margin-top: 0;
-        }
+          .ProseMirror p:first-child {
+            margin-top: 0;
+          }
 
-        .ProseMirror p:last-child {
-          margin-bottom: 0;
-        }
+          .ProseMirror p:last-child {
+            margin-bottom: 0;
+          }
 
-        .ProseMirror .bg-yellow-200 {
-          background-color: rgba(255, 255, 255, 0.2) !important;
-          color: #ffffff !important;
-          padding: 0.125rem 0.25rem !important;
-          border-radius: 0.25rem !important;
-          cursor: pointer !important;
-          transition: background-color 0.2s !important;
-          display: inline-block !important;
-        }
+          .ProseMirror span[data-entity-name].entity-highlight {
+            cursor: pointer !important;
+            transition: background-color 0.2s !important;
+            display: inline-block !important;
+            text-decoration: underline !important;
+            text-decoration-style: dashed !important;
+            text-underline-offset: 4px !important;
+            text-decoration-thickness: 1px !important;
+          }
 
-        .ProseMirror .bg-yellow-200:hover {
-          background-color: #fde68a !important;
-          color: #000000 !important;
-        }
+          .ProseMirror span[data-entity-name].entity-highlight:hover {
+            background-color: #fde68a !important;
+            color: #000000 !important;
+          }
 
-        .ProseMirror .text-completion-mark {
-          color: #6b7280 !important;
-          opacity: 0.6 !important;
-          user-select: none !important;
-          pointer-events: none !important;
-          font-style: italic !important;
-        }
-      `}</style>
+          .ProseMirror .text-completion-mark {
+            color: #6b7280 !important;
+            opacity: 0.6 !important;
+            user-select: none !important;
+            pointer-events: none !important;
+            font-style: italic !important;
+          }
+        `}</style>
+      </div>
     </div>
   );
 };

@@ -2,7 +2,6 @@ import type { Editor } from "@tiptap/react";
 
 export const performTextCompletionSuggestion = (
   editor: Editor,
-  entityNames: string[],
   isUpdatingTextCompletionSuggestionRef: React.MutableRefObject<boolean>,
   suggestion?: string | null,
 ) => {
@@ -164,7 +163,7 @@ export const confirmTextCompletion = (
 };
 
 // テキスト補完マークをクリアする処理
-export const clearTextCompletionMarks = (
+export const clearAndDeleteTextCompletionMarks = (
   editor: Editor,
   isUpdatingTextCompletionSuggestionRef: React.MutableRefObject<boolean>,
 ) => {

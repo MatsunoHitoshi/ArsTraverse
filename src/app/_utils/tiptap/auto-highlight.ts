@@ -1,12 +1,20 @@
+import type { CustomNodeType } from "@/app/const/types";
 import type { Editor } from "@tiptap/react";
 
 const escapeRegExp = (string: string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 };
 
+const customTagTags = ["pers-name", "place-name"];
+
+const customTagMatch: Record<string, string> = {
+  "pers-name": "Person",
+  "place-name": "Place",
+};
+
 export const performHighlightUpdate = (
   editor: Editor,
-  entityNames: string[],
+  entities: CustomNodeType[],
   isUpdatingHighlightsRef: React.MutableRefObject<boolean>,
   onNewHighlighted?: (entityName: string) => void,
 ) => {
@@ -22,13 +30,14 @@ export const performHighlightUpdate = (
 
     // 既存のハイライトをクリア
     editor.commands.unsetEntityHighlight();
+    editor.commands.unsetCustomTagHighlight();
 
     // エディタのドキュメント構造を取得
     const doc = editor.state.doc;
 
     // 各エンティティ名をハイライト
-    const sortedEntityNames = [...entityNames].sort(
-      (a, b) => b.length - a.length,
+    const sortedEntities = [...entities].sort(
+      (a, b) => b.name.length - a.name.length,
     );
 
     // すべてのマッチを収集（ドキュメント構造を直接使用）
@@ -43,15 +52,15 @@ export const performHighlightUpdate = (
       if (node.isText) {
         const text = node.text ?? "";
 
-        sortedEntityNames.forEach((entityName) => {
-          const regex = new RegExp(escapeRegExp(entityName), "gi");
+        sortedEntities.forEach((entity) => {
+          const regex = new RegExp(escapeRegExp(entity.name), "gi");
           let match;
 
           while ((match = regex.exec(text)) !== null) {
             allMatches.push({
               start: pos + match.index,
-              end: pos + match.index + entityName.length,
-              entityName,
+              end: pos + match.index + entity.name.length,
+              entityName: entity.name,
             });
           }
         });
@@ -64,8 +73,23 @@ export const performHighlightUpdate = (
     // 後ろから前に向かってハイライトを適用（位置のずれを防ぐ）
     allMatches.reverse().forEach(({ start, end, entityName }) => {
       try {
-        // 選択範囲を設定してハイライトを適用
+        // 選択範囲を設定
         editor.commands.setTextSelection({ from: start, to: end });
+
+        // エンティティのlabelを確認してPersonの場合はpers - nameタグで囲む;
+        const entity = entities.find((e) => e.name === entityName);
+
+        customTagTags.forEach((tagName) => {
+          if (entity?.label === customTagMatch[tagName]) {
+            editor.commands.setCustomTagHighlight({
+              tagName,
+              entityName,
+              ref: entity?.id ?? "",
+            });
+          }
+        });
+
+        //通常のハイライトを適用
         editor.commands.setEntityHighlight({ entityName });
       } catch (error) {
         console.warn(

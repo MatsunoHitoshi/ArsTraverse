@@ -25,9 +25,8 @@ export const EntityHighlight = Mark.create<EntityHighlightOptions>({
   addOptions() {
     return {
       HTMLAttributes: {
-        class:
-          "bg-yellow-200 rounded px-1 cursor-pointer text-black hover:bg-yellow-300 transition-colors",
         "data-entity-name": "",
+        class: "entity-highlight",
       },
     };
   },
@@ -40,8 +39,7 @@ export const EntityHighlight = Mark.create<EntityHighlightOptions>({
         renderHTML: (attributes) => {
           return {
             "data-entity-name": attributes.entityName as string,
-            class:
-              "bg-yellow-200 rounded px-1 cursor-pointer text-black hover:bg-yellow-300 transition-colors",
+            class: "entity-highlight",
           };
         },
       },

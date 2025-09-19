@@ -6,7 +6,7 @@ import type {
 } from "@/app/const/types";
 import React, { useState, useEffect, useRef } from "react";
 import { D3ForceGraph } from "../d3/force/graph";
-import TipTapEditor from "./tip-tap-editor";
+import TipTapEditor from "./tiptap/tip-tap-editor";
 import type { Workspace } from "@prisma/client";
 import { api } from "@/trpc/react";
 import { Button } from "../button/button";
@@ -75,7 +75,6 @@ const CuratorsWritingWorkspace = ({
   const [graphSize, setGraphSize] = useState({ width: 400, height: 400 });
   const graphDocument = topicSpace?.graphData;
   const nodes = graphDocument?.nodes ?? [];
-  const nodeNames = nodes.map((node: CustomNodeType) => node.name);
 
   useEffect(() => {
     const observer = new ResizeObserver((entries) => {
@@ -125,7 +124,7 @@ const CuratorsWritingWorkspace = ({
     <div className="flex h-screen w-full gap-2 bg-slate-900 p-4 font-sans">
       {/* Left Column: Text Editor (2/3) */}
       <div className="flex h-[calc(100svh-72px)] w-2/3 flex-col">
-        <div className="flex h-full flex-col bg-slate-900 shadow-sm">
+        <div className="flex h-full flex-col bg-slate-900">
           <div className="mb-2 flex w-full flex-row items-center gap-2">
             <LinkButton
               href="/workspaces"
@@ -145,7 +144,7 @@ const CuratorsWritingWorkspace = ({
             <TipTapEditor
               content={editorContent}
               onUpdate={onEditorContentUpdate}
-              entityNames={nodeNames}
+              entities={nodes}
               onEntityClick={handleEntityClick}
               workspaceId={workspace.id}
             />
