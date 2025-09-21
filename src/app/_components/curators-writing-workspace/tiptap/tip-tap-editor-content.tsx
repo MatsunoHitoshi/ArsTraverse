@@ -16,9 +16,9 @@ import {
   clearAndDeleteTextCompletionMarks,
 } from "@/app/_utils/tiptap/text-completion";
 import { api } from "@/trpc/react";
-import { CustomNodeType } from "@/app/const/types";
+import type { CustomNodeType } from "@/app/const/types";
 import { TiptapEditorToolBar } from "./tools/tool-bar";
-import { TeiCustomTagHighlight } from "./tei/tei-custom-tag-highlight-extension";
+import { TeiCustomTagHighlightExtensions } from "./tei/tei-custom-tag-highlight-extension";
 
 interface TipTapEditorContentProps {
   content: JSONContent;
@@ -121,11 +121,7 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
       StarterKit,
       EntityHighlight,
       TextCompletionMark,
-      TeiCustomTagHighlight("pers-name"),
-      TeiCustomTagHighlight("place-name"),
-      // TeiElement,
-      // TeiAttribute,
-      // PersNameComponent,
+      ...TeiCustomTagHighlightExtensions,
     ],
     content,
     onUpdate: ({ editor }) => {
@@ -155,10 +151,73 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
             if (!isTextSuggestionMode) {
               setIsSuggestionLoading(true);
               setCursorPosition(getCursorPosition());
+              // カーソル位置に一番近い3つのハイライト部分のエンティティを取得
+              const cursorPos = editor.state.selection.from;
+
+              // エディタのJSONからentityHighlightマークを探す
+              const findEntityHighlights = (
+                content: JSONContent[],
+              ): Array<{ name: string; from: number; to: number }> => {
+                const highlights: Array<{
+                  name: string;
+                  from: number;
+                  to: number;
+                }> = [];
+                let position = 0;
+
+                const traverse = (nodes: JSONContent[]) => {
+                  for (const node of nodes) {
+                    if (node.type === "text" && node.marks) {
+                      for (const mark of node.marks) {
+                        if (
+                          mark.type === "entityHighlight" &&
+                          mark.attrs?.entityName
+                        ) {
+                          highlights.push({
+                            name: mark.attrs.entityName as string,
+                            from: position,
+                            to: position + (node.text?.length ?? 0),
+                          });
+                        }
+                      }
+                      position += node.text?.length ?? 0;
+                    } else if (node.content) {
+                      traverse(node.content);
+                    }
+                  }
+                };
+
+                traverse(content);
+                return highlights;
+              };
+
+              const allHighlights = findEntityHighlights(
+                editor.getJSON().content || [],
+              );
+              const nearbyEntities = allHighlights
+                .map((highlight) => {
+                  // カーソル位置からハイライト部分までの最小距離を計算
+                  const distance = Math.min(
+                    Math.abs(highlight.from - cursorPos),
+                    Math.abs(highlight.to - cursorPos),
+                    // カーソルがハイライト部分の範囲内にある場合は距離0
+                    highlight.from <= cursorPos && highlight.to >= cursorPos
+                      ? 0
+                      : Infinity,
+                  );
+                  return { ...highlight, distance };
+                })
+                .sort((a, b) => a.distance - b.distance)
+                .slice(0, 3)
+                .map((highlight) => highlight.name);
+
+              console.log("nearbyEntities: ", nearbyEntities);
+
               textCompletion.mutate(
                 {
                   workspaceId: workspaceId,
                   baseText: editor.getText(),
+                  searchEntities: nearbyEntities,
                 },
                 {
                   onSuccess: (suggestion) => {

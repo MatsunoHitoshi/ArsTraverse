@@ -1,4 +1,4 @@
-import { Attributes, Mark, mergeAttributes } from "@tiptap/core";
+import { type Attributes, Mark, mergeAttributes } from "@tiptap/core";
 
 export interface TextCompletionMarkOptions {
   HTMLAttributes: Record<string, unknown>;

@@ -7,6 +7,7 @@ import {
   WorkspaceStatus,
 } from "@prisma/client";
 import OpenAI from "openai";
+import { env } from "@/env";
 
 const CreateWorkspaceSchema = z.object({
   name: z.string().min(1, "ワークスペース名は必須です"),
@@ -47,6 +48,7 @@ const RemoveCollaboratorSchema = z.object({
 const TextCompletionSchema = z.object({
   workspaceId: z.string(),
   baseText: z.string(),
+  searchEntities: z.array(z.string()).optional(),
 });
 
 const EntityInformationCompletionSchema = z.object({
@@ -429,10 +431,11 @@ export const workspaceRouter = createTRPCRouter({
   textCompletion: protectedProcedure
     .input(TextCompletionSchema)
     .mutation(async ({ ctx, input }) => {
-      const { workspaceId, baseText } = input;
+      const { workspaceId, baseText, searchEntities } = input;
 
       console.log("workspaceId: ", workspaceId);
       console.log("baseText: ", baseText);
+      console.log("searchEntities: ", searchEntities);
 
       const workspace = await ctx.db.workspace.findFirst({
         where: {
@@ -443,27 +446,63 @@ export const workspaceRouter = createTRPCRouter({
             { collaborators: { some: { id: ctx.session.user.id } } },
           ],
         },
+        include: {
+          referencedTopicSpaces: true,
+        },
       });
 
       if (!workspace) {
         throw new Error("Workspace not found or access denied");
       }
 
+      const topicSpaceTools = workspace.referencedTopicSpaces.map(
+        (topicSpace) => ({
+          type: "mcp" as const,
+          server_label: `context-search-${topicSpace.name}`,
+          server_url: `${env.NEXT_PUBLIC_BASE_URL}/api/topic-spaces/${topicSpace.id}/mcp`,
+          require_approval: "never" as const,
+        }),
+      );
+
+      // const topicSpaceTools = [
+      //   {
+      //     type: "mcp" as const,
+      //     server_label: `context-search-${workspace.referencedTopicSpaces[0]?.name}`,
+      //     server_url: `https://arstraverse.caric.jp/api/topic-spaces/cm8los72z00065adrgtn7b4tk/mcp`,
+      //     require_approval: "never" as const,
+      //   },
+      // ];
+
+      console.log("topicSpaceTools: ", topicSpaceTools);
+
       const openai = new OpenAI();
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "user",
-            content: `以下のテキストの続きを一文だけ補完してください。\n${baseText}`,
-          },
-        ],
-      });
 
-      console.log("response: ", response.choices[0]?.message?.content);
+      // MCPツールが利用できない場合のフォールバック
+      let response;
+      try {
+        response = await openai.responses.create({
+          model: "gpt-4o-mini",
+          tools: topicSpaceTools.length > 0 ? [...topicSpaceTools] : undefined,
+          input: `あなたは、文脈を踏まえながら論理的でわかりやすい文章を執筆する専門家です。${topicSpaceTools.length > 0 ? `ツール「context-search ${workspace.referencedTopicSpaces[0]?.name}」を利用してこれから示すエンティティについてそれぞれ個別に検索を行い、文脈情報を利用しながら、` : ""}これから示す元となるテキストの続きを一文だけ補完してください。応答として出力するのは、元となるテキストの続きだけにしてください。
+          ${searchEntities && searchEntities.length > 0 ? `\n検索するエンティティ：${searchEntities.join(", ")}` : ""}
+          \n元となるテキスト：${baseText}`,
+        });
+      } catch (error) {
+        console.error(
+          "MCP tool error, falling back to basic completion:",
+          error,
+        );
+        // MCPツールが失敗した場合は基本的なテキスト補完にフォールバック
+        response = await openai.responses.create({
+          model: "gpt-4o-mini",
+          input: `以下のテキストの続きを一文だけ補完してください。応答として出力するのは、元となるテキストの続きだけにしてください。\n${baseText}`,
+        });
+      }
 
-      const suggestion = response.choices[0]?.message?.content;
-      const withoutBaseText = suggestion?.startsWith(baseText)
+      console.log("response: ", response.output_text);
+
+      const suggestion = response.output_text ?? "";
+      const withoutBaseText = suggestion.startsWith(baseText)
         ? suggestion.slice(baseText.length)
         : suggestion;
       return withoutBaseText;
@@ -572,19 +611,17 @@ export const workspaceRouter = createTRPCRouter({
         });
 
         // 実行が完了するまで待機
-        let runStatus = await openai.beta.threads.runs.retrieve(
-          thread.id,
-          run.id,
-        );
+        let runStatus = await openai.beta.threads.runs.retrieve(run.id, {
+          thread_id: thread.id,
+        });
         while (
           runStatus.status !== "completed" &&
           runStatus.status !== "failed"
         ) {
           await new Promise((resolve) => setTimeout(resolve, 1000));
-          runStatus = await openai.beta.threads.runs.retrieve(
-            thread.id,
-            run.id,
-          );
+          runStatus = await openai.beta.threads.runs.retrieve(run.id, {
+            thread_id: thread.id,
+          });
         }
 
         if (runStatus.status === "failed") {

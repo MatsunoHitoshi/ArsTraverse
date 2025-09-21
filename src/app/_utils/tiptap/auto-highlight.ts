@@ -1,15 +1,12 @@
 import type { CustomNodeType } from "@/app/const/types";
 import type { Editor } from "@tiptap/react";
+import {
+  customTags,
+  customTagMatch,
+} from "@/app/_components/curators-writing-workspace/tiptap/tei/tei-custom-tag-highlight-extension";
 
 const escapeRegExp = (string: string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-};
-
-const customTagTags = ["pers-name", "place-name"];
-
-const customTagMatch: Record<string, string> = {
-  "pers-name": "Person",
-  "place-name": "Place",
 };
 
 export const performHighlightUpdate = (
@@ -79,7 +76,7 @@ export const performHighlightUpdate = (
         // エンティティのlabelを確認してPersonの場合はpers - nameタグで囲む;
         const entity = entities.find((e) => e.name === entityName);
 
-        customTagTags.forEach((tagName) => {
+        customTags.forEach((tagName) => {
           if (entity?.label === customTagMatch[tagName]) {
             editor.commands.setCustomTagHighlight({
               tagName,

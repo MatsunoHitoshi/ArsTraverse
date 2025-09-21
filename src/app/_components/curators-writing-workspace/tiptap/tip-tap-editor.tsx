@@ -1,5 +1,5 @@
 "use client";
-import { CustomNodeType } from "@/app/const/types";
+import type { CustomNodeType } from "@/app/const/types";
 import { TipTapEditorContent } from "./tip-tap-editor-content";
 import { type JSONContent } from "@tiptap/react";
 import React from "react";

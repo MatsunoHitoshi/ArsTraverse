@@ -4,6 +4,15 @@ export interface PerseNameHighlightOptions {
   HTMLAttributes: Record<string, unknown>;
 }
 
+export const customTags = ["pers-name", "place-name", "artwork", "event"];
+
+export const customTagMatch: Record<string, string> = {
+  "pers-name": "Person",
+  "place-name": "Place",
+  artwork: "Artwork",
+  "event-name": "Event",
+};
+
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     customTagHighlight: {
@@ -106,3 +115,7 @@ export const TeiCustomTagHighlight = (tagName: string) =>
       };
     },
   });
+
+export const TeiCustomTagHighlightExtensions = customTags.map((tagName) =>
+  TeiCustomTagHighlight(tagName),
+);
