@@ -1,4 +1,4 @@
-import { Editor } from "@tiptap/core";
+import type { Editor } from "@tiptap/core";
 import ExportButton from "./export-button";
 
 export const TiptapEditorToolBar = ({ editor }: { editor: Editor }) => {

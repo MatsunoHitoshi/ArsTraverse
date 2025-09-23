@@ -13,6 +13,8 @@ import {
   formNodeDataForFrontend,
   formRelationshipDataForFrontend,
 } from "@/app/_utils/kg/frontend-properties";
+import { getTextFromDocumentFile } from "@/app/_utils/text/text";
+import { extractRelevantSections } from "@/app/_utils/text/extract-relevant-sections";
 
 function isGraphDocument(data: unknown): data is GraphDocumentForFrontend {
   return (
@@ -118,6 +120,7 @@ export const mcpRouter = createTRPCRouter({
         include: {
           graphNodes: true,
           graphRelationships: true,
+          sourceDocuments: true,
         },
       });
 
@@ -179,6 +182,10 @@ export const mcpRouter = createTRPCRouter({
         },
       };
 
+      const sourceDocuments = topicSpace.sourceDocuments.map(
+        (document) => document,
+      );
+
       // 4. LLMで要約を生成
       const openai = new OpenAI();
 
@@ -196,25 +203,57 @@ export const mcpRouter = createTRPCRouter({
         context += `- (${sourceNode?.name})-[${relationship?.type}]->(${targetNode?.name})\n`;
       });
 
-      const completion = await openai.chat.completions.create({
-        messages: [
-          {
-            role: "system",
-            content:
-              "あなたは美術の専門家です。与えられた主題と関連情報に基づいて、簡潔で分かりやすい解説文を日本語で生成してください。",
-          },
-          {
-            role: "user",
-            content: `以下の情報について、200字程度で解説してください。\n\n${context}`,
-          },
-        ],
+      // 検索キーワードを抽出（主題名と関連ノード名）
+      const searchKeywords = [
+        mainNode.name,
+        mainNode.label,
+        ...responseData.relatedNodes
+          .map(({ node }) => node?.name)
+          .filter(Boolean),
+        ...responseData.relatedNodes
+          .map(({ node }) => node?.label)
+          .filter(Boolean),
+      ].filter(Boolean) as string[];
+
+      console.log("searchKeywords: ", searchKeywords);
+
+      // 各文書から関連部分のみを抽出
+      const sourceDocumentsTexts = await Promise.all(
+        sourceDocuments.map(async (document) => {
+          const fullText = await getTextFromDocumentFile(
+            document.url,
+            document.documentType,
+          );
+          const relevantSections = extractRelevantSections(
+            fullText,
+            searchKeywords,
+            300,
+          );
+          return relevantSections.length > 0
+            ? relevantSections.join("\n\n---\n\n")
+            : "";
+        }),
+      );
+
+      console.log("sourceDocumentsTexts: ", sourceDocumentsTexts);
+
+      const relevantTexts = sourceDocumentsTexts.filter(
+        (text) => text.length > 0,
+      );
+
+      if (relevantTexts.length > 0) {
+        context += "元となったテキスト記述（関連部分のみ）:\n";
+        context += relevantTexts.join("\n\n");
+      }
+
+      const response = await openai.responses.create({
         model: "gpt-4o-mini",
         temperature: 0.7,
+        tools: [],
+        input: `あなたは芸術文化の専門家です。与えられた主題と関連情報に基づいて、簡潔で分かりやすい解説文を生成してください。以下の情報について、200字程度で解説してください。\n\n${context}`,
       });
 
-      const summary =
-        completion.choices[0]?.message?.content ??
-        "要約を生成できませんでした。";
+      const summary = response.output_text ?? "要約を生成できませんでした。";
 
       // 5. 指定された形式で返却
       const result: ContextKnowledge = {

@@ -66,12 +66,12 @@ export const TextCompletionMark = Mark.create<TextCompletionMarkOptions>({
     return {
       setTextCompletion:
         (attributes = {}) =>
-        ({ commands, chain }) => {
+        ({ chain }) => {
           return chain().setMark(this.name, attributes).run();
         },
       unsetTextCompletion:
         () =>
-        ({ commands, chain }) => {
+        ({ chain }) => {
           console.log("---unsetTextCompletion");
           return chain().unsetMark(this.name).run();
         },

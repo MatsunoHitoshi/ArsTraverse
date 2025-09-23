@@ -134,7 +134,7 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
     onSelectionUpdate: () => {
       // カーソル移動時にテキスト提案モードを無効化
       setTimeout(() => {
-        if (isTextSuggestionMode) {
+        if (isTextSuggestionMode && !isSuggestionLoading) {
           console.log("カーソル移動時にテキスト提案モードを無効化!!");
           disableTextSuggestionMode();
         }
@@ -142,118 +142,130 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
     },
     editorProps: {
       handleKeyDown: (view, event) => {
-        // Tabキーが押された場合
+        // Tabキーが押された場合 - テキスト補完を実行
         if (event.key === "Tab") {
           event.preventDefault();
-          console.log("event.key: ", event.key);
-          // テキスト補完を実行
+          console.log("Tab key pressed - generating text completion");
+
           if (!isUpdatingTextCompletionSuggestionRef.current && editor) {
-            if (!isTextSuggestionMode) {
-              setIsSuggestionLoading(true);
-              setCursorPosition(getCursorPosition());
-              // カーソル位置に一番近い3つのハイライト部分のエンティティを取得
-              const cursorPos = editor.state.selection.from;
+            const isDeepMode = isTextSuggestionMode;
+            setIsSuggestionLoading(true);
+            setCursorPosition(getCursorPosition());
 
-              // エディタのJSONからentityHighlightマークを探す
-              const findEntityHighlights = (
-                content: JSONContent[],
-              ): Array<{ name: string; from: number; to: number }> => {
-                const highlights: Array<{
-                  name: string;
-                  from: number;
-                  to: number;
-                }> = [];
-                let position = 0;
+            // カーソル位置に一番近い3つのハイライト部分のエンティティを取得
+            const cursorPos = editor.state.selection.from;
 
-                const traverse = (nodes: JSONContent[]) => {
-                  for (const node of nodes) {
-                    if (node.type === "text" && node.marks) {
-                      for (const mark of node.marks) {
-                        if (
-                          mark.type === "entityHighlight" &&
-                          mark.attrs?.entityName
-                        ) {
-                          highlights.push({
-                            name: mark.attrs.entityName as string,
-                            from: position,
-                            to: position + (node.text?.length ?? 0),
-                          });
-                        }
+            // エディタのJSONからentityHighlightマークを探す
+            const findEntityHighlights = (
+              content: JSONContent[],
+            ): Array<{ name: string; from: number; to: number }> => {
+              const highlights: Array<{
+                name: string;
+                from: number;
+                to: number;
+              }> = [];
+              let position = 0;
+
+              const traverse = (nodes: JSONContent[]) => {
+                for (const node of nodes) {
+                  if (node.type === "text" && node.marks) {
+                    for (const mark of node.marks) {
+                      if (
+                        mark.type === "entityHighlight" &&
+                        mark.attrs?.entityName
+                      ) {
+                        highlights.push({
+                          name: mark.attrs.entityName as string,
+                          from: position,
+                          to: position + (node.text?.length ?? 0),
+                        });
                       }
-                      position += node.text?.length ?? 0;
-                    } else if (node.content) {
-                      traverse(node.content);
                     }
+                    position += node.text?.length ?? 0;
+                  } else if (node.content) {
+                    traverse(node.content);
                   }
-                };
-
-                traverse(content);
-                return highlights;
+                }
               };
 
-              const allHighlights = findEntityHighlights(
-                editor.getJSON().content || [],
-              );
-              const nearbyEntities = allHighlights
-                .map((highlight) => {
-                  // カーソル位置からハイライト部分までの最小距離を計算
-                  const distance = Math.min(
-                    Math.abs(highlight.from - cursorPos),
-                    Math.abs(highlight.to - cursorPos),
-                    // カーソルがハイライト部分の範囲内にある場合は距離0
-                    highlight.from <= cursorPos && highlight.to >= cursorPos
-                      ? 0
-                      : Infinity,
-                  );
-                  return { ...highlight, distance };
-                })
-                .sort((a, b) => a.distance - b.distance)
-                .slice(0, 3)
-                .map((highlight) => highlight.name);
+              traverse(content);
+              return highlights;
+            };
 
-              console.log("nearbyEntities: ", nearbyEntities);
+            const allHighlights = findEntityHighlights(
+              editor.getJSON().content || [],
+            );
+            const nearbyEntities = allHighlights
+              .map((highlight) => {
+                // カーソル位置からハイライト部分までの最小距離を計算
+                const distance = Math.min(
+                  Math.abs(highlight.from - cursorPos),
+                  Math.abs(highlight.to - cursorPos),
+                  // カーソルがハイライト部分の範囲内にある場合は距離0
+                  highlight.from <= cursorPos && highlight.to >= cursorPos
+                    ? 0
+                    : Infinity,
+                );
+                return { ...highlight, distance };
+              })
+              .sort((a, b) => a.distance - b.distance)
+              .slice(0, 3)
+              .map((highlight) => highlight.name);
 
-              textCompletion.mutate(
-                {
-                  workspaceId: workspaceId,
-                  baseText: editor.getText(),
-                  searchEntities: nearbyEntities,
-                },
-                {
-                  onSuccess: (suggestion) => {
-                    setIsTextSuggestionMode(true);
-                    performTextCompletionSuggestion(
+            console.log("nearbyEntities: ", nearbyEntities);
+
+            textCompletion.mutate(
+              {
+                workspaceId: workspaceId,
+                baseText: editor.getText(),
+                searchEntities: nearbyEntities,
+                isDeepMode,
+              },
+              {
+                onSuccess: (suggestion) => {
+                  // 既存の推薦がある場合はクリアしてから新しい推薦を適用
+                  if (isTextSuggestionMode) {
+                    clearAndDeleteTextCompletionMarks(
                       editor,
                       isUpdatingTextCompletionSuggestionRef,
-                      suggestion,
                     );
-                    setIsSuggestionLoading(false);
-                    setCursorPosition(null);
-                  },
-                  onError: (error) => {
-                    console.error(error);
-                    setIsSuggestionLoading(false);
-                    setCursorPosition(null);
-                  },
+                  }
+                  setIsTextSuggestionMode(true);
+                  performTextCompletionSuggestion(
+                    editor,
+                    isUpdatingTextCompletionSuggestionRef,
+                    suggestion,
+                  );
+                  setIsSuggestionLoading(false);
+                  setCursorPosition(null);
                 },
-              );
-            } else {
-              console.log("confirmTextCompletion");
-              confirmTextCompletion(
-                editor,
-                isUpdatingTextCompletionSuggestionRef,
-              );
-              setIsTextSuggestionMode(false);
-            }
+                onError: (error) => {
+                  console.error(error);
+                  setIsSuggestionLoading(false);
+                  setCursorPosition(null);
+                },
+              },
+            );
           }
 
           return true; // イベントを処理したことを示す
-        } else {
-          // Tab以外のキーが押された場合、テキスト提案モードを無効化
-          if (isTextSuggestionMode) {
-            console.log("Tabキー以外が押された!!");
-            disableTextSuggestionMode();
-          }
+        }
+
+        // Enterキーが押された場合 - テキスト補完を確定
+        if (event.key === "Enter" && isTextSuggestionMode && editor) {
+          event.preventDefault();
+          console.log("Enter key pressed - confirming text completion");
+          confirmTextCompletion(editor, isUpdatingTextCompletionSuggestionRef);
+          setIsTextSuggestionMode(false);
+          return true; // イベントを処理したことを示す
+        }
+
+        // Escapeキーが押された場合 - テキスト提案モードを無効化
+        if (event.key === "Escape" && isTextSuggestionMode) {
+          event.preventDefault();
+          console.log("Escape key pressed - canceling text completion");
+          disableTextSuggestionMode();
+          return true; // イベントを処理したことを示す
         }
 
         return false; // 他のキーは通常通り処理

@@ -15,10 +15,7 @@ import { env } from "@/env";
 import { getTextFromDocumentFile } from "@/app/_utils/text/text";
 import { inspectFileTypeFromUrl } from "@/app/_utils/sys/file";
 import { DocumentType } from "@prisma/client";
-import {
-  formDocumentGraphForFrontend,
-  formGraphDataForFrontend,
-} from "@/app/_utils/kg/frontend-properties";
+import { formDocumentGraphForFrontend } from "@/app/_utils/kg/frontend-properties";
 
 const SourceDocumentSchema = z.object({
   name: z.string(),
