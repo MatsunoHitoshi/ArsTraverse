@@ -1,6 +1,6 @@
 import React from "react";
 
-export const TeiStyles: React.FC = () => {
+export const TeiStyles = () => {
   return (
     <style jsx global>{`
       /* TEI要素のスタイル */

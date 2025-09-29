@@ -6,7 +6,7 @@ import React from "react";
 
 interface TipTapEditorProps {
   content: JSONContent;
-  onUpdate: (content: JSONContent) => void;
+  onUpdate: (content: JSONContent, updateAllowed: boolean) => void;
   entities: CustomNodeType[];
   onEntityClick?: (entityName: string) => void;
   workspaceId: string;

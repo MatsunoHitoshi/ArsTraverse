@@ -3,8 +3,15 @@
 import type {
   CustomNodeType,
   GraphDocumentForFrontend,
+  TiptapGraphFilterOption,
 } from "@/app/const/types";
-import React, { useState, useEffect, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  createContext,
+} from "react";
 import { D3ForceGraph } from "../d3/force/graph";
 import TipTapEditor from "./tiptap/tip-tap-editor";
 import type { Workspace } from "@prisma/client";
@@ -15,6 +22,7 @@ import { ChevronLeftIcon } from "../icons";
 import { LinkButton } from "../button/link-button";
 import { TopicSpaceAttachModal } from "../workspace/topic-space-attach-modal";
 import { RelatedNodesAndLinksViewer } from "../view/graph-view/related-nodes-viewer";
+import { findEntityHighlights } from "@/app/_utils/text/find-entity-highlights";
 
 interface CuratorsWritingWorkspaceProps {
   // 既存のprops（後方互換性のため）
@@ -25,6 +33,21 @@ interface CuratorsWritingWorkspaceProps {
   workspace: Workspace;
   refetch: () => void;
 }
+
+export const TiptapGraphFilterContext = createContext<{
+  tiptapGraphFilterOption: TiptapGraphFilterOption;
+  setTiptapGraphFilterOption: React.Dispatch<
+    React.SetStateAction<TiptapGraphFilterOption>
+  >;
+}>({
+  tiptapGraphFilterOption: {
+    mode: "non-filtered",
+    entities: [],
+  },
+  setTiptapGraphFilterOption: () => {
+    console.log("setTiptapGraphFilterOption");
+  },
+});
 
 const CuratorsWritingWorkspace = ({
   topicSpaceId,
@@ -67,6 +90,11 @@ const CuratorsWritingWorkspace = ({
     x: 0,
     y: 0,
   });
+  const [tiptapGraphFilterOption, setTiptapGraphFilterOption] =
+    useState<TiptapGraphFilterOption>({
+      mode: "non-filtered",
+      entities: [],
+    });
 
   // --- Graph State ---
   const svgRef = useRef<SVGSVGElement>(null);
@@ -75,6 +103,54 @@ const CuratorsWritingWorkspace = ({
   const [graphSize, setGraphSize] = useState({ width: 400, height: 400 });
   const graphDocument = topicSpace?.graphData;
   const nodes = graphDocument?.nodes ?? [];
+
+  const tiptapFilteredGraphDocument = useMemo(() => {
+    if (!graphDocument) return null;
+    const filteredNodes = graphDocument?.nodes.filter((node) =>
+      tiptapGraphFilterOption.entities.includes(node.name),
+    );
+    const filteredRelationships = graphDocument?.relationships.filter(
+      (relationship) => {
+        const ids = filteredNodes.map((node) => node.id);
+        return (
+          ids.includes(relationship.sourceId) ||
+          ids.includes(relationship.targetId)
+        );
+      },
+    );
+    const neighborNodes = graphDocument?.nodes.filter((node) =>
+      filteredRelationships.some(
+        (relationship) =>
+          relationship.sourceId === node.id ||
+          relationship.targetId === node.id,
+      ),
+    );
+    return {
+      nodes: neighborNodes,
+      relationships: filteredRelationships,
+    };
+  }, [graphDocument, tiptapGraphFilterOption]);
+
+  const tiptapSelectedGraphDocument = useMemo(() => {
+    if (!graphDocument) return null;
+
+    const selectedNodes = graphDocument?.nodes.filter((node) =>
+      tiptapGraphFilterOption.entities.includes(node.name),
+    );
+    const selectedRelationships = graphDocument?.relationships.filter(
+      (relationship) => {
+        const ids = selectedNodes.map((node) => node.id);
+        return (
+          ids.includes(relationship.sourceId) &&
+          ids.includes(relationship.targetId)
+        );
+      },
+    );
+    return {
+      nodes: selectedNodes,
+      relationships: selectedRelationships,
+    };
+  }, [graphDocument, tiptapGraphFilterOption]);
 
   useEffect(() => {
     const observer = new ResizeObserver((entries) => {
@@ -108,8 +184,27 @@ const CuratorsWritingWorkspace = ({
     }
   };
 
-  const onEditorContentUpdate = (content: JSONContent) => {
+  const onEditorContentUpdate = (
+    content: JSONContent,
+    updateAllowed: boolean,
+  ) => {
     console.log("onSave");
+
+    const entitiesInText = findEntityHighlights(content.content ?? []);
+    const names = entitiesInText.map((entity) => entity.name);
+    const diffCheck =
+      names.length !== tiptapGraphFilterOption.entities.length ||
+      names.some(
+        (name, index) => name !== tiptapGraphFilterOption.entities[index],
+      );
+    if (diffCheck) {
+      console.log("diffCheck: ", diffCheck);
+      setTiptapGraphFilterOption({
+        ...tiptapGraphFilterOption,
+        entities: names,
+      });
+    }
+    if (!updateAllowed) return;
     updateWorkspace.mutate({
       id: workspace.id,
       content: {
@@ -141,41 +236,18 @@ const CuratorsWritingWorkspace = ({
 
           {/* TipTapエディタ */}
           <div className="h-full max-h-full flex-grow overflow-y-hidden">
-            <TipTapEditor
-              content={editorContent}
-              onUpdate={onEditorContentUpdate}
-              entities={nodes}
-              onEntityClick={handleEntityClick}
-              workspaceId={workspace.id}
-            />
+            <TiptapGraphFilterContext.Provider
+              value={{ tiptapGraphFilterOption, setTiptapGraphFilterOption }}
+            >
+              <TipTapEditor
+                content={editorContent}
+                onUpdate={onEditorContentUpdate}
+                entities={nodes}
+                onEntityClick={handleEntityClick}
+                workspaceId={workspace.id}
+              />
+            </TiptapGraphFilterContext.Provider>
           </div>
-
-          {/* エンティティ名のリスト */}
-          {/* {nodeNames.length > 0 && (
-            <div className="mt-4">
-              <h3 className="mb-2 text-sm font-medium text-gray-400">
-                利用可能なエンティティ:
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {nodeNames
-                  .slice(0, 15)
-                  .map((entityName: string, index: number) => (
-                    <span
-                      key={index}
-                      className="cursor-pointer rounded bg-orange-500 px-2 py-1 text-xs text-white hover:bg-orange-300"
-                      onClick={() => handleEntityClick(entityName)}
-                    >
-                      {entityName}
-                    </span>
-                  ))}
-                {nodeNames.length > 15 && (
-                  <span className="px-2 py-1 text-xs text-gray-400">
-                    +{nodeNames.length - 15} more
-                  </span>
-                )}
-              </div>
-            </div>
-          )} */}
         </div>
       </div>
 
@@ -206,7 +278,11 @@ const CuratorsWritingWorkspace = ({
                         width={graphSize.width}
                         height={graphSize.height}
                         defaultPosition={defaultPosition}
-                        graphDocument={graphDocument}
+                        graphDocument={
+                          tiptapGraphFilterOption.mode === "filtered"
+                            ? tiptapFilteredGraphDocument ?? graphDocument
+                            : graphDocument
+                        }
                         isLinkFiltered={false}
                         currentScale={currentScale}
                         setCurrentScale={setCurrentScale}
@@ -215,6 +291,11 @@ const CuratorsWritingWorkspace = ({
                         setFocusedLink={() => {
                           // リンクフォーカス機能は現在使用しない
                         }}
+                        selectedGraphData={
+                          tiptapGraphFilterOption.mode !== "non-filtered"
+                            ? tiptapSelectedGraphDocument ?? undefined
+                            : undefined
+                        }
                         focusedLink={undefined}
                         isLargeGraph={false}
                         isEditor={false}

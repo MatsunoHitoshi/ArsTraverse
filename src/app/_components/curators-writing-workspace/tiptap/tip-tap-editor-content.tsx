@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, useState } from "react";
+import React, { useEffect, useRef, useCallback, useContext } from "react";
 import {
   useEditor,
   EditorContent,
@@ -10,19 +10,17 @@ import { EntityHighlight } from "./extensions/entity-highlight-extension";
 import { TextCompletionMark } from "./extensions/text-completion-mark";
 import { TeiStyles } from "./tei/tei-styles";
 import { performHighlightUpdate } from "@/app/_utils/tiptap/auto-highlight";
-import {
-  performTextCompletionSuggestion,
-  confirmTextCompletion,
-  clearAndDeleteTextCompletionMarks,
-} from "@/app/_utils/tiptap/text-completion";
-import { api } from "@/trpc/react";
 import type { CustomNodeType } from "@/app/const/types";
 import { TiptapEditorToolBar } from "./tools/tool-bar";
 import { TeiCustomTagHighlightExtensions } from "./tei/tei-custom-tag-highlight-extension";
+import { TiptapStyles } from "./styles";
+import { KeyboardHandlerExtension } from "./extensions/keyboard-handler-extension";
+import { useTextCompletion } from "./hooks/use-text-completion";
+import { TiptapGraphFilterContext } from "..";
 
 interface TipTapEditorContentProps {
   content: JSONContent;
-  onUpdate: (content: JSONContent) => void;
+  onUpdate: (content: JSONContent, updateAllowed: boolean) => void;
   entities: CustomNodeType[];
   onEntityClick?: (entityName: string) => void;
   workspaceId: string;
@@ -35,25 +33,18 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
   onEntityClick,
   workspaceId,
 }) => {
-  const [isTextSuggestionMode, setIsTextSuggestionMode] =
-    useState<boolean>(false);
-  const [isSuggestionLoading, setIsSuggestionLoading] =
-    useState<boolean>(false);
-  const [cursorPosition, setCursorPosition] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
-  const updateTimeoutRef = useRef<NodeJS.Timeout>();
+  const editorRef = useRef<HTMLDivElement>(null);
   const highlightTimeoutRef = useRef<NodeJS.Timeout>();
   const debounceTimeoutRef = useRef<NodeJS.Timeout>();
-  const isUpdatingTextCompletionSuggestionRef = useRef(false);
+  const updateTimeoutRef = useRef<NodeJS.Timeout>();
   const isUpdatingHighlightsRef = useRef(false); // ハイライト更新中フラグ
   const isHighlightClickRef = useRef(false); // ハイライトクリック中フラグ
-  const editorRef = useRef<HTMLDivElement>(null);
   const DEBOUNCE_TIME = 1000;
-  const textCompletion = api.workspace.textCompletion.useMutation();
-  const entityInformationCompletion =
-    api.workspace.entityInformationCompletion.useMutation();
+  const { tiptapGraphFilterOption, setTiptapGraphFilterOption } = useContext(
+    TiptapGraphFilterContext,
+  );
+  // カスタムフックを使用
+  const textCompletion = useTextCompletion({ workspaceId });
 
   // 新しいハイライトが検出されたときのコールバック
   const handleNewHighlight = useCallback(
@@ -100,20 +91,18 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
   const debouncedUpdate = useCallback(
     (content: JSONContent) => {
       // ハイライト更新中はonUpdateをスキップ
-      if (isUpdatingHighlightsRef.current) return;
-      if (isUpdatingTextCompletionSuggestionRef.current) return;
+      const updateAllowed =
+        !isUpdatingHighlightsRef.current &&
+        !textCompletion.isUpdatingTextCompletionSuggestionRef.current;
 
       if (updateTimeoutRef.current) {
         clearTimeout(updateTimeoutRef.current);
       }
       updateTimeoutRef.current = setTimeout(() => {
-        // const html = editor?.getHTML();
-        // console.log("HTML: ", html);
-        // console.log("converted body: ", TeiConverter.toTeiBody(html));
-        onUpdate(content);
+        onUpdate(content, updateAllowed);
       }, DEBOUNCE_TIME);
     },
-    [onUpdate],
+    [onUpdate, textCompletion.isUpdatingTextCompletionSuggestionRef],
   );
 
   const editor = useEditor({
@@ -122,6 +111,11 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
       EntityHighlight,
       TextCompletionMark,
       ...TeiCustomTagHighlightExtensions,
+      KeyboardHandlerExtension.configure({
+        onTabKey: (editor) => textCompletion.handleTabKey(editor, editorRef),
+        onEnterKey: (editor) => textCompletion.handleEnterKey(editor),
+        onEscapeKey: (editor) => textCompletion.handleEscapeKey(editor),
+      }),
     ],
     content,
     onUpdate: ({ editor }) => {
@@ -134,170 +128,23 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
     onSelectionUpdate: () => {
       // カーソル移動時にテキスト提案モードを無効化
       setTimeout(() => {
-        if (isTextSuggestionMode && !isSuggestionLoading) {
+        if (
+          textCompletion.isTextSuggestionMode &&
+          !textCompletion.isSuggestionLoading
+        ) {
           console.log("カーソル移動時にテキスト提案モードを無効化!!");
-          disableTextSuggestionMode();
+          textCompletion.disableTextSuggestionMode(editor!);
         }
       }, 100);
     },
     editorProps: {
       handleKeyDown: (view, event) => {
-        // Tabキーが押された場合 - テキスト補完を実行
-        if (event.key === "Tab") {
-          event.preventDefault();
-          console.log("Tab key pressed - generating text completion");
-
-          if (!isUpdatingTextCompletionSuggestionRef.current && editor) {
-            const isDeepMode = isTextSuggestionMode;
-            setIsSuggestionLoading(true);
-            setCursorPosition(getCursorPosition());
-
-            // カーソル位置に一番近い3つのハイライト部分のエンティティを取得
-            const cursorPos = editor.state.selection.from;
-
-            // エディタのJSONからentityHighlightマークを探す
-            const findEntityHighlights = (
-              content: JSONContent[],
-            ): Array<{ name: string; from: number; to: number }> => {
-              const highlights: Array<{
-                name: string;
-                from: number;
-                to: number;
-              }> = [];
-              let position = 0;
-
-              const traverse = (nodes: JSONContent[]) => {
-                for (const node of nodes) {
-                  if (node.type === "text" && node.marks) {
-                    for (const mark of node.marks) {
-                      if (
-                        mark.type === "entityHighlight" &&
-                        mark.attrs?.entityName
-                      ) {
-                        highlights.push({
-                          name: mark.attrs.entityName as string,
-                          from: position,
-                          to: position + (node.text?.length ?? 0),
-                        });
-                      }
-                    }
-                    position += node.text?.length ?? 0;
-                  } else if (node.content) {
-                    traverse(node.content);
-                  }
-                }
-              };
-
-              traverse(content);
-              return highlights;
-            };
-
-            const allHighlights = findEntityHighlights(
-              editor.getJSON().content || [],
-            );
-            const nearbyEntities = allHighlights
-              .map((highlight) => {
-                // カーソル位置からハイライト部分までの最小距離を計算
-                const distance = Math.min(
-                  Math.abs(highlight.from - cursorPos),
-                  Math.abs(highlight.to - cursorPos),
-                  // カーソルがハイライト部分の範囲内にある場合は距離0
-                  highlight.from <= cursorPos && highlight.to >= cursorPos
-                    ? 0
-                    : Infinity,
-                );
-                return { ...highlight, distance };
-              })
-              .sort((a, b) => a.distance - b.distance)
-              .slice(0, 3)
-              .map((highlight) => highlight.name);
-
-            console.log("nearbyEntities: ", nearbyEntities);
-
-            textCompletion.mutate(
-              {
-                workspaceId: workspaceId,
-                baseText: editor.getText(),
-                searchEntities: nearbyEntities,
-                isDeepMode,
-              },
-              {
-                onSuccess: (suggestion) => {
-                  // 既存の推薦がある場合はクリアしてから新しい推薦を適用
-                  if (isTextSuggestionMode) {
-                    clearAndDeleteTextCompletionMarks(
-                      editor,
-                      isUpdatingTextCompletionSuggestionRef,
-                    );
-                  }
-                  setIsTextSuggestionMode(true);
-                  performTextCompletionSuggestion(
-                    editor,
-                    isUpdatingTextCompletionSuggestionRef,
-                    suggestion,
-                  );
-                  setIsSuggestionLoading(false);
-                  setCursorPosition(null);
-                },
-                onError: (error) => {
-                  console.error(error);
-                  setIsSuggestionLoading(false);
-                  setCursorPosition(null);
-                },
-              },
-            );
-          }
-
-          return true; // イベントを処理したことを示す
-        }
-
-        // Enterキーが押された場合 - テキスト補完を確定
-        if (event.key === "Enter" && isTextSuggestionMode && editor) {
-          event.preventDefault();
-          console.log("Enter key pressed - confirming text completion");
-          confirmTextCompletion(editor, isUpdatingTextCompletionSuggestionRef);
-          setIsTextSuggestionMode(false);
-          return true; // イベントを処理したことを示す
-        }
-
-        // Escapeキーが押された場合 - テキスト提案モードを無効化
-        if (event.key === "Escape" && isTextSuggestionMode) {
-          event.preventDefault();
-          console.log("Escape key pressed - canceling text completion");
-          disableTextSuggestionMode();
-          return true; // イベントを処理したことを示す
-        }
-
-        return false; // 他のキーは通常通り処理
+        console.log("onKeyDown: ", event.key);
+        return false;
       },
     },
     immediatelyRender: false,
   });
-
-  // テキスト提案モードを無効化する関数
-  const disableTextSuggestionMode = useCallback(() => {
-    if (isTextSuggestionMode && editor) {
-      setIsTextSuggestionMode(false);
-      clearAndDeleteTextCompletionMarks(
-        editor,
-        isUpdatingTextCompletionSuggestionRef,
-      );
-    }
-  }, [isTextSuggestionMode, editor, isUpdatingTextCompletionSuggestionRef]);
-
-  // カーソル位置を取得する関数
-  const getCursorPosition = useCallback(() => {
-    if (!editor || !editorRef.current) return null;
-
-    const selection = editor.state.selection;
-    const coords = editor.view.coordsAtPos(selection.head);
-    const editorRect = editorRef.current.getBoundingClientRect();
-
-    return {
-      x: coords.right - editorRect.left,
-      y: coords.top - editorRect.top,
-    };
-  }, [editor]);
 
   // エンティティ名のハイライトを適用
   useEffect(() => {
@@ -365,11 +212,11 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
     const target = e.target as HTMLElement;
 
     // テキスト提案モードがアクティブな場合、マウスクリックで無効化
-    if (isTextSuggestionMode) {
+    if (textCompletion.isTextSuggestionMode) {
       console.log(
         "テキスト提案モードがアクティブな場合、マウスクリックで無効化!!",
       );
-      disableTextSuggestionMode();
+      textCompletion.disableTextSuggestionMode(editor!);
     }
 
     // ハイライトされたエンティティのクリック処理
@@ -405,66 +252,23 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
           className="h-full min-h-[200px] overflow-y-scroll rounded-md border border-gray-600 bg-slate-800 p-3 text-white focus-within:outline-none"
           onClick={handleClick}
         />
-        {isSuggestionLoading && cursorPosition && (
-          <div
-            className="pointer-events-none absolute z-10"
-            style={{
-              left: `${cursorPosition.x}px`,
-              top: `${cursorPosition.y}px`,
-            }}
-          >
-            <div className="flex items-center space-x-1 rounded-md bg-slate-700/60 px-2 py-1 shadow-lg">
-              <div className="h-3 w-3 animate-spin rounded-full border border-white border-t-transparent"></div>
-              <span className="text-xs text-white">生成中...</span>
+        {textCompletion.isSuggestionLoading &&
+          textCompletion.cursorPosition && (
+            <div
+              className="pointer-events-none absolute z-10"
+              style={{
+                left: `${textCompletion.cursorPosition.x}px`,
+                top: `${textCompletion.cursorPosition.y}px`,
+              }}
+            >
+              <div className="flex items-center space-x-1 rounded-md bg-slate-700/60 px-2 py-1 shadow-lg">
+                <div className="h-3 w-3 animate-spin rounded-full border border-white border-t-transparent"></div>
+                <span className="text-xs text-white">生成中...</span>
+              </div>
             </div>
-          </div>
-        )}
+          )}
         <TeiStyles />
-        <style jsx global>{`
-          .ProseMirror {
-            outline: none;
-            height: 100%;
-            min-height: 200px;
-            color: white;
-            font-family: inherit;
-            line-height: 1.6;
-          }
-
-          .ProseMirror p {
-            margin: 0.5em 0;
-          }
-
-          .ProseMirror p:first-child {
-            margin-top: 0;
-          }
-
-          .ProseMirror p:last-child {
-            margin-bottom: 0;
-          }
-
-          .ProseMirror span[data-entity-name].entity-highlight {
-            cursor: pointer !important;
-            transition: background-color 0.2s !important;
-            display: inline-block !important;
-            text-decoration: underline !important;
-            text-decoration-style: dashed !important;
-            text-underline-offset: 4px !important;
-            text-decoration-thickness: 1px !important;
-          }
-
-          .ProseMirror span[data-entity-name].entity-highlight:hover {
-            background-color: #fde68a !important;
-            color: #000000 !important;
-          }
-
-          .ProseMirror .text-completion-mark {
-            color: #6b7280 !important;
-            opacity: 0.6 !important;
-            user-select: none !important;
-            pointer-events: none !important;
-            font-style: italic !important;
-          }
-        `}</style>
+        <TiptapStyles />
       </div>
     </div>
   );

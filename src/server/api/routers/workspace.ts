@@ -8,7 +8,6 @@ import {
 } from "@prisma/client";
 import OpenAI from "openai";
 import { env } from "@/env";
-import { isDeepStrictEqual } from "util";
 
 const CreateWorkspaceSchema = z.object({
   name: z.string().min(1, "ワークスペース名は必須です"),

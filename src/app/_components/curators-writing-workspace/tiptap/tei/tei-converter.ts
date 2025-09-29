@@ -1,6 +1,3 @@
-import type { JSONContent } from "@tiptap/react";
-import type { Attributes, HTMLContent } from "@tiptap/core";
-
 export class TeiConverter {
   static toTeiBody(HTMLContent: string | undefined, withClass = false): string {
     const html = !withClass
@@ -10,12 +7,32 @@ export class TeiConverter {
       html ?? "",
       "pers-name",
     );
-    const body = `<body>${persNameConvertedHTML}</body>`;
+    const placeNameConvertedHTML = this.convertCustomTag(
+      persNameConvertedHTML,
+      "place-name",
+    );
+    const artworkConvertedHTML = this.convertCustomTag(
+      placeNameConvertedHTML,
+      "artwork",
+    );
+    const eventNameConvertedHTML = this.convertCustomTag(
+      artworkConvertedHTML,
+      "event",
+    );
+
+    const removedDataEntityName = this.removeDataEntityName(
+      eventNameConvertedHTML,
+    );
+    const body = `<body>${removedDataEntityName}</body>`;
     return body;
   }
 
   private static removeClass(html: string): string {
     return html.replace(/\s*class="[^"]*"/g, "");
+  }
+
+  private static removeDataEntityName(html: string): string {
+    return html.replace(/data-entity-name="[^"]*"/g, "");
   }
 
   /**
@@ -35,15 +52,19 @@ export class TeiConverter {
     return html.replace(
       new RegExp(
         `<span([^>]*data-${tagName}="([^"]*)"[^>]*)>(.*?)</span>`,
-        "g",
+        "gs",
       ),
-      (match: string, attrs: string, content: string) => {
+      (match: string, attrs: string, entityName: string, content: string) => {
         // 既存のref属性を優先的に使用
         const existingRefMatch: RegExpMatchArray | null =
           attrs.match(/ref="([^"]*)"/);
         const tagNameCamelCase: string = this.kebabToCamelCase(tagName);
 
         if (existingRefMatch) {
+          console.log(
+            "tei: ",
+            `<${tagNameCamelCase} ref="${existingRefMatch[1]}">${content}</${tagNameCamelCase}>`,
+          );
           return `<${tagNameCamelCase} ref="${existingRefMatch[1]}">${content}</${tagNameCamelCase}>`;
         }
         // ref属性がない場合はdata-entity-nameから抽出

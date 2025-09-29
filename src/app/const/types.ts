@@ -103,3 +103,8 @@ export type FocusedPosition = {
   x: number;
   y: number;
 };
+
+export type TiptapGraphFilterOption = {
+  mode: "non-filtered" | "focused" | "filtered";
+  entities: string[];
+};
