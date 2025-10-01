@@ -16,6 +16,7 @@ import { getTextFromDocumentFile } from "@/app/_utils/text/text";
 import { inspectFileTypeFromUrl } from "@/app/_utils/sys/file";
 import { DocumentType } from "@prisma/client";
 import { formDocumentGraphForFrontend } from "@/app/_utils/kg/frontend-properties";
+import { extractRelevantSections } from "@/app/_utils/text/extract-relevant-sections";
 
 const SourceDocumentSchema = z.object({
   name: z.string(),
@@ -215,5 +216,32 @@ export const sourceDocumentRouter = createTRPCRouter({
       });
 
       return document;
+    }),
+
+  getReferenceSectionsById: publicProcedure
+    .input(z.object({ id: z.string(), searchTerms: z.array(z.string()) }))
+    .query(async ({ ctx, input }) => {
+      const document = await ctx.db.sourceDocument.findFirst({
+        where: { id: input.id },
+      });
+
+      if (!document) {
+        throw new Error("Document not found");
+      }
+
+      const fullText = await getTextFromDocumentFile(
+        document.url,
+        document.documentType,
+      );
+
+      console.log("fullText: ", fullText.slice(0, 20));
+
+      const relevantSections = extractRelevantSections(
+        fullText,
+        input.searchTerms,
+        250,
+      );
+
+      return relevantSections;
     }),
 });

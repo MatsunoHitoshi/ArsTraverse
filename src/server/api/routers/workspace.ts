@@ -437,6 +437,7 @@ export const workspaceRouter = createTRPCRouter({
       console.log("workspaceId: ", workspaceId);
       console.log("baseText: ", baseText);
       console.log("searchEntities: ", searchEntities);
+      console.log("isDeepMode: ", isDeepMode);
 
       const workspace = await ctx.db.workspace.findFirst({
         where: {
@@ -455,6 +456,8 @@ export const workspaceRouter = createTRPCRouter({
       if (!workspace) {
         throw new Error("Workspace not found or access denied");
       }
+
+      console.log("isDeepMode: ", isDeepMode);
 
       const topicSpaceTools = isDeepMode
         ? workspace.referencedTopicSpaces.map((topicSpace) => ({
@@ -478,14 +481,13 @@ export const workspaceRouter = createTRPCRouter({
 
       const openai = new OpenAI();
 
-      // MCPツールが利用できない場合のフォールバック
       let response;
       try {
         response = await openai.responses.create({
           model: "gpt-4o-mini",
           tools: topicSpaceTools,
           input: isDeepMode
-            ? `あなたは、文脈を踏まえながら論理的でわかりやすい文章を執筆する専門家です。${topicSpaceTools.length > 0 ? `ツール「context-search ${workspace.referencedTopicSpaces[0]?.id}」を利用してこれから示すエンティティについてそれぞれ個別に検索を行い、文脈情報を利用しながら、` : ""}これから示す元となるテキストの続きを補完してください。応答として出力するのは、元となるテキストの続きの文章だけにしてください。
+            ? `あなたは、文脈を踏まえながら論理的でわかりやすい文章を執筆する専門家です。${topicSpaceTools.length > 0 ? `ツール「context-search ${workspace.referencedTopicSpaces[0]?.id}」を利用してこれから示すエンティティについてそれぞれ個別に検索を行い、関係性の検索を利用しながら、` : ""}これから示す元となるテキストの続きを補完してください。必ず言及されている箇所の内容も参照しながら文章を生成してください。応答として出力するのは、元となるテキストの続きの文章だけにしてください。
           ${searchEntities && searchEntities.length > 0 ? `\n検索するエンティティ：${searchEntities.join(", ")}` : ""}
           \n元となるテキスト：${baseText}`
             : `あなたは、文脈を踏まえながら論理的でわかりやすい文章を執筆する専門家です。文脈情報を利用しながら、これから示す元となるテキストの続きを一文だけ補完してください。応答として出力するのは、元となるテキストの続きの文章だけにしてください。
@@ -510,151 +512,5 @@ export const workspaceRouter = createTRPCRouter({
         ? suggestion.slice(baseText.length)
         : suggestion;
       return withoutBaseText;
-    }),
-
-  entityInformationCompletion: protectedProcedure
-    .input(EntityInformationCompletionSchema)
-    .mutation(async ({ ctx, input }) => {
-      const { workspaceId, entityName } = input;
-
-      const workspace = await ctx.db.workspace.findFirst({
-        where: {
-          id: workspaceId,
-          isDeleted: false,
-          OR: [
-            { userId: ctx.session.user.id },
-            { collaborators: { some: { id: ctx.session.user.id } } },
-          ],
-        },
-        include: {
-          referencedTopicSpaces: {
-            include: {
-              graphNodes: {
-                where: { deletedAt: null },
-              },
-              graphRelationships: {
-                where: { deletedAt: null },
-              },
-            },
-          },
-        },
-      });
-
-      if (!workspace) {
-        throw new Error("Workspace not found or access denied");
-      }
-
-      const graphNodes = workspace.referencedTopicSpaces.flatMap(
-        (topicSpace: TopicSpace & { graphNodes: GraphNode[] }) =>
-          topicSpace.graphNodes,
-      );
-
-      const entityInformation = graphNodes.find(
-        (node: GraphNode) => node.name === entityName,
-      );
-
-      const graphRelationships = workspace.referencedTopicSpaces.flatMap(
-        (
-          topicSpace: TopicSpace & { graphRelationships: GraphRelationship[] },
-        ) => topicSpace.graphRelationships,
-      );
-
-      const neighbors = graphRelationships.filter(
-        (relationship: GraphRelationship) =>
-          relationship.fromNodeId === entityInformation?.id ||
-          relationship.toNodeId === entityInformation?.id,
-      );
-
-      const neighborGraphNodes = graphNodes.filter(
-        (node: GraphNode) =>
-          neighbors.some(
-            (relationship: GraphRelationship) =>
-              relationship.fromNodeId === node.id,
-          ) ||
-          neighbors.some(
-            (relationship: GraphRelationship) =>
-              relationship.toNodeId === node.id,
-          ),
-      );
-
-      const openai = new OpenAI();
-      let context = "";
-      const nodes = neighborGraphNodes;
-      neighbors.forEach((edge) => {
-        context += `(${
-          nodes.find((n) => {
-            return n?.id === edge?.fromNodeId;
-          })?.name
-        })-[${edge?.type}]->(${
-          nodes.find((n) => {
-            return n?.id === edge?.toNodeId;
-          })?.name
-        })\n`;
-      });
-
-      const assistant = await openai.beta.assistants.create({
-        name: "エンティティ情報アシスタント",
-        instructions:
-          "必ず与えられた文脈からわかる情報を使用して回答を生成してください。",
-        model: "gpt-4o-mini",
-        temperature: 1.0,
-      });
-      console.log("context: \n", context);
-      const thread = await openai.beta.threads.create({
-        messages: [
-          {
-            role: "user",
-            content: `「${entityName}」についての情報を作成しようとしています。下記の文脈を使用して一文の短い説明を作成してください。\n${context}`,
-          },
-        ],
-      });
-
-      try {
-        const run = await openai.beta.threads.runs.create(thread.id, {
-          assistant_id: assistant.id,
-        });
-
-        // 実行が完了するまで待機
-        let runStatus = await openai.beta.threads.runs.retrieve(run.id, {
-          thread_id: thread.id,
-        });
-        while (
-          runStatus.status !== "completed" &&
-          runStatus.status !== "failed"
-        ) {
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          runStatus = await openai.beta.threads.runs.retrieve(run.id, {
-            thread_id: thread.id,
-          });
-        }
-
-        if (runStatus.status === "failed") {
-          throw new Error("アシスタントの実行に失敗しました");
-        }
-
-        // メッセージを取得
-        const messages = await openai.beta.threads.messages.list(thread.id);
-        const lastMessage = messages.data[0];
-
-        if (lastMessage && lastMessage.content[0]?.type === "text") {
-          const suggestionText = lastMessage.content[0].text.value;
-          const textWithoutFirstEntityName = suggestionText.startsWith(
-            entityName,
-          )
-            ? suggestionText.slice(entityName.length)
-            : suggestionText;
-          return {
-            entityInformationText: textWithoutFirstEntityName,
-          };
-        } else {
-          throw new Error("メッセージの取得に失敗しました");
-        }
-      } catch (error) {
-        console.log("error: ", error);
-        return {
-          entityInformationText: "",
-          error: "作成できませんでした",
-        };
-      }
     }),
 });

@@ -9,13 +9,13 @@ import { StarterKit } from "@tiptap/starter-kit";
 import { EntityHighlight } from "./extensions/entity-highlight-extension";
 import { TextCompletionMark } from "./extensions/text-completion-mark";
 import { TeiStyles } from "./tei/tei-styles";
-import { performHighlightUpdate } from "@/app/_utils/tiptap/auto-highlight";
 import type { CustomNodeType } from "@/app/const/types";
 import { TiptapEditorToolBar } from "./tools/tool-bar";
 import { TeiCustomTagHighlightExtensions } from "./tei/tei-custom-tag-highlight-extension";
 import { TiptapStyles } from "./styles";
 import { KeyboardHandlerExtension } from "./extensions/keyboard-handler-extension";
 import { useTextCompletion } from "./hooks/use-text-completion";
+import { useHighlight } from "./hooks/use-highlight";
 import { TiptapGraphFilterContext } from "..";
 
 interface TipTapEditorContentProps {
@@ -34,24 +34,14 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
   workspaceId,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
-  const highlightTimeoutRef = useRef<NodeJS.Timeout>();
   const debounceTimeoutRef = useRef<NodeJS.Timeout>();
   const updateTimeoutRef = useRef<NodeJS.Timeout>();
-  const isUpdatingHighlightsRef = useRef(false); // ハイライト更新中フラグ
-  const isHighlightClickRef = useRef(false); // ハイライトクリック中フラグ
   const DEBOUNCE_TIME = 1000;
-  const { tiptapGraphFilterOption, setTiptapGraphFilterOption } = useContext(
-    TiptapGraphFilterContext,
-  );
-  // カスタムフックを使用
-  const textCompletion = useTextCompletion({ workspaceId });
+  const {} = useContext(TiptapGraphFilterContext);
 
   // 新しいハイライトが検出されたときのコールバック
   const handleNewHighlight = useCallback(
     (editor: Editor, entityName: string) => {
-      // ハイライトクリック中は処理をスキップ
-      if (isHighlightClickRef.current) return;
-
       console.log("----- New highlight detected -----\n", entityName);
       // 挙動が安定しないためハイライトのアップデート処理は行わない
       // setIsSuggestionLoading(true);
@@ -84,15 +74,29 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
       //   onEntityClick(entityName);
       // }
     },
-    [onEntityClick],
+    [],
   );
+
+  // カスタムフックを使用
+  const textCompletion = useTextCompletion({
+    workspaceId,
+  });
+
+  // ハイライト処理用のカスタムフック（エディタは後で設定）
+  const highlight = useHighlight({
+    editor: null,
+    entities,
+    onEntityClick,
+    onNewHighlight: handleNewHighlight,
+    isTextSuggestionMode: textCompletion.isTextSuggestionMode,
+  });
 
   // デバウンス処理付きのonUpdate
   const debouncedUpdate = useCallback(
     (content: JSONContent) => {
       // ハイライト更新中はonUpdateをスキップ
       const updateAllowed =
-        !isUpdatingHighlightsRef.current &&
+        !highlight.isUpdatingHighlightsRef.current &&
         !textCompletion.isUpdatingTextCompletionSuggestionRef.current;
 
       if (updateTimeoutRef.current) {
@@ -102,7 +106,11 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
         onUpdate(content, updateAllowed);
       }, DEBOUNCE_TIME);
     },
-    [onUpdate, textCompletion.isUpdatingTextCompletionSuggestionRef],
+    [
+      onUpdate,
+      textCompletion.isUpdatingTextCompletionSuggestionRef,
+      highlight.isUpdatingHighlightsRef,
+    ],
   );
 
   const editor = useEditor({
@@ -121,83 +129,46 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
     onUpdate: ({ editor }) => {
       debouncedUpdate(editor.getJSON());
     },
-    onFocus: () => {
-      // フォーカス時にハイライトを更新
-      // updateHighlights(true);
-    },
     onSelectionUpdate: () => {
       // カーソル移動時にテキスト提案モードを無効化
+      // ただし、テキスト提案の出力中やハイライト更新中は無効化しない
       setTimeout(() => {
         if (
           textCompletion.isTextSuggestionMode &&
-          !textCompletion.isSuggestionLoading
+          !textCompletion.isSuggestionLoading &&
+          !textCompletion.isUpdatingTextCompletionSuggestionRef.current &&
+          !highlight.isUpdatingHighlightsRef.current
         ) {
           console.log("カーソル移動時にテキスト提案モードを無効化!!");
-          textCompletion.disableTextSuggestionMode(editor!);
+          textCompletion.disableTextSuggestionMode(editor);
         }
       }, 100);
     },
     editorProps: {
-      handleKeyDown: (view, event) => {
-        console.log("onKeyDown: ", event.key);
+      handleKeyDown: (_view, _event) => {
         return false;
       },
     },
-    immediatelyRender: false,
+    immediatelyRender: true,
   });
 
-  // エンティティ名のハイライトを適用
+  // エディタが作成されたらハイライトフックに設定
   useEffect(() => {
-    if (!editor || entities.length === 0) return;
-
-    // エディタの準備が完了してからハイライトを適用
-    const applyHighlightsWithDelay = () => {
-      if (highlightTimeoutRef.current) {
-        clearTimeout(highlightTimeoutRef.current);
-      }
-
-      highlightTimeoutRef.current = setTimeout(() => {
-        if (editor.isDestroyed) return;
-        performHighlightUpdate(
-          editor,
-          entities,
-          isUpdatingHighlightsRef,
-          (entityName) => handleNewHighlight(editor, entityName),
-        );
-      }, 300);
-    };
-
-    // エディタの準備完了を待つ
-    if (editor.isDestroyed) return;
-
-    // 少し遅延させてエディタの準備が完了してからハイライトを適用
-    applyHighlightsWithDelay();
-
-    // クリーンアップ関数で使用するref値をキャプチャ
-    const highlightTimeout = highlightTimeoutRef.current;
-    const debounceTimeout = debounceTimeoutRef.current;
-
-    return () => {
-      if (highlightTimeout) {
-        clearTimeout(highlightTimeout);
-      }
-      if (debounceTimeout) {
-        clearTimeout(debounceTimeout);
-      }
-    };
-  }, [editor, entities, handleNewHighlight]);
+    if (editor) {
+      highlight.editorRef.current = editor;
+      // エディタが設定されたらハイライト処理を手動でトリガー
+      setTimeout(() => {
+        highlight.triggerHighlightOnEditorSet();
+      }, 500);
+    }
+  }, [editor, highlight.editorRef, highlight]);
 
   // クリーンアップ処理を改善
   useEffect(() => {
     // クリーンアップ関数で使用するref値をキャプチャ
-    const highlightTimeout = highlightTimeoutRef.current;
     const debounceTimeout = debounceTimeoutRef.current;
     const updateTimeout = updateTimeoutRef.current;
-
     return () => {
-      if (highlightTimeout) {
-        clearTimeout(highlightTimeout);
-      }
       if (debounceTimeout) {
         clearTimeout(debounceTimeout);
       }
@@ -209,31 +180,16 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
 
   // エンティティハイライトのクリック処理
   const handleClick = (e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-
     // テキスト提案モードがアクティブな場合、マウスクリックで無効化
     if (textCompletion.isTextSuggestionMode) {
       console.log(
         "テキスト提案モードがアクティブな場合、マウスクリックで無効化!!",
       );
-      textCompletion.disableTextSuggestionMode(editor!);
+      textCompletion.disableTextSuggestionMode(editor);
     }
 
-    // ハイライトされたエンティティのクリック処理
-    if (target.dataset.entityName && onEntityClick) {
-      e.preventDefault();
-      e.stopPropagation();
-
-      // ハイライトクリック中フラグを設定
-      isHighlightClickRef.current = true;
-
-      // 少し遅延させてフラグをリセット（ハイライト更新処理が完了するまで待つ）
-      setTimeout(() => {
-        isHighlightClickRef.current = false;
-      }, 500);
-
-      onEntityClick(target.dataset.entityName);
-    }
+    // ハイライトフックのクリック処理を使用
+    highlight.handleHighlightClick(e);
   };
 
   if (!editor) {

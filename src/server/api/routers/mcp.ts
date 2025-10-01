@@ -15,6 +15,7 @@ import {
 } from "@/app/_utils/kg/frontend-properties";
 import { getTextFromDocumentFile } from "@/app/_utils/text/text";
 import { extractRelevantSections } from "@/app/_utils/text/extract-relevant-sections";
+import type { GraphNode, GraphRelationship } from "@prisma/client";
 
 function isGraphDocument(data: unknown): data is GraphDocumentForFrontend {
   return (
@@ -98,7 +99,16 @@ export const mcpRouter = createTRPCRouter({
         return false;
       });
 
-      return matchedNodes;
+      return matchedNodes.map((node) => {
+        const relatedNodesAndRelationships = getRelatedNodesAndRelationships(
+          graphData,
+          node.id,
+        );
+        return {
+          node: formNodeDataForFrontend(node),
+          relatedNodesAndRelationships,
+        };
+      });
     }),
 
   getContextKnowledgeForNodePublic: publicProcedure
@@ -144,43 +154,7 @@ export const mcpRouter = createTRPCRouter({
       }
 
       // 3. グラフデータを処理
-      const mainNode = graphData.nodes.find((n) => String(n.id) === nodeId);
-      if (!mainNode) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Node not found in the graph.",
-        });
-      }
-
-      const relatedRelationships = graphData.relationships.filter(
-        (l) => String(l.fromNodeId) === nodeId || String(l.toNodeId) === nodeId,
-      );
-
-      const relatedNodeIds = new Set(
-        relatedRelationships.map((l) =>
-          String(l.fromNodeId) === nodeId ? l.toNodeId : l.fromNodeId,
-        ),
-      );
-
-      const relatedNodesWithDetails = Array.from(relatedNodeIds).map((id) => {
-        const node = graphData.nodes.find((n) => n.id === id);
-        const relationship = relatedRelationships.find(
-          (l) => l.fromNodeId === id || l.toNodeId === id,
-        );
-        return { node, relationship };
-      });
-
-      const responseData = {
-        nodeDetails: mainNode,
-        relatedNodes: relatedNodesWithDetails.map(({ node, relationship }) => ({
-          node,
-          relationship,
-        })),
-        graphSubset: {
-          nodes: [mainNode, ...relatedNodesWithDetails.map(({ node }) => node)],
-          relationships: relatedRelationships,
-        },
-      };
+      const responseData = getRelatedNodesAndRelationships(graphData, nodeId);
 
       const sourceDocuments = topicSpace.sourceDocuments.map(
         (document) => document,
@@ -189,8 +163,8 @@ export const mcpRouter = createTRPCRouter({
       // 4. LLMで要約を生成
       const openai = new OpenAI();
 
-      let context = `主題: (name: ${mainNode.name}, label: ${mainNode.label}, properties: ${JSON.stringify(
-        mainNode.properties,
+      let context = `主題: (name: ${responseData.nodeDetails.name}, label: ${responseData.nodeDetails.label}, properties: ${JSON.stringify(
+        responseData.nodeDetails.properties,
       )})\n`;
       context += "関連情報:\n";
       responseData.relatedNodes.forEach(({ relationship }) => {
@@ -205,13 +179,9 @@ export const mcpRouter = createTRPCRouter({
 
       // 検索キーワードを抽出（主題名と関連ノード名）
       const searchKeywords = [
-        mainNode.name,
-        mainNode.label,
+        responseData.nodeDetails.name,
         ...responseData.relatedNodes
           .map(({ node }) => node?.name)
-          .filter(Boolean),
-        ...responseData.relatedNodes
-          .map(({ node }) => node?.label)
           .filter(Boolean),
       ].filter(Boolean) as string[];
 
@@ -276,3 +246,49 @@ export const mcpRouter = createTRPCRouter({
       return result;
     }),
 });
+
+const getRelatedNodesAndRelationships = (
+  graphData: {
+    nodes: GraphNode[];
+    relationships: GraphRelationship[];
+  },
+  nodeId: string,
+) => {
+  const mainNode = graphData.nodes.find((n) => String(n.id) === nodeId);
+  if (!mainNode) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Node not found in the graph.",
+    });
+  }
+
+  const relatedRelationships = graphData.relationships.filter(
+    (l) => String(l.fromNodeId) === nodeId || String(l.toNodeId) === nodeId,
+  );
+
+  const relatedNodeIds = new Set(
+    relatedRelationships.map((l) =>
+      String(l.fromNodeId) === nodeId ? l.toNodeId : l.fromNodeId,
+    ),
+  );
+
+  const relatedNodesWithDetails = Array.from(relatedNodeIds).map((id) => {
+    const node = graphData.nodes.find((n) => n.id === id);
+    const relationship = relatedRelationships.find(
+      (l) => l.fromNodeId === id || l.toNodeId === id,
+    );
+    return { node, relationship };
+  });
+
+  return {
+    nodeDetails: mainNode,
+    relatedNodes: relatedNodesWithDetails.map(({ node, relationship }) => ({
+      node,
+      relationship,
+    })),
+    graphSubset: {
+      nodes: [mainNode, ...relatedNodesWithDetails.map(({ node }) => node)],
+      relationships: relatedRelationships,
+    },
+  };
+};

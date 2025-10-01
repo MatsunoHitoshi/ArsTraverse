@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import type { Editor } from "@tiptap/core";
 import { api } from "@/trpc/react";
 import {
@@ -25,7 +25,13 @@ export const useTextCompletion = ({
   } | null>(null);
 
   const isUpdatingTextCompletionSuggestionRef = useRef(false);
+  const isTextSuggestionModeRef = useRef(false);
   const textCompletion = api.workspace.textCompletion.useMutation();
+
+  // isTextSuggestionModeの状態をrefに同期
+  useEffect(() => {
+    isTextSuggestionModeRef.current = isTextSuggestionMode;
+  }, [isTextSuggestionMode]);
 
   // カーソル位置を取得する関数
   const getCursorPosition = useCallback(
@@ -45,18 +51,22 @@ export const useTextCompletion = ({
   );
 
   // テキスト提案モードを無効化する関数
-  const disableTextSuggestionMode = useCallback(
-    (editor: Editor) => {
-      if (isTextSuggestionMode && editor) {
-        setIsTextSuggestionMode(false);
-        clearAndDeleteTextCompletionMarks(
-          editor,
-          isUpdatingTextCompletionSuggestionRef,
-        );
-      }
-    },
-    [isTextSuggestionMode],
-  );
+  const disableTextSuggestionMode = useCallback((editor: Editor) => {
+    // テキスト提案の出力中は無効化しない
+    if (isUpdatingTextCompletionSuggestionRef.current) {
+      console.log("テキスト提案の出力中は無効化をスキップ");
+      return;
+    }
+
+    if (isTextSuggestionModeRef.current && editor) {
+      console.log("テキスト提案モードを無効化");
+      setIsTextSuggestionMode(false);
+      clearAndDeleteTextCompletionMarks(
+        editor,
+        isUpdatingTextCompletionSuggestionRef,
+      );
+    }
+  }, []);
 
   // カーソル位置に近いエンティティを取得する関数
   const getNearbyEntities = useCallback((editor: Editor, cursorPos: number) => {
@@ -83,7 +93,9 @@ export const useTextCompletion = ({
     (editor: Editor, editorRef: React.RefObject<HTMLDivElement>) => {
       if (isUpdatingTextCompletionSuggestionRef.current) return;
 
-      const isDeepMode = isTextSuggestionMode;
+      // 既にテキスト提案モードがアクティブな場合はDeepMode
+      const isDeepMode = isTextSuggestionModeRef.current;
+
       setIsSuggestionLoading(true);
       setCursorPosition(getCursorPosition(editor, editorRef));
 
@@ -101,13 +113,14 @@ export const useTextCompletion = ({
         },
         {
           onSuccess: (suggestion) => {
-            if (isTextSuggestionMode) {
+            if (isTextSuggestionModeRef.current) {
               clearAndDeleteTextCompletionMarks(
                 editor,
                 isUpdatingTextCompletionSuggestionRef,
               );
             }
             setIsTextSuggestionMode(true);
+
             performTextCompletionSuggestion(
               editor,
               isUpdatingTextCompletionSuggestionRef,
@@ -124,40 +137,29 @@ export const useTextCompletion = ({
         },
       );
     },
-    [
-      isTextSuggestionMode,
-      workspaceId,
-      textCompletion,
-      getCursorPosition,
-      getNearbyEntities,
-    ],
+    [workspaceId, textCompletion, getCursorPosition, getNearbyEntities],
   );
 
   // Enterキーが押された時の処理
-  const handleEnterKey = useCallback(
-    (editor: Editor) => {
-      if (isTextSuggestionMode && editor) {
-        console.log("Enter key pressed - confirming text completion");
-        confirmTextCompletion(editor, isUpdatingTextCompletionSuggestionRef);
-        setIsTextSuggestionMode(false);
-        return true;
-      }
-      return false;
-    },
-    [isTextSuggestionMode],
-  );
+  const handleEnterKey = useCallback((editor: Editor) => {
+    if (isTextSuggestionModeRef.current && editor) {
+      confirmTextCompletion(editor, isUpdatingTextCompletionSuggestionRef);
+      setIsTextSuggestionMode(false);
+      return true;
+    }
+    return false;
+  }, []);
 
   // Escapeキーが押された時の処理
   const handleEscapeKey = useCallback(
     (editor: Editor) => {
-      if (isTextSuggestionMode) {
-        console.log("Escape key pressed - canceling text completion");
+      if (isTextSuggestionModeRef.current) {
         disableTextSuggestionMode(editor);
         return true;
       }
       return false;
     },
-    [isTextSuggestionMode, disableTextSuggestionMode],
+    [disableTextSuggestionMode],
   );
 
   return {

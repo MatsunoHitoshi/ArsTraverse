@@ -8,6 +8,7 @@ interface UseHighlightOptions {
   entities: CustomNodeType[];
   onEntityClick?: (entityName: string) => void;
   onNewHighlight?: (editor: Editor, entityName: string) => void;
+  isTextSuggestionMode?: boolean;
 }
 
 export const useHighlight = ({
@@ -15,12 +16,14 @@ export const useHighlight = ({
   entities,
   onEntityClick,
   onNewHighlight,
+  isTextSuggestionMode = false,
 }: UseHighlightOptions) => {
-  const highlightTimeoutRef = useRef<NodeJS.Timeout>();
   const isUpdatingHighlightsRef = useRef(false);
   const isHighlightClickRef = useRef(false);
   const editorRef = useRef<Editor | null>(editor);
   const onNewHighlightRef = useRef(onNewHighlight);
+  const handleNewHighlightRef =
+    useRef<(editor: Editor, entityName: string) => void>();
 
   // 新しいハイライトが検出されたときのコールバック
   const handleNewHighlight = useCallback(
@@ -36,8 +39,14 @@ export const useHighlight = ({
     [],
   );
 
+  // handleNewHighlightの参照を更新
+  useEffect(() => {
+    handleNewHighlightRef.current = handleNewHighlight;
+  }, [handleNewHighlight]);
+
   // エディタの参照を更新
   useEffect(() => {
+    console.log("editorRef.current: ", editorRef.current);
     editorRef.current = editor;
   }, [editor]);
 
@@ -45,39 +54,6 @@ export const useHighlight = ({
   useEffect(() => {
     onNewHighlightRef.current = onNewHighlight;
   }, [onNewHighlight]);
-
-  // エンティティ名のハイライトを適用
-  useEffect(() => {
-    if (!editorRef.current || entities.length === 0) return;
-
-    const applyHighlightsWithDelay = () => {
-      if (highlightTimeoutRef.current) {
-        clearTimeout(highlightTimeoutRef.current);
-      }
-
-      highlightTimeoutRef.current = setTimeout(() => {
-        if (editorRef.current?.isDestroyed) return;
-        console.log("Applying highlights with entities:", entities.length);
-        performHighlightUpdate(
-          editorRef.current!,
-          entities,
-          isUpdatingHighlightsRef,
-          (entityName) => handleNewHighlight(editorRef.current!, entityName),
-        );
-      }, 300);
-    };
-
-    if (editorRef.current?.isDestroyed) return;
-    applyHighlightsWithDelay();
-
-    const highlightTimeout = highlightTimeoutRef.current;
-
-    return () => {
-      if (highlightTimeout) {
-        clearTimeout(highlightTimeout);
-      }
-    };
-  }, [entities, handleNewHighlight]);
 
   // ハイライトクリック処理
   const handleHighlightClick = useCallback(
@@ -109,22 +85,23 @@ export const useHighlight = ({
       return;
     }
 
-    console.log(
-      "Manually triggering highlight update with entities:",
-      entities.length,
-    );
+    // テキスト提案モードがアクティブな場合はスキップ
+    if (isTextSuggestionMode) {
+      console.log("Skipping highlight update - text suggestion mode is active");
+      return;
+    }
     performHighlightUpdate(
       editorRef.current,
       entities,
       isUpdatingHighlightsRef,
       (entityName) => {
         console.log("New highlight detected:", entityName);
-        if (onNewHighlightRef.current) {
-          onNewHighlightRef.current(editorRef.current!, entityName);
+        if (handleNewHighlightRef.current) {
+          handleNewHighlightRef.current(editorRef.current!, entityName);
         }
       },
     );
-  }, [entities]);
+  }, [entities, isTextSuggestionMode]);
 
   return {
     isUpdatingHighlightsRef,
@@ -132,5 +109,11 @@ export const useHighlight = ({
     handleHighlightClick,
     editorRef: editorRef,
     triggerHighlightUpdate,
+    // エディタが設定されたときのハイライト処理を手動でトリガーする関数
+    triggerHighlightOnEditorSet: () => {
+      if (editorRef.current && entities.length > 0) {
+        triggerHighlightUpdate();
+      }
+    },
   };
 };
