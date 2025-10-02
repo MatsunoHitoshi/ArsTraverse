@@ -20,22 +20,24 @@ const createHandlerForTopicSpace = (
         searchRelationToolName,
         `ユーザーが${topicSpaceName}、について質問したり調査を依頼した際に必ず使用してください。情報源「${topicSpaceName}」からキーワードに一致する情報を検索し、ユーザーの質問に答えるための関連情報を提供します。`,
         {
-          query: z
-            .string()
-            .describe("ユーザーの質問から抽出した、検索の核となるキーワード。"),
+          queries: z
+            .array(z.string())
+            .describe(
+              "ユーザーの質問から抽出した、検索の核となるキーワードの配列。",
+            ),
         },
-        async ({ query }) => {
+        async ({ queries }) => {
           try {
             const results = await api.mcp.searchTopicSpacePublic({
               topicSpaceId,
-              query,
+              queries: queries,
             });
             if (results.length === 0) {
               return {
                 content: [
                   {
                     type: "text",
-                    text: `「${query}」に一致する情報は見つかりませんでした。`,
+                    text: `「${queries.map((query) => `"${query}"`).join(", ")}」に一致する情報は見つかりませんでした。`,
                   },
                 ],
               };

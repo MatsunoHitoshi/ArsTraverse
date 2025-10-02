@@ -44,12 +44,12 @@ export const mcpRouter = createTRPCRouter({
     .input(
       z.object({
         topicSpaceId: z.string(),
-        query: z.string(),
+        queries: z.array(z.string()),
       }),
     )
     .query(async ({ ctx, input }) => {
-      const { topicSpaceId, query } = input;
-      const lowerCaseQuery = query.toLowerCase();
+      const { topicSpaceId, queries } = input;
+      const lowerCaseQueries = queries.map((query) => query.toLowerCase());
 
       const topicSpace = await ctx.db.topicSpace.findFirst({
         where: {
@@ -78,26 +78,47 @@ export const mcpRouter = createTRPCRouter({
         return []; // グラフデータがない場合は空配列を返す
       }
 
-      const matchedNodes = graphData.nodes.filter((node) => {
-        // 名前の一致をチェック
-        if (node.name.toLowerCase().includes(lowerCaseQuery)) {
-          return true;
-        }
-        // ラベルの一致をチェック
-        if (node.label.toLowerCase().includes(lowerCaseQuery)) {
-          return true;
-        }
-        // プロパティの一致をチェック
-        if (node.properties) {
-          const propertiesString = JSON.stringify(
-            node.properties,
-          ).toLowerCase();
-          if (propertiesString.includes(lowerCaseQuery)) {
-            return true;
-          }
-        }
-        return false;
-      });
+      const matchedNodes = lowerCaseQueries
+        .map((query) => {
+          return graphData.nodes.filter((node) => {
+            if (node.name.toLowerCase().includes(query)) {
+              return true;
+            }
+            if (node.label.toLowerCase().includes(query)) {
+              return true;
+            }
+            if (node.properties) {
+              const propertiesString = JSON.stringify(
+                node.properties,
+              ).toLowerCase();
+              if (propertiesString.includes(query)) {
+                return true;
+              }
+            }
+            return false;
+          });
+        })
+        .flat();
+      // const matchedNodes = graphData.nodes.filter((node) => {
+      //   // 名前の一致をチェック
+      //   if (node.name.toLowerCase().includes(lowerCaseQueries)) {
+      //     return true;
+      //   }
+      //   // ラベルの一致をチェック
+      //   if (node.label.toLowerCase().includes(lowerCaseQuery)) {
+      //     return true;
+      //   }
+      //   // プロパティの一致をチェック
+      //   if (node.properties) {
+      //     const propertiesString = JSON.stringify(
+      //       node.properties,
+      //     ).toLowerCase();
+      //     if (propertiesString.includes(lowerCaseQuery)) {
+      //       return true;
+      //     }
+      //   }
+      //   return false;
+      // });
 
       return matchedNodes.map((node) => {
         const relatedNodesAndRelationships = getRelatedNodesAndRelationships(
@@ -217,7 +238,7 @@ export const mcpRouter = createTRPCRouter({
       }
 
       const response = await openai.responses.create({
-        model: "gpt-4o-mini",
+        model: "gpt-4.1-nano",
         temperature: 0.7,
         tools: [],
         input: `あなたは芸術文化の専門家です。与えられた主題と関連情報に基づいて、簡潔で分かりやすい解説文を生成してください。以下の情報について、200字程度で解説してください。\n\n${context}`,

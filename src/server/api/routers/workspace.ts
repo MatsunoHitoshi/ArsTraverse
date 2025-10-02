@@ -8,6 +8,8 @@ import {
 } from "@prisma/client";
 import OpenAI from "openai";
 import { env } from "@/env";
+import { api } from "@/trpc/server";
+import { mcpRouter } from "./mcp";
 
 const CreateWorkspaceSchema = z.object({
   name: z.string().min(1, "ワークスペース名は必須です"),
@@ -449,7 +451,12 @@ export const workspaceRouter = createTRPCRouter({
           ],
         },
         include: {
-          referencedTopicSpaces: true,
+          referencedTopicSpaces: {
+            include: {
+              graphNodes: true,
+              graphRelationships: true,
+            },
+          },
         },
       });
 
@@ -481,17 +488,54 @@ export const workspaceRouter = createTRPCRouter({
 
       const openai = new OpenAI();
 
+      const baseContexts = workspace.referencedTopicSpaces[0]?.graphNodes
+        .filter((node) => searchEntities?.includes(node.name))
+        .map((baseNode) => {
+          const neighborRelationships =
+            workspace.referencedTopicSpaces[0]?.graphRelationships.filter(
+              (relationship) =>
+                relationship.fromNodeId === baseNode.id ||
+                relationship.toNodeId === baseNode.id,
+            );
+          const neighborNodes =
+            workspace.referencedTopicSpaces[0]?.graphNodes.filter((node) =>
+              neighborRelationships?.some(
+                (relationship) =>
+                  relationship.fromNodeId === node.id ||
+                  relationship.toNodeId === node.id,
+              ),
+            );
+          return (
+            `### (ID: ${baseNode.id}, name: ${baseNode.name}, label: ${baseNode.label}) \n#### ノードの関連情報\n` +
+            neighborNodes
+              ?.map((node) => {
+                return ` - [${
+                  neighborRelationships?.find(
+                    (relationship) =>
+                      relationship.fromNodeId === node.id ||
+                      relationship.toNodeId === node.id,
+                  )?.type
+                }] -> (ID: ${node.id}, name: ${node.name}, label: ${node.label})\n`;
+              })
+              .join("\n\n")
+          );
+        })
+        .join("\n");
+
+      console.log("baseContexts: ", baseContexts);
+
       let response;
       try {
         response = await openai.responses.create({
-          model: "gpt-4o-mini",
+          model: "gpt-4.1-nano",
           tools: topicSpaceTools,
           input: isDeepMode
-            ? `あなたは、文脈を踏まえながら論理的でわかりやすい文章を執筆する専門家です。${topicSpaceTools.length > 0 ? `ツール「context-search ${workspace.referencedTopicSpaces[0]?.id}」を利用してこれから示すエンティティについてそれぞれ個別に検索を行い、関係性の検索を利用しながら、` : ""}これから示す元となるテキストの続きを補完してください。必ず言及されている箇所の内容も参照しながら文章を生成してください。応答として出力するのは、元となるテキストの続きの文章だけにしてください。
+            ? `あなたは、文脈を踏まえながら論理的でわかりやすい文章を執筆する専門家です。${topicSpaceTools.length > 0 ? `ツール「context-search ${workspace.referencedTopicSpaces[0]?.id}」を利用してこれから示すエンティティについて検索を行い、関係性や具体的な言及箇所の検索も併用しながら、` : ""}これから示す元となるテキストの続きを補完してください。必ず言及されている箇所の文章も参照しながら文章を生成してください。応答として出力するのは、元となるテキストの続きの文章だけにしてください。
           ${searchEntities && searchEntities.length > 0 ? `\n検索するエンティティ：${searchEntities.join(", ")}` : ""}
           \n元となるテキスト：${baseText}`
-            : `あなたは、文脈を踏まえながら論理的でわかりやすい文章を執筆する専門家です。文脈情報を利用しながら、これから示す元となるテキストの続きを一文だけ補完してください。応答として出力するのは、元となるテキストの続きの文章だけにしてください。
-          \n元となるテキスト：${baseText}`,
+            : `あなたは、文脈を踏まえながら論理的でわかりやすい文章を執筆する専門家です。これから示す元となるテキストの続きを一文だけ補完してください。応答として出力するのは、元となるテキストの続きの文章だけにしてください。
+          \n元となるテキスト：${baseText}
+          \n関連情報：\n${baseContexts}`,
         });
       } catch (error) {
         console.error(
@@ -500,7 +544,7 @@ export const workspaceRouter = createTRPCRouter({
         );
         // MCPツールが失敗した場合は基本的なテキスト補完にフォールバック
         response = await openai.responses.create({
-          model: "gpt-4o-mini",
+          model: "gpt-4.1-nano",
           input: `以下のテキストの続きを一文だけ補完してください。応答として出力するのは、元となるテキストの続きの文章だけにしてください。\n${baseText}`,
         });
       }
