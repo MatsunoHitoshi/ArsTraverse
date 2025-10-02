@@ -61,7 +61,7 @@ export const assistantRouter = createTRPCRouter({
         name: "記事執筆アシスタント",
         instructions:
           "あなたは美術について紹介する記事を執筆する専門家です。必ず与えられた文脈からわかる情報を使用して回答を生成してください。",
-        model: "gpt-4o-mini",
+        model: "gpt-4.1-nano",
         temperature: 1.0,
       });
       const thread = await openai.beta.threads.create({
@@ -143,7 +143,7 @@ export const assistantRouter = createTRPCRouter({
         name: "記事執筆アシスタント",
         instructions:
           "あなたは美術について紹介する記事を執筆する専門家です。必ず与えられた文脈からわかる情報のみを使用して回答を生成してください。",
-        model: "gpt-4o-mini",
+        model: "gpt-4.1-nano",
         temperature: 1.0,
       });
       const thread = await openai.beta.threads.create({

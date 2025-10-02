@@ -43,7 +43,7 @@ const createHandlerForTopicSpace = (
               };
             }
             const textResponse =
-              "以下の情報とそれぞれの関連情報が見つかりました。詳細を知りたいものを選択してください。\n" +
+              "以下の情報とそれぞれの関連情報が見つかりました。さらに詳しい関係性や具体的な言及箇所を知りたい場合は、ノードのIDをもとにそれぞれのツールを利用してください。\n" +
               results
                 .map(
                   (result) =>
