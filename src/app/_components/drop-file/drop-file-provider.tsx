@@ -35,15 +35,15 @@ export const DropFileProvider = ({
   };
 
   return (
-    <div className="relative flex w-full flex-col items-center rounded-xl bg-slate-500">
+    <div className="relative flex h-full w-full flex-col items-center rounded-md bg-slate-500">
       <div
-        className={`rounded-xl border-2 border-dashed ${isDragActive ? "z-20 border-orange-500 bg-slate-500/80" : "z-0 border-slate-200"} absolute inset-0 `}
+        className={`rounded-md border-2 border-dashed ${isDragActive ? "z-20 border-orange-500 bg-slate-500/80" : "z-0 border-slate-200"} absolute inset-0 `}
         onDragEnter={onDragEnter}
         onDragLeave={onDragLeave}
         onDragOver={(e) => e.preventDefault()}
         onDrop={onDrop}
       ></div>
-      <div className="z-10 p-8">{children}</div>
+      <div className="pointer-events-none z-10 p-8">{children}</div>
     </div>
   );
 };

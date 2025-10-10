@@ -10,7 +10,7 @@ import { EntityHighlight } from "./extensions/entity-highlight-extension";
 import { TextCompletionMark } from "./extensions/text-completion-mark";
 import { TeiStyles } from "./tei/tei-styles";
 import type { CustomNodeType } from "@/app/const/types";
-import { TiptapEditorToolBar } from "./tools/tool-bar";
+import { EditorToolBar } from "./tools/editor-tool-bar";
 import { TeiCustomTagHighlightExtensions } from "./tei/tei-custom-tag-highlight-extension";
 import { TiptapStyles } from "./styles";
 import { KeyboardHandlerExtension } from "./extensions/keyboard-handler-extension";
@@ -197,15 +197,15 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
   }
 
   return (
-    <div className="relative flex h-full flex-col gap-1">
+    <div className="relative flex h-full flex-col gap-2">
       <div className="text-white">
-        <TiptapEditorToolBar editor={editor} />
+        <EditorToolBar editor={editor} />
       </div>
       <div className="h-full overflow-y-hidden">
         <EditorContent
           ref={editorRef}
           editor={editor}
-          className="h-full min-h-[200px] overflow-y-scroll rounded-md border border-gray-600 bg-slate-800 p-3 text-white focus-within:outline-none"
+          className="h-full min-h-[200px] overflow-y-scroll rounded-md bg-slate-800 p-3 text-white focus-within:outline-none"
           onClick={handleClick}
         />
         {textCompletion.isSuggestionLoading &&

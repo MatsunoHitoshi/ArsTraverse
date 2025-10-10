@@ -23,6 +23,9 @@ import { LinkButton } from "../button/link-button";
 import { TopicSpaceAttachModal } from "../workspace/topic-space-attach-modal";
 import { RelatedNodesAndLinksViewer } from "../view/graph-view/related-nodes-viewer";
 import { findEntityHighlights } from "@/app/_utils/text/find-entity-highlights";
+import { NodeDetailPanel } from "./node-detail-panel";
+import { PDFDropZone } from "./pdf-drop-zone";
+import { usePDFProcessing } from "./hooks/use-pdf-processing";
 
 interface CuratorsWritingWorkspaceProps {
   // 既存のprops（後方互換性のため）
@@ -72,6 +75,14 @@ const CuratorsWritingWorkspace = ({
 
   const [isTopicSpaceAttachModalOpen, setIsTopicSpaceAttachModalOpen] =
     useState<boolean>(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(workspace.name);
+  const [displayTitle, setDisplayTitle] = useState(workspace.name);
+
+  // workspace.nameが更新されたらdisplayTitleも更新
+  useEffect(() => {
+    setDisplayTitle(workspace.name);
+  }, [workspace.name]);
 
   const [editorContent, setEditorContent] = useState<JSONContent>(
     (workspace.content as JSONContent) ?? DEFAULT_CONTENT,
@@ -82,14 +93,34 @@ const CuratorsWritingWorkspace = ({
   const { data: topicSpace } = api.topicSpaces.getById.useQuery({
     id: topicSpaceId ?? "",
   });
-  const updateWorkspace = api.workspace.update.useMutation();
-  const [defaultPosition, setDefaultPosition] = useState<{
-    x: number;
-    y: number;
-  }>({
-    x: 0,
-    y: 0,
+  const updateWorkspace = api.workspace.update.useMutation({
+    onSuccess: (data) => {
+      // 更新成功時に即座に表示タイトルを更新
+      if (data?.name) {
+        setDisplayTitle(data.name);
+      }
+      setIsEditingTitle(false);
+      void refetch(); // データを再取得
+    },
+    onError: (error) => {
+      console.error("ワークスペース名の更新に失敗しました:", error);
+      setIsEditingTitle(false);
+      setEditingTitle(workspace.name); // エラー時は元の名前に戻す
+    },
   });
+
+  // PDF処理用のカスタムフック
+  const { isProcessingPDF, processingStep, processingError, handlePDFUpload } =
+    usePDFProcessing(workspace.id, () => {
+      void refetch();
+    });
+  // const [defaultPosition, setDefaultPosition] = useState<{
+  //   x: number;
+  //   y: number;
+  // }>({
+  //   x: 0,
+  //   y: 0,
+  // });
   const [tiptapGraphFilterOption, setTiptapGraphFilterOption] =
     useState<TiptapGraphFilterOption>({
       mode: "non-filtered",
@@ -215,10 +246,45 @@ const CuratorsWritingWorkspace = ({
     setEditorContent(content);
   };
 
+  const handleTitleEdit = (value: string) => {
+    setIsEditingTitle(true);
+    setEditingTitle(value);
+  };
+
+  const handleTitleSave = () => {
+    const trimmedTitle = editingTitle.trim();
+
+    // バリデーション: 空文字または変更なしの場合は編集を終了
+    if (!trimmedTitle || trimmedTitle === workspace.name) {
+      setIsEditingTitle(false);
+      setEditingTitle(workspace.name);
+      return;
+    }
+
+    // 更新中は編集モードを維持（isEditingTitleをfalseにしない）
+    updateWorkspace.mutate({
+      id: workspace.id,
+      name: trimmedTitle,
+    });
+  };
+
+  const handleTitleCancel = () => {
+    setIsEditingTitle(false);
+    setEditingTitle(workspace.name);
+  };
+
+  const handleTitleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleTitleSave();
+    } else if (e.key === "Escape") {
+      handleTitleCancel();
+    }
+  };
+
   return (
     <div className="flex h-screen w-full gap-2 bg-slate-900 p-4 font-sans">
       {/* Left Column: Text Editor (2/3) */}
-      <div className="flex h-[calc(100svh-72px)] w-2/3 flex-col">
+      <div className="flex h-[calc(100svh-80px)] w-2/3 flex-col">
         <div className="flex h-full flex-col bg-slate-900">
           <div className="mb-2 flex w-full flex-row items-center gap-2">
             <LinkButton
@@ -229,9 +295,31 @@ const CuratorsWritingWorkspace = ({
                 <ChevronLeftIcon height={16} width={16} color="white" />
               </div>
             </LinkButton>
-            <h2 className="text-lg font-semibold text-gray-400">
-              {workspace.name}
-            </h2>
+            {isEditingTitle ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={editingTitle}
+                  onChange={(e) => setEditingTitle(e.target.value)}
+                  onBlur={handleTitleSave}
+                  onKeyDown={handleTitleKeyPress}
+                  disabled={updateWorkspace.isPending}
+                  className="bg-transparent text-lg font-semibold text-gray-400 outline-none focus:text-white disabled:opacity-50"
+                  autoFocus
+                />
+                {updateWorkspace.isPending && (
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent"></div>
+                )}
+              </div>
+            ) : (
+              <h2
+                className="cursor-pointer text-lg font-semibold text-gray-400 hover:text-white"
+                onClick={() => handleTitleEdit(displayTitle)}
+                title="クリックして編集"
+              >
+                {displayTitle}
+              </h2>
+            )}
           </div>
 
           {/* TipTapエディタ */}
@@ -252,9 +340,9 @@ const CuratorsWritingWorkspace = ({
       </div>
 
       {/* Right Column: Knowledge Graph Viewer & Detail Panel (1/3) */}
-      <div className="flex w-1/3 flex-col">
+      <div className="flex h-[calc(100svh-80px)] w-1/3 flex-col">
         {/* Knowledge Graph Viewer */}
-        <div className="flex-1">
+        <div className="min-h-0 flex-1 flex-shrink-0 overflow-y-hidden">
           <div
             ref={graphContainerRef}
             className="relative flex h-full w-full flex-col items-center justify-center rounded-t-lg border border-b-0 border-gray-300 bg-slate-900 text-gray-400"
@@ -277,7 +365,7 @@ const CuratorsWritingWorkspace = ({
                         svgRef={svgRef}
                         width={graphSize.width}
                         height={graphSize.height}
-                        defaultPosition={defaultPosition}
+                        // defaultPosition={defaultPosition}
                         graphDocument={
                           tiptapGraphFilterOption.mode === "filtered"
                             ? tiptapFilteredGraphDocument ?? graphDocument
@@ -309,38 +397,36 @@ const CuratorsWritingWorkspace = ({
                 )}
               </>
             ) : (
-              <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-4">
-                <p>参照するリポジトリが選択されていません</p>
-                <Button onClick={() => setIsTopicSpaceAttachModalOpen(true)}>
-                  参照するリポジトリを選択
-                </Button>
-              </div>
+              <PDFDropZone
+                isProcessingPDF={isProcessingPDF}
+                processingStep={processingStep}
+                processingError={processingError}
+                onPDFUpload={handlePDFUpload}
+                onSelectExistingRepository={() =>
+                  setIsTopicSpaceAttachModalOpen(true)
+                }
+              />
             )}
           </div>
         </div>
 
         {/* Detail/Evidence Panel */}
-        <div className="flex-1">
-          <div className="h-full rounded-b-lg border border-gray-300 bg-slate-900 p-4 shadow-sm">
-            <h2 className="text-md mb-4 font-semibold text-gray-400">詳細</h2>
-            {activeEntity ? (
-              <div className="text-white">
-                <h3 className="font-semibold text-white">
-                  {activeEntity.name}
-                </h3>
-                <p className="text-sm text-gray-400">{activeEntity.label}</p>
-                <p className="mt-2 text-sm">
-                  {activeEntity.properties?.description ?? "No description"}
+        <div className="relative flex-1 flex-shrink-0 overflow-y-hidden">
+          {topicSpaceId ? (
+            <NodeDetailPanel
+              activeEntity={activeEntity}
+              workspaceId={workspace.id}
+              topicSpaceId={topicSpaceId}
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center rounded-b-lg border border-t-0 border-gray-300 bg-slate-800 text-gray-400">
+              <div className="text-center">
+                <p className="text-sm">
+                  リポジトリを選択すると詳細パネルが表示されます
                 </p>
-                <hr className="my-4" />
-                <h3 className="font-semibold text-gray-400">参照</h3>
               </div>
-            ) : (
-              <p className="text-gray-300">
-                Editor内でハイライトされたエンティティをクリックすると詳細が表示されます。
-              </p>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 

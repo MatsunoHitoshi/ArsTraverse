@@ -10,7 +10,7 @@ const FilterButton = ({ editor }: { editor: Editor }) => {
   );
   return (
     <button
-      className="rounded-lg bg-black/20 p-2 backdrop-blur-sm"
+      className="rounded-lg bg-black/75 p-2 backdrop-blur-sm"
       onClick={() => {
         const entities = findEntityHighlights(editor.getJSON().content);
         const names = entities.map((entity) => entity.name);
@@ -33,7 +33,7 @@ const FilterButton = ({ editor }: { editor: Editor }) => {
           tiptapGraphFilterOption.mode === "focused"
             ? "orange"
             : tiptapGraphFilterOption.mode === "filtered"
-              ? "red"
+              ? "lightgreen"
               : "white"
         }
       />

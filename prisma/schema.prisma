@@ -67,6 +67,11 @@ model User {
   collaboratedWorkspaces Workspace[]        @relation("WorkspaceCollaborators")
   writingHistoryChanges WritingHistory[]    @relation("WritingHistoryChangedBy")
   
+  // 注釈関連
+  annotations     Annotation[]
+  annotationHistories AnnotationHistory[]
+  discussionParticipations AnnotationDiscussion[] @relation("DiscussionParticipants")
+  
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
 }
@@ -94,6 +99,9 @@ model SourceDocument {
   graph       DocumentGraph?
   topicSpaces TopicSpace[]
   tags        Tag[]
+  
+  // 注釈から統合された場合の関連
+  annotations Annotation[]
 }
 
 enum DocumentType {
@@ -138,6 +146,9 @@ model GraphNode {
   relationshipsFrom GraphRelationship[] @relation("fromNode")
   relationshipsTo   GraphRelationship[] @relation("toNode")
 
+  // 注釈関連
+  annotations       Annotation[]
+
   createdAt DateTime? @default(now())
   updatedAt DateTime? @updatedAt
   deletedAt DateTime?
@@ -160,6 +171,8 @@ model GraphRelationship {
   toNode     GraphNode @relation("toNode", fields: [toNodeId], references: [id], onDelete: Cascade)
   toNodeId   String
 
+  // 注釈関連
+  annotations       Annotation[]
 
   createdAt DateTime? @default(now())
   updatedAt DateTime? @updatedAt
@@ -211,6 +224,7 @@ model Tag {
   topicSpaces     TopicSpace[]
   sourceDocuments SourceDocument[]
   workspaces      Workspace[] @relation("WorkspaceTags")
+  discussionTags  AnnotationDiscussion[] @relation("DiscussionTags")
 }
 
 model GraphChangeHistory {
@@ -393,4 +407,139 @@ model WritingHistory {
   @@index([workspaceId])
   @@index([changedById])
   @@index([createdAt])
+}
+
+// 注釈機能
+model Annotation {
+  id          String   @id @default(cuid())
+  content     Json?   // 注釈の内容（Markdown対応）
+  type        AnnotationType @default(COMMENT) // 注釈の種類
+  
+  // 対象となるGraphNodeまたはGraphRelationship
+  targetNode        GraphNode?        @relation(fields: [targetNodeId], references: [id])
+  targetNodeId      String?
+  targetRelationship GraphRelationship? @relation(fields: [targetRelationshipId], references: [id])
+  targetRelationshipId String?
+  
+  // 作成者
+  author      User     @relation(fields: [authorId], references: [id])
+  authorId    String
+  
+  // Thread機能のための親子関係
+  parentAnnotation   Annotation?  @relation("AnnotationThread", fields: [parentAnnotationId], references: [id])
+  parentAnnotationId String?
+  childAnnotations  Annotation[] @relation("AnnotationThread")
+  
+  // 履歴管理
+  histories         AnnotationHistory[]
+  
+  // 議論管理
+  rootDiscussions   AnnotationDiscussion[]
+  
+  // 知識グラフ統合用（注釈をSourceDocumentとして扱う場合）
+  sourceDocument   SourceDocument? @relation(fields: [sourceDocumentId], references: [id])
+  sourceDocumentId String?
+  
+  // 作成・更新日時
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  isDeleted   Boolean  @default(false)
+  
+  // インデックス
+  @@index([targetNodeId])
+  @@index([targetRelationshipId])
+  @@index([authorId])
+  @@index([parentAnnotationId])
+  @@index([sourceDocumentId])
+  @@index([createdAt])
+}
+
+// 注釈の種類
+enum AnnotationType {
+  COMMENT     // 一般的なコメント・説明
+  INTERPRETATION // 解釈・分析
+  QUESTION    // 質問
+  CLARIFICATION // 補足・説明
+  CRITICISM   // 批評・指摘
+  SUPPORT     // 支持・同意
+}
+
+// 注釈履歴管理
+model AnnotationHistory {
+  id          String   @id @default(cuid())
+  
+  // 対象の注釈
+  annotation  Annotation @relation(fields: [annotationId], references: [id], onDelete: Cascade)
+  annotationId String
+  
+  // 変更の種類
+  changeType  AnnotationChangeType
+  
+  // 変更内容
+  previousContent Json? // 変更前の内容
+  currentContent  Json? // 変更後の内容
+  previousType    AnnotationType? // 変更前のタイプ
+  currentType     AnnotationType? // 変更後のタイプ
+  
+  // 変更理由・コメント
+  changeReason    String?
+  changeComment   String?
+  
+  // 変更者
+  changedBy       User     @relation(fields: [changedById], references: [id])
+  changedById     String
+  
+  // 変更日時
+  createdAt       DateTime @default(now())
+  
+  // インデックス
+  @@index([annotationId])
+  @@index([changedById])
+  @@index([createdAt])
+}
+
+// 注釈変更の種類
+enum AnnotationChangeType {
+  CREATED     // 作成
+  UPDATED     // 更新
+  DELETED     // 削除
+  RESTORED    // 復元
+  TYPE_CHANGED // タイプ変更
+}
+
+// 注釈議論管理
+model AnnotationDiscussion {
+  id          String   @id @default(cuid())
+  
+  // 議論のタイトル・概要
+  title       String?
+  description String?
+  
+  // 議論の状態
+  status      DiscussionStatus @default(ACTIVE)
+  
+  // 関連する注釈（議論の中心となる注釈）
+  rootAnnotation   Annotation @relation(fields: [rootAnnotationId], references: [id])
+  rootAnnotationId String
+  
+  // 議論の参加者
+  participants User[] @relation("DiscussionParticipants")
+  
+  // 議論のタグ
+  tags         Tag[]  @relation("DiscussionTags")
+  
+  // 作成・更新日時
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  @@index([rootAnnotationId])
+  @@index([status])
+}
+
+// 議論の状態
+enum DiscussionStatus {
+  ACTIVE      // 進行中
+  RESOLVED    // 解決済み
+  ARCHIVED    // アーカイブ
+  CONTROVERSIAL // 論争中
 }

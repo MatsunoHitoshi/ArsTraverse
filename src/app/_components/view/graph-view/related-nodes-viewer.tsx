@@ -69,7 +69,7 @@ export const RelatedNodesAndLinksViewer = ({
         toolComponent={
           onClose && (
             <div
-              className={`absolute !w-[${containerWidth}px] bg-slate-950/20 p-2 backdrop-blur-sm`}
+              className={`absolute !w-[${containerWidth}px] rounded-lg bg-slate-950/20 p-2 backdrop-blur-sm`}
             >
               <Button
                 className="z-10 !h-8 !w-8 bg-transparent !p-2 text-sm hover:bg-slate-50/10"

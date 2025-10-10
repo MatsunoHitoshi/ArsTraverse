@@ -24,9 +24,9 @@ export default function WorkspacePage() {
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-900">
-        <div className="text-center text-white">
+        <div className="flex flex-col items-center text-center text-white">
           <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600"></div>
-          <p>ワークスペースを読み込み中...</p>
+          <div>ワークスペースを読み込み中...</div>
         </div>
       </div>
     );

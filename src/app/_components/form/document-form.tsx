@@ -199,26 +199,41 @@ export const DocumentForm = ({
             </>
           ) : (
             <>
-              <div className="flex w-full flex-col items-center gap-3">
-                <FileUploader
-                  name="target-file"
-                  inputRef={fileInputRef}
-                  setFile={setFile}
-                  file={file}
-                />
-                <div className="flex flex-col items-center">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsOpenTips(!isOpenTips);
-                    }}
-                  >
-                    <div className="text-xs underline hover:no-underline">
-                      大きなファイルを読み込ませるときのTips
+              {inspectResult.length > 0 ? (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="font-semibold">テキスト情報</div>
+                  <div className="flex h-96 flex-col items-center gap-2 overflow-y-scroll rounded-xl border border-slate-300">
+                    <div className="flex flex-col items-center gap-2 p-8">
+                      {inspectResult.map((result, index) => (
+                        <div key={index}>{result.pageContent}</div>
+                      ))}
                     </div>
-                  </button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <>
+                  <div className="flex w-full flex-col items-center gap-3">
+                    <FileUploader
+                      name="target-file"
+                      inputRef={fileInputRef}
+                      setFile={setFile}
+                      file={file}
+                    />
+                    <div className="flex flex-col items-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsOpenTips(!isOpenTips);
+                        }}
+                      >
+                        <div className="text-xs underline hover:no-underline">
+                          大きなファイルを読み込ませるときのTips
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </>
           )}
 
@@ -248,19 +263,6 @@ export const DocumentForm = ({
               )}
             </div>
           </div>
-
-          {inspectResult.length > 0 && (
-            <div className="flex flex-col items-center gap-2">
-              <div className="font-semibold">テキスト情報</div>
-              <div className="flex h-96 flex-col items-center gap-2 overflow-y-scroll rounded-xl border border-slate-300">
-                <div className="flex flex-col items-center gap-2 p-8">
-                  {inspectResult.map((result, index) => (
-                    <div key={index}>{result.pageContent}</div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </form>
       <DocumentUploadTipsModal isOpen={isOpenTips} setIsOpen={setIsOpenTips} />

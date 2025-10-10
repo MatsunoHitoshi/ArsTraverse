@@ -1075,4 +1075,163 @@ export const topicSpaceRouter = createTRPCRouter({
 
       return updatedTopicSpace;
     }),
+
+  // ノードの注釈一覧取得（議論の盛り上がり順）
+  getNodeAnnotations: protectedProcedure
+    .input(
+      z.object({
+        nodeId: z.string(),
+        topicSpaceId: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const annotations = await ctx.db.annotation.findMany({
+        where: {
+          targetNodeId: input.nodeId,
+          isDeleted: false,
+          targetNode: {
+            topicSpaceId: input.topicSpaceId,
+          },
+        },
+        include: {
+          author: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+            },
+          },
+          childAnnotations: {
+            where: { isDeleted: false },
+            include: {
+              author: {
+                select: {
+                  id: true,
+                  name: true,
+                  image: true,
+                },
+              },
+            },
+            orderBy: { createdAt: "asc" },
+          },
+          histories: {
+            orderBy: { createdAt: "desc" },
+            take: 5,
+          },
+        },
+        orderBy: [
+          { childAnnotations: { _count: "desc" } },
+          { createdAt: "desc" },
+        ],
+      });
+
+      return annotations;
+    }),
+
+  // エッジの注釈一覧取得（議論の盛り上がり順）
+  getEdgeAnnotations: protectedProcedure
+    .input(
+      z.object({
+        edgeId: z.string(),
+        topicSpaceId: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const annotations = await ctx.db.annotation.findMany({
+        where: {
+          targetRelationshipId: input.edgeId,
+          isDeleted: false,
+          targetRelationship: {
+            topicSpaceId: input.topicSpaceId,
+          },
+        },
+        include: {
+          author: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+            },
+          },
+          childAnnotations: {
+            where: { isDeleted: false },
+            include: {
+              author: {
+                select: {
+                  id: true,
+                  name: true,
+                  image: true,
+                },
+              },
+            },
+            orderBy: { createdAt: "asc" },
+          },
+          histories: {
+            orderBy: { createdAt: "desc" },
+            take: 5,
+          },
+        },
+        orderBy: [
+          { childAnnotations: { _count: "desc" } },
+          { createdAt: "desc" },
+        ],
+      });
+
+      return annotations;
+    }),
+
+  // 注釈から知識グラフ統合（不要？）
+  // integrateAnnotationGraph: protectedProcedure
+  //   .input(
+  //     z.object({
+  //       annotationId: z.string(),
+  //       topicSpaceId: z.string(),
+  //       extractedGraph: z.object({
+  //         nodes: z.array(z.any()),
+  //         relationships: z.array(z.any()),
+  //       }),
+  //     }),
+  //   )
+  //   .mutation(async ({ ctx, input }) => {
+  //     const extractor = new AnnotationGraphExtractor(ctx.db);
+
+  //     // 注釈をSourceDocumentとして作成
+  //     const annotation = await ctx.db.annotation.findUnique({
+  //       where: { id: input.annotationId },
+  //     });
+
+  //     if (!annotation) {
+  //       throw new Error("注釈が見つかりません");
+  //     }
+
+  //     const sourceDocument = await ctx.db.sourceDocument.create({
+  //       data: {
+  //         name: `注釈から抽出: ${annotation.type}`,
+  //         url: `annotation://${annotation.id}`,
+  //         userId: ctx.session.user.id,
+  //         documentType: "INPUT_TXT",
+  //       },
+  //     });
+
+  //     // 注釈とSourceDocumentを関連付け
+  //     await ctx.db.annotation.update({
+  //       where: { id: annotation.id },
+  //       data: { sourceDocumentId: sourceDocument.id },
+  //     });
+
+  //     // グラフを統合
+  //     const result = await extractor.integrateGraphToTopicSpace(
+  //       input.topicSpaceId,
+  //       input.extractedGraph,
+  //       sourceDocument.id,
+  //       ctx.session.user.id,
+  //     );
+
+  //     return {
+  //       sourceDocument,
+  //       documentGraph: result.documentGraph,
+  //       integratedNodes: result.integratedNodes,
+  //       integratedEdges: result.integratedEdges,
+  //     };
+  //   }),
 });

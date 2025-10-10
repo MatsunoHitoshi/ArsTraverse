@@ -375,9 +375,7 @@ export const D3ForceGraph = ({
                         //         ? `url(#gradient-${graphLink.id})`
                         //         : "white"
                         // }
-                        strokeWidth={
-                          (isFocused ? 2 : 1.2) * (isDirectedLinks ? 1 : 1.5)
-                        }
+                        strokeWidth={(isFocused ? 2 : 1.2) * 1.5}
                         strokeOpacity={
                           isFocused
                             ? 1
@@ -387,21 +385,39 @@ export const D3ForceGraph = ({
                                 (distance(graphLink) * distance(graphLink) || 1)
                         }
                         // strokeOpacity={isFocused ? 1 : isGradient ? 0.3 : 0.4}
-                        strokeDasharray={isDirectedLinks ? "5,5" : undefined}
                         x1={modSource.x}
                         y1={modSource.y}
                         x2={modTarget.x}
                         y2={modTarget.y}
-                      >
-                        {isDirectedLinks && (
-                          <animate
-                            attributeName="stroke-dashoffset"
-                            values="0;-10"
-                            dur="1s"
-                            repeatCount="indefinite"
-                          />
-                        )}
-                      </line>
+                      ></line>
+                      {isDirectedLinks && (
+                        <g>
+                          <line
+                            stroke={"orange"}
+                            strokeWidth={(isFocused ? 2 : 1.2) * 1.5}
+                            strokeOpacity={0.1}
+                            x1={modSource.x}
+                            y1={modSource.y}
+                            x2={modTarget.x}
+                            y2={modTarget.y}
+                          >
+                            <animate
+                              attributeName="stroke-dasharray"
+                              values="0,100;100,0;100,100"
+                              dur="1.5s"
+                              repeatCount="indefinite"
+                            />
+                            <animate
+                              attributeName="stroke-opacity"
+                              values="0;0.6;0.6;0"
+                              dur="1.5s"
+                              repeatCount="indefinite"
+                              keyTimes="0;0.01;0.1;1"
+                            />
+                          </line>
+                        </g>
+                      )}
+
                       {/* <defs>
                       <linearGradient
                         id={`gradient-${graphLink.id}`}

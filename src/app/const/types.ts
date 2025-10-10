@@ -6,6 +6,10 @@ import type {
   Tag,
   Activity,
   Workspace,
+  Annotation,
+  AnnotationHistory,
+  DocumentType,
+  Prisma,
 } from "@prisma/client";
 import type { SimulationNodeDatum, SimulationLinkDatum } from "d3";
 
@@ -18,6 +22,28 @@ export interface TopicSpaceResponse extends TopicSpace {
 
 export interface DocumentGraphResponse extends DocumentGraph {
   dataJson: GraphDocumentForFrontend;
+}
+
+export interface CreateSourceDocumentResponse {
+  documentGraph: {
+    id: string;
+    dataJson: Prisma.JsonValue;
+    createdAt: Date;
+    updatedAt: Date;
+    isDeleted: boolean;
+    userId: string;
+    sourceDocumentId: string;
+  };
+  sourceDocument: {
+    id: string;
+    name: string;
+    url: string;
+    createdAt: Date;
+    updatedAt: Date;
+    isDeleted: boolean;
+    documentType: DocumentType;
+    userId: string;
+  };
 }
 
 export interface DocumentResponseWithGraphData extends SourceDocument {
@@ -33,6 +59,16 @@ export interface DocumentResponse extends SourceDocument {
 
 export interface WorkspaceResponse extends Workspace {
   referencedTopicSpaces?: TopicSpaceResponse[];
+}
+
+export interface AnnotationResponse extends Annotation {
+  childAnnotations?: AnnotationResponse[];
+  author: {
+    id: string;
+    name: string | null;
+    image: string | null;
+  };
+  histories: AnnotationHistory[];
 }
 
 export interface CustomNodeType
@@ -108,3 +144,108 @@ export type TiptapGraphFilterOption = {
   mode: "non-filtered" | "focused" | "filtered";
   entities: string[];
 };
+
+// クラスタリング関連の型定義
+export interface AnnotationClusteringParams {
+  featureExtraction: {
+    maxFeatures: number;
+    minDf: number;
+    maxDf: number;
+    includeMetadata: boolean;
+    includeStructural: boolean;
+  };
+  dimensionalityReduction: {
+    nNeighbors: number;
+    minDist: number;
+    spread: number;
+    nComponents: number;
+    randomSeed: number;
+  };
+  clustering: {
+    algorithm: "KMEANS" | "DBSCAN" | "HIERARCHICAL";
+    nClusters?: number;
+    eps?: number;
+    minSamples?: number;
+    linkage?: "ward" | "complete" | "average" | "single";
+  };
+}
+
+export interface AnnotationClusteringResult {
+  features: {
+    vectors: number[][];
+    names: string[];
+    annotationIds: string[];
+  };
+  dimensionalityReduction: {
+    coordinates: Array<{ x: number; y: number; annotationId: string }>;
+    annotationIds: string[];
+    parameters: AnnotationClusteringParams["dimensionalityReduction"];
+    qualityMetrics?: {
+      trustworthiness?: number;
+      continuity?: number;
+    };
+  };
+  clustering: {
+    clusters: Array<{
+      clusterId: number;
+      centerX: number;
+      centerY: number;
+      size: number;
+      annotationIds: string[];
+      features?: {
+        avgSentiment?: number;
+        dominantType?: string;
+        participants?: string[];
+        timeRange?: { start: Date; end: Date };
+      };
+    }>;
+    algorithm: string;
+    parameters: AnnotationClusteringParams["clustering"];
+    qualityMetrics?: {
+      silhouetteScore?: number;
+      inertia?: number;
+      calinskiHarabaszScore?: number;
+    };
+  };
+  processingTime: {
+    featureExtraction: number;
+    dimensionalityReduction: number;
+    clustering: number;
+    total: number;
+  };
+  statistics: {
+    totalAnnotations: number;
+    totalClusters: number;
+    averageClusterSize: number;
+    largestClusterSize: number;
+    smallestClusterSize: number;
+    qualityScore: number;
+  };
+}
+
+export interface ClusteringVisualizationData {
+  annotations: Array<{
+    id: string;
+    x: number;
+    y: number;
+    clusterId: number;
+    content: string;
+    type: string;
+    author: string;
+    createdAt: Date;
+  }>;
+  clusters: Array<{
+    id: number;
+    centerX: number;
+    centerY: number;
+    size: number;
+    color: string;
+    label: string;
+  }>;
+  bounds: {
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
+  };
+}

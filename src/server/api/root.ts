@@ -11,6 +11,7 @@ import { mcpRouter } from "./routers/mcp";
 import { migrationRouter } from "./routers/migration/unify-graph-data";
 import { graphEmbeddingRouter } from "./routers/graph-embedding";
 import { workspaceRouter } from "./routers/workspace";
+import { annotationRouter } from "./routers/annotation";
 
 /**
  * This is the primary router for your server.
@@ -30,6 +31,7 @@ export const appRouter = createTRPCRouter({
   migration: migrationRouter,
   graphEmbedding: graphEmbeddingRouter,
   workspace: workspaceRouter,
+  annotation: annotationRouter,
 });
 
 // export type definition of API

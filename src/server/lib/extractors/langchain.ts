@@ -19,7 +19,7 @@ export class LangChainExtractor implements Extractor {
     isPlaneTextMode: boolean,
     schema?: TransformerSchema,
   ): Promise<NodesAndRelationships | null> {
-    const llm = new ChatOpenAI({ temperature: 0.8, model: "gpt-4o" });
+    const llm = new ChatOpenAI({ temperature: 0.3, model: "gpt-4o-mini" });
     const transformerOptions = schema
       ? {
           llm: llm,

@@ -31,6 +31,7 @@ export const FileUploader = ({
           <div className="text-sm">または</div>
           <Button
             id="fileSelect"
+            className="pointer-events-auto"
             onClick={() => {
               if (typeof window !== "undefined") {
                 const fileElem = document.getElementById("file-upload");

@@ -119,7 +119,7 @@ export const TopicSpaceAttachModal = ({
     <Modal
       isOpen={isOpen}
       setIsOpen={setIsOpen}
-      title="リポジトリにドキュメントを追加"
+      title="参照するリポジトリを追加"
     >
       <form onSubmit={methods.handleSubmit(submit, isInValid)}>
         <div className="flex flex-col gap-3">

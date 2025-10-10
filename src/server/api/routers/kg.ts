@@ -164,6 +164,7 @@ export const kgRouter = createTRPCRouter({
 
       try {
         const documents = await textInspect(localFilePath, isPlaneTextMode);
+        console.log("documents: ", documents);
         return {
           data: { documents: documents },
         };

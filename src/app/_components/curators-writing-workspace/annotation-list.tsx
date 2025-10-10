@@ -1,0 +1,258 @@
+"use client";
+
+import React, { useState } from "react";
+import { Button } from "../button/button";
+import type { AnnotationResponse } from "@/app/const/types";
+import { convertJsonToText } from "@/app/_utils/tiptap/convert";
+import { AnnotationForm } from "./annotation-form";
+import Image from "next/image";
+import { RelativeTimeWithTooltip } from "./relative-time-with-tooltip";
+import { ChevronDownIcon } from "@heroicons/react/24/outline";
+import Link from "next/link";
+import {
+  getAnnotationTypeColor,
+  getAnnotationTypeLabel,
+} from "@/app/_utils/annotation/type-utils";
+
+interface AnnotationListProps {
+  annotations: AnnotationResponse[];
+  onRefetch: () => void;
+  topicSpaceId: string;
+  showOnlyTopLevel?: boolean; // トップレベルの注釈のみを表示するかどうか
+}
+
+export const AnnotationList: React.FC<AnnotationListProps> = ({
+  annotations,
+  onRefetch,
+  topicSpaceId,
+  showOnlyTopLevel = true,
+}) => {
+  const [parentAnnotationId, setParentAnnotationId] = useState<string | null>(
+    null,
+  );
+
+  const [showAnnotationForm, setShowAnnotationForm] = useState(false);
+  const [expandedReplies, setExpandedReplies] = useState<Set<string>>(
+    new Set(),
+  );
+
+  const handleReply = (annotationId: string) => {
+    setParentAnnotationId(annotationId);
+    setShowAnnotationForm(true);
+  };
+
+  const toggleReplies = (annotationId: string) => {
+    setExpandedReplies((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(annotationId)) {
+        newSet.delete(annotationId);
+      } else {
+        newSet.add(annotationId);
+      }
+      return newSet;
+    });
+  };
+
+  // 表示する注釈を決定
+  const displayAnnotations = showOnlyTopLevel
+    ? annotations?.filter((annotation) => !annotation.parentAnnotationId) ?? []
+    : annotations ?? [];
+
+  if (displayAnnotations.length === 0) {
+    return (
+      <div className="py-4 text-center">
+        <p className="mb-2 text-sm text-gray-400">まだ注釈がありません</p>
+        <Button
+          size="small"
+          onClick={() => setShowAnnotationForm(true)}
+          className="text-xs"
+        >
+          最初の注釈を追加
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {displayAnnotations.map((annotation) => (
+        <div
+          key={annotation.id}
+          className="rounded-lg border border-gray-600 bg-slate-800 p-3"
+        >
+          {/* 注釈ヘッダー */}
+          <div className="mb-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Image
+                alt=""
+                src={annotation.author.image ?? ""}
+                height={24}
+                width={24}
+                className="rounded-full border border-gray-600"
+              />
+              <span className="text-xs text-gray-400">
+                {annotation.author.name}
+              </span>
+              <RelativeTimeWithTooltip
+                datetime={annotation.createdAt}
+                className="text-xs text-gray-500"
+              />
+            </div>
+            <div className="flex gap-1">
+              <Button
+                size="small"
+                onClick={() => handleReply(annotation.id)}
+                className="flex h-6 flex-row items-center justify-center bg-gray-700 px-2 text-xs"
+              >
+                返信
+              </Button>
+              <Link href={`/annotations/${annotation.id}`}>
+                <Button
+                  size="small"
+                  className="justify-centers flex h-6 flex-row items-center bg-gray-700 px-2 text-xs hover:bg-gray-600"
+                >
+                  詳細
+                </Button>
+              </Link>
+            </div>
+          </div>
+
+          <span
+            className={`flex w-max flex-row items-center justify-center rounded-full px-1 py-0.5 text-xs font-medium ${getAnnotationTypeColor(
+              annotation.type,
+            )}`}
+          >
+            {getAnnotationTypeLabel(annotation.type)}
+          </span>
+
+          {/* 注釈内容 */}
+          <div className="p-2 text-sm text-gray-200">
+            {convertJsonToText(annotation.content).substring(0, 200)}
+            {convertJsonToText(annotation.content).length > 200 && "..."}
+          </div>
+
+          {/* 子注釈 */}
+          {annotation.childAnnotations &&
+            annotation.childAnnotations.length > 0 && (
+              <div className="ml-2 border-l-2 border-gray-600 pl-3">
+                <button
+                  onClick={() => toggleReplies(annotation.id)}
+                  className="mb-2 flex w-full flex-row items-center justify-between gap-2 rounded-md p-2 text-xs text-gray-400 transition-colors hover:bg-slate-700 hover:text-gray-300"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="flex -space-x-1">
+                      {(() => {
+                        // 同じユーザーの重複を除去
+                        const uniqueAuthors = annotation.childAnnotations
+                          .reduce(
+                            (acc, child) => {
+                              if (
+                                !acc.find(
+                                  (author) => author.id === child.author.id,
+                                )
+                              ) {
+                                acc.push(child.author);
+                              }
+                              return acc;
+                            },
+                            [] as (typeof annotation.childAnnotations)[0]["author"][],
+                          )
+                          .slice(0, 3);
+
+                        return (
+                          <>
+                            {uniqueAuthors.map((author, index) => (
+                              <Image
+                                key={author.id}
+                                alt=""
+                                src={author.image ?? ""}
+                                height={20}
+                                width={20}
+                                className="rounded-full border border-slate-600"
+                                style={{ zIndex: 3 - index }}
+                              />
+                            ))}
+                            {uniqueAuthors.length > 3 && (
+                              <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-slate-600 bg-slate-600 text-xs text-white">
+                                …
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                    <span>{annotation.childAnnotations.length}件の返信</span>
+                  </div>
+                  <span
+                    className={`transform transition-transform ${expandedReplies.has(annotation.id) ? "rotate-180" : ""}`}
+                  >
+                    <ChevronDownIcon width={16} height={16} color="white" />
+                  </span>
+                </button>
+                {expandedReplies.has(annotation.id) && (
+                  <div className="space-y-2">
+                    {annotation.childAnnotations.slice(0, 3).map((child) => (
+                      <div
+                        key={child.id}
+                        className="mb-2 rounded border border-gray-700 bg-slate-700 p-2"
+                      >
+                        <div className="mb-1 flex items-center gap-2">
+                          <Image
+                            alt=""
+                            src={child.author.image ?? ""}
+                            height={16}
+                            width={16}
+                            className="rounded-full border border-gray-600"
+                          />
+                          <span className="text-xs text-gray-400">
+                            {child.author.name}
+                          </span>
+                          <RelativeTimeWithTooltip
+                            datetime={child.createdAt}
+                            className="text-xs text-gray-500"
+                          />
+                        </div>
+                        <div className="text-xs text-gray-300">
+                          {convertJsonToText(child.content).substring(0, 100)}
+                          {convertJsonToText(child.content).length > 100 &&
+                            "..."}
+                        </div>
+                      </div>
+                    ))}
+
+                    {annotation.childAnnotations.length > 3 && (
+                      <div className="mt-4">
+                        <Link href={`/annotations/${annotation.id}`}>
+                          <Button
+                            size="small"
+                            className="flex-row items-center justify-center bg-gray-700 px-2 text-xs hover:bg-gray-600"
+                          >
+                            すべての返信を見る ( +{" "}
+                            {annotation.childAnnotations.length - 3}
+                            件)
+                          </Button>
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+        </div>
+      ))}
+      {showAnnotationForm && parentAnnotationId && (
+        <AnnotationForm
+          targetType="annotation"
+          targetId={parentAnnotationId}
+          topicSpaceId={topicSpaceId}
+          parentAnnotationId={parentAnnotationId}
+          onClose={() => setShowAnnotationForm(false)}
+          onSuccess={() => {
+            setShowAnnotationForm(false);
+            void onRefetch();
+          }}
+        />
+      )}
+    </div>
+  );
+};

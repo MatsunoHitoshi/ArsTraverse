@@ -9,6 +9,11 @@ import {
 import OpenAI from "openai";
 import { env } from "@/env";
 
+export const TiptapContentSchema = z.object({
+  type: z.string(),
+  content: z.array(z.any()).optional(),
+});
+
 const CreateWorkspaceSchema = z.object({
   name: z.string().min(1, "ワークスペース名は必須です"),
   description: z.string().optional(),
@@ -24,12 +29,7 @@ const UpdateWorkspaceSchema = z.object({
   id: z.string(),
   name: z.string().optional(),
   description: z.string().optional(),
-  content: z
-    .object({
-      type: z.string(),
-      content: z.array(z.any()).optional(),
-    })
-    .optional(),
+  content: TiptapContentSchema.optional(),
   status: z.nativeEnum(WorkspaceStatus).optional(),
   referencedTopicSpaceIds: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional(),
@@ -52,10 +52,10 @@ const TextCompletionSchema = z.object({
   isDeepMode: z.boolean(),
 });
 
-const EntityInformationCompletionSchema = z.object({
-  workspaceId: z.string(),
-  entityName: z.string(),
-});
+// const EntityInformationCompletionSchema = z.object({
+//   workspaceId: z.string(),
+//   entityName: z.string(),
+// });
 
 export const workspaceRouter = createTRPCRouter({
   create: protectedProcedure
@@ -554,5 +554,161 @@ export const workspaceRouter = createTRPCRouter({
         ? suggestion.slice(baseText.length)
         : suggestion;
       return withoutBaseText;
+    }),
+
+  // ワークスペース関連ノードの注釈一覧取得
+  getWorkspaceNodeAnnotations: protectedProcedure
+    .input(
+      z.object({
+        nodeId: z.string(),
+        workspaceId: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      // ワークスペースの参照トピックスペースを取得
+      const workspace = await ctx.db.workspace.findUnique({
+        where: { id: input.workspaceId },
+        include: {
+          referencedTopicSpaces: true,
+        },
+      });
+
+      if (!workspace) {
+        throw new Error("ワークスペースが見つかりません");
+      }
+
+      // ノードが参照トピックスペースに属するかチェック
+      const node = await ctx.db.graphNode.findFirst({
+        where: {
+          id: input.nodeId,
+          topicSpaceId: {
+            in: workspace.referencedTopicSpaces.map((ts) => ts.id),
+          },
+        },
+      });
+
+      if (!node) {
+        throw new Error(
+          "指定されたノードはこのワークスペースで参照されていません",
+        );
+      }
+
+      // 注釈を取得
+      const annotations = await ctx.db.annotation.findMany({
+        where: {
+          targetNodeId: input.nodeId,
+          isDeleted: false,
+        },
+        include: {
+          author: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+            },
+          },
+          childAnnotations: {
+            where: { isDeleted: false },
+            include: {
+              author: {
+                select: {
+                  id: true,
+                  name: true,
+                  image: true,
+                },
+              },
+            },
+            orderBy: { createdAt: "asc" },
+          },
+          histories: {
+            orderBy: { createdAt: "desc" },
+            take: 5,
+          },
+        },
+        orderBy: [
+          { childAnnotations: { _count: "desc" } },
+          { createdAt: "desc" },
+        ],
+      });
+
+      return annotations;
+    }),
+
+  // ワークスペース関連エッジの注釈一覧取得
+  getWorkspaceEdgeAnnotations: protectedProcedure
+    .input(
+      z.object({
+        edgeId: z.string(),
+        workspaceId: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      // ワークスペースの参照トピックスペースを取得
+      const workspace = await ctx.db.workspace.findUnique({
+        where: { id: input.workspaceId },
+        include: {
+          referencedTopicSpaces: true,
+        },
+      });
+
+      if (!workspace) {
+        throw new Error("ワークスペースが見つかりません");
+      }
+
+      // エッジが参照トピックスペースに属するかチェック
+      const edge = await ctx.db.graphRelationship.findFirst({
+        where: {
+          id: input.edgeId,
+          topicSpaceId: {
+            in: workspace.referencedTopicSpaces.map((ts) => ts.id),
+          },
+        },
+      });
+
+      if (!edge) {
+        throw new Error(
+          "指定されたエッジはこのワークスペースで参照されていません",
+        );
+      }
+
+      // 注釈を取得
+      const annotations = await ctx.db.annotation.findMany({
+        where: {
+          targetRelationshipId: input.edgeId,
+          isDeleted: false,
+        },
+        include: {
+          author: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+            },
+          },
+          childAnnotations: {
+            where: { isDeleted: false },
+            include: {
+              author: {
+                select: {
+                  id: true,
+                  name: true,
+                  image: true,
+                },
+              },
+            },
+            orderBy: { createdAt: "asc" },
+          },
+          histories: {
+            orderBy: { createdAt: "desc" },
+            take: 5,
+          },
+        },
+        orderBy: [
+          { childAnnotations: { _count: "desc" } },
+          { createdAt: "desc" },
+        ],
+      });
+
+      return annotations;
     }),
 });

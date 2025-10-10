@@ -6,7 +6,7 @@ import { exportXML } from "@/app/_utils/sys/xml";
 const ExportButton = ({ editor }: { editor: Editor }) => {
   return (
     <button
-      className="rounded-lg bg-black/20 p-2 backdrop-blur-sm"
+      className="rounded-lg bg-black/75 p-2 backdrop-blur-sm"
       onClick={() => {
         const html = editor.getHTML();
         const tei = TeiConverter.toTeiBody(html);

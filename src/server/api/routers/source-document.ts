@@ -204,7 +204,10 @@ export const sourceDocumentRouter = createTRPCRouter({
         ),
       });
 
-      return documentGraph;
+      return {
+        documentGraph,
+        sourceDocument: document,
+      };
     }),
 
   update: protectedProcedure
