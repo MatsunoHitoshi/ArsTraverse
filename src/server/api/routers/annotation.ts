@@ -864,7 +864,7 @@ export const annotationRouter = createTRPCRouter({
         const orchestrator = new AnnotationClusteringOrchestrator(ctx.db);
 
         // デフォルトパラメータを使用
-        const params = input.params || orchestrator.getDefaultParams();
+        const params = input.params ?? orchestrator.getDefaultParams();
 
         // パラメータの妥当性を検証
         const validation = orchestrator.validateParams(params);
