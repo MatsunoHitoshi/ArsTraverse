@@ -1,15 +1,18 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { RelativeTimeWithTooltip } from "./relative-time-with-tooltip";
 import { convertJsonToText } from "@/app/_utils/tiptap/convert";
 import {
   getAnnotationTypeColor,
   getAnnotationTypeLabel,
 } from "@/app/_utils/annotation/type-utils";
+import { AnnotationEditForm } from "./annotation-edit-form";
 import type { AnnotationResponse } from "@/app/const/types";
+import { Button } from "../button/button";
 
 interface AnnotationHierarchyProps {
   currentAnnotation: AnnotationResponse;
@@ -17,6 +20,7 @@ interface AnnotationHierarchyProps {
   childAnnotations: AnnotationResponse[];
   onRefetch: () => void;
   topicSpaceId: string;
+  setShowAnnotationForm: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
@@ -25,7 +29,29 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
   childAnnotations,
   onRefetch,
   topicSpaceId,
+  setShowAnnotationForm,
 }) => {
+  const { data: session } = useSession();
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editingAnnotation, setEditingAnnotation] =
+    useState<AnnotationResponse | null>(null);
+
+  const handleEditClick = (annotation: AnnotationResponse) => {
+    setEditingAnnotation(annotation);
+    setShowEditForm(true);
+  };
+
+  const handleEditSuccess = () => {
+    setShowEditForm(false);
+    setEditingAnnotation(null);
+    onRefetch();
+  };
+
+  const handleEditClose = () => {
+    setShowEditForm(false);
+    setEditingAnnotation(null);
+  };
+
   const renderAnnotationCard = (
     annotation: AnnotationResponse,
     isCurrent = false,
@@ -60,6 +86,20 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
                 datetime={annotation.createdAt}
                 className="text-xs text-gray-500"
               />
+            </div>
+            <div className="flex gap-1">
+              {session?.user?.id === annotation.author.id && (
+                <button
+                  className="flex h-6 flex-row items-center justify-center rounded bg-blue-700 px-2 text-xs hover:bg-blue-600"
+                  onClick={(e: React.MouseEvent) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleEditClick(annotation);
+                  }}
+                >
+                  編集
+                </button>
+              )}
             </div>
           </div>
 
@@ -185,9 +225,19 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
       {/* 子注釈 */}
       {childAnnotations?.length > 0 && (
         <div className="ml-2 border-l-2 border-gray-600 pl-4">
-          <h4 className="mb-2 text-sm font-medium text-gray-300">
-            子注釈 ({childAnnotations.length}件)
-          </h4>
+          <div className="mb-2 flex flex-row items-center justify-between">
+            <h4 className="mb-2 text-sm font-medium text-gray-300">
+              子注釈 ({childAnnotations.length}件)
+            </h4>
+            <Button
+              size="small"
+              onClick={() => setShowAnnotationForm(true)}
+              className="hover:bg-slate-600"
+            >
+              返信を追加
+            </Button>
+          </div>
+
           <div className="space-y-3">
             {childAnnotations.map((child) =>
               renderAnnotationCard(child, false, "child"),
@@ -205,6 +255,15 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
             </p>
           </div>
         </div>
+      )}
+
+      {/* 編集フォーム */}
+      {showEditForm && editingAnnotation && (
+        <AnnotationEditForm
+          annotation={editingAnnotation}
+          onClose={handleEditClose}
+          onSuccess={handleEditSuccess}
+        />
       )}
     </div>
   );

@@ -101,13 +101,13 @@ export const GraphInfoPanel = ({
                 </>
               </DisclosureButton>
 
-              {focusedNode && (
+              {/* {focusedNode && (
                 <div className="flex flex-col gap-2 text-sm">
                   <div className="flex flex-row items-center gap-1">
-                    <div className="font-semibold">プロパティ</div>
+                    <div className="font-semibold">プロパティ</div> */}
 
-                    {/*　MEMO: Info Panelからの編集は体験として微妙なので一旦編集できないようにする */}
-                    {/* {isEditor ? (
+              {/*　MEMO: Info Panelからの編集は体験として微妙なので一旦編集できないようにする */}
+              {/* {isEditor ? (
                       <Button
                         className="!p-1 !text-sm"
                         onClick={() => setIsEditing(!isEditing)}
@@ -117,15 +117,15 @@ export const GraphInfoPanel = ({
                     ) : (
                       <></>
                     )} */}
-                  </div>
+              {/* </div> */}
 
-                  <PropertiesDetailPanel
+              {/* <PropertiesDetailPanel
                     data={focusedNode}
                     topicSpaceId={topicSpaceId}
-                  />
+                  /> */}
 
-                  {/*　MEMO: Info Panelからの編集は体験として微妙なので一旦編集できないようにする */}
-                  {/* {isEditor && isEditing && topicSpaceId && refetch ? (
+              {/*　MEMO: Info Panelからの編集は体験として微妙なので一旦編集できないようにする */}
+              {/* {isEditor && isEditing && topicSpaceId && refetch ? (
                     <div className="flex flex-col gap-1">
                       <NodePropertiesForm
                         node={focusedNode}
@@ -141,8 +141,8 @@ export const GraphInfoPanel = ({
                       topicSpaceId={topicSpaceId}
                     />
                   )} */}
-                </div>
-              )}
+              {/* </div> */}
+              {/* )} */}
 
               <DisclosurePanel className="flex w-full flex-col gap-2 pl-5">
                 {!!topicSpaceId && (
@@ -203,7 +203,7 @@ export const GraphInfoPanel = ({
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-2 text-sm">
+                {/* <div className="flex flex-col gap-2 text-sm">
                   <div className="flex flex-row items-center gap-1">
                     <div className="font-semibold">プロパティ</div>
                   </div>
@@ -211,7 +211,7 @@ export const GraphInfoPanel = ({
                     data={focusedLink}
                     topicSpaceId={topicSpaceId}
                   />
-                </div>
+                </div> */}
               </div>
             )}
           </div>

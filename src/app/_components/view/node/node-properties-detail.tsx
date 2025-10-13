@@ -10,6 +10,7 @@ import { NodePropertiesForm } from "../../form/node-properties-form";
 import AdditionalGraphViewer from "../graph-view/additional-graph-viewer";
 import type { CustomNodeType } from "@/app/const/types";
 import { RelatedNodesAndLinksViewer } from "../graph-view/related-nodes-viewer";
+import { NodeAnnotationSection } from "./node-annotation-section";
 
 export const NodePropertiesDetail = ({
   node,
@@ -75,7 +76,21 @@ export const NodePropertiesDetail = ({
             <div className="text-sm text-gray-500">{node.label}</div>
           </div>
 
-          <div className="flex flex-col gap-4">
+          <div className="flex w-full flex-col gap-4">
+            <div className="flex w-full flex-col items-start gap-1">
+              <RelatedNodesAndLinksViewer
+                node={node}
+                topicSpaceId={topicSpaceId}
+                className="flex w-full flex-col gap-1 rounded-md border border-gray-600"
+              />
+              <a
+                className="w-max cursor-pointer rounded-md bg-slate-500 p-2 text-sm text-white"
+                href={`/topic-spaces/${topicSpaceId}/tree/${node.id}`}
+              >
+                ツリー表示
+              </a>
+            </div>
+
             <div className="flex flex-row items-center gap-3">
               <div className="text-xs">プロパティ</div>
 
@@ -112,6 +127,10 @@ export const NodePropertiesDetail = ({
               )}
             </div>
 
+            <div className="flex w-full flex-col gap-4">
+              <NodeAnnotationSection node={node} topicSpaceId={topicSpaceId} />
+            </div>
+
             {topicSpaceId && refetch && newGraphDocument && (
               <AdditionalGraphViewer
                 graphDocument={newGraphDocument}
@@ -120,12 +139,6 @@ export const NodePropertiesDetail = ({
                 refetch={refetch}
               />
             )}
-
-            <RelatedNodesAndLinksViewer
-              node={node}
-              topicSpaceId={topicSpaceId}
-              className="flex flex-col gap-1 rounded-md border border-gray-600"
-            />
 
             {onEdit && enableEdit && refetch ? (
               <div className="flex w-full flex-col gap-1">

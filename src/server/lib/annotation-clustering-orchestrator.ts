@@ -1,19 +1,20 @@
 import type { PrismaClient } from "@prisma/client";
 import {
-  AnnotationData,
+  type AnnotationData,
   AnnotationFeatureExtractor,
-  FeatureExtractionParams,
+  type FeatureExtractionParams,
 } from "./annotation-feature-extractor";
 import {
-  UMAPParameters,
-  DimensionalityReductionResult,
+  type UMAPParameters,
+  type DimensionalityReductionResult,
   DimensionalityReductionService,
 } from "./dimensionality-reduction-service";
 import {
-  ClusteringParameters,
-  ClusteringResult,
+  type ClusteringParameters,
+  type ClusteringResult,
   ClusteringService,
 } from "./clustering-service";
+import { ClusterTitleGenerator } from "./cluster-title-generator";
 
 export interface AnnotationClusteringParams {
   // 特徴量抽出パラメータ
@@ -45,6 +46,7 @@ export interface AnnotationClusteringResult {
     featureExtraction: number;
     dimensionalityReduction: number;
     clustering: number;
+    titleGeneration: number;
     total: number;
   };
 }
@@ -54,29 +56,77 @@ export class AnnotationClusteringOrchestrator {
   private featureExtractor: AnnotationFeatureExtractor;
   private dimensionalityReductionService: DimensionalityReductionService;
   private clusteringService: ClusteringService;
+  private titleGenerator: ClusterTitleGenerator;
 
   constructor(db: PrismaClient) {
     this.db = db;
     this.featureExtractor = new AnnotationFeatureExtractor(db);
     this.dimensionalityReductionService = new DimensionalityReductionService();
     this.clusteringService = new ClusteringService();
+    this.titleGenerator = new ClusterTitleGenerator(db);
   }
 
   /**
-   * 注釈ツリー全体のクラスタリングを実行
+   * ノードまたはエッジに付随する注釈全体のクラスタリングを実行
    */
   async performClustering(
-    rootAnnotationId: string,
+    targetNodeId: string | undefined,
+    targetRelationshipId: string | undefined,
     params: AnnotationClusteringParams,
   ): Promise<AnnotationClusteringResult> {
     const startTime = Date.now();
 
     try {
       // 1. 注釈データを取得
-      const annotations = await this.getAnnotationTree(rootAnnotationId);
+      const annotations = await this.getAnnotationsByTarget(
+        targetNodeId,
+        targetRelationshipId,
+      );
 
       if (annotations.length < 2) {
         throw new Error("クラスタリングには最低2つの注釈が必要です");
+      }
+
+      // データ数が少ない場合は簡易的なクラスタリング結果を返す
+      if (annotations.length < 3) {
+        const coordinates = annotations.map((_, index) => ({
+          x: Math.random() * 100,
+          y: Math.random() * 100,
+          annotationId: annotations[index]?.id ?? "",
+        }));
+
+        return {
+          features: {
+            vectors: [],
+            names: [],
+            annotationIds: annotations.map((a) => a.id),
+          },
+          dimensionalityReduction: {
+            coordinates,
+            annotationIds: annotations.map((a) => a.id),
+            parameters: params.dimensionalityReduction,
+          },
+          clustering: {
+            clusters: [
+              {
+                clusterId: 0,
+                centerX: 50,
+                centerY: 50,
+                size: annotations.length,
+                annotationIds: annotations.map((a) => a.id),
+              },
+            ],
+            algorithm: "SIMPLE",
+            parameters: params.clustering,
+          },
+          processingTime: {
+            featureExtraction: 0,
+            dimensionalityReduction: 0,
+            clustering: 0,
+            titleGeneration: 0,
+            total: Date.now() - startTime,
+          },
+        };
       }
 
       // 2. 特徴量抽出
@@ -111,6 +161,28 @@ export class AnnotationClusteringOrchestrator {
       );
       const clusteringTime = Date.now() - clusteringStartTime;
 
+      // 6. クラスタータイトル生成
+      const titleStartTime = Date.now();
+      const clusterTitles = await this.titleGenerator.generateClusterTitles(
+        clusteringResult.clusters.map((cluster) => ({
+          clusterId: cluster.clusterId,
+          annotationIds: cluster.annotationIds,
+        })),
+        this.titleGenerator.getDefaultParams(),
+      );
+      const titleTime = Date.now() - titleStartTime;
+
+      // タイトルをクラスター結果に追加
+      clusteringResult.clusters = clusteringResult.clusters.map((cluster) => {
+        const titleResult = clusterTitles.find(
+          (t) => t.clusterId === cluster.clusterId,
+        );
+        return {
+          ...cluster,
+          title: titleResult?.title ?? `クラスター ${cluster.clusterId}`,
+        };
+      });
+
       const totalTime = Date.now() - startTime;
 
       return {
@@ -125,6 +197,7 @@ export class AnnotationClusteringOrchestrator {
           featureExtraction: featureTime,
           dimensionalityReduction: reductionTime,
           clustering: clusteringTime,
+          titleGeneration: titleTime,
           total: totalTime,
         },
       };
@@ -170,65 +243,79 @@ export class AnnotationClusteringOrchestrator {
   }
 
   /**
-   * 注釈ツリー全体を取得
+   * ノードまたはエッジに付随する注釈全体を取得
    */
-  private async getAnnotationTree(
-    rootAnnotationId: string,
+  private async getAnnotationsByTarget(
+    targetNodeId: string | undefined,
+    targetRelationshipId: string | undefined,
   ): Promise<AnnotationData[]> {
-    // ルート注釈を取得
-    const rootAnnotation = await this.db.annotation.findUnique({
-      where: { id: rootAnnotationId, isDeleted: false },
-      include: {
-        author: true,
-        childAnnotations: {
-          where: { isDeleted: false },
-          include: {
-            author: true,
-            childAnnotations: {
-              where: { isDeleted: false },
-              include: {
-                author: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!rootAnnotation) {
-      throw new Error("ルート注釈が見つかりません");
+    if (!targetNodeId && !targetRelationshipId) {
+      throw new Error(
+        "targetNodeIdまたはtargetRelationshipIdのいずれかが必要です",
+      );
     }
 
-    // 注釈ツリーを平坦化
-    const annotations: AnnotationData[] = [];
+    // まず、対象ノードまたはエッジに付随するすべての注釈IDを取得
+    const rootAnnotations = await this.db.annotation.findMany({
+      where: {
+        isDeleted: false,
+        OR: [
+          targetNodeId ? { targetNodeId } : {},
+          targetRelationshipId ? { targetRelationshipId } : {},
+        ].filter((condition) => Object.keys(condition).length > 0),
+      },
+      select: { id: true },
+    });
 
-    const flattenAnnotations = (
-      annotation: Record<string, unknown>,
-      level = 0,
-    ) => {
-      annotations.push({
-        id: annotation.id as string,
-        content: annotation.content as Record<string, unknown>,
-        type: annotation.type as string,
-        createdAt: annotation.createdAt as Date,
-        authorId: annotation.authorId as string,
-        parentAnnotationId: annotation.parentAnnotationId as string | null,
-        targetNodeId: annotation.targetNodeId as string | null,
-        targetRelationshipId: annotation.targetRelationshipId as string | null,
-      });
+    // すべての注釈IDを収集（階層構造を含む）
+    const allAnnotationIds = new Set<string>();
 
-      if (annotation.childAnnotations) {
-        (annotation.childAnnotations as Record<string, unknown>[]).forEach(
-          (child: Record<string, unknown>) => {
-            flattenAnnotations(child, level + 1);
+    const collectAllAnnotationIds = async (annotationIds: string[]) => {
+      for (const annotationId of annotationIds) {
+        if (allAnnotationIds.has(annotationId)) continue;
+        allAnnotationIds.add(annotationId);
+
+        // 子注釈のIDを取得
+        const childAnnotations = await this.db.annotation.findMany({
+          where: {
+            parentAnnotationId: annotationId,
+            isDeleted: false,
           },
-        );
+          select: { id: true },
+        });
+
+        if (childAnnotations.length > 0) {
+          const childIds = childAnnotations.map((child) => child.id);
+          await collectAllAnnotationIds(childIds);
+        }
       }
     };
 
-    flattenAnnotations(rootAnnotation);
+    // ルート注釈から開始してすべての注釈IDを収集
+    await collectAllAnnotationIds(rootAnnotations.map((a) => a.id));
 
-    return annotations;
+    // 収集したIDで注釈の詳細を取得
+    const annotations = await this.db.annotation.findMany({
+      where: {
+        id: { in: Array.from(allAnnotationIds) },
+        isDeleted: false,
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    // AnnotationData形式に変換
+    const annotationData: AnnotationData[] = annotations.map((annotation) => ({
+      id: annotation.id,
+      content: annotation.content as Record<string, unknown>,
+      type: annotation.type,
+      createdAt: annotation.createdAt,
+      authorId: annotation.authorId,
+      parentAnnotationId: annotation.parentAnnotationId,
+      targetNodeId: annotation.targetNodeId,
+      targetRelationshipId: annotation.targetRelationshipId,
+    }));
+
+    return annotationData;
   }
 
   /**

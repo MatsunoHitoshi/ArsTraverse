@@ -19,6 +19,7 @@ import { useSession } from "next-auth/react";
 import { Switch } from "@headlessui/react";
 import { useSearchParams } from "next/navigation";
 import { MultiDocumentGraphEditor } from "../view/graph-edit/multi-document-graph-editor";
+import { TopicSpaceDocumentListSection } from "./document-list-section";
 
 type TopicGraphDetailProps = {
   id: string;
@@ -153,30 +154,13 @@ export const TopicGraphEditor = ({
               )}
             </div>
 
-            <div className="flex flex-col gap-1">
-              <div className="flex w-full flex-row items-center justify-between">
-                <div className="font-semibold">ドキュメント</div>
-                <div className="flex flex-row items-center gap-2">
-                  <div className="text-sm">色分け</div>
-                  <div>
-                    <Switch
-                      checked={isClustered}
-                      onChange={setIsClustered}
-                      className="group inline-flex h-6 w-11 items-center rounded-full bg-slate-400 transition data-[checked]:bg-orange-400"
-                    >
-                      <span className="size-4 translate-x-1 rounded-full bg-white transition group-data-[checked]:translate-x-6" />
-                    </Switch>
-                  </div>
-                </div>
-              </div>
-
-              <TopicGraphDocumentList
-                documents={topicSpace.sourceDocuments as DocumentResponse[]}
-                selectedDocumentId={selectedDocumentId}
-                setSelectedDocumentId={setSelectedDocumentId}
-                isClustered={isClustered}
-              />
-            </div>
+            <TopicSpaceDocumentListSection
+              documents={topicSpace.sourceDocuments as DocumentResponse[]}
+              selectedDocumentId={selectedDocumentId}
+              setSelectedDocumentId={setSelectedDocumentId}
+              isClustered={isClustered}
+              setIsClustered={setIsClustered}
+            />
           </div>
         ) : (
           <div className="absolute bottom-3 w-40 rounded-lg bg-black/20 p-2 backdrop-blur-sm">

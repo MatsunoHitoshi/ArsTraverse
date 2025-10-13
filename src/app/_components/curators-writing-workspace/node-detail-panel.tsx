@@ -2,10 +2,8 @@
 
 import React, { useState } from "react";
 import { api } from "@/trpc/react";
-import { Button } from "../button/button";
-import { AnnotationList } from "./annotation-list";
-import { AnnotationForm } from "./annotation-form";
 import { AnnotationGraphExtractionModal } from "./annotation-graph-extraction-modal";
+import { NodeAnnotationSection } from "../view/node/node-annotation-section";
 import type { AnnotationResponse, CustomNodeType } from "@/app/const/types";
 
 interface NodeDetailPanelProps {
@@ -19,16 +17,14 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({
   workspaceId,
   topicSpaceId,
 }) => {
-  const [showAnnotationForm, setShowAnnotationForm] = useState(false);
   const [showGraphExtractionModal, setShowGraphExtractionModal] =
     useState(false);
 
-  // ノードの注釈を取得
+  // ノードの注釈を取得（グラフ抽出用）
   const { data: annotations, refetch: refetchAnnotations } =
-    api.workspace.getWorkspaceNodeAnnotations.useQuery(
+    api.annotation.getNodeAnnotations.useQuery(
       {
         nodeId: activeEntity?.id ?? "",
-        workspaceId,
       },
       {
         enabled: !!activeEntity?.id,
@@ -59,55 +55,12 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({
       </div>
 
       {/* 注釈セクション */}
-      <div className="mb-4">
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="font-semibold text-gray-400">注釈</h3>
-          <div className="flex gap-2">
-            <Button
-              size="small"
-              onClick={() => setShowAnnotationForm(true)}
-              className="text-xs"
-            >
-              注釈を追加
-            </Button>
-            {/* {annotations && annotations.length > 0 && (
-              <Button
-                size="small"
-                onClick={() => setShowGraphExtractionModal(true)}
-                className="border border-gray-600 text-xs"
-              >
-                グラフ抽出
-              </Button>
-            )} */}
-          </div>
-        </div>
-
-        {/* 注釈一覧 */}
-        <AnnotationList
-          annotations={annotations as AnnotationResponse[]}
-          onRefetch={refetchAnnotations}
-          topicSpaceId={topicSpaceId}
-        />
-      </div>
-
-      {/* 注釈フォーム */}
-      {showAnnotationForm && (
-        <AnnotationForm
-          targetType="node"
-          targetId={activeEntity.id}
-          topicSpaceId={topicSpaceId}
-          onClose={() => setShowAnnotationForm(false)}
-          onSuccess={() => {
-            setShowAnnotationForm(false);
-            void refetchAnnotations();
-          }}
-        />
-      )}
+      <NodeAnnotationSection node={activeEntity} topicSpaceId={topicSpaceId} />
 
       {/* グラフ抽出モーダル */}
-      {showGraphExtractionModal && (
+      {showGraphExtractionModal && annotations && (
         <AnnotationGraphExtractionModal
-          annotations={annotations as AnnotationResponse[]}
+          annotations={annotations}
           topicSpaceId={topicSpaceId}
           onClose={() => setShowGraphExtractionModal(false)}
         />

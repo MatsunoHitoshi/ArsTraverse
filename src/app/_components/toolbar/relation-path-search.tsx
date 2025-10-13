@@ -26,6 +26,7 @@ export const RelationPathSearch = ({
   const [startNode, setStartNode] = useState<SelectBoxOption>();
   const [endNode, setEndNode] = useState<SelectBoxOption>();
   const [isPathNotFound, setIsPathNotFound] = useState<boolean>(false);
+  const [isOpen, setIsOpen] = useState<boolean>(false);
 
   useEffect(() => {
     if (!!defaultEndNodeId && !!defaultStartNodeId) {
@@ -68,35 +69,51 @@ export const RelationPathSearch = ({
   }, []);
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="text-xs">つながりの検索</div>
-      <div className="flex flex-row items-center justify-between gap-2">
-        <SelectInput
-          options={options}
-          selected={startNode}
-          setSelected={setStartNode}
-          borderRed={isPathNotFound}
-          placeholder="このノードから"
-        />
-        <div>
-          <ChevronRightIcon height={14} width={14} color="white" />
-        </div>
+    <div className="flex flex-col gap-3">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 text-sm font-semibold transition-colors hover:text-gray-300"
+      >
+        <span
+          className={`transform transition-transform ${isOpen ? "rotate-90" : "rotate-0"}`}
+        >
+          <ChevronRightIcon width={16} height={16} color="white" />
+        </span>
+        <span>詳細検索</span>
+      </button>
 
-        <SelectInput
-          options={options}
-          selected={endNode}
-          setSelected={setEndNode}
-          borderRed={isPathNotFound}
-          placeholder="このノードまで"
-        />
-      </div>
-      <div className="flex flex-row items-center gap-2 text-xs">
-        <div>距離: </div>
-        <div>
-          {pathData &&
-            (pathData.nodes.length === 0 ? "-" : pathData.nodes.length - 1)}
+      {isOpen && (
+        <div className="flex flex-col gap-1">
+          <div className="text-xs">つながりの検索</div>
+          <div className="flex flex-row items-center justify-between gap-2">
+            <SelectInput
+              options={options}
+              selected={startNode}
+              setSelected={setStartNode}
+              borderRed={isPathNotFound}
+              placeholder="このノードから"
+            />
+            <div>
+              <ChevronRightIcon height={14} width={14} color="white" />
+            </div>
+
+            <SelectInput
+              options={options}
+              selected={endNode}
+              setSelected={setEndNode}
+              borderRed={isPathNotFound}
+              placeholder="このノードまで"
+            />
+          </div>
+          <div className="flex flex-row items-center gap-2 text-xs">
+            <div>距離: </div>
+            <div>
+              {pathData &&
+                (pathData.nodes.length === 0 ? "-" : pathData.nodes.length - 1)}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

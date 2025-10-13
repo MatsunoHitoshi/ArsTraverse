@@ -10,6 +10,7 @@ import type {
   AnnotationHistory,
   DocumentType,
   Prisma,
+  AnnotationDiscussion,
 } from "@prisma/client";
 import type { SimulationNodeDatum, SimulationLinkDatum } from "d3";
 
@@ -68,7 +69,8 @@ export interface AnnotationResponse extends Annotation {
     name: string | null;
     image: string | null;
   };
-  histories: AnnotationHistory[];
+  histories?: AnnotationHistory[];
+  rootDiscussions?: AnnotationDiscussion[];
 }
 
 export interface CustomNodeType
@@ -185,28 +187,7 @@ export interface AnnotationClusteringResult {
       continuity?: number;
     };
   };
-  clustering: {
-    clusters: Array<{
-      clusterId: number;
-      centerX: number;
-      centerY: number;
-      size: number;
-      annotationIds: string[];
-      features?: {
-        avgSentiment?: number;
-        dominantType?: string;
-        participants?: string[];
-        timeRange?: { start: Date; end: Date };
-      };
-    }>;
-    algorithm: string;
-    parameters: AnnotationClusteringParams["clustering"];
-    qualityMetrics?: {
-      silhouetteScore?: number;
-      inertia?: number;
-      calinskiHarabaszScore?: number;
-    };
-  };
+  clustering: ClusteringResult;
   processingTime: {
     featureExtraction: number;
     dimensionalityReduction: number;
@@ -248,4 +229,35 @@ export interface ClusteringVisualizationData {
     minY: number;
     maxY: number;
   };
+}
+
+export interface ClusterResult {
+  clusterId: number;
+  centerX: number;
+  centerY: number;
+  size: number;
+  annotationIds: string[];
+  title?: string;
+  features?: {
+    avgSentiment?: number;
+    dominantType?: string;
+    participants?: string[];
+    timeRange?: { start: Date; end: Date };
+  };
+}
+
+export interface ClusteringResult {
+  clusters: ClusterResult[];
+  algorithm: string;
+  parameters: AnnotationClusteringParams["clustering"];
+  qualityMetrics?: {
+    silhouetteScore?: number;
+    inertia?: number;
+    calinskiHarabaszScore?: number;
+  };
+  coordinates?: Array<{
+    x: number;
+    y: number;
+    annotationId: string;
+  }>;
 }

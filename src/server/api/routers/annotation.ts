@@ -3,11 +3,7 @@ import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import { TRPCError } from "@trpc/server";
 import { AnnotationType, AnnotationChangeType } from "@prisma/client";
 import { TiptapContentSchema } from "./workspace";
-import {
-  formGraphDataForFrontend,
-  formNodeDataForFrontend,
-  formRelationshipDataForFrontend,
-} from "@/app/_utils/kg/frontend-properties";
+import { formGraphDataForFrontend } from "@/app/_utils/kg/frontend-properties";
 
 export const annotationRouter = createTRPCRouter({
   // 注釈IDで注釈を取得
@@ -68,6 +64,49 @@ export const annotationRouter = createTRPCRouter({
       }
 
       return annotation;
+    }),
+
+  // 複数の注釈IDで注釈を一括取得（パフォーマンス最適化）
+  getAnnotationsByIds: protectedProcedure
+    .input(z.object({ annotationIds: z.array(z.string()) }))
+    .query(async ({ ctx, input }) => {
+      if (input.annotationIds.length === 0) {
+        return [];
+      }
+
+      const annotations = await ctx.db.annotation.findMany({
+        where: {
+          id: { in: input.annotationIds },
+          isDeleted: false,
+        },
+        include: {
+          author: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+            },
+          },
+          targetNode: {
+            select: {
+              id: true,
+              name: true,
+              label: true,
+              topicSpaceId: true,
+            },
+          },
+          targetRelationship: {
+            select: {
+              id: true,
+              topicSpaceId: true,
+              type: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      return annotations;
     }),
 
   // 注釈の親注釈を取得
@@ -226,7 +265,6 @@ export const annotationRouter = createTRPCRouter({
     .input(
       z.object({
         nodeId: z.string(),
-        topicSpaceId: z.string(),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -234,9 +272,6 @@ export const annotationRouter = createTRPCRouter({
         where: {
           targetNodeId: input.nodeId,
           isDeleted: false,
-          targetNode: {
-            topicSpaceId: input.topicSpaceId,
-          },
         },
         include: {
           author: {
@@ -823,7 +858,8 @@ export const annotationRouter = createTRPCRouter({
   performAnnotationClustering: protectedProcedure
     .input(
       z.object({
-        rootAnnotationId: z.string(),
+        targetNodeId: z.string().optional(),
+        targetRelationshipId: z.string().optional(),
         params: z
           .object({
             featureExtraction: z.object({
@@ -855,7 +891,7 @@ export const annotationRouter = createTRPCRouter({
           .optional(),
       }),
     )
-    .mutation(async ({ ctx, input }) => {
+    .query(async ({ ctx, input }) => {
       try {
         const { AnnotationClusteringOrchestrator } = await import(
           "@/server/lib/annotation-clustering-orchestrator"
@@ -877,7 +913,8 @@ export const annotationRouter = createTRPCRouter({
 
         // クラスタリングを実行
         const result = await orchestrator.performClustering(
-          input.rootAnnotationId,
+          input.targetNodeId,
+          input.targetRelationshipId,
           params,
         );
 
@@ -886,6 +923,10 @@ export const annotationRouter = createTRPCRouter({
 
         return {
           ...result,
+          clustering: {
+            ...result.clustering,
+            coordinates: result.dimensionalityReduction.coordinates,
+          },
           statistics,
         };
       } catch (error) {
@@ -905,7 +946,7 @@ export const annotationRouter = createTRPCRouter({
         cacheKey: z.string().optional(),
       }),
     )
-    .query(async ({ ctx, input }) => {
+    .query(async () => {
       // 将来的にはキャッシュ機能を実装
       // 現在は常に新しいクラスタリングを実行
       throw new TRPCError({

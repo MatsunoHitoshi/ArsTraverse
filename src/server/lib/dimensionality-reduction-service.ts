@@ -35,10 +35,42 @@ export class DimensionalityReductionService {
       randomSeed = 42,
     } = parameters;
 
+    // データポイント数に応じてnNeighborsを調整
+    const dataPoints = features.length;
+    const adjustedNNeighbors = Math.min(
+      nNeighbors,
+      Math.max(2, dataPoints - 1),
+    );
+
+    // データポイントが少なすぎる場合は簡易的な座標生成
+    if (dataPoints < 3) {
+      const coordinates = features.map((_, index) => ({
+        x: Math.random() * 100,
+        y: Math.random() * 100,
+        annotationId: annotationIds[index] ?? "",
+      }));
+
+      return {
+        coordinates,
+        annotationIds,
+        parameters: {
+          nNeighbors: adjustedNNeighbors,
+          minDist,
+          spread,
+          nComponents,
+          randomSeed,
+        },
+        qualityMetrics: {
+          trustworthiness: 0,
+          continuity: 0,
+        },
+      };
+    }
+
     try {
       // UMAPインスタンスを作成
       const umap = new UMAP({
-        nNeighbors,
+        nNeighbors: adjustedNNeighbors,
         minDist,
         spread,
         nComponents,
@@ -61,7 +93,7 @@ export class DimensionalityReductionService {
         coordinates,
         annotationIds,
         parameters: {
-          nNeighbors,
+          nNeighbors: adjustedNNeighbors,
           minDist,
           spread,
           nComponents,
