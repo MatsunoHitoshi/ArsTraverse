@@ -72,6 +72,12 @@ model User {
   annotationHistories AnnotationHistory[]
   discussionParticipations AnnotationDiscussion[] @relation("DiscussionParticipants")
   
+  // 変更提案関連
+  proposedEdits        GraphEditProposal[] @relation("GraphEditProposalProposer")
+  reviewingEdits       GraphEditProposal[] @relation("GraphEditProposalReviewer")
+  lockedProposals      GraphEditProposal[] @relation("GraphEditProposalLock")
+  proposalComments     ProposalComment[]
+  
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
 }
@@ -202,6 +208,9 @@ model TopicSpace {
   activities       Activity[]
   graphFusionQueue GraphFusionQueue[]
   graphEmbeddingQueues GraphEmbeddingQueue[]
+  
+  // 変更提案
+  editProposals GraphEditProposal[]
   
   // ワークスペースから参照される
   referencedByWorkspaces Workspace[] @relation("WorkspaceReferencedTopicSpaces")
@@ -542,4 +551,108 @@ enum DiscussionStatus {
   RESOLVED    // 解決済み
   ARCHIVED    // アーカイブ
   CONTROVERSIAL // 論争中
+}
+
+// グラフ変更提案（Pull Request型）
+model GraphEditProposal {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  
+  // 提案の状態
+  status      ProposalStatus @default(PENDING)
+  
+  // 対象のTopicSpace
+  topicSpace   TopicSpace @relation(fields: [topicSpaceId], references: [id])
+  topicSpaceId String
+  
+  // 提案者
+  proposer     User     @relation("GraphEditProposalProposer", fields: [proposerId], references: [id])
+  proposerId   String
+  
+  // レビュー担当者（admin）
+  reviewer     User?    @relation("GraphEditProposalReviewer", fields: [reviewerId], references: [id])
+  reviewerId   String?
+  
+  // 変更内容（diffデータ）
+  changes      GraphEditChange[]
+  
+  // レビューコメント・議論
+  comments     ProposalComment[]
+  
+  // ロック情報
+  lockedAt     DateTime?
+  lockedBy     User?    @relation("GraphEditProposalLock", fields: [lockedById], references: [id])
+  lockedById   String?
+  
+  // 承認・却下日時
+  reviewedAt   DateTime?
+  approvedAt   DateTime?
+  rejectedAt   DateTime?
+  
+  // 却下理由
+  rejectionReason String?
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  @@index([topicSpaceId])
+  @@index([proposerId])
+  @@index([status])
+}
+
+enum ProposalStatus {
+  DRAFT       // 下書き（まだ提出していない）
+  PENDING     // レビュー待ち
+  IN_REVIEW   // レビュー中
+  LOCKED      // 編集中（ロック済み）
+  APPROVED    // 承認済み
+  REJECTED    // 却下
+  MERGED      // マージ済み
+  CANCELLED   // 取り下げ
+}
+
+// 変更提案の変更内容
+model GraphEditChange {
+  id          String   @id @default(cuid())
+  
+  proposal    GraphEditProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposalId  String
+  
+  changeType       GraphChangeType
+  changeEntityType GraphChangeEntityType
+  changeEntityId   String
+  
+  // 変更前・変更後の状態
+  previousState    Json
+  nextState        Json
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([proposalId])
+}
+
+// 提案へのコメント
+model ProposalComment {
+  id          String   @id @default(cuid())
+  
+  proposal    GraphEditProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposalId  String
+  
+  author      User     @relation(fields: [authorId], references: [id])
+  authorId    String
+  
+  content     Json     // Tiptap形式
+  
+  // スレッド機能
+  parentComment   ProposalComment?  @relation("CommentThread", fields: [parentCommentId], references: [id])
+  parentCommentId String?
+  childComments   ProposalComment[] @relation("CommentThread")
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  isDeleted   Boolean  @default(false)
+  
+  @@index([proposalId])
+  @@index([authorId])
 }

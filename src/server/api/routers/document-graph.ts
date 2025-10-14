@@ -17,6 +17,7 @@ import {
   GraphChangeRecordType,
   GraphChangeType,
 } from "@prisma/client";
+import { KnowledgeGraphInputSchema } from "./topic-space";
 
 // const CreateDocumentGraphSchema = z.object({
 //   dataJson: z.object({
@@ -28,10 +29,7 @@ import {
 
 const UpdateDocumentGraphSchema = z.object({
   id: z.string(),
-  dataJson: z.object({
-    nodes: z.array(z.any()),
-    relationships: z.array(z.any()),
-  }),
+  dataJson: KnowledgeGraphInputSchema,
 });
 
 export const documentGraphRouter = createTRPCRouter({

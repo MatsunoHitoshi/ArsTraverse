@@ -12,6 +12,7 @@ import { migrationRouter } from "./routers/migration/unify-graph-data";
 import { graphEmbeddingRouter } from "./routers/graph-embedding";
 import { workspaceRouter } from "./routers/workspace";
 import { annotationRouter } from "./routers/annotation";
+import { graphEditProposalRouter } from "./routers/graph-edit-proposal";
 
 /**
  * This is the primary router for your server.
@@ -32,6 +33,7 @@ export const appRouter = createTRPCRouter({
   graphEmbedding: graphEmbeddingRouter,
   workspace: workspaceRouter,
   annotation: annotationRouter,
+  graphEditProposal: graphEditProposalRouter,
 });
 
 // export type definition of API

@@ -41,6 +41,11 @@ import {
   formTopicSpaceForFrontendPublic,
 } from "@/app/_utils/kg/frontend-properties";
 
+export const KnowledgeGraphInputSchema = z.object({
+  nodes: z.array(z.any()),
+  relationships: z.array(z.any()),
+});
+
 const TopicSpaceCreateSchema = z.object({
   name: z.string(),
   image: z.string().url().optional(),
@@ -71,10 +76,7 @@ const DetachDocumentSchema = z.object({
 });
 
 const UpdateGraphPropertiesSchema = z.object({
-  dataJson: z.object({
-    nodes: z.array(z.any()),
-    relationships: z.array(z.any()),
-  }),
+  dataJson: KnowledgeGraphInputSchema,
   id: z.string(),
 });
 

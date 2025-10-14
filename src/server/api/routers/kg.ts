@@ -27,6 +27,7 @@ import {
   formNodeDataForFrontend,
   formRelationshipDataForFrontend,
 } from "@/app/_utils/kg/frontend-properties";
+import { KnowledgeGraphInputSchema } from "./topic-space";
 // import type { Prisma } from "@prisma/client";
 // import { GraphDataStatus } from "@prisma/client";
 // import { stripGraphData } from "@/app/_utils/kg/data-strip";
@@ -44,10 +45,7 @@ const TestInspectInputSchema = z.object({
 
 const IntegrateGraphInputSchema = z.object({
   topicSpaceId: z.string(),
-  graphDocument: z.object({
-    nodes: z.array(z.any()),
-    relationships: z.array(z.any()),
-  }),
+  graphDocument: KnowledgeGraphInputSchema,
 });
 
 const GetRelatedNodesInputSchema = z.object({

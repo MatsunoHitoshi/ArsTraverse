@@ -144,7 +144,7 @@ export class ClusterTitleGenerator {
     maxTokens: number,
     temperature: number,
     model: string,
-    maxRetries: number = 3,
+    maxRetries = 3,
   ): Promise<string> {
     // より柔軟なテキスト選択アルゴリズム
     const maxTotalLength = 1000;
@@ -186,14 +186,18 @@ ${formattedTexts}
 
         // タイトルが長すぎる場合は切り詰め
         return title.length > 20 ? title.slice(0, 20) + "..." : title;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error(
           `GPT API呼び出しエラー (試行 ${attempt}/${maxRetries}):`,
           error,
         );
 
         // レート制限エラーの場合は待機時間を増やしてリトライ
-        if (error.status === 429 && attempt < maxRetries) {
+        if (
+          error instanceof Error &&
+          error.message.includes("429") &&
+          attempt < maxRetries
+        ) {
           const waitTime = Math.pow(2, attempt) * 1000; // 指数バックオフ
           console.log(`${waitTime}ms 待機してリトライします...`);
           await this.delay(waitTime);

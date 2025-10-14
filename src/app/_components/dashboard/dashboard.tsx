@@ -38,7 +38,7 @@ export const Dashboard = () => {
             <div className="flex flex-col gap-1">
               <div className="flex flex-row items-center justify-between">
                 <div className="text-lg font-semibold">最近のドキュメント</div>
-                <Link href="/">
+                <Link href="/documents/new">
                   <Button className="!h-8 !w-8 !p-2">
                     <div className="h-4 w-4">
                       <PlusIcon width={16} height={16} color="white" />

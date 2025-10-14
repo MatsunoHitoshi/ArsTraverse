@@ -2,21 +2,26 @@ import { Input } from "@headlessui/react";
 import clsx from "clsx";
 
 export const TextInput = ({
+  id,
   value,
   onChange,
   placeholder = "",
   defaultValue = "",
   autoFocus = false,
+  required = false,
 }: {
+  id?: string;
   value?: string;
   onChange: (value: string) => void;
   placeholder?: string;
   defaultValue?: string;
   autoFocus?: boolean;
+  required?: boolean;
 }) => {
   return (
     <Input
       type="text"
+      id={id}
       placeholder={placeholder}
       autoFocus={autoFocus}
       className={clsx(
@@ -26,6 +31,7 @@ export const TextInput = ({
       value={value}
       defaultValue={defaultValue}
       onChange={(e) => onChange(e.target.value)}
+      required={required}
     />
   );
 };

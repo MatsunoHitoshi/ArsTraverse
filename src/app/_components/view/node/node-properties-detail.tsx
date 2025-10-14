@@ -147,6 +147,7 @@ export const NodePropertiesDetail = ({
                   topicSpaceId={topicSpaceId}
                   refetch={refetch}
                   setIsEditing={setOnEdit}
+                  enableProposalMode={true}
                 />
               </div>
             ) : (

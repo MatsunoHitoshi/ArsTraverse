@@ -155,7 +155,7 @@ export const usePDFProcessing = (
           createTopicSpace.mutate(
             {
               name: fileName.replace(".pdf", ""),
-              description: `PDFから自動生成されたリポジトリ: ${fileName}`,
+              description: `ワークスペースか作成されたリポジトリ: ${fileName}`,
               documentId: sourceDocumentId,
             },
             {

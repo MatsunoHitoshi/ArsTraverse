@@ -272,8 +272,8 @@ export default function AnnotationDetailPage() {
                   height={graphAreaHeight}
                   hierarchy={{
                     currentAnnotationId: annotation.id,
-                    parentAnnotationId: parentAnnotation?.id || null,
-                    childAnnotationIds: replies?.map((reply) => reply.id) || [],
+                    parentAnnotationId: parentAnnotation?.id ?? null,
+                    childAnnotationIds: replies?.map((reply) => reply.id) ?? [],
                   }}
                 />
               ) : (

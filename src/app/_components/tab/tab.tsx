@@ -112,7 +112,7 @@ export const TabsContainer = ({ children }: { children: React.ReactNode }) => {
           <Button
             className="flex flex-row items-center gap-1"
             onClick={() => {
-              router.push("/");
+              router.push("/documents/new");
             }}
           >
             <PlusIcon width={16} height={16} color="white" />
@@ -124,7 +124,7 @@ export const TabsContainer = ({ children }: { children: React.ReactNode }) => {
           <Button
             className="flex flex-row items-center gap-1"
             onClick={() => {
-              router.push("/");
+              router.push("/documents/new");
             }}
           >
             <PlusIcon width={16} height={16} color="white" />

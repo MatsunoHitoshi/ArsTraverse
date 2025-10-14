@@ -10,7 +10,7 @@ import { SPGuardProvider } from "@/providers/sp-guard";
 
 export const metadata = {
   title: "ArsTraverse",
-  description: "関係性の宇宙を横断する可視化ツール",
+  description: "関係性の宇宙を横断する可視化アーカイブツール",
   icons: [{ rel: "icon", url: "/favicon.ico" }],
 };
 

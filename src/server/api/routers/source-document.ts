@@ -17,6 +17,7 @@ import { inspectFileTypeFromUrl } from "@/app/_utils/sys/file";
 import { DocumentType } from "@prisma/client";
 import { formDocumentGraphForFrontend } from "@/app/_utils/kg/frontend-properties";
 import { extractRelevantSections } from "@/app/_utils/text/extract-relevant-sections";
+import { KnowledgeGraphInputSchema } from "./topic-space";
 
 const SourceDocumentSchema = z.object({
   name: z.string(),
@@ -26,10 +27,7 @@ const SourceDocumentSchema = z.object({
 const SourceDocumentWithGraphSchema = z.object({
   name: z.string(),
   url: z.string().url(),
-  dataJson: z.object({
-    nodes: z.array(z.any()),
-    relationships: z.array(z.any()),
-  }),
+  dataJson: KnowledgeGraphInputSchema,
 });
 
 export const sourceDocumentRouter = createTRPCRouter({

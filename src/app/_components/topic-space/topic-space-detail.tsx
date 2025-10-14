@@ -23,6 +23,7 @@ import { MultiDocumentGraphViewer } from "../view/graph-view/multi-document-grap
 import { DocumentEditModal } from "../document/document-edit-modal";
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
 import { TopicSpaceChangeHistory } from "./topic-space-change-history";
+import { ProposalList } from "../graph-edit-proposal/proposal-list";
 
 export const TopicSpaceDetail = ({ id }: { id: string }) => {
   const { data: session } = useSession();
@@ -30,6 +31,9 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
     id: id,
   });
   const detachDocument = api.topicSpaces.detachDocument.useMutation();
+  const [selectedProposalId, setSelectedProposalId] = useState<string | null>(
+    null,
+  );
 
   const onDetachDocument = (documentId: string) => {
     detachDocument.mutate(
@@ -154,6 +158,20 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
                     } ${hover ? "bg-white/10" : ""}`}
                   >
                     <div className="h-4 w-4">
+                      <FileTextIcon width={16} height={16} color="white" />
+                    </div>
+                    <div className="text-sm">変更提案</div>
+                  </div>
+                )}
+              </Tab>
+              <Tab as={Fragment}>
+                {({ hover, selected }) => (
+                  <div
+                    className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${
+                      selected ? "border-b-2 border-white outline-none" : ""
+                    } ${hover ? "bg-white/10" : ""}`}
+                  >
+                    <div className="h-4 w-4">
                       <LayersIcon width={16} height={16} color="white" />
                     </div>
                     <div className="text-sm">変更履歴</div>
@@ -217,6 +235,9 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
                     }}
                   />
                 </div>
+              </TabPanel>
+              <TabPanel>
+                <ProposalList topicSpaceId={id} />
               </TabPanel>
               <TabPanel>
                 <TopicSpaceChangeHistory topicSpaceId={id} />

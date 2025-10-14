@@ -3,8 +3,10 @@ import type { CustomNodeType } from "@/app/const/types";
 import React, { useState } from "react";
 import { Button } from "../button/button";
 import { api } from "@/trpc/react";
-import { PlusIcon, TrashIcon } from "../icons";
+import { PlusIcon, TrashIcon, FileTextIcon } from "../icons";
 import { Textarea } from "../textarea";
+import { ProposalCreateForm } from "../graph-edit-proposal/proposal-create-form";
+import { GraphChangeType, GraphChangeEntityType } from "@prisma/client";
 
 export const NodePropertiesForm = ({
   topicSpaceId,
@@ -12,6 +14,7 @@ export const NodePropertiesForm = ({
   refetch,
   setIsEditing,
   width = "long",
+  enableProposalMode = false,
 }: {
   topicSpaceId: string;
   node: CustomNodeType;
@@ -19,11 +22,13 @@ export const NodePropertiesForm = ({
   setIsEditing: React.Dispatch<React.SetStateAction<boolean>>;
   className?: string;
   width?: "short" | "long";
+  enableProposalMode?: boolean;
 }) => {
   const updateProperty = api.topicSpaces.updateGraphProperties.useMutation();
   const [properties, setProperties] = useState<PropertyTypeForFrontend>(
     node.properties,
   );
+  const [showProposalForm, setShowProposalForm] = useState(false);
 
   const submit = () => {
     updateProperty.mutate(
@@ -45,6 +50,72 @@ export const NodePropertiesForm = ({
       },
     );
   };
+
+  const handleCreateProposal = () => {
+    setShowProposalForm(true);
+  };
+
+  const handleProposalSuccess = () => {
+    setShowProposalForm(false);
+    setIsEditing(false);
+  };
+
+  const handleProposalCancel = () => {
+    setShowProposalForm(false);
+  };
+
+  // 変更内容を生成
+  const generateChanges = () => {
+    const changes: {
+      changeType: GraphChangeType;
+      changeEntityType: GraphChangeEntityType;
+      changeEntityId: string;
+      previousState: { nodes: unknown[]; relationships: unknown[] };
+      nextState: { nodes: unknown[]; relationships: unknown[] };
+    }[] = [];
+
+    // プロパティの変更を検出
+    const originalProperties = node.properties;
+    const newProperties = properties;
+
+    // 変更されたプロパティを検出
+    const allKeys = new Set([
+      ...Object.keys(originalProperties),
+      ...Object.keys(newProperties),
+    ]);
+
+    for (const key of allKeys) {
+      const originalValue = originalProperties[key];
+      const newValue = newProperties[key];
+
+      if (originalValue !== newValue) {
+        changes.push({
+          changeType: GraphChangeType.UPDATE,
+          changeEntityType: GraphChangeEntityType.NODE,
+          changeEntityId: node.id,
+          previousState: { nodes: [originalProperties], relationships: [] },
+          nextState: {
+            nodes: [{ ...originalProperties, ...newProperties }],
+            relationships: [],
+          },
+        });
+        break; // ノード全体の変更として1つの変更にまとめる
+      }
+    }
+
+    return changes;
+  };
+
+  if (showProposalForm) {
+    return (
+      <ProposalCreateForm
+        topicSpaceId={topicSpaceId}
+        changes={generateChanges()}
+        onSuccess={handleProposalSuccess}
+        onCancel={handleProposalCancel}
+      />
+    );
+  }
   return (
     <div className="flex flex-col gap-2">
       {Object.entries(properties).map(([key, value], index) => {
@@ -122,6 +193,17 @@ export const NodePropertiesForm = ({
         >
           <PlusIcon height={18} width={18} />
         </Button>
+
+        {enableProposalMode && (
+          <Button
+            className="flex flex-row items-center gap-1 !p-1 !text-sm"
+            onClick={handleCreateProposal}
+          >
+            <FileTextIcon height={18} width={18} />
+            変更提案
+          </Button>
+        )}
+
         <Button className="!p-1 !text-sm" onClick={submit}>
           保存
         </Button>
