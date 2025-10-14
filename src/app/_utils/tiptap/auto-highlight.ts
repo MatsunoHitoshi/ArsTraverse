@@ -25,6 +25,10 @@ export const performHighlightUpdate = (
     // 現在のカーソル位置を保存
     const currentSelection = editor.state.selection;
 
+    // トランザクション全体をhistoryから除外
+    const tr = editor.state.tr.setMeta("addToHistory", false);
+    editor.view.dispatch(tr);
+
     // 既存のハイライトをクリア
     editor.commands.unsetEntityHighlight();
     editor.commands.unsetCustomTagHighlight();

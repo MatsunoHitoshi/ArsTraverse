@@ -66,18 +66,28 @@ export const EntityHighlight = Mark.create<EntityHighlightOptions>({
     return {
       setEntityHighlight:
         (attributes) =>
-        ({ commands, chain }) => {
-          return chain().setMark(this.name, attributes).run();
+        ({ commands, chain, tr }) => {
+          return chain()
+            .setMark(this.name, attributes)
+            .command(({ tr }) => {
+              tr.setMeta("addToHistory", false);
+              return true;
+            })
+            .run();
         },
       unsetEntityHighlight:
         () =>
-        ({ commands, chain, state }) => {
+        ({ commands, chain, state, tr }) => {
           return chain()
             .setTextSelection({
               from: 0,
               to: state.doc.content.size,
             })
             .unsetMark(this.name)
+            .command(({ tr }) => {
+              tr.setMeta("addToHistory", false);
+              return true;
+            })
             .run();
         },
     };
