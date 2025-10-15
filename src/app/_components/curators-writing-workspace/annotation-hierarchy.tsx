@@ -13,6 +13,10 @@ import {
 import { AnnotationEditForm } from "./annotation-edit-form";
 import type { AnnotationResponse } from "@/app/const/types";
 import { Button } from "../button/button";
+import {
+  DeleteRecordModal,
+  type DeleteRecordType,
+} from "../modal/delete-record-modal";
 
 interface AnnotationHierarchyProps {
   currentAnnotation: AnnotationResponse;
@@ -35,6 +39,11 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
   const [showEditForm, setShowEditForm] = useState(false);
   const [editingAnnotation, setEditingAnnotation] =
     useState<AnnotationResponse | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState<boolean>(false);
+  const [deleteIntent, setDeleteIntent] = useState<{
+    id: string;
+    type: DeleteRecordType;
+  }>();
 
   const handleEditClick = (annotation: AnnotationResponse) => {
     setEditingAnnotation(annotation);
@@ -50,6 +59,11 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
   const handleEditClose = () => {
     setShowEditForm(false);
     setEditingAnnotation(null);
+  };
+
+  const handleDelete = (annotationId: string) => {
+    setDeleteIntent({ id: annotationId, type: "annotation" });
+    setDeleteModalOpen(true);
   };
 
   const renderAnnotationCard = (
@@ -89,16 +103,23 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
             </div>
             <div className="flex gap-1">
               {session?.user?.id === annotation.author.id && (
-                <button
-                  className="flex h-6 flex-row items-center justify-center rounded bg-blue-700 px-2 text-xs hover:bg-blue-600"
-                  onClick={(e: React.MouseEvent) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleEditClick(annotation);
-                  }}
-                >
-                  編集
-                </button>
+                <>
+                  <Button
+                    size="medium"
+                    className="flex h-6 flex-row items-center justify-center rounded px-2 text-xs hover:bg-slate-600"
+                    onClick={() => handleEditClick(annotation)}
+                  >
+                    編集
+                  </Button>
+
+                  <Button
+                    size="medium"
+                    onClick={() => handleDelete(annotation.id)}
+                    className="flex h-6 flex-row items-center justify-center bg-red-700 px-2 text-xs hover:bg-red-600"
+                  >
+                    削除
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -263,6 +284,16 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
           annotation={editingAnnotation}
           onClose={handleEditClose}
           onSuccess={handleEditSuccess}
+        />
+      )}
+
+      {deleteIntent && (
+        <DeleteRecordModal
+          isOpen={deleteModalOpen}
+          setIsOpen={setDeleteModalOpen}
+          type={deleteIntent.type}
+          id={deleteIntent.id}
+          refetch={onRefetch}
         />
       )}
     </div>

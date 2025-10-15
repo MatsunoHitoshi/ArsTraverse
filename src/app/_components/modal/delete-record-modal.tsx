@@ -1,8 +1,13 @@
+import React from "react";
 import { Modal } from "../modal/modal";
 import { api } from "@/trpc/react";
 import { Button } from "../button/button";
 
-export type DeleteRecordType = "sourceDocument" | "topicSpace" | "workspace";
+export type DeleteRecordType =
+  | "sourceDocument"
+  | "topicSpace"
+  | "workspace"
+  | "annotation";
 type DeleteModalProps = {
   isOpen: boolean;
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -18,9 +23,19 @@ export const DeleteRecordModal = ({
   id,
   refetch,
 }: DeleteModalProps) => {
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+
+  // モーダルが開かれるたびにエラーメッセージをリセット
+  React.useEffect(() => {
+    if (isOpen) {
+      setErrorMessage(null);
+    }
+  }, [isOpen]);
+
   const deleteDocument = api.sourceDocument.delete.useMutation();
   const deleteTopicSpace = api.topicSpaces.delete.useMutation();
   const deleteWorkspace = api.workspace.delete.useMutation();
+  const deleteAnnotation = api.annotation.deleteAnnotation.useMutation();
 
   const title = () => {
     switch (type) {
@@ -30,6 +45,8 @@ export const DeleteRecordModal = ({
         return "リポジトリ";
       case "workspace":
         return "ワークスペース";
+      case "annotation":
+        return "注釈";
     }
   };
 
@@ -46,8 +63,7 @@ export const DeleteRecordModal = ({
 
             onError: (e) => {
               console.log(e);
-              refetch();
-              setIsOpen(false);
+              setErrorMessage(e.message || "削除に失敗しました");
             },
           },
         );
@@ -61,8 +77,7 @@ export const DeleteRecordModal = ({
             },
             onError: (e) => {
               console.log(e);
-              refetch();
-              setIsOpen(false);
+              setErrorMessage(e.message || "削除に失敗しました");
             },
           },
         );
@@ -76,8 +91,21 @@ export const DeleteRecordModal = ({
             },
             onError: (e) => {
               console.log(e);
+              setErrorMessage(e.message || "削除に失敗しました");
+            },
+          },
+        );
+      case "annotation":
+        return deleteAnnotation.mutate(
+          { annotationId: id },
+          {
+            onSuccess: (_res) => {
               refetch();
               setIsOpen(false);
+            },
+            onError: (e) => {
+              console.log(e);
+              setErrorMessage(e.message || "削除に失敗しました");
             },
           },
         );
@@ -88,6 +116,17 @@ export const DeleteRecordModal = ({
     <Modal isOpen={isOpen} setIsOpen={setIsOpen} title={`${title()}を削除する`}>
       <div className="flex flex-col gap-6">
         <div>{`1件の${title()}を削除してもよろしいですか？`}</div>
+
+        {errorMessage && (
+          <div className="rounded-md bg-black/50  p-2 text-red-500">
+            <div className="flex">
+              <div className="ml-3">
+                <p className="text-sm">{errorMessage}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-row justify-end gap-2">
           <Button
             type="button"

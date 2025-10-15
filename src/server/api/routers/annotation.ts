@@ -669,6 +669,11 @@ export const annotationRouter = createTRPCRouter({
           id: input.annotationId,
           isDeleted: false,
         },
+        include: {
+          childAnnotations: {
+            where: { isDeleted: false },
+          },
+        },
       });
 
       if (!existingAnnotation) {
@@ -683,6 +688,15 @@ export const annotationRouter = createTRPCRouter({
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "この注釈を削除する権限がありません",
+        });
+      }
+
+      // 子注釈が存在する場合は削除できない
+      if (existingAnnotation.childAnnotations.length > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "子注釈が存在するため削除できません。先に子注釈を削除してください。",
         });
       }
 

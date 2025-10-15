@@ -4,17 +4,15 @@ import React, { useState } from "react";
 import { api } from "@/trpc/react";
 import { AnnotationGraphExtractionModal } from "./annotation-graph-extraction-modal";
 import { NodeAnnotationSection } from "../view/node/node-annotation-section";
-import type { AnnotationResponse, CustomNodeType } from "@/app/const/types";
+import type { CustomNodeType } from "@/app/const/types";
 
 interface NodeDetailPanelProps {
   activeEntity: CustomNodeType | undefined;
-  workspaceId: string;
   topicSpaceId: string;
 }
 
 export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({
   activeEntity,
-  workspaceId,
   topicSpaceId,
 }) => {
   const [showGraphExtractionModal, setShowGraphExtractionModal] =

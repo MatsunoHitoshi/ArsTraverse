@@ -13,6 +13,11 @@ import {
   getAnnotationTypeColor,
   getAnnotationTypeLabel,
 } from "@/app/_utils/annotation/type-utils";
+import { useSession } from "next-auth/react";
+import {
+  DeleteRecordModal,
+  type DeleteRecordType,
+} from "../modal/delete-record-modal";
 
 interface AnnotationListProps {
   annotations: AnnotationResponse[];
@@ -27,6 +32,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
   topicSpaceId,
   showOnlyTopLevel = true,
 }) => {
+  const { data: session } = useSession();
   const [parentAnnotationId, setParentAnnotationId] = useState<string | null>(
     null,
   );
@@ -35,10 +41,20 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
   const [expandedReplies, setExpandedReplies] = useState<Set<string>>(
     new Set(),
   );
+  const [deleteModalOpen, setDeleteModalOpen] = useState<boolean>(false);
+  const [deleteIntent, setDeleteIntent] = useState<{
+    id: string;
+    type: DeleteRecordType;
+  }>();
 
   const handleReply = (annotationId: string) => {
     setParentAnnotationId(annotationId);
     setShowAnnotationForm(true);
+  };
+
+  const handleDelete = (annotationId: string) => {
+    setDeleteIntent({ id: annotationId, type: "annotation" });
+    setDeleteModalOpen(true);
   };
 
   const toggleReplies = (annotationId: string) => {
@@ -62,13 +78,6 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
     return (
       <div className="py-4 text-center">
         <p className="mb-2 text-sm text-gray-400">まだ注釈がありません</p>
-        <Button
-          size="small"
-          onClick={() => setShowAnnotationForm(true)}
-          className="text-xs"
-        >
-          最初の注釈を追加
-        </Button>
       </div>
     );
   }
@@ -114,6 +123,15 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
                   詳細
                 </Button>
               </Link>
+              {/* {session?.user?.id === annotation.authorId && (
+                <Button
+                  size="small"
+                  onClick={() => handleDelete(annotation.id)}
+                  className="flex h-6 flex-row items-center justify-center bg-red-700 px-2 text-xs hover:bg-red-600"
+                >
+                  削除
+                </Button>
+              )} */}
             </div>
           </div>
 
@@ -251,6 +269,15 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
             setShowAnnotationForm(false);
             void onRefetch();
           }}
+        />
+      )}
+      {deleteIntent && (
+        <DeleteRecordModal
+          isOpen={deleteModalOpen}
+          setIsOpen={setDeleteModalOpen}
+          type={deleteIntent.type}
+          id={deleteIntent.id}
+          refetch={onRefetch}
         />
       )}
     </div>

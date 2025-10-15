@@ -3,11 +3,14 @@ export const TiptapStyles = () => {
     <style jsx global>{`
       .ProseMirror {
         outline: none;
-        height: 100%;
         min-height: 200px;
         color: white;
         font-family: inherit;
         line-height: 1.6;
+        margin-top: 12px;
+        margin-bottom: 12px;
+        margin-left: 4px;
+        margin-right: 4px;
       }
 
       .ProseMirror p {
