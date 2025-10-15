@@ -460,7 +460,6 @@ const CuratorsWritingWorkspace = ({
             {topicSpaceId ? (
               <NodeDetailPanel
                 activeEntity={activeEntity}
-                workspaceId={workspace.id}
                 topicSpaceId={topicSpaceId}
               />
             ) : (
