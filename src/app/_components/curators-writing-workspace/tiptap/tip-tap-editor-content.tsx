@@ -1,4 +1,10 @@
-import React, { useEffect, useRef, useCallback, useContext } from "react";
+import React, {
+  useEffect,
+  useRef,
+  useCallback,
+  useContext,
+  useState,
+} from "react";
 import {
   useEditor,
   EditorContent,
@@ -17,6 +23,7 @@ import { KeyboardHandlerExtension } from "./extensions/keyboard-handler-extensio
 import { useTextCompletion } from "./hooks/use-text-completion";
 import { useHighlight } from "./hooks/use-highlight";
 import { TiptapGraphFilterContext } from "..";
+import { HighlightVisibilityProvider } from "./contexts/highlight-visibility-context";
 
 interface TipTapEditorContentProps {
   content: JSONContent;
@@ -38,6 +45,8 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
   const updateTimeoutRef = useRef<NodeJS.Timeout>();
   const DEBOUNCE_TIME = 1000;
   const {} = useContext(TiptapGraphFilterContext);
+
+  const [isAIAssistEnabled, setIsAIAssistEnabled] = useState<boolean>(false);
 
   // 新しいハイライトが検出されたときのコールバック
   const handleNewHighlight = useCallback(
@@ -80,6 +89,7 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
   // カスタムフックを使用
   const textCompletion = useTextCompletion({
     workspaceId,
+    isAIAssistEnabled,
   });
 
   // ハイライト処理用のカスタムフック（エディタは後で設定）
@@ -197,35 +207,41 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
   }
 
   return (
-    <div className="relative flex h-full flex-col gap-2">
-      <div className="text-white">
-        <EditorToolBar editor={editor} />
-      </div>
-      <div className="h-full overflow-y-hidden">
-        <EditorContent
-          ref={editorRef}
-          editor={editor}
-          className="h-full min-h-[200px] overflow-y-scroll rounded-md bg-slate-800 p-3 text-white focus-within:outline-none"
-          onClick={handleClick}
-        />
-        {textCompletion.isSuggestionLoading &&
-          textCompletion.cursorPosition && (
-            <div
-              className="pointer-events-none absolute z-10"
-              style={{
-                left: `${textCompletion.cursorPosition.x}px`,
-                top: `${textCompletion.cursorPosition.y}px`,
-              }}
-            >
-              <div className="flex items-center space-x-1 rounded-md bg-slate-700/60 px-2 py-1 shadow-lg">
-                <div className="h-3 w-3 animate-spin rounded-full border border-white border-t-transparent"></div>
-                <span className="text-xs text-white">生成中...</span>
+    <HighlightVisibilityProvider>
+      <div className="relative flex h-full flex-col gap-2">
+        <div className="text-white">
+          <EditorToolBar
+            editor={editor}
+            isAIAssistEnabled={isAIAssistEnabled}
+            setIsAIAssistEnabled={setIsAIAssistEnabled}
+          />
+        </div>
+        <div className="h-full overflow-y-hidden">
+          <EditorContent
+            ref={editorRef}
+            editor={editor}
+            className="h-full min-h-[200px] overflow-y-scroll rounded-md bg-slate-800 p-3 text-white focus-within:outline-none"
+            onClick={handleClick}
+          />
+          {textCompletion.isSuggestionLoading &&
+            textCompletion.cursorPosition && (
+              <div
+                className="pointer-events-none absolute z-10"
+                style={{
+                  left: `${textCompletion.cursorPosition.x}px`,
+                  top: `${textCompletion.cursorPosition.y}px`,
+                }}
+              >
+                <div className="flex items-center space-x-1 rounded-md bg-slate-700/60 px-2 py-1 shadow-lg">
+                  <div className="h-3 w-3 animate-spin rounded-full border border-white border-t-transparent"></div>
+                  <span className="text-xs text-white">生成中...</span>
+                </div>
               </div>
-            </div>
-          )}
-        <TeiStyles />
-        <TiptapStyles />
+            )}
+          <TeiStyles />
+          <TiptapStyles />
+        </div>
       </div>
-    </div>
+    </HighlightVisibilityProvider>
   );
 };

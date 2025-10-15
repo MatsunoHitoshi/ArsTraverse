@@ -3,10 +3,10 @@ import { Editor } from "@tiptap/core";
 import { TeiConverter } from "../tei/tei-converter";
 import { exportXML } from "@/app/_utils/sys/xml";
 
-const ExportButton = ({ editor }: { editor: Editor }) => {
+const TeiExportButton = ({ editor }: { editor: Editor }) => {
   return (
     <button
-      className="rounded-lg bg-black/75 p-2 backdrop-blur-sm"
+      className="flex flex-row items-center gap-1 rounded-lg bg-black/75 p-2 text-xs backdrop-blur-sm"
       onClick={() => {
         const html = editor.getHTML();
         const tei = TeiConverter.toTeiBody(html);
@@ -14,9 +14,10 @@ const ExportButton = ({ editor }: { editor: Editor }) => {
         exportXML(tei);
       }}
     >
+      TEI
       <ShareIcon height={16} width={16} color="white" />
     </button>
   );
 };
 
-export default ExportButton;
+export default TeiExportButton;

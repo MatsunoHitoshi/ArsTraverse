@@ -10,10 +10,12 @@ import { findEntityHighlights } from "@/app/_utils/text/find-entity-highlights";
 
 interface UseTextCompletionOptions {
   workspaceId: string;
+  isAIAssistEnabled: boolean;
 }
 
 export const useTextCompletion = ({
   workspaceId,
+  isAIAssistEnabled,
 }: UseTextCompletionOptions) => {
   const [isTextSuggestionMode, setIsTextSuggestionMode] =
     useState<boolean>(false);

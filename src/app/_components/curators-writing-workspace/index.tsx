@@ -18,7 +18,12 @@ import type { Workspace } from "@prisma/client";
 import { api } from "@/trpc/react";
 import { Button } from "../button/button";
 import type { JSONContent } from "@tiptap/react";
-import { ChevronLeftIcon } from "../icons";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  PinLeftIcon,
+  PinRightIcon,
+} from "../icons";
 import { LinkButton } from "../button/link-button";
 import { TopicSpaceAttachModal } from "../workspace/topic-space-attach-modal";
 import { RelatedNodesAndLinksViewer } from "../view/graph-view/related-nodes-viewer";
@@ -75,6 +80,7 @@ const CuratorsWritingWorkspace = ({
 
   const [isTopicSpaceAttachModalOpen, setIsTopicSpaceAttachModalOpen] =
     useState<boolean>(false);
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editingTitle, setEditingTitle] = useState(workspace.name);
   const [displayTitle, setDisplayTitle] = useState(workspace.name);
@@ -207,6 +213,24 @@ const CuratorsWritingWorkspace = ({
     };
   }, []);
 
+  // 右パネルが開いた時にグラフサイズを再計算
+  useEffect(() => {
+    if (isRightPanelOpen && graphContainerRef.current) {
+      // 少し遅延させてからサイズを再計算
+      const timeoutId = setTimeout(() => {
+        const rect = graphContainerRef.current?.getBoundingClientRect();
+        if (rect) {
+          setGraphSize({
+            width: rect.width,
+            height: rect.height,
+          });
+        }
+      }, 300);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isRightPanelOpen]);
+
   // エンティティ名のクリック処理
   const handleEntityClick = (entityName: string) => {
     const foundNode = nodes.find((n: CustomNodeType) => n.name === entityName);
@@ -283,43 +307,62 @@ const CuratorsWritingWorkspace = ({
 
   return (
     <div className="flex h-screen w-full gap-2 bg-slate-900 p-4 font-sans">
-      {/* Left Column: Text Editor (2/3) */}
-      <div className="flex h-[calc(100svh-80px)] w-2/3 flex-col">
+      {/* Left Column: Text Editor */}
+      <div
+        className={`flex h-[calc(100svh-80px)] flex-col transition-all duration-300 ${
+          isRightPanelOpen ? "w-2/3" : "w-full"
+        }`}
+      >
         <div className="flex h-full flex-col bg-slate-900">
-          <div className="mb-2 flex w-full flex-row items-center gap-2">
-            <LinkButton
-              href="/workspaces"
-              className="flex !h-8 !w-8 items-center justify-center"
-            >
-              <div className="h-4 w-4">
-                <ChevronLeftIcon height={16} width={16} color="white" />
-              </div>
-            </LinkButton>
-            {isEditingTitle ? (
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={editingTitle}
-                  onChange={(e) => setEditingTitle(e.target.value)}
-                  onBlur={handleTitleSave}
-                  onKeyDown={handleTitleKeyPress}
-                  disabled={updateWorkspace.isPending}
-                  className="bg-transparent text-lg font-semibold text-gray-400 outline-none focus:text-white disabled:opacity-50"
-                  autoFocus
-                />
-                {updateWorkspace.isPending && (
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent"></div>
-                )}
-              </div>
-            ) : (
-              <h2
-                className="cursor-pointer text-lg font-semibold text-gray-400 hover:text-white"
-                onClick={() => handleTitleEdit(displayTitle)}
-                title="クリックして編集"
+          <div className="mb-2 flex w-full flex-row items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <LinkButton
+                href="/workspaces"
+                className="flex !h-8 !w-8 items-center justify-center"
               >
-                {displayTitle}
-              </h2>
-            )}
+                <div className="h-4 w-4">
+                  <ChevronLeftIcon height={16} width={16} color="white" />
+                </div>
+              </LinkButton>
+              {isEditingTitle ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={editingTitle}
+                    onChange={(e) => setEditingTitle(e.target.value)}
+                    onBlur={handleTitleSave}
+                    onKeyDown={handleTitleKeyPress}
+                    disabled={updateWorkspace.isPending}
+                    className="bg-transparent text-lg font-semibold text-gray-400 outline-none focus:text-white disabled:opacity-50"
+                    autoFocus
+                  />
+                  {updateWorkspace.isPending && (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent"></div>
+                  )}
+                </div>
+              ) : (
+                <h2
+                  className="cursor-pointer text-lg font-semibold text-gray-400 hover:text-white"
+                  onClick={() => handleTitleEdit(displayTitle)}
+                  title="クリックして編集"
+                >
+                  {displayTitle}
+                </h2>
+              )}
+            </div>
+
+            {/* Right Panel Toggle Button */}
+            <Button
+              size="small"
+              onClick={() => setIsRightPanelOpen(!isRightPanelOpen)}
+              className="flex items-center gap-1"
+            >
+              {isRightPanelOpen ? (
+                <PinRightIcon height={16} width={16} color="white" />
+              ) : (
+                <PinLeftIcon height={16} width={16} color="white" />
+              )}
+            </Button>
           </div>
 
           {/* TipTapエディタ */}
@@ -339,96 +382,99 @@ const CuratorsWritingWorkspace = ({
         </div>
       </div>
 
-      {/* Right Column: Knowledge Graph Viewer & Detail Panel (1/3) */}
-      <div className="flex h-[calc(100svh-80px)] w-1/3 flex-col">
-        {/* Knowledge Graph Viewer */}
-        <div className="min-h-0 flex-1 flex-shrink-0 overflow-y-hidden">
-          <div
-            ref={graphContainerRef}
-            className="relative flex h-full w-full flex-col items-center justify-center rounded-t-lg border border-b-0 border-gray-300 bg-slate-900 text-gray-400"
-          >
-            {topicSpace ? (
-              <>
-                {graphDocument ? (
-                  <>
-                    {activeEntity ? (
-                      <RelatedNodesAndLinksViewer
-                        node={activeEntity}
-                        topicSpaceId={topicSpace.id}
-                        className="h-full w-full"
-                        height={graphSize.height}
-                        width={graphSize.width}
-                        onClose={() => setActiveEntity(undefined)}
-                      />
-                    ) : (
-                      <D3ForceGraph
-                        svgRef={svgRef}
-                        width={graphSize.width}
-                        height={graphSize.height}
-                        // defaultPosition={defaultPosition}
-                        graphDocument={
-                          tiptapGraphFilterOption.mode === "filtered"
-                            ? tiptapFilteredGraphDocument ?? graphDocument
-                            : graphDocument
-                        }
-                        isLinkFiltered={false}
-                        currentScale={currentScale}
-                        setCurrentScale={setCurrentScale}
-                        setFocusedNode={setActiveEntity}
-                        focusedNode={activeEntity}
-                        setFocusedLink={() => {
-                          // リンクフォーカス機能は現在使用しない
-                        }}
-                        selectedGraphData={
-                          tiptapGraphFilterOption.mode !== "non-filtered"
-                            ? tiptapSelectedGraphDocument ?? undefined
-                            : undefined
-                        }
-                        focusedLink={undefined}
-                        isLargeGraph={false}
-                        isEditor={false}
-                      />
-                    )}
-                  </>
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center">
-                    <p>グラフデータが見つかりません</p>
-                  </div>
-                )}
-              </>
-            ) : (
-              <PDFDropZone
-                isProcessingPDF={isProcessingPDF}
-                processingStep={processingStep}
-                processingError={processingError}
-                onPDFUpload={handlePDFUpload}
-                onSelectExistingRepository={() =>
-                  setIsTopicSpaceAttachModalOpen(true)
-                }
+      {/* Right Column: Knowledge Graph Viewer & Detail Panel */}
+      {isRightPanelOpen && (
+        <div className="flex h-[calc(100svh-80px)] w-1/3 flex-col">
+          {/* Knowledge Graph Viewer */}
+          <div className="min-h-0 flex-1 flex-shrink-0 overflow-y-hidden">
+            <div
+              ref={graphContainerRef}
+              className="relative flex h-full w-full flex-col items-center justify-center rounded-t-lg border border-b-0 border-gray-300 bg-slate-900 text-gray-400"
+            >
+              {topicSpace ? (
+                <>
+                  {graphDocument ? (
+                    <>
+                      {activeEntity ? (
+                        <RelatedNodesAndLinksViewer
+                          node={activeEntity}
+                          topicSpaceId={topicSpace.id}
+                          className="h-full w-full"
+                          height={graphSize.height}
+                          width={graphSize.width}
+                          onClose={() => setActiveEntity(undefined)}
+                        />
+                      ) : (
+                        <D3ForceGraph
+                          key={`graph-${isRightPanelOpen}-${graphSize.width}-${graphSize.height}`}
+                          svgRef={svgRef}
+                          width={graphSize.width}
+                          height={graphSize.height}
+                          // defaultPosition={defaultPosition}
+                          graphDocument={
+                            tiptapGraphFilterOption.mode === "filtered"
+                              ? tiptapFilteredGraphDocument ?? graphDocument
+                              : graphDocument
+                          }
+                          isLinkFiltered={false}
+                          currentScale={currentScale}
+                          setCurrentScale={setCurrentScale}
+                          setFocusedNode={setActiveEntity}
+                          focusedNode={activeEntity}
+                          setFocusedLink={() => {
+                            // リンクフォーカス機能は現在使用しない
+                          }}
+                          selectedGraphData={
+                            tiptapGraphFilterOption.mode !== "non-filtered"
+                              ? tiptapSelectedGraphDocument ?? undefined
+                              : undefined
+                          }
+                          focusedLink={undefined}
+                          isLargeGraph={false}
+                          isEditor={false}
+                        />
+                      )}
+                    </>
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <p>グラフデータが見つかりません</p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <PDFDropZone
+                  isProcessingPDF={isProcessingPDF}
+                  processingStep={processingStep}
+                  processingError={processingError}
+                  onPDFUpload={handlePDFUpload}
+                  onSelectExistingRepository={() =>
+                    setIsTopicSpaceAttachModalOpen(true)
+                  }
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Detail/Evidence Panel */}
+          <div className="relative flex-1 flex-shrink-0 overflow-y-hidden">
+            {topicSpaceId ? (
+              <NodeDetailPanel
+                activeEntity={activeEntity}
+                workspaceId={workspace.id}
+                topicSpaceId={topicSpaceId}
               />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center rounded-b-lg border border-t-0 border-gray-300 bg-slate-800 text-gray-400">
+                <div className="text-center">
+                  <p className="text-sm">
+                    リポジトリを選択すると詳細パネルが表示されます
+                  </p>
+                </div>
+              </div>
             )}
           </div>
         </div>
-
-        {/* Detail/Evidence Panel */}
-        <div className="relative flex-1 flex-shrink-0 overflow-y-hidden">
-          {topicSpaceId ? (
-            <NodeDetailPanel
-              activeEntity={activeEntity}
-              workspaceId={workspace.id}
-              topicSpaceId={topicSpaceId}
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center rounded-b-lg border border-t-0 border-gray-300 bg-slate-800 text-gray-400">
-              <div className="text-center">
-                <p className="text-sm">
-                  リポジトリを選択すると詳細パネルが表示されます
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      )}
 
       <TopicSpaceAttachModal
         isOpen={isTopicSpaceAttachModalOpen}

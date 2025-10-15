@@ -10,7 +10,7 @@ const FilterButton = ({ editor }: { editor: Editor }) => {
   );
   return (
     <button
-      className="rounded-lg bg-black/75 p-2 backdrop-blur-sm"
+      className="flex flex-row items-center gap-1 rounded-lg bg-black/75 p-2 backdrop-blur-sm"
       onClick={() => {
         const entities = findEntityHighlights(editor.getJSON().content);
         const names = entities.map((entity) => entity.name);
@@ -26,6 +26,17 @@ const FilterButton = ({ editor }: { editor: Editor }) => {
         });
       }}
     >
+      <div
+        className={`text-xs ${
+          tiptapGraphFilterOption.mode === "focused"
+            ? "text-orange-300"
+            : tiptapGraphFilterOption.mode === "filtered"
+              ? "text-green-300"
+              : "text-white"
+        }`}
+      >
+        Focus
+      </div>
       <Crosshair1Icon
         height={16}
         width={16}

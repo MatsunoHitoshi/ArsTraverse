@@ -1,7 +1,8 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useContext } from "react";
 import type { Editor } from "@tiptap/core";
 import type { CustomNodeType } from "@/app/const/types";
 import { performHighlightUpdate } from "@/app/_utils/tiptap/auto-highlight";
+import { HighlightVisibilityContext } from "../contexts/highlight-visibility-context";
 
 interface UseHighlightOptions {
   editor: Editor | null;
@@ -24,6 +25,10 @@ export const useHighlight = ({
   const onNewHighlightRef = useRef(onNewHighlight);
   const handleNewHighlightRef =
     useRef<(editor: Editor, entityName: string) => void>();
+
+  // ハイライト表示状態を取得（プロバイダーが存在しない場合はデフォルトでtrue）
+  const highlightContext = useContext(HighlightVisibilityContext);
+  const isHighlightVisible = highlightContext?.isHighlightVisible ?? true;
 
   // 新しいハイライトが検出されたときのコールバック
   const handleNewHighlight = useCallback(
@@ -58,6 +63,11 @@ export const useHighlight = ({
   // ハイライトクリック処理
   const handleHighlightClick = useCallback(
     (e: React.MouseEvent) => {
+      // ハイライトが非表示の場合はクリックイベントを無視
+      if (!isHighlightVisible) {
+        return;
+      }
+
       const target = e.target as HTMLElement;
 
       if (target.dataset.entityName && onEntityClick) {
@@ -73,7 +83,7 @@ export const useHighlight = ({
         onEntityClick(target.dataset.entityName);
       }
     },
-    [onEntityClick],
+    [onEntityClick, isHighlightVisible],
   );
 
   // 手動でハイライトを実行する関数

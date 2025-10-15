@@ -51,7 +51,7 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({
         <p className="mt-2 text-sm">
           {String(activeEntity.properties?.description ?? "No description")}
         </p>
-        <hr className="my-4" />
+        <div className="my-4 border-b border-gray-400" />
       </div>
 
       {/* 注釈セクション */}
