@@ -41,11 +41,9 @@ import {
   formTopicSpaceForFrontendPrivate,
   formTopicSpaceForFrontendPublic,
 } from "@/app/_utils/kg/frontend-properties";
-
-export const KnowledgeGraphInputSchema = z.object({
-  nodes: z.array(z.any()),
-  relationships: z.array(z.any()),
-});
+import { getTextReference } from "./source-document";
+import { KnowledgeGraphInputSchema } from "../schemas/knowledge-graph";
+import OpenAI from "openai";
 
 const TopicSpaceCreateSchema = z.object({
   name: z.string(),
@@ -1246,5 +1244,110 @@ export const topicSpaceRouter = createTRPCRouter({
       });
 
       return updatedTopicSpace;
+    }),
+
+  generateNodeDescriptionFromDocument: protectedProcedure
+    .input(z.object({ id: z.string(), nodeId: z.string() }))
+    .mutation(async function* ({ ctx, input }) {
+      const topicSpace = await ctx.db.topicSpace.findFirst({
+        where: { id: input.id },
+        include: {
+          admins: true,
+          sourceDocuments: true,
+        },
+      });
+
+      if (!topicSpace) {
+        throw new Error("TopicSpace not found");
+      }
+      adminGuard(topicSpace, ctx);
+
+      const node = await ctx.db.graphNode.findFirst({
+        where: { id: input.nodeId },
+      });
+
+      if (!node) {
+        throw new Error("Node not found");
+      }
+
+      let referenceText = "";
+
+      for (const sourceDocument of topicSpace.sourceDocuments) {
+        const relevantSections = await getTextReference(
+          ctx,
+          sourceDocument.id,
+          [node.name],
+          800,
+        );
+        referenceText += relevantSections.join("\n---\n");
+      }
+
+      // OpenAIを使用して解説文をストリーミング生成
+      if (referenceText.trim()) {
+        try {
+          const openai = new OpenAI();
+          const stream = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+              {
+                role: "system",
+                content: `あなたは専門的な知識を分かりやすく解説するエキスパートです。与えられた文書から、指定されたノード（概念）について、簡潔で分かりやすい解説文を作成してください。
+
+解説文の要件：
+- 200-300文字程度の簡潔な説明
+- 専門用語は適切に説明する
+- 文書の内容を基にした正確な情報
+- 読み手が理解しやすい構成
+- 日本語で記述`,
+              },
+              {
+                role: "user",
+                content: `ノード名: ${node.name}
+ノードラベル: ${node.label}
+
+関連文書:
+${referenceText}
+
+上記の文書を基に、「${node.name}」についての解説文を作成してください。`,
+              },
+            ],
+            max_tokens: 500,
+            temperature: 0.7,
+            stream: true,
+          });
+
+          let accumulatedText = "";
+          for await (const chunk of stream) {
+            const content = chunk.choices[0]?.delta?.content ?? "";
+            if (content) {
+              accumulatedText += content;
+              yield {
+                node: node,
+                description: accumulatedText,
+                isComplete: false,
+              };
+            }
+          }
+
+          yield {
+            node: node,
+            description: accumulatedText,
+            isComplete: true,
+          };
+        } catch (error) {
+          console.error("OpenAI API error:", error);
+          yield {
+            node: node,
+            description: "解説文の生成に失敗しました。",
+            isComplete: true,
+          };
+        }
+      } else {
+        yield {
+          node: node,
+          description: "関連する文書が見つかりませんでした。",
+          isComplete: true,
+        };
+      }
     }),
 });

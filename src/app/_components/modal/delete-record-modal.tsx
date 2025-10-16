@@ -102,6 +102,7 @@ export const DeleteRecordModal = ({
             onSuccess: (_res) => {
               refetch();
               setIsOpen(false);
+              window.history.back();
             },
             onError: (e) => {
               console.log(e);

@@ -27,7 +27,7 @@ import {
   formNodeDataForFrontend,
   formRelationshipDataForFrontend,
 } from "@/app/_utils/kg/frontend-properties";
-import { KnowledgeGraphInputSchema } from "./topic-space";
+import { KnowledgeGraphInputSchema } from "../schemas/knowledge-graph";
 // import type { Prisma } from "@prisma/client";
 // import { GraphDataStatus } from "@prisma/client";
 // import { stripGraphData } from "@/app/_utils/kg/data-strip";

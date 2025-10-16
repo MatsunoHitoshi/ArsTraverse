@@ -151,19 +151,17 @@ export const AnnotationDetailModal: React.FC<AnnotationDetailModalProps> = ({
           )}
 
         {/* 返信フォーム */}
-        {showReplyForm && annotation.id && (
-          <AnnotationForm
-            targetType="annotation"
-            targetId={annotation.id}
-            topicSpaceId={topicSpaceId}
-            parentAnnotationId={annotation.id}
-            onClose={() => setShowReplyForm(false)}
-            onSuccess={() => {
-              setShowReplyForm(false);
-              void onRefetch();
-            }}
-          />
-        )}
+        <AnnotationForm
+          targetType="annotation"
+          targetId={annotation.id || ""}
+          topicSpaceId={topicSpaceId}
+          parentAnnotationId={annotation.id}
+          isOpen={showReplyForm && !!annotation.id}
+          setIsOpen={setShowReplyForm}
+          onSuccess={() => {
+            void onRefetch();
+          }}
+        />
 
         {/* 履歴モーダル */}
         {showHistory && (

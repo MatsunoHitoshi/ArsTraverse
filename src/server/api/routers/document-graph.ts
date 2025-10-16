@@ -17,7 +17,7 @@ import {
   GraphChangeRecordType,
   GraphChangeType,
 } from "@prisma/client";
-import { KnowledgeGraphInputSchema } from "./topic-space";
+import { KnowledgeGraphInputSchema } from "../schemas/knowledge-graph";
 
 // const CreateDocumentGraphSchema = z.object({
 //   dataJson: z.object({

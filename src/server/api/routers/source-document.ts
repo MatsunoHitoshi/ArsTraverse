@@ -14,10 +14,10 @@ import { storageUtils } from "@/app/_utils/supabase/supabase";
 import { env } from "@/env";
 import { getTextFromDocumentFile } from "@/app/_utils/text/text";
 import { inspectFileTypeFromUrl } from "@/app/_utils/sys/file";
-import { DocumentType } from "@prisma/client";
+import { DocumentType, PrismaClient } from "@prisma/client";
 import { formDocumentGraphForFrontend } from "@/app/_utils/kg/frontend-properties";
 import { extractRelevantSections } from "@/app/_utils/text/extract-relevant-sections";
-import { KnowledgeGraphInputSchema } from "./topic-space";
+import { KnowledgeGraphInputSchema } from "../schemas/knowledge-graph";
 
 const SourceDocumentSchema = z.object({
   name: z.string(),
@@ -29,6 +29,36 @@ const SourceDocumentWithGraphSchema = z.object({
   url: z.string().url(),
   dataJson: KnowledgeGraphInputSchema,
 });
+
+export const getTextReference = async (
+  ctx: { db: PrismaClient },
+  documentId: string,
+  searchTerms: string[],
+  contextLength = 250,
+) => {
+  const document = await ctx.db.sourceDocument.findFirst({
+    where: { id: documentId },
+  });
+
+  if (!document) {
+    throw new Error("Document not found");
+  }
+
+  const fullText = await getTextFromDocumentFile(
+    document.url,
+    document.documentType,
+  );
+
+  console.log("fullText: ", fullText.slice(0, 20));
+
+  const relevantSections = extractRelevantSections(
+    fullText,
+    searchTerms,
+    contextLength,
+  );
+
+  return relevantSections;
+};
 
 export const sourceDocumentRouter = createTRPCRouter({
   cleaningInputFiles: publicProcedure
@@ -222,25 +252,10 @@ export const sourceDocumentRouter = createTRPCRouter({
   getReferenceSectionsById: publicProcedure
     .input(z.object({ id: z.string(), searchTerms: z.array(z.string()) }))
     .query(async ({ ctx, input }) => {
-      const document = await ctx.db.sourceDocument.findFirst({
-        where: { id: input.id },
-      });
-
-      if (!document) {
-        throw new Error("Document not found");
-      }
-
-      const fullText = await getTextFromDocumentFile(
-        document.url,
-        document.documentType,
-      );
-
-      console.log("fullText: ", fullText.slice(0, 20));
-
-      const relevantSections = extractRelevantSections(
-        fullText,
+      const relevantSections = await getTextReference(
+        ctx,
+        input.id,
         input.searchTerms,
-        250,
       );
 
       return relevantSections;

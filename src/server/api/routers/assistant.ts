@@ -7,7 +7,7 @@ import type {
 import OpenAI from "openai";
 import { storageUtils } from "@/app/_utils/supabase/supabase";
 import { BUCKETS } from "@/app/_utils/supabase/const";
-import { KnowledgeGraphInputSchema } from "./topic-space";
+import { KnowledgeGraphInputSchema } from "../schemas/knowledge-graph";
 
 const GenerateGraphSummarySchema = z.object({
   graphData: KnowledgeGraphInputSchema,

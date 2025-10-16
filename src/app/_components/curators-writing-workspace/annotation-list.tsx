@@ -18,12 +18,14 @@ import {
   DeleteRecordModal,
   type DeleteRecordType,
 } from "../modal/delete-record-modal";
+import { PlusIcon } from "../icons";
 
 interface AnnotationListProps {
   annotations: AnnotationResponse[];
   onRefetch: () => void;
   topicSpaceId: string;
   showOnlyTopLevel?: boolean; // トップレベルの注釈のみを表示するかどうか
+  handleGenerateAnnotationFromDocument?: () => void;
 }
 
 export const AnnotationList: React.FC<AnnotationListProps> = ({
@@ -31,6 +33,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
   onRefetch,
   topicSpaceId,
   showOnlyTopLevel = true,
+  handleGenerateAnnotationFromDocument,
 }) => {
   const { data: session } = useSession();
   const [parentAnnotationId, setParentAnnotationId] = useState<string | null>(
@@ -76,8 +79,18 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
 
   if (displayAnnotations.length === 0) {
     return (
-      <div className="py-4 text-center">
+      <div className="flex flex-col items-center gap-2 py-4 text-center">
         <p className="mb-2 text-sm text-gray-400">まだ注釈がありません</p>
+
+        {handleGenerateAnnotationFromDocument && (
+          <Button
+            className="flex flex-row items-center gap-1"
+            onClick={() => handleGenerateAnnotationFromDocument()}
+          >
+            <PlusIcon width={16} height={16} color="white" />
+            <div className="text-sm">ドキュメントから注釈を生成</div>
+          </Button>
+        )}
       </div>
     );
   }
@@ -258,19 +271,17 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
             )}
         </div>
       ))}
-      {showAnnotationForm && parentAnnotationId && (
-        <AnnotationForm
-          targetType="annotation"
-          targetId={parentAnnotationId}
-          topicSpaceId={topicSpaceId}
-          parentAnnotationId={parentAnnotationId}
-          onClose={() => setShowAnnotationForm(false)}
-          onSuccess={() => {
-            setShowAnnotationForm(false);
-            void onRefetch();
-          }}
-        />
-      )}
+      <AnnotationForm
+        targetType="annotation"
+        targetId={parentAnnotationId ?? ""}
+        topicSpaceId={topicSpaceId}
+        parentAnnotationId={parentAnnotationId}
+        isOpen={showAnnotationForm && !!parentAnnotationId}
+        setIsOpen={setShowAnnotationForm}
+        onSuccess={() => {
+          void onRefetch();
+        }}
+      />
       {deleteIntent && (
         <DeleteRecordModal
           isOpen={deleteModalOpen}

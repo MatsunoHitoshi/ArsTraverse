@@ -7,7 +7,7 @@ import {
   GraphChangeEntityType,
   GraphChangeRecordType,
 } from "@prisma/client";
-import { KnowledgeGraphInputSchema } from "./topic-space";
+import { KnowledgeGraphInputSchema } from "../schemas/knowledge-graph";
 import { TiptapContentSchema } from "./workspace";
 
 // 変更提案作成スキーマ

@@ -169,21 +169,17 @@ export default function AnnotationDetailPage() {
         </div>
 
         {/* 注釈フォーム */}
-        {showAnnotationForm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-            <AnnotationForm
-              targetType="annotation"
-              targetId={annotationId}
-              topicSpaceId={annotation.targetNode?.topicSpaceId ?? ""}
-              parentAnnotationId={annotationId}
-              onClose={() => setShowAnnotationForm(false)}
-              onSuccess={() => {
-                setShowAnnotationForm(false);
-                handleRefetch();
-              }}
-            />
-          </div>
-        )}
+        <AnnotationForm
+          targetType="annotation"
+          targetId={annotationId}
+          topicSpaceId={annotation.targetNode?.topicSpaceId ?? ""}
+          parentAnnotationId={annotationId}
+          isOpen={showAnnotationForm}
+          setIsOpen={setShowAnnotationForm}
+          onSuccess={() => {
+            handleRefetch();
+          }}
+        />
       </div>
 
       {/* 右側: グラフ可視化 */}

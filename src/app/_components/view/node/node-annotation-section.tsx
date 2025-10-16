@@ -5,7 +5,7 @@ import { api } from "@/trpc/react";
 import { Button } from "../../button/button";
 import { AnnotationList } from "../../curators-writing-workspace/annotation-list";
 import { AnnotationForm } from "../../curators-writing-workspace/annotation-form";
-import type { AnnotationResponse, CustomNodeType } from "@/app/const/types";
+import type { CustomNodeType } from "@/app/const/types";
 
 interface NodeAnnotationSectionProps {
   node: CustomNodeType;
@@ -17,6 +17,12 @@ export const NodeAnnotationSection: React.FC<NodeAnnotationSectionProps> = ({
   topicSpaceId,
 }) => {
   const [showAnnotationForm, setShowAnnotationForm] = useState(false);
+  const [defaultAnnotationContent, setDefaultAnnotationContent] = useState("");
+
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const generateNodeDescriptionFromDocument =
+    api.topicSpaces.generateNodeDescriptionFromDocument.useMutation();
 
   // ノードの注釈を取得
   const { data: annotations, refetch: refetchAnnotations } =
@@ -38,8 +44,9 @@ export const NodeAnnotationSection: React.FC<NodeAnnotationSectionProps> = ({
             size="small"
             onClick={() => setShowAnnotationForm(true)}
             className="text-xs"
+            disabled={isGenerating}
           >
-            注釈を追加
+            {isGenerating ? "生成中..." : "注釈を追加"}
           </Button>
         </div>
       </div>
@@ -50,22 +57,69 @@ export const NodeAnnotationSection: React.FC<NodeAnnotationSectionProps> = ({
           annotations={annotations}
           onRefetch={refetchAnnotations}
           topicSpaceId={topicSpaceId}
+          handleGenerateAnnotationFromDocument={() => {
+            // まずモーダルを開く
+            setShowAnnotationForm(true);
+            setDefaultAnnotationContent("解説文を生成中...");
+            setIsGenerating(true);
+
+            // ストリーミングで解説文を生成
+            generateNodeDescriptionFromDocument.mutate(
+              {
+                id: topicSpaceId,
+                nodeId: node.id,
+              },
+              {
+                onSuccess: (data) => {
+                  // ストリーミングデータの処理
+                  if (
+                    data &&
+                    typeof data[Symbol.asyncIterator] === "function"
+                  ) {
+                    void (async () => {
+                      try {
+                        for await (const chunk of data) {
+                          setDefaultAnnotationContent(chunk.description);
+                          if (chunk.isComplete) {
+                            setIsGenerating(false);
+                            console.log("解説文生成完了");
+                          }
+                        }
+                      } catch (error) {
+                        console.error("ストリーミング処理エラー:", error);
+                        setIsGenerating(false);
+                      }
+                    })();
+                  } else {
+                    // 通常のレスポンスの場合（このケースは発生しないはず）
+                    console.error("予期しないレスポンス形式:", data);
+                    setIsGenerating(false);
+                  }
+                },
+                onError: (error) => {
+                  console.error("解説文生成エラー:", error);
+                  setDefaultAnnotationContent("解説文の生成に失敗しました");
+                  setIsGenerating(false);
+                },
+              },
+            );
+          }}
         />
       )}
 
       {/* 注釈フォーム */}
-      {showAnnotationForm && (
-        <AnnotationForm
-          targetType="node"
-          targetId={node.id}
-          topicSpaceId={topicSpaceId}
-          onClose={() => setShowAnnotationForm(false)}
-          onSuccess={() => {
-            setShowAnnotationForm(false);
-            void refetchAnnotations();
-          }}
-        />
-      )}
+      <AnnotationForm
+        targetType="node"
+        targetId={node.id}
+        topicSpaceId={topicSpaceId}
+        isOpen={showAnnotationForm}
+        setIsOpen={setShowAnnotationForm}
+        onSuccess={() => {
+          void refetchAnnotations();
+        }}
+        defaultAnnotationType="CLARIFICATION"
+        defaultAnnotationContent={defaultAnnotationContent}
+      />
     </div>
   );
 };

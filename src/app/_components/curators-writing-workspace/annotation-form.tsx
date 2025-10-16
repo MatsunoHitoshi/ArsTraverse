@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import type { AnnotationType } from "@prisma/client";
@@ -8,33 +8,41 @@ import { api } from "@/trpc/react";
 import { Button } from "../button/button";
 import { ListboxInput } from "../input/listbox-input";
 import { TiptapEditorToolbar } from "./tiptap/tools/tiptap-editor-toolbar";
+import { Modal } from "../modal/modal";
 
 interface AnnotationFormProps {
   targetType: "node" | "edge" | "annotation";
   targetId: string;
   topicSpaceId: string;
   parentAnnotationId?: string | null;
-  onClose: () => void;
+  isOpen: boolean;
+  setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
   onSuccess: () => void;
+  defaultAnnotationType?: AnnotationType;
+  defaultAnnotationContent?: string;
 }
 
 export const AnnotationForm: React.FC<AnnotationFormProps> = ({
+  defaultAnnotationType = "COMMENT",
+  defaultAnnotationContent = "",
   targetType,
   targetId,
   topicSpaceId,
   parentAnnotationId,
-  onClose,
+  isOpen,
+  setIsOpen,
   onSuccess,
 }) => {
   if (parentAnnotationId)
     console.log("parentAnnotationId: ", parentAnnotationId);
-  const [annotationType, setAnnotationType] =
-    useState<AnnotationType>("COMMENT");
+  const [annotationType, setAnnotationType] = useState<AnnotationType>(
+    defaultAnnotationType,
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const editor = useEditor({
     extensions: [StarterKit],
-    content: "",
+    content: defaultAnnotationContent,
     immediatelyRender: false,
     editorProps: {
       attributes: {
@@ -44,9 +52,16 @@ export const AnnotationForm: React.FC<AnnotationFormProps> = ({
     },
   });
 
+  useEffect(() => {
+    if (defaultAnnotationContent) {
+      editor?.commands.setContent(defaultAnnotationContent);
+    }
+  }, [defaultAnnotationContent]);
+
   const createAnnotationMutation = api.annotation.createAnnotation.useMutation({
     onSuccess: () => {
       onSuccess();
+      setIsOpen(false);
     },
     onError: (error) => {
       console.error("注釈作成エラー:", error);
@@ -90,46 +105,52 @@ export const AnnotationForm: React.FC<AnnotationFormProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-opacity-50 text-white">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-slate-900 p-6">
-        <h3 className="mb-4 text-lg font-semibold">
-          {parentAnnotationId ? "返信を追加" : "新しい注釈を追加"}
-        </h3>
-
-        {/* 注釈タイプ選択 */}
-        <div className="mb-4">
-          <label className="mb-2 block text-sm font-medium text-gray-500">
-            注釈の種類
-          </label>
-          <ListboxInput
-            options={annotationTypeOptions}
-            selected={annotationType}
-            setSelected={(value) => setAnnotationType(value as AnnotationType)}
-            placeholder="注釈の種類を選択"
-          />
-        </div>
-
-        {/* エディター */}
-        <div className="mb-4">
-          <label className="mb-2 block text-sm font-medium text-gray-500">
-            内容
-          </label>
-          <div className="rounded-md bg-slate-800">
-            <TiptapEditorToolbar
-              editor={editor}
-              className="border-b border-slate-600 p-2"
+    <Modal
+      isOpen={isOpen}
+      setIsOpen={setIsOpen}
+      title={parentAnnotationId ? "返信を追加" : "新しい注釈を追加"}
+      size="extra-large"
+    >
+      <div className="flex flex-col overflow-hidden">
+        {/* スクロール可能なコンテンツエリア */}
+        <div className="flex-1 overflow-y-auto">
+          {/* 注釈タイプ選択 */}
+          <div className="mb-4">
+            <label className="mb-2 block text-sm font-medium text-gray-500">
+              注釈の種類
+            </label>
+            <ListboxInput
+              options={annotationTypeOptions}
+              selected={annotationType}
+              setSelected={(value) =>
+                setAnnotationType(value as AnnotationType)
+              }
+              placeholder="注釈の種類を選択"
             />
-            <EditorContent
-              editor={editor}
-              className="[&_.ProseMirror]:min-h-[100px] [&_.ProseMirror]:border-0 [&_.ProseMirror]:border-none [&_.ProseMirror]:bg-slate-800 [&_.ProseMirror]:p-3 [&_.ProseMirror]:text-white [&_.ProseMirror]:outline-none"
-            />
+          </div>
+
+          {/* エディター */}
+          <div className="mb-4">
+            <label className="mb-2 block text-sm font-medium text-gray-500">
+              内容
+            </label>
+            <div className="rounded-md bg-slate-800">
+              <TiptapEditorToolbar
+                editor={editor}
+                className="border-b border-slate-600 p-2"
+              />
+              <EditorContent
+                editor={editor}
+                className="[&_.ProseMirror]:max-h-[300px] [&_.ProseMirror]:min-h-[150px] [&_.ProseMirror]:overflow-y-auto [&_.ProseMirror]:border-0 [&_.ProseMirror]:border-none [&_.ProseMirror]:bg-slate-800 [&_.ProseMirror]:p-3 [&_.ProseMirror]:text-white [&_.ProseMirror]:outline-none"
+              />
+            </div>
           </div>
         </div>
 
-        {/* ボタン */}
-        <div className="flex justify-end gap-2">
+        {/* 固定ボタンエリア */}
+        <div className="flex justify-end gap-2 border-t border-gray-600 pt-4">
           <Button
-            onClick={onClose}
+            onClick={() => setIsOpen(false)}
             disabled={isSubmitting}
             className="border border-gray-300"
           >
@@ -143,6 +164,6 @@ export const AnnotationForm: React.FC<AnnotationFormProps> = ({
           </Button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };
