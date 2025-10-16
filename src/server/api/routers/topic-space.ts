@@ -27,6 +27,7 @@ import {
   GraphChangeEntityType,
   GraphChangeRecordType,
   GraphChangeType,
+  type User,
   type GraphNode,
   type GraphRelationship,
   type PrismaClient,
@@ -75,7 +76,7 @@ const DetachDocumentSchema = z.object({
   id: z.string(),
 });
 
-const UpdateGraphPropertiesSchema = z.object({
+const UpdateGraphSchema = z.object({
   dataJson: KnowledgeGraphInputSchema,
   id: z.string(),
 });
@@ -208,6 +209,15 @@ const detachTopicSpaceGraphData = async (
     deletedNodes: deletedNodes,
     deletedRelationships: deletedRelationships,
   };
+};
+
+const adminGuard = (
+  topicSpace: (TopicSpace & { admins: User[] }) | null,
+  ctx: { session: { user: { id: string } } },
+) => {
+  if (!topicSpace?.admins.some((admin) => admin.id === ctx.session.user.id)) {
+    throw new Error("You are not authorized to update this topic space");
+  }
 };
 
 export const topicSpaceRouter = createTRPCRouter({
@@ -783,7 +793,7 @@ export const topicSpaceRouter = createTRPCRouter({
     }),
 
   updateGraphProperties: protectedProcedure
-    .input(UpdateGraphPropertiesSchema)
+    .input(UpdateGraphSchema)
     .mutation(async ({ ctx, input }) => {
       const topicSpace = await ctx.db.topicSpace.findFirst({
         where: {
@@ -918,13 +928,10 @@ export const topicSpaceRouter = createTRPCRouter({
         },
       });
 
-      if (
-        !topicSpace?.admins.some((admin) => {
-          return admin.id === ctx.session.user.id;
-        })
-      ) {
+      if (!topicSpace) {
         throw new Error("TopicSpace not found");
       }
+      adminGuard(topicSpace, ctx);
 
       const prevNodes = topicSpace.graphNodes;
       const prevRelationships = topicSpace.graphRelationships;
@@ -1078,162 +1085,166 @@ export const topicSpaceRouter = createTRPCRouter({
       return updatedTopicSpace;
     }),
 
-  // ノードの注釈一覧取得（議論の盛り上がり順）
-  getNodeAnnotations: protectedProcedure
-    .input(
-      z.object({
-        nodeId: z.string(),
-        topicSpaceId: z.string(),
-      }),
-    )
-    .query(async ({ ctx, input }) => {
-      const annotations = await ctx.db.annotation.findMany({
-        where: {
-          targetNodeId: input.nodeId,
-          isDeleted: false,
-          targetNode: {
-            topicSpaceId: input.topicSpaceId,
-          },
-        },
+  updateGraph: protectedProcedure
+    .input(UpdateGraphSchema)
+    .mutation(async ({ ctx, input }) => {
+      const topicSpace = await ctx.db.topicSpace.findFirst({
+        where: { id: input.id },
         include: {
-          author: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-            },
-          },
-          childAnnotations: {
-            where: { isDeleted: false },
-            include: {
-              author: {
-                select: {
-                  id: true,
-                  name: true,
-                  image: true,
-                },
-              },
-            },
-            orderBy: { createdAt: "asc" },
-          },
-          histories: {
-            orderBy: { createdAt: "desc" },
-            take: 5,
-          },
+          admins: true,
+          graphNodes: true,
+          graphRelationships: true,
         },
-        orderBy: [
-          { childAnnotations: { _count: "desc" } },
-          { createdAt: "desc" },
-        ],
+      });
+      if (!topicSpace) {
+        throw new Error("TopicSpace not found");
+      }
+      adminGuard(topicSpace, ctx);
+
+      const prevGraphData = formGraphDataForFrontend({
+        nodes: topicSpace.graphNodes,
+        relationships: topicSpace.graphRelationships,
       });
 
-      return annotations;
-    }),
+      const sanitizedGraphData = {
+        nodes: input.dataJson.nodes as NodeTypeForFrontend[],
+        relationships: input.dataJson
+          .relationships as RelationshipTypeForFrontend[],
+      };
+      const nodeDiffs = diffNodes(
+        prevGraphData.nodes,
+        sanitizedGraphData.nodes,
+      );
+      const relationshipDiffs = diffRelationships(
+        prevGraphData.relationships,
+        sanitizedGraphData.relationships,
+      );
 
-  // エッジの注釈一覧取得（議論の盛り上がり順）
-  getEdgeAnnotations: protectedProcedure
-    .input(
-      z.object({
-        edgeId: z.string(),
-        topicSpaceId: z.string(),
-      }),
-    )
-    .query(async ({ ctx, input }) => {
-      const annotations = await ctx.db.annotation.findMany({
-        where: {
-          targetRelationshipId: input.edgeId,
-          isDeleted: false,
-          targetRelationship: {
-            topicSpaceId: input.topicSpaceId,
-          },
-        },
-        include: {
-          author: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-            },
-          },
-          childAnnotations: {
-            where: { isDeleted: false },
-            include: {
-              author: {
-                select: {
-                  id: true,
-                  name: true,
-                  image: true,
-                },
-              },
-            },
-            orderBy: { createdAt: "asc" },
-          },
-          histories: {
-            orderBy: { createdAt: "desc" },
-            take: 5,
-          },
-        },
-        orderBy: [
-          { childAnnotations: { _count: "desc" } },
-          { createdAt: "desc" },
-        ],
+      const nodeCreateData = nodeDiffs
+        .filter((diff) => diff.type === GraphChangeType.ADD)
+        .map((diff) => diff.updated)
+        .filter((node) => node !== null);
+      const relationshipCreateData = relationshipDiffs
+        .filter((diff) => diff.type === GraphChangeType.ADD)
+        .map((diff) => diff.updated)
+        .filter((relationship) => relationship !== null);
+
+      const nodeDeleteData = nodeDiffs
+        .filter((diff) => diff.type === GraphChangeType.REMOVE)
+        .map((diff) => diff.original)
+        .filter((node) => node !== null);
+      const relationshipDeleteData = relationshipDiffs
+        .filter((diff) => diff.type === GraphChangeType.REMOVE)
+        .map((diff) => diff.original)
+        .filter((relationship) => relationship !== null);
+
+      const nodeUpdateData = nodeDiffs
+        .filter((diff) => diff.type === GraphChangeType.UPDATE)
+        .map((diff) => diff.updated)
+        .filter((node) => node !== null);
+      const relationshipUpdateData = relationshipDiffs
+        .filter((diff) => diff.type === GraphChangeType.UPDATE)
+        .map((diff) => diff.updated)
+        .filter((relationship) => relationship !== null);
+
+      await ctx.db.graphNode.createMany({
+        data: nodeCreateData.map((node) => ({
+          id: node.id,
+          name: node.name,
+          label: node.label,
+          properties: node.properties,
+          topicSpaceId: topicSpace.id,
+        })),
+      });
+      await ctx.db.graphRelationship.createMany({
+        data: relationshipCreateData.map((relationship) => ({
+          id: relationship.id,
+          type: relationship.type,
+          properties: relationship.properties,
+          fromNodeId: relationship.sourceId,
+          toNodeId: relationship.targetId,
+          topicSpaceId: topicSpace.id,
+        })),
       });
 
-      return annotations;
+      for (const node of nodeUpdateData) {
+        await ctx.db.graphNode.update({
+          where: { id: node.id },
+          data: {
+            name: node.name,
+            properties: node.properties,
+            label: node.label,
+            topicSpaceId: topicSpace.id,
+          },
+        });
+      }
+      for (const relationship of relationshipUpdateData) {
+        await ctx.db.graphRelationship.update({
+          where: { id: relationship.id },
+          data: {
+            type: relationship.type,
+            properties: relationship.properties,
+            fromNodeId: relationship.sourceId,
+            toNodeId: relationship.targetId,
+            topicSpaceId: topicSpace.id,
+          },
+        });
+      }
+
+      await ctx.db.graphNode.updateMany({
+        where: { id: { in: nodeDeleteData.map((node) => node.id) } },
+        data: {
+          topicSpaceId: null,
+          deletedAt: new Date(),
+        },
+      });
+      await ctx.db.graphRelationship.updateMany({
+        where: {
+          id: {
+            in: relationshipDeleteData.map((relationship) => relationship.id),
+          },
+        },
+        data: {
+          topicSpaceId: null,
+          deletedAt: new Date(),
+        },
+      });
+
+      const graphChangeHistory = await ctx.db.graphChangeHistory.create({
+        data: {
+          recordType: GraphChangeRecordType.TOPIC_SPACE,
+          recordId: topicSpace.id,
+          description: "グラフを更新しました",
+          user: { connect: { id: ctx.session.user.id } },
+        },
+      });
+
+      await ctx.db.nodeLinkChangeHistory.createMany({
+        data: nodeDiffs.map((diff) => ({
+          changeType: diff.type,
+          changeEntityType: GraphChangeEntityType.NODE,
+          changeEntityId: String(diff.original?.id ?? diff.updated?.id),
+          previousState: diff.original ?? {},
+          nextState: diff.updated ?? {},
+          graphChangeHistoryId: graphChangeHistory.id,
+        })),
+      });
+
+      await ctx.db.nodeLinkChangeHistory.createMany({
+        data: relationshipDiffs.map((diff) => ({
+          changeType: diff.type,
+          changeEntityType: GraphChangeEntityType.EDGE,
+          changeEntityId: String(diff.original?.id ?? diff.updated?.id),
+          previousState: diff.original ?? {},
+          nextState: diff.updated ?? {},
+          graphChangeHistoryId: graphChangeHistory.id,
+        })),
+      });
+
+      const updatedTopicSpace = await ctx.db.topicSpace.findFirst({
+        where: { id: input.id },
+      });
+
+      return updatedTopicSpace;
     }),
-
-  // 注釈から知識グラフ統合（不要？）
-  // integrateAnnotationGraph: protectedProcedure
-  //   .input(
-  //     z.object({
-  //       annotationId: z.string(),
-  //       topicSpaceId: z.string(),
-  //       extractedGraph: z.object({
-  //         nodes: z.array(z.any()),
-  //         relationships: z.array(z.any()),
-  //       }),
-  //     }),
-  //   )
-  //   .mutation(async ({ ctx, input }) => {
-  //     const extractor = new AnnotationGraphExtractor(ctx.db);
-
-  //     // 注釈をSourceDocumentとして作成
-  //     const annotation = await ctx.db.annotation.findUnique({
-  //       where: { id: input.annotationId },
-  //     });
-
-  //     if (!annotation) {
-  //       throw new Error("注釈が見つかりません");
-  //     }
-
-  //     const sourceDocument = await ctx.db.sourceDocument.create({
-  //       data: {
-  //         name: `注釈から抽出: ${annotation.type}`,
-  //         url: `annotation://${annotation.id}`,
-  //         userId: ctx.session.user.id,
-  //         documentType: "INPUT_TXT",
-  //       },
-  //     });
-
-  //     // 注釈とSourceDocumentを関連付け
-  //     await ctx.db.annotation.update({
-  //       where: { id: annotation.id },
-  //       data: { sourceDocumentId: sourceDocument.id },
-  //     });
-
-  //     // グラフを統合
-  //     const result = await extractor.integrateGraphToTopicSpace(
-  //       input.topicSpaceId,
-  //       input.extractedGraph,
-  //       sourceDocument.id,
-  //       ctx.session.user.id,
-  //     );
-
-  //     return {
-  //       sourceDocument,
-  //       documentGraph: result.documentGraph,
-  //       integratedNodes: result.integratedNodes,
-  //       integratedEdges: result.integratedEdges,
-  //     };
-  //   }),
 });

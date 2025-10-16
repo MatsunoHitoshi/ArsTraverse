@@ -1,7 +1,6 @@
 "use client";
 import { api } from "@/trpc/react";
 import { TabsContainer } from "../tab/tab";
-import { useWindowSize } from "@/app/_hooks/use-window-size";
 import type {
   DocumentResponseWithGraphData,
   GraphDocumentForFrontend,
@@ -16,7 +15,6 @@ import { Toolbar } from "../toolbar/toolbar";
 import { RelationPathSearch } from "../toolbar/relation-path-search";
 import { circleColor } from "./topic-graph-detail";
 import { useSession } from "next-auth/react";
-import { Switch } from "@headlessui/react";
 import { useSearchParams } from "next/navigation";
 import { MultiDocumentGraphEditor } from "../view/graph-edit/multi-document-graph-editor";
 import { TopicSpaceDocumentListSection } from "./document-list-section";
@@ -48,7 +46,6 @@ export const TopicGraphEditor = ({
           id: id,
         },
   );
-  const [innerWidth, innerHeight] = useWindowSize();
   const [graphFullScreen, setGraphFullScreen] = useState<boolean>(false);
 
   const [selectedDocumentId, setSelectedDocumentId] = useState<string>("");
@@ -58,7 +55,9 @@ export const TopicGraphEditor = ({
   const [nodeSearchQuery, setNodeSearchQuery] = useState<string>("");
   const [pathData, setPathData] = useState<GraphDocumentForFrontend>();
   const [isClustered, setIsClustered] = useState<boolean>(false);
-  const [graphData, setGraphData] = useState<GraphDocumentForFrontend>();
+  const [graphData, setGraphData] = useState<GraphDocumentForFrontend | null>(
+    null,
+  );
 
   useEffect(() => {
     console.log("graphData: ", topicSpace?.graphData);
@@ -175,7 +174,9 @@ export const TopicGraphEditor = ({
         <div className="col-span-2 h-full overflow-scroll">
           {graphData ? (
             <MultiDocumentGraphEditor
+              defaultGraphDocument={topicSpace.graphData}
               graphDocument={graphData}
+              setGraphDocument={setGraphData}
               topicSpaceId={id}
               refetch={refetch}
               isGraphFullScreen={graphFullScreen}

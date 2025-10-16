@@ -1,6 +1,7 @@
 "use client";
 
 import type {
+  CustomLinkType,
   CustomNodeType,
   GraphDocumentForFrontend,
   TiptapGraphFilterOption,
@@ -20,7 +21,8 @@ import { Button } from "../button/button";
 import type { JSONContent } from "@tiptap/react";
 import {
   ChevronLeftIcon,
-  ChevronRightIcon,
+  CrossLargeIcon,
+  Pencil2Icon,
   PinLeftIcon,
   PinRightIcon,
 } from "../icons";
@@ -31,6 +33,12 @@ import { findEntityHighlights } from "@/app/_utils/text/find-entity-highlights";
 import { NodeDetailPanel } from "./node-detail-panel";
 import { PDFDropZone } from "./pdf-drop-zone";
 import { usePDFProcessing } from "./hooks/use-pdf-processing";
+import { useGraphEditor } from "@/app/_hooks/use-graph-editor";
+import {
+  LinkPropertyEditModal,
+  NodePropertyEditModal,
+} from "../modal/node-link-property-edit-modal";
+import { NodeLinkEditModal } from "../modal/node-link-edit-modal";
 
 interface CuratorsWritingWorkspaceProps {
   // 既存のprops（後方互換性のため）
@@ -78,6 +86,7 @@ const CuratorsWritingWorkspace = ({
     ],
   };
 
+  const updateGraphData = api.topicSpaces.updateGraph.useMutation();
   const [isTopicSpaceAttachModalOpen, setIsTopicSpaceAttachModalOpen] =
     useState<boolean>(false);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
@@ -138,7 +147,41 @@ const CuratorsWritingWorkspace = ({
   const [currentScale, setCurrentScale] = useState<number>(1);
   const graphContainerRef = useRef<HTMLDivElement>(null);
   const [graphSize, setGraphSize] = useState({ width: 400, height: 400 });
-  const graphDocument = topicSpace?.graphData;
+  const defaultGraphDocument = topicSpace?.graphData;
+
+  // グラフ編集用のカスタムフック
+  const {
+    graphDocument,
+    setGraphDocument,
+    isEditor: isGraphEditor,
+    setIsEditor: setIsGraphEditor,
+    isGraphUpdated,
+    isNodePropertyEditModalOpen,
+    setIsNodePropertyEditModalOpen,
+    isLinkPropertyEditModalOpen,
+    setIsLinkPropertyEditModalOpen,
+    isNodeLinkAttachModalOpen,
+    setIsNodeLinkAttachModalOpen,
+    focusedNode,
+    setFocusedNode,
+    focusedLink,
+    setFocusedLink,
+    additionalGraph,
+    setAdditionalGraph,
+    onNodeContextMenu,
+    onLinkContextMenu,
+    onGraphUpdate,
+    resetGraphUpdated,
+  } = useGraphEditor({
+    defaultGraphDocument,
+    onUpdateSuccess: () => {
+      void refetch();
+    },
+    onUpdateError: (error) => {
+      console.error("グラフの更新に失敗しました", error);
+    },
+  });
+
   const nodes = graphDocument?.nodes ?? [];
 
   const tiptapFilteredGraphDocument = useMemo(() => {
@@ -305,12 +348,33 @@ const CuratorsWritingWorkspace = ({
     }
   };
 
+  const onRecordUpdate = () => {
+    if (!graphDocument) return;
+    updateGraphData.mutate(
+      {
+        id: topicSpaceId ?? "",
+        dataJson: graphDocument,
+      },
+      {
+        onSuccess: (res) => {
+          console.log("グラフの更新に成功しました", res);
+          void refetch();
+          setIsGraphEditor(false);
+          resetGraphUpdated();
+        },
+        onError: (error) => {
+          console.error("グラフの更新に失敗しました", error);
+        },
+      },
+    );
+  };
+
   return (
     <div className="flex h-screen w-full gap-2 bg-slate-900 p-4 font-sans">
       {/* Left Column: Text Editor */}
       <div
         className={`flex h-[calc(100svh-80px)] flex-col transition-all duration-300 ${
-          isRightPanelOpen ? "w-2/3" : "w-full"
+          isRightPanelOpen ? (isGraphEditor ? "w-1/2" : "w-2/3") : "w-full"
         }`}
       >
         <div className="flex h-full flex-col bg-slate-900">
@@ -384,9 +448,17 @@ const CuratorsWritingWorkspace = ({
 
       {/* Right Column: Knowledge Graph Viewer & Detail Panel */}
       {isRightPanelOpen && (
-        <div className="flex h-[calc(100svh-80px)] w-1/3 flex-col">
+        <div
+          className={`flex h-[calc(100svh-80px)] flex-col transition-all duration-300 ${
+            isGraphEditor ? "w-1/2" : "w-1/3"
+          }`}
+        >
           {/* Knowledge Graph Viewer */}
-          <div className="min-h-0 flex-1 flex-shrink-0 overflow-y-hidden">
+          <div
+            className={`min-h-0 flex-shrink-0 overflow-y-hidden ${
+              isGraphEditor ? "flex-[3]" : "flex-1"
+            }`}
+          >
             <div
               ref={graphContainerRef}
               className="relative flex h-full w-full flex-col items-center justify-center rounded-t-lg border border-b-0 border-gray-300 bg-slate-900 text-gray-400"
@@ -429,9 +501,62 @@ const CuratorsWritingWorkspace = ({
                               ? tiptapSelectedGraphDocument ?? undefined
                               : undefined
                           }
+                          toolComponent={
+                            <div className="absolute ml-1 mt-1 flex flex-row items-center gap-1">
+                              {!isGraphEditor ? (
+                                <Button
+                                  size="small"
+                                  onClick={() =>
+                                    setIsGraphEditor(!isGraphEditor)
+                                  }
+                                  className="flex items-center gap-1"
+                                >
+                                  <Pencil2Icon
+                                    height={16}
+                                    width={16}
+                                    color="white"
+                                  />
+                                </Button>
+                              ) : (
+                                <>
+                                  <Button
+                                    size="small"
+                                    onClick={() =>
+                                      setIsGraphEditor(!isGraphEditor)
+                                    }
+                                    className="flex items-center gap-1"
+                                  >
+                                    <CrossLargeIcon
+                                      height={16}
+                                      width={16}
+                                      color="white"
+                                    />
+                                  </Button>
+                                  {isGraphUpdated && (
+                                    <Button
+                                      size="small"
+                                      onClick={onRecordUpdate}
+                                      className="flex items-center gap-1 text-sm"
+                                    >
+                                      グラフを更新
+                                    </Button>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          }
                           focusedLink={undefined}
                           isLargeGraph={false}
-                          isEditor={false}
+                          isEditor={isGraphEditor}
+                          onGraphUpdate={
+                            isGraphEditor ? onGraphUpdate : undefined
+                          }
+                          onNodeContextMenu={
+                            isGraphEditor ? onNodeContextMenu : undefined
+                          }
+                          onLinkContextMenu={
+                            isGraphEditor ? onLinkContextMenu : undefined
+                          }
                         />
                       )}
                     </>
@@ -456,7 +581,11 @@ const CuratorsWritingWorkspace = ({
           </div>
 
           {/* Detail/Evidence Panel */}
-          <div className="relative flex-1 flex-shrink-0 overflow-y-hidden">
+          <div
+            className={`relative flex-shrink-0 overflow-y-hidden ${
+              isGraphEditor ? "flex-[1]" : "flex-1"
+            }`}
+          >
             {topicSpaceId ? (
               <NodeDetailPanel
                 activeEntity={activeEntity}
@@ -481,6 +610,34 @@ const CuratorsWritingWorkspace = ({
         workspaceId={workspace.id}
         refetch={refetch}
       />
+
+      {/* グラフ編集用モーダル */}
+      {isGraphEditor && graphDocument && (
+        <>
+          <NodePropertyEditModal
+            isOpen={isNodePropertyEditModalOpen}
+            setIsOpen={setIsNodePropertyEditModalOpen}
+            graphDocument={graphDocument}
+            setGraphDocument={setGraphDocument}
+            graphNode={focusedNode}
+          />
+          <LinkPropertyEditModal
+            isOpen={isLinkPropertyEditModalOpen}
+            setIsOpen={setIsLinkPropertyEditModalOpen}
+            graphDocument={graphDocument}
+            setGraphDocument={setGraphDocument}
+            graphLink={focusedLink}
+          />
+          <NodeLinkEditModal
+            isOpen={isNodeLinkAttachModalOpen}
+            setIsOpen={setIsNodeLinkAttachModalOpen}
+            graphDocument={graphDocument}
+            setGraphDocument={setGraphDocument}
+            additionalGraph={additionalGraph}
+            setAdditionalGraph={setAdditionalGraph}
+          />
+        </>
+      )}
     </div>
   );
 };

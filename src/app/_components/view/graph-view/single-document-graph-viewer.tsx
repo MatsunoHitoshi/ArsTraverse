@@ -22,6 +22,7 @@ import { NodeLinkEditModal } from "../../modal/node-link-edit-modal";
 import { Button } from "../../button/button";
 import { diffNodes, diffRelationships } from "@/app/_utils/kg/diff";
 import { GraphSyncedText } from "../../document/graph-synced-text";
+import { useGraphEditor } from "@/app/_hooks/use-graph-editor";
 
 export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
   const { data: graphData, refetch } = api.documentGraph.getById.useQuery({
@@ -29,7 +30,41 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
   });
   const updateGraph = api.documentGraph.updateGraph.useMutation();
   const defaultGraphData = graphData?.dataJson;
-  const [isEditor, setIsEditor] = useState<boolean>(false);
+
+  // カスタムフックを使用
+  const {
+    graphDocument,
+    setGraphDocument,
+    isEditor,
+    setIsEditor,
+    isGraphUpdated,
+    isNodePropertyEditModalOpen,
+    setIsNodePropertyEditModalOpen,
+    isLinkPropertyEditModalOpen,
+    setIsLinkPropertyEditModalOpen,
+    isNodeLinkAttachModalOpen,
+    setIsNodeLinkAttachModalOpen,
+    focusedNode,
+    setFocusedNode,
+    focusedLink,
+    setFocusedLink,
+    additionalGraph,
+    setAdditionalGraph,
+    onNodeContextMenu,
+    onLinkContextMenu,
+    onGraphUpdate,
+    resetGraphUpdated,
+  } = useGraphEditor({
+    defaultGraphDocument: defaultGraphData,
+    onUpdateSuccess: () => {
+      void refetch();
+      setIsEditor(false);
+    },
+    onUpdateError: (error) => {
+      console.error("グラフの更新に失敗しました", error);
+    },
+  });
+
   const [isLinkFiltered, setIsLinkFiltered] = useState<boolean>(false);
   const [nodeSearchQuery, setNodeSearchQuery] = useState<string>("");
   const [innerWidth, innerHeight] = useWindowSize();
@@ -37,60 +72,12 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
   const graphAreaHeight = (innerHeight ?? 300) - 130;
   const svgRef = useRef<SVGSVGElement>(null);
   const [currentScale, setCurrentScale] = useState<number>(1);
-  const [focusedNode, setFocusedNode] = useState<CustomNodeType | undefined>(
-    undefined,
-  );
-  const [focusedLink, setFocusedLink] = useState<CustomLinkType | undefined>(
-    undefined,
-  );
-
-  const [graphDocument, setGraphDocument] =
-    useState<GraphDocumentForFrontend | null>(null);
-  useEffect(() => {
-    setGraphDocument(defaultGraphData ?? null);
-  }, [defaultGraphData]);
-  const [isGraphUpdated, setIsGraphUpdated] = useState<boolean>(false);
-  useEffect(() => {
-    const nodeDiff = diffNodes(
-      defaultGraphData?.nodes ?? [],
-      graphDocument?.nodes ?? [],
-    );
-    const relationshipDiff = diffRelationships(
-      defaultGraphData?.relationships ?? [],
-      graphDocument?.relationships ?? [],
-    );
-    setIsGraphUpdated(nodeDiff.length > 0 || relationshipDiff.length > 0);
-  }, [graphDocument, defaultGraphData]);
-
-  const onNodeContextMenu = (graphNode: CustomNodeType) => {
-    console.log("onNodeContextMenu", graphNode);
-    setFocusedNode(graphNode);
-    setIsNodePropertyEditModalOpen(true);
-  };
-
-  const onLinkContextMenu = (graphLink: CustomLinkType) => {
-    console.log("onLinkContextMenu", graphLink);
-    setFocusedLink(graphLink);
-    setIsLinkPropertyEditModalOpen(true);
-  };
-
-  const [additionalGraph, setAdditionalGraph] = useState<
-    GraphDocumentForFrontend | undefined
-  >();
-  const [isNodeLinkAttachModalOpen, setIsNodeLinkAttachModalOpen] =
-    useState<boolean>(false);
-  const [isNodePropertyEditModalOpen, setIsNodePropertyEditModalOpen] =
-    useState<boolean>(false);
-  const [isLinkPropertyEditModalOpen, setIsLinkPropertyEditModalOpen] =
-    useState<boolean>(false);
-
   const [textPanelFull, setTextPanelFull] = useState<boolean>(false);
 
   const onGraphFormUpdate = (additionalGraph: GraphDocumentForFrontend) => {
     console.log("onGraphUpdate", additionalGraph);
     if (isEditor) {
-      setAdditionalGraph(additionalGraph);
-      setIsNodeLinkAttachModalOpen(true);
+      onGraphUpdate(additionalGraph);
     }
   };
 
@@ -105,6 +92,7 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
         onSuccess: (res) => {
           void refetch();
           setIsEditor(false);
+          resetGraphUpdated();
         },
         onError: () => {
           console.error("グラフの更新に失敗しました");
@@ -130,7 +118,7 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
               setIsEditing={setIsEditor}
               setNodeSearchQuery={setNodeSearchQuery}
               rightArea={
-                <div className="flex w-full flex-row items-center gap-4">
+                <div className="flex flex-row items-center gap-4">
                   <UrlCopy
                     messagePosition="inButton"
                     className="flex !h-8 !w-8 flex-row items-center justify-center px-0 py-0"

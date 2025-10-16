@@ -182,10 +182,17 @@ export const documentGraphRouter = createTRPCRouter({
         })),
       });
 
-      await ctx.db.graphNode.updateMany({
-        where: { id: { in: nodeUpdateData.map((node) => node.id) } },
-        data: { properties: nodeUpdateData.map((node) => node.properties) },
-      });
+      for (const node of nodeUpdateData) {
+        await ctx.db.graphNode.update({
+          where: { id: node.id },
+          data: {
+            properties: node.properties,
+            name: node.name,
+            label: node.label,
+            documentGraphId: documentGraph.id,
+          },
+        });
+      }
       for (const relationship of relationshipUpdateData) {
         await ctx.db.graphRelationship.update({
           where: { id: relationship.id },
