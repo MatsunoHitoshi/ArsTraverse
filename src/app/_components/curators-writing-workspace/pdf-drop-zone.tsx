@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { DropFileProvider } from "../drop-file/drop-file-provider";
+import { DropFileProviderDashed } from "../drop-file/drop-file-provider";
 import { Button } from "../button/button";
 import type { ProcessingStep } from "./hooks/use-pdf-processing";
 
@@ -11,6 +11,7 @@ interface PDFDropZoneProps {
   processingError: string | null;
   onPDFUpload: (file: File) => void;
   onSelectExistingRepository: () => void;
+  withTopicSpaceOption?: boolean;
 }
 
 export const PDFDropZone: React.FC<PDFDropZoneProps> = ({
@@ -19,6 +20,7 @@ export const PDFDropZone: React.FC<PDFDropZoneProps> = ({
   processingError,
   onPDFUpload,
   onSelectExistingRepository,
+  withTopicSpaceOption = false,
 }) => {
   const handleFileSet = (
     file: File | null | ((prev: File | null) => File | null),
@@ -30,7 +32,7 @@ export const PDFDropZone: React.FC<PDFDropZoneProps> = ({
   };
 
   return (
-    <DropFileProvider setFile={handleFileSet}>
+    <DropFileProviderDashed setFile={handleFileSet}>
       <div className="flex h-full w-full flex-col items-center justify-center gap-4 p-8">
         {isProcessingPDF ? (
           <div className="text-center">
@@ -55,21 +57,23 @@ export const PDFDropZone: React.FC<PDFDropZoneProps> = ({
               </p>
               <p className="text-center text-xs text-gray-300">（50MB以下）</p>
             </div>
-            <div className="pointer-events-auto flex flex-col items-center gap-2">
-              <p className="text-sm text-gray-300">
-                または既存のリポジトリを選択
-              </p>
+            {withTopicSpaceOption && (
+              <div className="pointer-events-auto flex flex-col items-center gap-2">
+                <p className="text-sm text-gray-300">
+                  または既存のリポジトリを選択
+                </p>
 
-              <Button
-                onClick={onSelectExistingRepository}
-                className="px-6 py-3 text-white hover:bg-slate-600"
-              >
-                既存のリポジトリを選択
-              </Button>
-            </div>
+                <Button
+                  onClick={onSelectExistingRepository}
+                  className="px-6 py-3 text-white hover:bg-slate-600"
+                >
+                  既存のリポジトリを選択
+                </Button>
+              </div>
+            )}
           </>
         )}
       </div>
-    </DropFileProvider>
+    </DropFileProviderDashed>
   );
 };

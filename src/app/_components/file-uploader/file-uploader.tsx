@@ -1,6 +1,6 @@
 import type { LegacyRef } from "react";
 import { Button } from "../button/button";
-import { DropFileProvider } from "../drop-file/drop-file-provider";
+import { DropFileProviderDashed } from "../drop-file/drop-file-provider";
 type FileUploaderProps = {
   name: string;
   inputRef: LegacyRef<HTMLInputElement>;
@@ -15,7 +15,7 @@ export const FileUploader = ({
   file,
 }: FileUploaderProps) => {
   return (
-    <DropFileProvider setFile={setFile}>
+    <DropFileProviderDashed setFile={setFile}>
       <div className="flex min-h-[130px] w-full flex-col items-center">
         <input
           type="file"
@@ -46,6 +46,6 @@ export const FileUploader = ({
 
         <div className="font-semibold">{file?.name}</div>
       </div>
-    </DropFileProvider>
+    </DropFileProviderDashed>
   );
 };

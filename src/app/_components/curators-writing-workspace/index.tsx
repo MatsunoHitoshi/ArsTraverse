@@ -25,6 +25,7 @@ import {
   Pencil2Icon,
   PinLeftIcon,
   PinRightIcon,
+  PlusIcon,
 } from "../icons";
 import { LinkButton } from "../button/link-button";
 import { TopicSpaceAttachModal } from "../workspace/topic-space-attach-modal";
@@ -33,12 +34,14 @@ import { findEntityHighlights } from "@/app/_utils/text/find-entity-highlights";
 import { NodeDetailPanel } from "./node-detail-panel";
 import { PDFDropZone } from "./pdf-drop-zone";
 import { usePDFProcessing } from "./hooks/use-pdf-processing";
+import { Modal } from "../modal/modal";
 import { useGraphEditor } from "@/app/_hooks/use-graph-editor";
 import {
   LinkPropertyEditModal,
   NodePropertyEditModal,
 } from "../modal/node-link-property-edit-modal";
 import { NodeLinkEditModal } from "../modal/node-link-edit-modal";
+import { PlusCircleIcon } from "@heroicons/react/24/outline";
 
 interface CuratorsWritingWorkspaceProps {
   // 既存のprops（後方互換性のため）
@@ -89,6 +92,8 @@ const CuratorsWritingWorkspace = ({
   const updateGraphData = api.topicSpaces.updateGraph.useMutation();
   const [isTopicSpaceAttachModalOpen, setIsTopicSpaceAttachModalOpen] =
     useState<boolean>(false);
+  const [isPDFUploadModalOpen, setIsPDFUploadModalOpen] =
+    useState<boolean>(false);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editingTitle, setEditingTitle] = useState(workspace.name);
@@ -124,11 +129,6 @@ const CuratorsWritingWorkspace = ({
     },
   });
 
-  // PDF処理用のカスタムフック
-  const { isProcessingPDF, processingStep, processingError, handlePDFUpload } =
-    usePDFProcessing(workspace.id, () => {
-      void refetch();
-    });
   // const [defaultPosition, setDefaultPosition] = useState<{
   //   x: number;
   //   y: number;
@@ -181,6 +181,20 @@ const CuratorsWritingWorkspace = ({
       console.error("グラフの更新に失敗しました", error);
     },
   });
+
+  // PDF処理用のカスタムフック
+  const { isProcessingPDF, processingStep, processingError, handlePDFUpload } =
+    usePDFProcessing(
+      workspace.id,
+      () => {
+        void refetch();
+      },
+      topicSpaceId,
+      () => {
+        // 処理完了後にモーダルを閉じる
+        setIsPDFUploadModalOpen(false);
+      },
+    );
 
   const nodes = graphDocument?.nodes ?? [];
 
@@ -504,19 +518,34 @@ const CuratorsWritingWorkspace = ({
                           toolComponent={
                             <div className="absolute ml-1 mt-1 flex flex-row items-center gap-1">
                               {!isGraphEditor ? (
-                                <Button
-                                  size="small"
-                                  onClick={() =>
-                                    setIsGraphEditor(!isGraphEditor)
-                                  }
-                                  className="flex items-center gap-1"
-                                >
-                                  <Pencil2Icon
-                                    height={16}
-                                    width={16}
-                                    color="white"
-                                  />
-                                </Button>
+                                <>
+                                  <Button
+                                    size="small"
+                                    onClick={() =>
+                                      setIsGraphEditor(!isGraphEditor)
+                                    }
+                                    className="flex items-center gap-1"
+                                  >
+                                    <Pencil2Icon
+                                      height={16}
+                                      width={16}
+                                      color="white"
+                                    />
+                                  </Button>
+                                  <Button
+                                    size="small"
+                                    onClick={() =>
+                                      setIsPDFUploadModalOpen(true)
+                                    }
+                                    className="flex items-center gap-1"
+                                  >
+                                    <PlusIcon
+                                      height={16}
+                                      width={16}
+                                      color="white"
+                                    />
+                                  </Button>
+                                </>
                               ) : (
                                 <>
                                   <Button
@@ -575,6 +604,7 @@ const CuratorsWritingWorkspace = ({
                   onSelectExistingRepository={() =>
                     setIsTopicSpaceAttachModalOpen(true)
                   }
+                  withTopicSpaceOption={true}
                 />
               )}
             </div>
@@ -610,6 +640,24 @@ const CuratorsWritingWorkspace = ({
         workspaceId={workspace.id}
         refetch={refetch}
       />
+
+      {/* PDFアップロードモーダル */}
+      <Modal
+        isOpen={isPDFUploadModalOpen}
+        setIsOpen={setIsPDFUploadModalOpen}
+        title="新しいドキュメントを追加する"
+      >
+        <PDFDropZone
+          isProcessingPDF={isProcessingPDF}
+          processingStep={processingStep}
+          processingError={processingError}
+          onPDFUpload={handlePDFUpload}
+          onSelectExistingRepository={() => {
+            setIsPDFUploadModalOpen(false);
+            setIsTopicSpaceAttachModalOpen(true);
+          }}
+        />
+      </Modal>
 
       {/* グラフ編集用モーダル */}
       {isGraphEditor && graphDocument && (

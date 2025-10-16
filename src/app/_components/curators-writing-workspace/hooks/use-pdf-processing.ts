@@ -13,6 +13,8 @@ export type ProcessingStep = "upload" | "extract" | "graph" | "complete";
 export const usePDFProcessing = (
   workspaceId: string,
   onSuccess?: () => void,
+  existingTopicSpaceId?: string | null,
+  onComplete?: () => void,
 ) => {
   const [isProcessingPDF, setIsProcessingPDF] = useState(false);
   const [processingStep, setProcessingStep] =
@@ -25,6 +27,7 @@ export const usePDFProcessing = (
     api.sourceDocument.createWithGraphData.useMutation();
   const createTopicSpace = api.topicSpaces.create.useMutation();
   const updateWorkspace = api.workspace.update.useMutation();
+  const attachDocuments = api.topicSpaces.attachDocuments.useMutation();
 
   const handlePDFUpload = async (file: File) => {
     try {
@@ -149,54 +152,77 @@ export const usePDFProcessing = (
       const sourceDocumentId = documentResult.sourceDocument.id;
       console.log("SourceDocumentId:", sourceDocumentId);
 
-      // TopicSpaceを作成
-      const topicSpaceResult = await new Promise<TopicSpace>(
-        (resolve, reject) => {
-          createTopicSpace.mutate(
+      // 既存のTopicSpaceがある場合は統合、ない場合は新規作成
+      if (existingTopicSpaceId) {
+        // 既存のTopicSpaceにSourceDocumentをアタッチ
+        await new Promise((resolve, reject) => {
+          attachDocuments.mutate(
             {
-              name: fileName.replace(".pdf", ""),
-              description: `ワークスペースか作成されたリポジトリ: ${fileName}`,
-              documentId: sourceDocumentId,
+              id: existingTopicSpaceId,
+              documentIds: [sourceDocumentId],
             },
             {
-              onSuccess: (res) => {
-                console.log("TopicSpace作成成功:", res);
-                resolve(res);
+              onSuccess: () => {
+                console.log("既存のTopicSpaceにドキュメントをアタッチ成功");
+                resolve(true);
               },
               onError: (error) => {
-                console.error("TopicSpace作成エラー:", error);
+                console.error("既存のTopicSpaceへのアタッチエラー:", error);
                 reject(error);
               },
             },
           );
-        },
-      );
-
-      if (!topicSpaceResult) {
-        throw new Error("リポジトリの作成に失敗しました");
-      }
-
-      // ワークスペースにリポジトリをアタッチ
-      const currentTopicSpaceIds: string[] = [];
-      await new Promise((resolve, reject) => {
-        updateWorkspace.mutate(
-          {
-            id: workspaceId,
-            referencedTopicSpaceIds: [
-              ...currentTopicSpaceIds,
-              topicSpaceResult.id,
-            ],
-          },
-          {
-            onSuccess: () => {
-              resolve(true);
-            },
-            onError: (error) => {
-              reject(error);
-            },
+        });
+      } else {
+        // 新しいTopicSpaceを作成
+        const topicSpaceResult = await new Promise<TopicSpace>(
+          (resolve, reject) => {
+            createTopicSpace.mutate(
+              {
+                name: fileName.replace(".pdf", ""),
+                description: `ワークスペースか作成されたリポジトリ: ${fileName}`,
+                documentId: sourceDocumentId,
+              },
+              {
+                onSuccess: (res) => {
+                  console.log("TopicSpace作成成功:", res);
+                  resolve(res);
+                },
+                onError: (error) => {
+                  console.error("TopicSpace作成エラー:", error);
+                  reject(error);
+                },
+              },
+            );
           },
         );
-      });
+
+        if (!topicSpaceResult) {
+          throw new Error("リポジトリの作成に失敗しました");
+        }
+
+        // ワークスペースにリポジトリをアタッチ
+        const currentTopicSpaceIds: string[] = [];
+        await new Promise((resolve, reject) => {
+          updateWorkspace.mutate(
+            {
+              id: workspaceId,
+              referencedTopicSpaceIds: [
+                ...currentTopicSpaceIds,
+                topicSpaceResult.id,
+              ],
+            },
+            {
+              onSuccess: () => {
+                resolve(true);
+              },
+              onError: (error) => {
+                reject(error);
+              },
+            },
+          );
+        });
+      }
 
       setProcessingStep("complete");
       setIsProcessingPDF(false);
@@ -204,6 +230,11 @@ export const usePDFProcessing = (
       // 成功時のコールバックを実行
       if (onSuccess) {
         onSuccess();
+      }
+
+      // 完了時のコールバックを実行（モーダルを閉じる等）
+      if (onComplete) {
+        onComplete();
       }
     } catch (error) {
       console.error("グラフ処理エラー:", error);

@@ -4,11 +4,18 @@ type DropFileProviderProps = {
   children: React.ReactNode;
   setFile: React.Dispatch<React.SetStateAction<File | null>>;
   multiple?: boolean;
+  className?: string;
+  dragOverClassName?: string;
+  defaultClassName?: string;
 };
 
 export const DropFileProvider = ({
   children,
   setFile,
+  className,
+  defaultClassName,
+  dragOverClassName,
+  multiple = false,
 }: DropFileProviderProps) => {
   const [isDragActive, setIsDragActive] = useState<boolean>(false);
 
@@ -35,15 +42,34 @@ export const DropFileProvider = ({
   };
 
   return (
-    <div className="relative flex h-full w-full flex-col items-center rounded-md bg-slate-500">
+    <div className={className}>
       <div
-        className={`rounded-md border-2 border-dashed ${isDragActive ? "z-20 border-orange-500 bg-slate-500/80" : "z-0 border-slate-200"} absolute inset-0 `}
+        className={`${defaultClassName} ${isDragActive && dragOverClassName}`}
         onDragEnter={onDragEnter}
         onDragLeave={onDragLeave}
         onDragOver={(e) => e.preventDefault()}
         onDrop={onDrop}
       ></div>
-      <div className="pointer-events-none z-10 p-8">{children}</div>
+      <div className="pointer-events-none z-10">{children}</div>
     </div>
+  );
+};
+
+export const DropFileProviderDashed = ({
+  children,
+  setFile,
+}: {
+  children: React.ReactNode;
+  setFile: React.Dispatch<React.SetStateAction<File | null>>;
+}) => {
+  return (
+    <DropFileProvider
+      setFile={setFile}
+      className="relative flex h-full w-full flex-col items-center rounded-md bg-slate-500"
+      defaultClassName="rounded-md border-2 border-dashed absolute inset-0 z-0 border-slate-200"
+      dragOverClassName="!z-20 !border-orange-500 !bg-slate-500/80"
+    >
+      <div className="p-8">{children}</div>
+    </DropFileProvider>
   );
 };
