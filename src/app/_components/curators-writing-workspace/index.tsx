@@ -35,6 +35,7 @@ import { NodeDetailPanel } from "./node-detail-panel";
 import { PDFDropZone } from "./pdf-drop-zone";
 import { usePDFProcessing } from "./hooks/use-pdf-processing";
 import { Modal } from "../modal/modal";
+import { EditableTitle } from "./editable-title";
 import { useGraphEditor } from "@/app/_hooks/use-graph-editor";
 import {
   LinkPropertyEditModal,
@@ -95,8 +96,6 @@ const CuratorsWritingWorkspace = ({
   const [isPDFUploadModalOpen, setIsPDFUploadModalOpen] =
     useState<boolean>(false);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [editingTitle, setEditingTitle] = useState(workspace.name);
   const [displayTitle, setDisplayTitle] = useState(workspace.name);
 
   // workspace.nameが更新されたらdisplayTitleも更新
@@ -119,13 +118,12 @@ const CuratorsWritingWorkspace = ({
       if (data?.name) {
         setDisplayTitle(data.name);
       }
-      setIsEditingTitle(false);
       void refetch(); // データを再取得
     },
     onError: (error) => {
       console.error("ワークスペース名の更新に失敗しました:", error);
-      setIsEditingTitle(false);
-      setEditingTitle(workspace.name); // エラー時は元の名前に戻す
+      // エラー時は元の名前に戻す
+      setDisplayTitle(workspace.name);
     },
   });
 
@@ -327,38 +325,12 @@ const CuratorsWritingWorkspace = ({
     setEditorContent(content);
   };
 
-  const handleTitleEdit = (value: string) => {
-    setIsEditingTitle(true);
-    setEditingTitle(value);
-  };
-
-  const handleTitleSave = () => {
-    const trimmedTitle = editingTitle.trim();
-
-    // バリデーション: 空文字または変更なしの場合は編集を終了
-    if (!trimmedTitle || trimmedTitle === workspace.name) {
-      setIsEditingTitle(false);
-      setEditingTitle(workspace.name);
-      return;
-    }
-
-    // 更新中は編集モードを維持（isEditingTitleをfalseにしない）
-    updateWorkspace.mutate({
-      id: workspace.id,
-      name: trimmedTitle,
-    });
-  };
-
-  const handleTitleCancel = () => {
-    setIsEditingTitle(false);
-    setEditingTitle(workspace.name);
-  };
-
-  const handleTitleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleTitleSave();
-    } else if (e.key === "Escape") {
-      handleTitleCancel();
+  const handleTitleSave = (newTitle: string) => {
+    if (newTitle !== workspace.name) {
+      updateWorkspace.mutate({
+        id: workspace.id,
+        name: newTitle,
+      });
     }
   };
 
@@ -402,31 +374,11 @@ const CuratorsWritingWorkspace = ({
                   <ChevronLeftIcon height={16} width={16} color="white" />
                 </div>
               </LinkButton>
-              {isEditingTitle ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={editingTitle}
-                    onChange={(e) => setEditingTitle(e.target.value)}
-                    onBlur={handleTitleSave}
-                    onKeyDown={handleTitleKeyPress}
-                    disabled={updateWorkspace.isPending}
-                    className="bg-transparent text-lg font-semibold text-gray-400 outline-none focus:text-white disabled:opacity-50"
-                    autoFocus
-                  />
-                  {updateWorkspace.isPending && (
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent"></div>
-                  )}
-                </div>
-              ) : (
-                <h2
-                  className="cursor-pointer text-lg font-semibold text-gray-400 hover:text-white"
-                  onClick={() => handleTitleEdit(displayTitle)}
-                  title="クリックして編集"
-                >
-                  {displayTitle}
-                </h2>
-              )}
+              <EditableTitle
+                title={displayTitle}
+                onSave={handleTitleSave}
+                isPending={updateWorkspace.isPending}
+              />
             </div>
 
             {/* Right Panel Toggle Button */}

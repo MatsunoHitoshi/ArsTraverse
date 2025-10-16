@@ -153,7 +153,7 @@ export const TopicSpaceAttachModal = ({
                         topicSpaces ? topicSpaces.name : ""
                       }
                       onChange={(event) => setQuery(event.target.value)}
-                      placeholder="ドキュメント名を入力"
+                      placeholder="リポジトリ名を入力"
                       className={clsx(
                         "w-full rounded-lg border-none bg-white/5 py-1.5 pl-3 pr-8 text-sm/6 text-white",
                         "focus:outline-none data-[focus]:outline-1 data-[focus]:-outline-offset-2 data-[focus]:outline-slate-400",
