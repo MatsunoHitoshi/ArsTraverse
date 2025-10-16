@@ -2,10 +2,10 @@
 import Image from "next/image";
 import { Button } from "../button/button";
 import { signIn, signOut, useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { DashboardIcon } from "../icons";
 import { loginProhibited } from "@/app/const/page-config";
-import { usePathname } from "next/navigation";
+import { ThemeToggle } from "../theme/theme-toggle";
 
 export const Header = () => {
   const { data: session } = useSession();
@@ -14,7 +14,7 @@ export const Header = () => {
   const isLoginProhibited = loginProhibited(pathname);
   return (
     <div className="z-20 w-full p-1">
-      <div className="flex h-12 w-full flex-row items-center justify-between rounded-2xl bg-slate-700 text-slate-50">
+      <div className="flex h-12 w-full flex-row items-center justify-between rounded-2xl bg-slate-100 text-slate-900 dark:bg-slate-700 dark:text-slate-50">
         <div className="text-md font-semibold">
           <Button
             className="!py-0"
@@ -60,6 +60,7 @@ export const Header = () => {
                   >
                     <DashboardIcon width={18} height={18} />
                   </Button>
+                  <ThemeToggle />
                   <Button
                     onClick={() => {
                       router.push("/account");

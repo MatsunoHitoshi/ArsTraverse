@@ -356,14 +356,14 @@ const CuratorsWritingWorkspace = ({
   };
 
   return (
-    <div className="flex h-screen w-full gap-2 bg-slate-900 p-4 font-sans">
+    <div className="flex h-screen w-full gap-2 bg-white p-4 font-sans dark:bg-slate-900">
       {/* Left Column: Text Editor */}
       <div
         className={`flex h-[calc(100svh-80px)] flex-col transition-all duration-300 ${
           isRightPanelOpen ? (isGraphEditor ? "w-1/2" : "w-2/3") : "w-full"
         }`}
       >
-        <div className="flex h-full flex-col bg-slate-900">
+        <div className="flex h-full flex-col bg-white dark:bg-slate-900">
           <div className="mb-2 flex w-full flex-row items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <LinkButton
@@ -427,7 +427,7 @@ const CuratorsWritingWorkspace = ({
           >
             <div
               ref={graphContainerRef}
-              className="relative flex h-full w-full flex-col items-center justify-center rounded-t-lg border border-b-0 border-gray-300 bg-slate-900 text-gray-400"
+              className="relative flex h-full w-full flex-col items-center justify-center rounded-t-lg border border-b-0 border-gray-300 bg-white text-gray-600 dark:bg-slate-900 dark:text-gray-400"
             >
               {topicSpace ? (
                 <>
@@ -574,7 +574,7 @@ const CuratorsWritingWorkspace = ({
                 topicSpaceId={topicSpaceId}
               />
             ) : (
-              <div className="flex h-full w-full items-center justify-center rounded-b-lg border border-t-0 border-gray-300 bg-slate-800 text-gray-400">
+              <div className="flex h-full w-full items-center justify-center rounded-b-lg border border-t-0 border-gray-300 bg-gray-50 text-gray-600 dark:bg-slate-800 dark:text-gray-400">
                 <div className="text-center">
                   <p className="text-sm">
                     リポジトリを選択すると詳細パネルが表示されます

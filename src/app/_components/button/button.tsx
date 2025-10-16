@@ -16,7 +16,8 @@ type ButtonProps = {
 const style = {
   theme: {
     transparent: "rounded-lg bg-black/20 p-2 backdrop-blur-sm",
-    primary: " rounded-md bg-slate-700 text-slate-50",
+    primary:
+      " rounded-md bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-50",
   },
   size: {
     small: "text-sm p-2",
@@ -49,7 +50,7 @@ export const Button = ({
           {children}
         </button>
       ) : (
-        <div className="font-md flex flex-row items-center justify-center rounded-md bg-slate-700 px-3 py-2 text-slate-50 hover:bg-slate-700/90">
+        <div className="font-md flex flex-row items-center justify-center rounded-md bg-slate-200 px-3 py-2 text-slate-900 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-50 dark:hover:bg-slate-700/90">
           <Loading color="white" size={20} />
         </div>
       )}

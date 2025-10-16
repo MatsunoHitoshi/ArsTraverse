@@ -20,9 +20,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${GeistSans.variable} bg-slate-900`}>
+    <html
+      lang="en"
+      className={`${GeistSans.variable} bg-white dark:bg-slate-900`}
+    >
       <Analytics />
-      <body>
+      <body className="text-slate-900 dark:text-white">
         <TRPCReactProvider>
           <NextAuthProvider>
             <div className="fixed top-0 z-20 w-full">

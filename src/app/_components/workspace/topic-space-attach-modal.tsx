@@ -155,19 +155,19 @@ export const TopicSpaceAttachModal = ({
                       onChange={(event) => setQuery(event.target.value)}
                       placeholder="リポジトリ名を入力"
                       className={clsx(
-                        "w-full rounded-lg border-none bg-white/5 py-1.5 pl-3 pr-8 text-sm/6 text-white",
+                        "w-full rounded-lg border-none bg-white/5 py-1.5 pl-3 pr-8 text-sm/6 text-slate-900 dark:bg-white/5 dark:text-white",
                         "focus:outline-none data-[focus]:outline-1 data-[focus]:-outline-offset-2 data-[focus]:outline-slate-400",
                       )}
                     />
                     <ComboboxOptions
                       anchor="bottom start"
-                      className="z-50 max-w-[300px] divide-y divide-slate-400 rounded-md border bg-slate-900 empty:invisible"
+                      className="z-50 max-w-[300px] divide-y divide-slate-400 rounded-md border bg-white empty:invisible dark:bg-slate-900"
                     >
                       {filteredTopicSpaces.map((document) => (
                         <ComboboxOption
                           key={document.id}
                           value={document}
-                          className="cursor-pointer p-2 text-slate-50 data-[focus]:bg-slate-400 data-[focus]:text-black"
+                          className="cursor-pointer p-2 text-slate-900 data-[focus]:bg-slate-200 data-[focus]:text-slate-900 dark:text-slate-50 dark:data-[focus]:bg-slate-400 dark:data-[focus]:text-black"
                         >
                           {document.name}
                         </ComboboxOption>
