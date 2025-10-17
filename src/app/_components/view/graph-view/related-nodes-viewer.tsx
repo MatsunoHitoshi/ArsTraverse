@@ -12,6 +12,8 @@ export const RelatedNodesAndLinksViewer = ({
   className,
   height,
   width,
+  setFocusedNode,
+  focusedNode,
   onClose,
 }: {
   node: CustomNodeType;
@@ -19,6 +21,10 @@ export const RelatedNodesAndLinksViewer = ({
   className?: string;
   height?: number;
   width?: number;
+  setFocusedNode: React.Dispatch<
+    React.SetStateAction<CustomNodeType | undefined>
+  >;
+  focusedNode: CustomNodeType | undefined;
   onClose?: () => void;
 }) => {
   const { data: relatedNodesAndLinks } = api.kg.getRelatedNodes.useQuery({
@@ -30,9 +36,9 @@ export const RelatedNodesAndLinksViewer = ({
   const [containerWidth, setContainerWidth] = useState<number>(width ?? 400);
   const [containerHeight, setContainerHeight] = useState<number>(height ?? 400);
   const [currentScale, setCurrentScale] = useState<number>(1);
-  const [focusedNode, setFocusedNode] = useState<CustomNodeType | undefined>(
-    undefined,
-  );
+  // const [focusedNode, setFocusedNode] = useState<CustomNodeType | undefined>(
+  //   undefined,
+  // );
   const [focusedLink, setFocusedLink] = useState<CustomLinkType | undefined>(
     undefined,
   );

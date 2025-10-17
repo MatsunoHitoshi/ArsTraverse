@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { Button } from "../button/button";
-import type { AnnotationResponse } from "@/app/const/types";
+import type { AnnotationResponse, CustomNodeType } from "@/app/const/types";
 import { convertJsonToText } from "@/app/_utils/tiptap/convert";
 import { AnnotationForm } from "./annotation-form";
 import Image from "next/image";
@@ -13,12 +13,9 @@ import {
   getAnnotationTypeColor,
   getAnnotationTypeLabel,
 } from "@/app/_utils/annotation/type-utils";
-import { useSession } from "next-auth/react";
-import {
-  DeleteRecordModal,
-  type DeleteRecordType,
-} from "../modal/delete-record-modal";
 import { PlusIcon } from "../icons";
+import { HighlightedText } from "../common/highlighted-text";
+import { api } from "@/trpc/react";
 
 interface AnnotationListProps {
   annotations: AnnotationResponse[];
@@ -26,6 +23,9 @@ interface AnnotationListProps {
   topicSpaceId: string;
   showOnlyTopLevel?: boolean; // トップレベルの注釈のみを表示するかどうか
   handleGenerateAnnotationFromDocument?: () => void;
+  setFocusedNode: React.Dispatch<
+    React.SetStateAction<CustomNodeType | undefined>
+  >;
 }
 
 export const AnnotationList: React.FC<AnnotationListProps> = ({
@@ -34,8 +34,8 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
   topicSpaceId,
   showOnlyTopLevel = true,
   handleGenerateAnnotationFromDocument,
+  setFocusedNode,
 }) => {
-  const { data: session } = useSession();
   const [parentAnnotationId, setParentAnnotationId] = useState<string | null>(
     null,
   );
@@ -44,20 +44,18 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
   const [expandedReplies, setExpandedReplies] = useState<Set<string>>(
     new Set(),
   );
-  const [deleteModalOpen, setDeleteModalOpen] = useState<boolean>(false);
-  const [deleteIntent, setDeleteIntent] = useState<{
-    id: string;
-    type: DeleteRecordType;
-  }>();
+
+  // トピックスペースのノードデータを取得（ハイライト用）
+  const { data: topicSpaceData } = api.topicSpaces.getByIdPublic.useQuery(
+    { id: topicSpaceId },
+    { enabled: !!topicSpaceId },
+  );
+
+  const entities = topicSpaceData?.graphData?.nodes ?? [];
 
   const handleReply = (annotationId: string) => {
     setParentAnnotationId(annotationId);
     setShowAnnotationForm(true);
-  };
-
-  const handleDelete = (annotationId: string) => {
-    setDeleteIntent({ id: annotationId, type: "annotation" });
-    setDeleteModalOpen(true);
   };
 
   const toggleReplies = (annotationId: string) => {
@@ -136,15 +134,6 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
                   詳細
                 </Button>
               </Link>
-              {/* {session?.user?.id === annotation.authorId && (
-                <Button
-                  size="small"
-                  onClick={() => handleDelete(annotation.id)}
-                  className="flex h-6 flex-row items-center justify-center bg-red-700 px-2 text-xs hover:bg-red-600"
-                >
-                  削除
-                </Button>
-              )} */}
             </div>
           </div>
 
@@ -158,8 +147,17 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
 
           {/* 注釈内容 */}
           <div className="p-2 text-sm text-gray-200">
-            {convertJsonToText(annotation.content).substring(0, 200)}
-            {convertJsonToText(annotation.content).length > 200 && "..."}
+            <HighlightedText
+              text={convertJsonToText(annotation.content)}
+              entities={entities}
+              maxLength={300}
+              showEllipsis={true}
+              onEntityClick={(_entityName, entityId) => {
+                setFocusedNode(
+                  entities.find((entity) => entity.id === entityId),
+                );
+              }}
+            />
           </div>
 
           {/* 子注釈 */}
@@ -244,9 +242,19 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
                           />
                         </div>
                         <div className="text-xs text-gray-300">
-                          {convertJsonToText(child.content).substring(0, 100)}
-                          {convertJsonToText(child.content).length > 100 &&
-                            "..."}
+                          <HighlightedText
+                            text={convertJsonToText(child.content)}
+                            entities={entities}
+                            maxLength={100}
+                            showEllipsis={true}
+                            onEntityClick={(_entityName, entityId) => {
+                              setFocusedNode(
+                                entities.find(
+                                  (entity) => entity.id === entityId,
+                                ),
+                              );
+                            }}
+                          />
                         </div>
                       </div>
                     ))}
@@ -282,15 +290,6 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
           void onRefetch();
         }}
       />
-      {deleteIntent && (
-        <DeleteRecordModal
-          isOpen={deleteModalOpen}
-          setIsOpen={setDeleteModalOpen}
-          type={deleteIntent.type}
-          id={deleteIntent.id}
-          refetch={onRefetch}
-        />
-      )}
     </div>
   );
 };

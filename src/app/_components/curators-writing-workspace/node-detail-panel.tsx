@@ -9,11 +9,15 @@ import type { CustomNodeType } from "@/app/const/types";
 interface NodeDetailPanelProps {
   activeEntity: CustomNodeType | undefined;
   topicSpaceId: string;
+  setFocusedNode: React.Dispatch<
+    React.SetStateAction<CustomNodeType | undefined>
+  >;
 }
 
 export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({
   activeEntity,
   topicSpaceId,
+  setFocusedNode,
 }) => {
   const [showGraphExtractionModal, setShowGraphExtractionModal] =
     useState(false);
@@ -49,11 +53,15 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({
         <p className="mt-2 text-sm">
           {String(activeEntity.properties?.description ?? "No description")}
         </p>
-        <div className="my-4 border-b border-gray-400" />
+        <div className="my-3 border-b border-gray-400" />
       </div>
 
       {/* 注釈セクション */}
-      <NodeAnnotationSection node={activeEntity} topicSpaceId={topicSpaceId} />
+      <NodeAnnotationSection
+        node={activeEntity}
+        topicSpaceId={topicSpaceId}
+        setFocusedNode={setFocusedNode}
+      />
 
       {/* グラフ抽出モーダル */}
       {showGraphExtractionModal && annotations && (

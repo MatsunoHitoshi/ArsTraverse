@@ -13,6 +13,7 @@ import {
 } from "@/app/_utils/kg/data-disambiguation";
 import type {
   NodeTypeForFrontend,
+  ReferenceSection,
   RelationshipTypeForFrontend,
   TopicGraphFilterOption,
 } from "@/app/const/types";
@@ -1246,6 +1247,47 @@ export const topicSpaceRouter = createTRPCRouter({
       return updatedTopicSpace;
     }),
 
+  getNodeReference: protectedProcedure
+    .input(z.object({ id: z.string(), nodeId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const topicSpace = await ctx.db.topicSpace.findFirst({
+        where: { id: input.id },
+        include: {
+          admins: true,
+          sourceDocuments: true,
+        },
+      });
+      if (!topicSpace) {
+        throw new Error("TopicSpace not found");
+      }
+      adminGuard(topicSpace, ctx);
+
+      const node = await ctx.db.graphNode.findFirst({
+        where: { id: input.nodeId },
+      });
+      if (!node) {
+        throw new Error("Node not found");
+      }
+
+      const referenceSections: ReferenceSection[] = [];
+
+      for (const sourceDocument of topicSpace.sourceDocuments) {
+        const relevantSections = await getTextReference(
+          ctx,
+          sourceDocument.id,
+          [node.name],
+          200,
+        );
+        referenceSections.push({
+          sourceDocument: sourceDocument,
+          relevantSections: relevantSections.map(
+            (section) => section.slice(150) + "...",
+          ),
+        });
+      }
+
+      return referenceSections;
+    }),
   generateNodeDescriptionFromDocument: protectedProcedure
     .input(z.object({ id: z.string(), nodeId: z.string() }))
     .mutation(async function* ({ ctx, input }) {

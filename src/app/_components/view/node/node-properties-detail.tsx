@@ -3,7 +3,7 @@ import { Button } from "../../button/button";
 import { ChevronRightIcon, Pencil2Icon } from "../../icons";
 import { usePathname, useRouter } from "next/navigation";
 import { api } from "@/trpc/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loading } from "../../loading/loading";
 import { PropertiesDetailPanel } from "../../d3/force/graph-info-panel";
 import { NodePropertiesForm } from "../../form/node-properties-form";
@@ -31,6 +31,13 @@ export const NodePropertiesDetail = ({
     useState<GraphDocumentForFrontend | null>(null);
 
   const [onEdit, setOnEdit] = useState<boolean>(false);
+  const [focusedNode, setFocusedNode] = useState<CustomNodeType | undefined>(
+    undefined,
+  );
+
+  useEffect(() => {
+    router.push(`${pathname}?list=true&nodeId=${focusedNode?.id}`);
+  }, [focusedNode]);
 
   if (!node) {
     return null;
@@ -81,6 +88,8 @@ export const NodePropertiesDetail = ({
               <RelatedNodesAndLinksViewer
                 node={node}
                 topicSpaceId={topicSpaceId}
+                setFocusedNode={setFocusedNode}
+                focusedNode={focusedNode}
                 className="flex w-full flex-col gap-1 rounded-md border border-gray-600"
               />
               <a
@@ -128,7 +137,11 @@ export const NodePropertiesDetail = ({
             </div>
 
             <div className="flex w-full flex-col gap-4">
-              <NodeAnnotationSection node={node} topicSpaceId={topicSpaceId} />
+              <NodeAnnotationSection
+                node={node}
+                topicSpaceId={topicSpaceId}
+                setFocusedNode={setFocusedNode}
+              />
             </div>
 
             {topicSpaceId && refetch && newGraphDocument && (

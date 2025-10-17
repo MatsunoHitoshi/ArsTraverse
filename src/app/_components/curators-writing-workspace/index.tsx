@@ -440,6 +440,8 @@ const CuratorsWritingWorkspace = ({
                           className="h-full w-full"
                           height={graphSize.height}
                           width={graphSize.width}
+                          setFocusedNode={setActiveEntity}
+                          focusedNode={activeEntity}
                           onClose={() => setActiveEntity(undefined)}
                         />
                       ) : (
@@ -572,6 +574,7 @@ const CuratorsWritingWorkspace = ({
               <NodeDetailPanel
                 activeEntity={activeEntity}
                 topicSpaceId={topicSpaceId}
+                setFocusedNode={setActiveEntity}
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center rounded-b-lg border border-t-0 border-gray-300 bg-slate-800 text-gray-400">
