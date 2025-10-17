@@ -3,6 +3,7 @@
 import React from "react";
 import { api } from "@/trpc/react";
 import type { CustomNodeType } from "@/app/const/types";
+import Link from "next/link";
 
 interface NodeReferencePanelProps {
   node: CustomNodeType;
@@ -91,10 +92,17 @@ export const NodeReferencePanel: React.FC<NodeReferencePanelProps> = ({
             key={reference.sourceDocument.id}
             className="rounded-lg border border-slate-600 bg-slate-800/50 p-4"
           >
-            <h4 className="mb-3 flex items-center font-semibold text-gray-200">
-              <span className="mr-2 h-2 w-2 rounded-full bg-blue-400"></span>
-              {reference.sourceDocument.name}
-            </h4>
+            <Link
+              href={reference.sourceDocument.url}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <h4 className="mb-3 flex items-center font-semibold text-gray-200">
+                <span className="mr-2 h-2 w-2 rounded-full bg-blue-400"></span>
+                {reference.sourceDocument.name}
+              </h4>
+            </Link>
+
             <div className="space-y-3">
               {reference.relevantSections.map((section, index) => (
                 <div
