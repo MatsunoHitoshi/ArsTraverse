@@ -173,10 +173,10 @@ export const D3ForceGraph = ({
           .id((d) => d.id)
           .distance(
             (d) =>
-              20 *
+              38 *
               (distance(d) * distance(d) * distance(d) * distance(d) * 3 || 1),
           )
-          .strength((d) => 0.15 / (distance(d) * distance(d) || 1)),
+          .strength((d) => 0.125 / (distance(d) * distance(d) || 1)),
       )
       .force("center", forceCenter(centerX, centerY))
       .force("charge", forceManyBody().strength(-40))
@@ -513,7 +513,7 @@ export const D3ForceGraph = ({
                                   : "whitesmoke"
                         }
                         opacity={
-                          isNodeFiltered(graphNode, filterOption) ? 0.95 : 0.6
+                          isNodeFiltered(graphNode, filterOption) ? 0.9 : 0.6
                         }
                         cx={graphNode.x}
                         cy={graphNode.y}
@@ -526,14 +526,16 @@ export const D3ForceGraph = ({
                           y={graphNode.y}
                           textAnchor="middle"
                           fill={
-                            queryFiltered
-                              ? "#eab000"
-                              : isClustered
-                                ? "whitesmoke"
-                                : "dimgray"
+                            isFocused
+                              ? "whitesmoke"
+                              : queryFiltered
+                                ? "#eab000"
+                                : isClustered
+                                  ? "whitesmoke"
+                                  : "dimgray"
                           }
                           fontSize={
-                            currentScale > 4 ? 4 : currentScale > 3 ? 6 : 8
+                            currentScale > 4 ? 3 : currentScale > 4 ? 4 : 6
                           }
                         >
                           {graphNode.name}
