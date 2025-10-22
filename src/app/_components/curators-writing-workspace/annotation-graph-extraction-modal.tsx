@@ -82,7 +82,7 @@ export const AnnotationGraphExtractionModal: React.FC<
                 documentIds: [data.sourceDocument.id],
               },
               {
-                onSuccess: (data) => {
+                onSuccess: (_data) => {
                   alert("グラフの統合が完了しました");
                   onClose();
                 },

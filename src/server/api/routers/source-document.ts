@@ -6,6 +6,7 @@ import {
   publicProcedure,
 } from "@/server/api/trpc";
 import type {
+  LocaleEnum,
   NodeTypeForFrontend,
   RelationshipTypeForFrontend,
 } from "@/app/const/types";
@@ -111,7 +112,10 @@ export const sourceDocumentRouter = createTRPCRouter({
 
       return {
         ...document,
-        graph: formDocumentGraphForFrontend(document.graph),
+        graph: formDocumentGraphForFrontend(
+          document.graph,
+          ctx.session?.user.preferredLocale as LocaleEnum,
+        ),
         text: await getTextFromDocumentFile(
           document.url,
           document.documentType,
@@ -139,7 +143,10 @@ export const sourceDocumentRouter = createTRPCRouter({
 
       return {
         ...document,
-        graph: formDocumentGraphForFrontend(document.graph),
+        graph: formDocumentGraphForFrontend(
+          document.graph,
+          ctx.session?.user.preferredLocale as LocaleEnum,
+        ),
       };
     }),
 

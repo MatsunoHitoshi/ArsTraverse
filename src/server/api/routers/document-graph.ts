@@ -6,6 +6,7 @@ import {
   publicProcedure,
 } from "@/server/api/trpc";
 import type {
+  LocaleEnum,
   NodeTypeForFrontend,
   RelationshipTypeForFrontend,
 } from "@/app/const/types";
@@ -53,6 +54,7 @@ export const documentGraphRouter = createTRPCRouter({
       return {
         ...graph,
         dataJson: formGraphDataForFrontend({
+          preferredLocale: ctx.session?.user.preferredLocale as LocaleEnum,
           nodes: graph.graphNodes,
           relationships: graph.graphRelationships,
         }),

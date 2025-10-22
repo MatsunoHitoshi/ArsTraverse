@@ -1,0 +1,115 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "open": "Open",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "confirm": "Confirm",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "navigation": {
+    "dashboard": "Dashboard",
+    "documents": "Documents",
+    "topicSpaces": "Repository",
+    "workspaces": "Workspaces",
+    "annotations": "Annotations",
+    "account": "Account",
+    "signIn": "Sign In",
+    "signOut": "Sign Out",
+    "signUp": "Sign Up"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "recentDocuments": "Recent Documents",
+    "recentActivity": "Recent Activity",
+    "repository": "Repository",
+    "moveToTool": "Move to Tool"
+  },
+  "document": {
+    "title": "Document",
+    "name": "Name",
+    "description": "Description",
+    "upload": "Upload",
+    "download": "Download",
+    "view": "View",
+    "edit": "Edit",
+    "create": "Create",
+    "newDocument": "New Document"
+  },
+  "topicSpace": {
+    "title": "Topic Space",
+    "name": "Name",
+    "description": "Description",
+    "create": "Create",
+    "edit": "Edit",
+    "delete": "Delete",
+    "star": "Star",
+    "attachDocument": "Attach Document"
+  },
+  "graph": {
+    "title": "Graph",
+    "nodes": "Nodes",
+    "edges": "Edges",
+    "properties": "Properties",
+    "treeView": "Tree View",
+    "generateFromDescription": "Generate Graph from Description",
+    "regenerateGraph": "Regenerate Graph",
+    "relatedNodes": "Related Nodes",
+    "relatedLinks": "Related Links"
+  },
+  "account": {
+    "title": "Account Settings",
+    "profile": "Profile",
+    "language": "Language",
+    "preferences": "Preferences",
+    "update": "Update",
+    "save": "Save"
+  },
+  "annotation": {
+    "title": "Annotation",
+    "comment": "Comment",
+    "interpretation": "Interpretation",
+    "question": "Question",
+    "clarification": "Clarification",
+    "criticism": "Criticism",
+    "support": "Support",
+    "add": "Add",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "workspace": {
+    "title": "Workspace",
+    "name": "Name",
+    "description": "Description",
+    "content": "Content",
+    "status": "Status",
+    "draft": "Draft",
+    "inProgress": "In Progress",
+    "review": "Review",
+    "published": "Published",
+    "archived": "Archived",
+    "create": "Create",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "errors": {
+    "generic": "An error occurred",
+    "network": "Network error occurred",
+    "unauthorized": "Authentication required",
+    "forbidden": "Access denied",
+    "notFound": "Resource not found",
+    "validation": "Input validation error"
+  },
+  "validation": {
+    "required": "This field is required",
+    "email": "Please enter a valid email address",
+    "minLength": "Please enter at least {min} characters",
+    "maxLength": "Please enter at most {max} characters"
+  }
+}

@@ -14,6 +14,7 @@ export const env = createEnv({
       .default("development"),
     OPENAI_API_KEY: z.string(),
     TMP_DIRECTORY: z.string(),
+    HUGGINGFACE_API_KEY: z.string(),
     NEXTAUTH_SECRET:
       process.env.NODE_ENV === "production"
         ? z.string()
@@ -47,6 +48,7 @@ export const env = createEnv({
    * middlewares) or client-side so we need to destruct manually.
    */
   runtimeEnv: {
+    HUGGINGFACE_API_KEY: process.env.HUGGINGFACE_API_KEY,
     DATABASE_URL: process.env.DATABASE_URL,
     DIRECT_URL: process.env.DIRECT_URL,
     NODE_ENV: process.env.NODE_ENV,

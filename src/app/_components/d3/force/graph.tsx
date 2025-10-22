@@ -273,7 +273,9 @@ export const D3ForceGraph = ({
         {toolComponent}
         {nodes.length === 0 && relationships.length === 0 ? (
           <div className="mt-60 flex flex-col items-center">
-            <div>グラフデータがありません</div>
+            <div>
+              <span translate="yes">グラフデータがありません</span>
+            </div>
           </div>
         ) : (
           <svg

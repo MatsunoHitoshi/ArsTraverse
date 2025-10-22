@@ -58,7 +58,7 @@ export const TopicSpaceCard = ({ topicSpace, menu }: TopicSpaceCardProps) => {
               className="rounded-full border border-slate-400"
             />
           ) : (
-            <div className="flex h-12 w-12 flex-row items-center justify-center rounded-full border border-slate-400">
+            <div className="flex !h-12 !w-12 !min-w-12 flex-row items-center justify-center rounded-full border border-slate-400">
               <StackIcon height={24} width={24} color="white" />
             </div>
           )}

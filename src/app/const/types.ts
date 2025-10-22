@@ -13,7 +13,6 @@ import type {
   AnnotationDiscussion,
 } from "@prisma/client";
 import type { SimulationNodeDatum, SimulationLinkDatum } from "d3";
-import { experimental_taintUniqueValue } from "react";
 
 export interface TopicSpaceResponse extends TopicSpace {
   sourceDocuments: DocumentResponseWithGraphData[] | null;
@@ -267,3 +266,5 @@ export type ReferenceSection = {
   relevantSections: string[];
   sourceDocument: SourceDocument;
 };
+
+export type LocaleEnum = "ja" | "en";

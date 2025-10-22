@@ -1,0 +1,115 @@
+{
+  "common": {
+    "save": "保存",
+    "cancel": "キャンセル",
+    "delete": "削除",
+    "edit": "編集",
+    "close": "閉じる",
+    "open": "開く",
+    "loading": "読み込み中...",
+    "error": "エラー",
+    "success": "成功",
+    "confirm": "確認",
+    "yes": "はい",
+    "no": "いいえ"
+  },
+  "navigation": {
+    "dashboard": "ダッシュボード",
+    "documents": "ドキュメント",
+    "topicSpaces": "リポジトリ",
+    "workspaces": "ワークスペース",
+    "annotations": "注釈",
+    "account": "アカウント",
+    "signIn": "サインイン",
+    "signOut": "サインアウト",
+    "signUp": "サインアップ"
+  },
+  "dashboard": {
+    "title": "ダッシュボード",
+    "recentDocuments": "最近のドキュメント",
+    "recentActivity": "最近のアクティビティ",
+    "repository": "リポジトリ",
+    "moveToTool": "ツールへ移動"
+  },
+  "document": {
+    "title": "ドキュメント",
+    "name": "名前",
+    "description": "説明",
+    "upload": "アップロード",
+    "download": "ダウンロード",
+    "view": "表示",
+    "edit": "編集",
+    "create": "作成",
+    "newDocument": "新しいドキュメント"
+  },
+  "topicSpace": {
+    "title": "トピックスペース",
+    "name": "名前",
+    "description": "説明",
+    "create": "作成",
+    "edit": "編集",
+    "delete": "削除",
+    "star": "スター",
+    "attachDocument": "ドキュメントを添付"
+  },
+  "graph": {
+    "title": "グラフ",
+    "nodes": "ノード",
+    "edges": "エッジ",
+    "properties": "プロパティ",
+    "treeView": "ツリー表示",
+    "generateFromDescription": "descriptionからグラフを生成",
+    "regenerateGraph": "グラフの再生成",
+    "relatedNodes": "関連ノード",
+    "relatedLinks": "関連リンク"
+  },
+  "account": {
+    "title": "アカウント設定",
+    "profile": "プロフィール",
+    "language": "言語",
+    "preferences": "設定",
+    "update": "更新",
+    "save": "保存"
+  },
+  "annotation": {
+    "title": "注釈",
+    "comment": "コメント",
+    "interpretation": "解釈",
+    "question": "質問",
+    "clarification": "補足",
+    "criticism": "批評",
+    "support": "支持",
+    "add": "追加",
+    "edit": "編集",
+    "delete": "削除"
+  },
+  "workspace": {
+    "title": "ワークスペース",
+    "name": "名前",
+    "description": "説明",
+    "content": "内容",
+    "status": "状態",
+    "draft": "下書き",
+    "inProgress": "執筆中",
+    "review": "レビュー中",
+    "published": "公開済み",
+    "archived": "アーカイブ",
+    "create": "作成",
+    "edit": "編集",
+    "delete": "削除"
+  },
+  "errors": {
+    "generic": "エラーが発生しました",
+    "network": "ネットワークエラーが発生しました",
+    "unauthorized": "認証が必要です",
+    "forbidden": "アクセスが拒否されました",
+    "notFound": "リソースが見つかりません",
+    "validation": "入力値に問題があります"
+  },
+  "validation": {
+    "required": "この項目は必須です",
+    "email": "有効なメールアドレスを入力してください",
+    "minLength": "最低{min}文字以上入力してください",
+    "maxLength": "最大{max}文字まで入力してください"
+  }
+}

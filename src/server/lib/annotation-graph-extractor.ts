@@ -9,6 +9,7 @@ import type { Extractor } from "@/server/lib/extractors/base";
 import { AssistantsApiExtractor } from "@/server/lib/extractors/assistants";
 import { LangChainExtractor } from "@/server/lib/extractors/langchain";
 import { convertJsonToText } from "@/app/_utils/tiptap/convert";
+import { completeTranslateProperties } from "@/app/_utils/kg/node-name-translation";
 
 export class AnnotationGraphExtractor {
   constructor(private db: PrismaClient) {}
@@ -142,6 +143,9 @@ export class AnnotationGraphExtractor {
       // データの曖昧性解消
       const disambiguatedNodesAndRelationships = dataDisambiguation(
         normalizedNodesAndRelationships,
+      );
+      const translatedGraphDocument = await completeTranslateProperties(
+        disambiguatedNodesAndRelationships,
       );
 
       // フロントエンド用の形式に変換

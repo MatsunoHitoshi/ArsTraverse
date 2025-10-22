@@ -13,6 +13,7 @@ import { graphEmbeddingRouter } from "./routers/graph-embedding";
 import { workspaceRouter } from "./routers/workspace";
 import { annotationRouter } from "./routers/annotation";
 import { graphEditProposalRouter } from "./routers/graph-edit-proposal";
+import { userRouter } from "./routers/user";
 
 /**
  * This is the primary router for your server.
@@ -34,6 +35,7 @@ export const appRouter = createTRPCRouter({
   workspace: workspaceRouter,
   annotation: annotationRouter,
   graphEditProposal: graphEditProposalRouter,
+  user: userRouter,
 });
 
 // export type definition of API

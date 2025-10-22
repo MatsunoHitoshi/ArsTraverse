@@ -55,6 +55,7 @@ model User {
   email                String?              @unique
   emailVerified        DateTime?
   image                String?
+  preferredLocale      String?              @default("ja") // ユーザーの優先言語設定
   accounts             Account[]
   sessions             Session[]
   sourceDocuments      SourceDocument[]

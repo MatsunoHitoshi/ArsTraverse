@@ -2,11 +2,11 @@ import { useState } from "react";
 import { api } from "@/trpc/react";
 import { storageUtils } from "@/app/_utils/supabase/supabase";
 import { BUCKETS } from "@/app/_utils/supabase/const";
-import {
+import type {
   GraphDocumentForFrontend,
   CreateSourceDocumentResponse,
 } from "@/app/const/types";
-import { TopicSpace } from "@prisma/client";
+import type { TopicSpace } from "@prisma/client";
 
 export type ProcessingStep = "upload" | "extract" | "graph" | "complete";
 

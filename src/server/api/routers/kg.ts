@@ -1,6 +1,6 @@
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { z } from "zod";
-import { exportJson, writeLocalFileFromUrl } from "@/app/_utils/sys/file";
+import { writeLocalFileFromUrl } from "@/app/_utils/sys/file";
 import type {
   NodeDiffType,
   RelationshipDiffType,
@@ -11,7 +11,6 @@ import {
   dataDisambiguation,
   fuseGraphs,
 } from "@/app/_utils/kg/data-disambiguation";
-import { env } from "@/env";
 import {
   GraphChangeEntityType,
   GraphChangeRecordType,
@@ -28,6 +27,7 @@ import {
   formRelationshipDataForFrontend,
 } from "@/app/_utils/kg/frontend-properties";
 import { KnowledgeGraphInputSchema } from "../schemas/knowledge-graph";
+import { completeTranslateProperties } from "@/app/_utils/kg/node-name-translation";
 // import type { Prisma } from "@prisma/client";
 // import { GraphDataStatus } from "@prisma/client";
 // import { stripGraphData } from "@/app/_utils/kg/data-strip";
@@ -126,21 +126,12 @@ export const kgRouter = createTRPCRouter({
         const disambiguatedNodesAndRelationships = dataDisambiguation(
           normalizedNodesAndRelationships,
         );
-
-        if (env.NODE_ENV === "development") {
-          exportJson(
-            JSON.stringify(nodesAndRelationships),
-            "node-relationship.json",
-          );
-          exportJson(
-            JSON.stringify(disambiguatedNodesAndRelationships),
-            "disambiguated-node-relationship.json",
-          );
-        }
-
+        const graphDocument = await completeTranslateProperties(
+          disambiguatedNodesAndRelationships,
+        );
         return {
           data: {
-            graph: formGraphDataForFrontend(disambiguatedNodesAndRelationships),
+            graph: formGraphDataForFrontend(graphDocument),
           },
         };
       } catch (error) {

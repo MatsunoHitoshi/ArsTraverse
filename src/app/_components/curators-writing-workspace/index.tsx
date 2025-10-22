@@ -1,7 +1,6 @@
 "use client";
 
 import type {
-  CustomLinkType,
   CustomNodeType,
   GraphDocumentForFrontend,
   TiptapGraphFilterOption,
@@ -42,7 +41,7 @@ import {
   NodePropertyEditModal,
 } from "../modal/node-link-property-edit-modal";
 import { NodeLinkEditModal } from "../modal/node-link-edit-modal";
-import { PlusCircleIcon } from "@heroicons/react/24/outline";
+// import { PlusCircleIcon } from "@heroicons/react/24/outline";
 
 interface CuratorsWritingWorkspaceProps {
   // 既存のprops（後方互換性のため）
@@ -453,7 +452,7 @@ const CuratorsWritingWorkspace = ({
                           // defaultPosition={defaultPosition}
                           graphDocument={
                             tiptapGraphFilterOption.mode === "filtered"
-                              ? tiptapFilteredGraphDocument ?? graphDocument
+                              ? (tiptapFilteredGraphDocument ?? graphDocument)
                               : graphDocument
                           }
                           isLinkFiltered={false}
@@ -466,7 +465,7 @@ const CuratorsWritingWorkspace = ({
                           }}
                           selectedGraphData={
                             tiptapGraphFilterOption.mode !== "non-filtered"
-                              ? tiptapSelectedGraphDocument ?? undefined
+                              ? (tiptapSelectedGraphDocument ?? undefined)
                               : undefined
                           }
                           toolComponent={

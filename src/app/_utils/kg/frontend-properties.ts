@@ -1,5 +1,6 @@
 import type {
   GraphDocumentForFrontend,
+  LocaleEnum,
   NodeTypeForFrontend,
   PropertyTypeForFrontend,
   RelationshipTypeForFrontend,
@@ -17,6 +18,7 @@ import type {
 import { filterGraph } from "./filter";
 
 export const addStaticPropertiesForFrontend = (graph: {
+  preferredLocale?: LocaleEnum;
   nodes: GraphNode[];
   relationships: GraphRelationship[];
 }): GraphDocumentForFrontend => {
@@ -36,7 +38,7 @@ export const addStaticPropertiesForFrontend = (graph: {
 
   return {
     nodes: nodesWithStaticProperties.map((node) =>
-      formNodeDataForFrontend(node),
+      formNodeDataForFrontend(node, graph.preferredLocale),
     ),
     relationships: links.map((link) => formRelationshipDataForFrontend(link)),
   };
@@ -51,7 +53,11 @@ const getNeighborLinkCount = (
   }).length;
 };
 
-export const formTopicSpaceForFrontendPrivate = (
+export const formTopicSpaceForFrontendPrivate = ({
+  topicSpace,
+  filterOption,
+  preferredLocale,
+}: {
   topicSpace: TopicSpace & {
     nodes: GraphNode[];
     relationships: GraphRelationship[];
@@ -65,14 +71,16 @@ export const formTopicSpaceForFrontendPrivate = (
     })[];
     tags?: Tag[];
     admins?: User[];
-  },
-  filterOption?: TopicGraphFilterOption,
-) => {
+  };
+  filterOption?: TopicGraphFilterOption;
+  preferredLocale?: LocaleEnum;
+}) => {
   if (!!filterOption) {
     const filteredGraph = filterGraph(
       filterOption,
       topicSpace.id,
       formGraphDataForFrontend({
+        preferredLocale: preferredLocale,
         nodes: topicSpace.nodes,
         relationships: topicSpace.relationships,
       }),
@@ -85,12 +93,16 @@ export const formTopicSpaceForFrontendPrivate = (
     return {
       ...topicSpace,
       graphData: addStaticPropertiesForFrontend({
+        preferredLocale: preferredLocale,
         nodes: topicSpace.nodes,
         relationships: topicSpace.relationships,
       }),
       sourceDocuments: topicSpace.sourceDocuments?.map((doc) => ({
         ...doc,
-        graph: doc.graph ? formDocumentGraphForFrontend(doc.graph) : null,
+        graph:
+          doc.graph && doc.graph.graphNodes && doc.graph.graphRelationships
+            ? formDocumentGraphForFrontend(doc.graph, preferredLocale)
+            : null,
       })),
       tags: topicSpace.tags,
       admins: topicSpace.admins,
@@ -112,13 +124,15 @@ export const formTopicSpaceForFrontendPublic = (
     })[];
     tags?: Tag[];
   },
-  filterOption?: TopicGraphFilterOption,
+  filterOption: TopicGraphFilterOption,
+  preferredLocale?: LocaleEnum,
 ) => {
   if (!!filterOption) {
     const filteredGraph = filterGraph(
       filterOption,
       topicSpace.id,
       formGraphDataForFrontend({
+        preferredLocale: preferredLocale,
         nodes: topicSpace.nodes,
         relationships: topicSpace.relationships,
       }),
@@ -131,12 +145,16 @@ export const formTopicSpaceForFrontendPublic = (
     return {
       ...topicSpace,
       graphData: addStaticPropertiesForFrontend({
+        preferredLocale: preferredLocale,
         nodes: topicSpace.nodes,
         relationships: topicSpace.relationships,
       }),
       sourceDocuments: topicSpace.sourceDocuments?.map((doc) => ({
         ...doc,
-        graph: doc.graph ? formDocumentGraphForFrontend(doc.graph) : null,
+        graph:
+          doc.graph && doc.graph.graphNodes && doc.graph.graphRelationships
+            ? formDocumentGraphForFrontend(doc.graph, preferredLocale)
+            : null,
       })),
       tags: topicSpace.tags,
     };
@@ -148,10 +166,12 @@ export const formDocumentGraphForFrontend = (
     graphNodes: GraphNode[];
     graphRelationships: GraphRelationship[];
   },
+  preferredLocale?: LocaleEnum,
 ) => {
   return {
     ...documentGraph,
     dataJson: formGraphDataForFrontend({
+      preferredLocale: preferredLocale,
       nodes: documentGraph.graphNodes,
       relationships: documentGraph.graphRelationships,
     }),
@@ -159,14 +179,16 @@ export const formDocumentGraphForFrontend = (
 };
 
 export const formGraphDataForFrontend = ({
+  preferredLocale,
   nodes,
   relationships,
 }: {
+  preferredLocale?: LocaleEnum;
   nodes: GraphNode[];
   relationships: GraphRelationship[];
 }) => {
   return {
-    nodes: nodes.map((node) => formNodeDataForFrontend(node)),
+    nodes: nodes.map((node) => formNodeDataForFrontend(node, preferredLocale)),
     relationships: relationships.map((rel) =>
       formRelationshipDataForFrontend(rel),
     ),
@@ -175,10 +197,15 @@ export const formGraphDataForFrontend = ({
 
 export const formNodeDataForFrontend = (
   node: GraphNode,
+  preferredLocale?: LocaleEnum,
 ): NodeTypeForFrontend => {
+  const nodeName = preferredLocale
+    ? (node.properties as Record<string, string>)?.[`name_${preferredLocale}`]
+    : node.name;
+
   return {
     id: node.id,
-    name: node.name,
+    name: nodeName ?? node.name,
     label: node.label,
     properties: node.properties as PropertyTypeForFrontend,
     topicSpaceId: node.topicSpaceId ?? undefined,

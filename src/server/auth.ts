@@ -22,6 +22,7 @@ declare module "next-auth" {
   interface Session extends DefaultSession {
     user: {
       id: string;
+      preferredLocale?: string;
       // ...other properties
       // role: UserRole;
     } & DefaultSession["user"];
@@ -31,6 +32,7 @@ declare module "next-auth" {
     // ...other properties
     // role: UserRole;
     id: string;
+    preferredLocale?: string;
   }
 }
 
@@ -47,6 +49,7 @@ export const authOptions: NextAuthOptions = {
       user: {
         ...session.user,
         id: user.id,
+        preferredLocale: user.preferredLocale,
       },
     }),
   },

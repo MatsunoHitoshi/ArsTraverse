@@ -12,6 +12,7 @@ import {
   mergerNodes,
 } from "@/app/_utils/kg/data-disambiguation";
 import type {
+  LocaleEnum,
   NodeTypeForFrontend,
   ReferenceSection,
   RelationshipTypeForFrontend,
@@ -256,14 +257,15 @@ export const topicSpaceRouter = createTRPCRouter({
         throw new Error("TopicSpace not found");
       }
 
-      return formTopicSpaceForFrontendPrivate(
-        {
+      return formTopicSpaceForFrontendPrivate({
+        topicSpace: {
           ...topicSpace,
           nodes: topicSpace.graphNodes,
           relationships: topicSpace.graphRelationships,
         },
-        input.filterOption as TopicGraphFilterOption,
-      );
+        filterOption: input.filterOption as TopicGraphFilterOption,
+        preferredLocale: ctx.session.user.preferredLocale as LocaleEnum,
+      });
     }),
 
   getSummaryByIdPublic: publicProcedure
@@ -323,6 +325,7 @@ export const topicSpaceRouter = createTRPCRouter({
           relationships: topicSpace.graphRelationships,
         },
         input.filterOption as TopicGraphFilterOption,
+        ctx.session?.user.preferredLocale as LocaleEnum,
       );
     }),
 
