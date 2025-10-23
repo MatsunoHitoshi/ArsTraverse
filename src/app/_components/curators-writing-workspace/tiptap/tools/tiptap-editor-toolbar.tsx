@@ -11,6 +11,10 @@ import {
   ListNumberIcon,
   QuoteIcon,
   BorderDashedIcon,
+  TextAlignRightIcon,
+  TextAlignCenterIcon,
+  TextAlignLeftIcon,
+  TextAlignJustifyIcon,
 } from "@/app/_components/icons";
 import { useHighlightToggle } from "../hooks/use-highlight-toggle";
 
@@ -169,6 +173,46 @@ export const TiptapEditorToolbar: React.FC<TiptapEditorToolbarProps> = ({
           >
             H3
           </span>
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().setTextAlign("left").run()}
+          title="左寄せ"
+        >
+          <TextAlignLeftIcon
+            height={16}
+            width={16}
+            color={editor.isActive("textAlign", "left") ? "orange" : "white"}
+          />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().setTextAlign("center").run()}
+          title="中央寄せ"
+        >
+          <TextAlignCenterIcon
+            height={16}
+            width={16}
+            color={editor.isActive("textAlign", "center") ? "orange" : "white"}
+          />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().setTextAlign("right").run()}
+          title="右寄せ"
+        >
+          <TextAlignRightIcon
+            height={16}
+            width={16}
+            color={editor.isActive("textAlign", "right") ? "orange" : "white"}
+          />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().setTextAlign("justify").run()}
+          title="均等割り付け"
+        >
+          <TextAlignJustifyIcon
+            height={16}
+            width={16}
+            color={editor.isActive("textAlign", "justify") ? "orange" : "white"}
+          />
         </ToolbarButton>
       </div>
 

@@ -31,7 +31,7 @@ export const NodeLinkEditModal = ({
           <div className="flex flex-col gap-1 py-4">
             <div className="text-sm font-bold">ノード</div>
 
-            <div className="flex flex-col divide-y divide-gray-500">
+            <div className="flex flex-col gap-2">
               {additionalGraph.nodes.map((node) => (
                 <div
                   key={node.id}
@@ -102,7 +102,7 @@ export const NodeLinkEditModal = ({
         additionalGraph.relationships.length > 0 ? (
           <div className="flex flex-col gap-1 py-4">
             <div className="text-sm font-bold">リンク</div>
-            <div className="flex flex-col divide-y divide-gray-500">
+            <div className="flex flex-col gap-2">
               {additionalGraph.relationships.map((relationship) => (
                 <div
                   key={relationship.id}
@@ -110,10 +110,10 @@ export const NodeLinkEditModal = ({
                 >
                   <div className="rounded-xl border border-slate-500 p-2 text-xs text-gray-400">
                     {
-                      getNodeByIdForFrontend(
-                        relationship.sourceId,
-                        graphDocument?.nodes ?? [],
-                      )?.name
+                      getNodeByIdForFrontend(relationship.sourceId, [
+                        ...(graphDocument?.nodes ?? []),
+                        ...(additionalGraph?.nodes ?? []),
+                      ])?.name
                     }
                   </div>
                   <svg
@@ -203,11 +203,17 @@ export const NodeLinkEditModal = ({
             const newGraphDocument: GraphDocumentForFrontend = {
               nodes: [
                 ...(graphDocument?.nodes ?? []),
-                ...(additionalGraph?.nodes ?? []),
+                ...(additionalGraph?.nodes?.map((node) => ({
+                  ...node,
+                  isAdditional: true,
+                })) ?? []),
               ],
               relationships: [
                 ...(graphDocument?.relationships ?? []),
-                ...(additionalGraph?.relationships ?? []),
+                ...(additionalGraph?.relationships?.map((relationship) => ({
+                  ...relationship,
+                  isAdditional: true,
+                })) ?? []),
               ],
             };
             setGraphDocument(newGraphDocument);
@@ -215,7 +221,7 @@ export const NodeLinkEditModal = ({
             setIsOpen(false);
           }}
         >
-          保存
+          追加
         </Button>
       </div>
     </Modal>

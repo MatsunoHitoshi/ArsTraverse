@@ -102,11 +102,12 @@ export class AnnotationGraphExtractor {
           : new AssistantsApiExtractor();
 
       // グラフ抽出を実行
-      const nodesAndRelationships = await extractor.extract(
+      const nodesAndRelationships = await extractor.extract({
         localFilePath,
-        true, // isPlaneTextMode
+        isPlaneTextMode: true,
         schema,
-      );
+        additionalPrompt: "",
+      });
 
       if (!nodesAndRelationships) {
         throw new Error("グラフ抽出に失敗しました");

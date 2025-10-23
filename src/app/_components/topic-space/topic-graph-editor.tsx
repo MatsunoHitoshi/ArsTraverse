@@ -41,9 +41,11 @@ export const TopicGraphEditor = ({
             cutOff: cutOff ?? undefined,
             withBetweenNodes: withBetweenNodes === "true",
           },
+          withDocumentGraph: true,
         }
       : {
           id: id,
+          withDocumentGraph: true,
         },
   );
   const [graphFullScreen, setGraphFullScreen] = useState<boolean>(false);

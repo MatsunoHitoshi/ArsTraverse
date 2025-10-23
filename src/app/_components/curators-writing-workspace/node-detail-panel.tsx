@@ -1,38 +1,26 @@
-"use client";
-
-import React, { useState } from "react";
-import { api } from "@/trpc/react";
-import { AnnotationGraphExtractionModal } from "./annotation-graph-extraction-modal";
+import React from "react";
 import { NodeAnnotationSection } from "../view/node/node-annotation-section";
-import type { CustomNodeType } from "@/app/const/types";
-
+import type {
+  CustomNodeType,
+  GraphDocumentForFrontend,
+} from "@/app/const/types";
 interface NodeDetailPanelProps {
   activeEntity: CustomNodeType | undefined;
   topicSpaceId: string;
   setFocusedNode: React.Dispatch<
     React.SetStateAction<CustomNodeType | undefined>
   >;
+  setIsGraphEditor: React.Dispatch<React.SetStateAction<boolean>>;
+  onGraphUpdate: (additionalGraph: GraphDocumentForFrontend) => void;
 }
 
 export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({
   activeEntity,
   topicSpaceId,
   setFocusedNode,
+  setIsGraphEditor,
+  onGraphUpdate,
 }) => {
-  const [showGraphExtractionModal, setShowGraphExtractionModal] =
-    useState(false);
-
-  // ノードの注釈を取得（グラフ抽出用）
-  const { data: annotations, refetch: refetchAnnotations } =
-    api.annotation.getNodeAnnotations.useQuery(
-      {
-        nodeId: activeEntity?.id ?? "",
-      },
-      {
-        enabled: !!activeEntity?.id,
-      },
-    );
-
   if (!activeEntity) {
     return (
       <div className="min-h-full rounded-b-lg border border-gray-300 bg-slate-900 p-4 shadow-sm">
@@ -61,16 +49,9 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({
         node={activeEntity}
         topicSpaceId={topicSpaceId}
         setFocusedNode={setFocusedNode}
+        setIsGraphEditor={setIsGraphEditor}
+        onGraphUpdate={onGraphUpdate}
       />
-
-      {/* グラフ抽出モーダル */}
-      {showGraphExtractionModal && annotations && (
-        <AnnotationGraphExtractionModal
-          annotations={annotations}
-          topicSpaceId={topicSpaceId}
-          onClose={() => setShowGraphExtractionModal(false)}
-        />
-      )}
     </div>
   );
 };

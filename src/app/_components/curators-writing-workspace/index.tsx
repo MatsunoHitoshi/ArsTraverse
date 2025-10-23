@@ -405,6 +405,8 @@ const CuratorsWritingWorkspace = ({
                 entities={nodes}
                 onEntityClick={handleEntityClick}
                 workspaceId={workspace.id}
+                onGraphUpdate={onGraphUpdate}
+                setIsGraphEditor={setIsGraphEditor}
               />
             </TiptapGraphFilterContext.Provider>
           </div>
@@ -574,6 +576,8 @@ const CuratorsWritingWorkspace = ({
                 activeEntity={activeEntity}
                 topicSpaceId={topicSpaceId}
                 setFocusedNode={setActiveEntity}
+                setIsGraphEditor={setIsGraphEditor}
+                onGraphUpdate={onGraphUpdate}
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center rounded-b-lg border border-t-0 border-gray-300 bg-slate-800 text-gray-400">

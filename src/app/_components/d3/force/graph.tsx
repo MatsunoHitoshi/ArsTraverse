@@ -186,7 +186,7 @@ export const D3ForceGraph = ({
           return (
             centerX +
             (isClustered
-              ? graphNodes.find((n) => n.index === d.index)?.clustered?.x ?? 0
+              ? (graphNodes.find((n) => n.index === d.index)?.clustered?.x ?? 0)
               : 0)
           );
         }),
@@ -197,7 +197,7 @@ export const D3ForceGraph = ({
           return (
             centerY +
             (isClustered
-              ? graphNodes.find((n) => n.index === d.index)?.clustered?.y ?? 0
+              ? (graphNodes.find((n) => n.index === d.index)?.clustered?.y ?? 0)
               : 0)
           );
         }),
@@ -366,7 +366,9 @@ export const D3ForceGraph = ({
                             ? "#ef7234"
                             : isPathLink
                               ? "#eae80c"
-                              : "white"
+                              : graphLink.isAdditional
+                                ? "#3769d4"
+                                : "white"
                         }
                         // stroke={
                         //   isFocused
@@ -508,11 +510,13 @@ export const D3ForceGraph = ({
                             ? "#ef7234"
                             : isPathNode
                               ? "#eae80c"
-                              : graphUnselected
-                                ? "#324557"
-                                : isClustered && graphNode.nodeColor
-                                  ? graphNode.nodeColor
-                                  : "whitesmoke"
+                              : graphNode.isAdditional
+                                ? "#8b9dc3"
+                                : graphUnselected
+                                  ? "#324557"
+                                  : isClustered && graphNode.nodeColor
+                                    ? graphNode.nodeColor
+                                    : "whitesmoke"
                         }
                         opacity={
                           isNodeFiltered(graphNode, filterOption) ? 0.9 : 0.6

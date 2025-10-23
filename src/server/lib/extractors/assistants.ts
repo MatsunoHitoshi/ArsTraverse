@@ -3,6 +3,7 @@ import fs from "fs";
 import { getNodesAndRelationshipsFromResult } from "@/app/_utils/kg/get-nodes-and-relationships-from-result";
 import type {
   Extractor,
+  ExtractorOptions,
   NodesAndRelationships,
   TransformerSchema,
 } from "./base";
@@ -44,10 +45,10 @@ Relationships: ["alice", "roommate", "bob", {"start": 2021}], ["alice", "owns", 
 // 型が合わなくなったので、一旦使わない
 export class AssistantsApiExtractor implements Extractor {
   async extract(
-    localFilePath: string,
-    isPlaneTextMode: boolean,
-    schema?: TransformerSchema,
+    options: ExtractorOptions,
   ): Promise<NodesAndRelationships | null> {
+    const { localFilePath, isPlaneTextMode, schema, additionalPrompt } =
+      options;
     const openai = new OpenAI();
     const assistant = await openai.beta.assistants.create({
       name: "Graph Database Assistant",

@@ -5,18 +5,17 @@ import React, {
   useContext,
   useState,
 } from "react";
-import {
-  useEditor,
-  EditorContent,
-  type JSONContent,
-  type Editor,
-} from "@tiptap/react";
+import { useEditor, EditorContent, type JSONContent } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
 import { EntityHighlight } from "./extensions/entity-highlight-extension";
 import { TextCompletionMark } from "./extensions/text-completion-mark";
 import { TeiStyles } from "./tei/tei-styles";
-import type { CustomNodeType } from "@/app/const/types";
+import type {
+  CustomNodeType,
+  GraphDocumentForFrontend,
+} from "@/app/const/types";
 import { EditorToolBar } from "./tools/editor-tool-bar";
+import { CustomBubbleMenu } from "./tools/bubble-menu";
 import { TeiCustomTagHighlightExtensions } from "./tei/tei-custom-tag-highlight-extension";
 import { TiptapStyles } from "./styles";
 import { KeyboardHandlerExtension } from "./extensions/keyboard-handler-extension";
@@ -24,6 +23,7 @@ import { useTextCompletion } from "./hooks/use-text-completion";
 import { useHighlight } from "./hooks/use-highlight";
 import { TiptapGraphFilterContext } from "..";
 import { HighlightVisibilityProvider } from "./contexts/highlight-visibility-context";
+import TextAlign from "@tiptap/extension-text-align";
 
 interface TipTapEditorContentProps {
   content: JSONContent;
@@ -31,6 +31,8 @@ interface TipTapEditorContentProps {
   entities: CustomNodeType[];
   onEntityClick?: (entityName: string) => void;
   workspaceId: string;
+  onGraphUpdate?: (additionalGraph: GraphDocumentForFrontend) => void;
+  setIsGraphEditor: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
@@ -39,6 +41,8 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
   entities,
   onEntityClick,
   workspaceId,
+  onGraphUpdate,
+  setIsGraphEditor,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const debounceTimeoutRef = useRef<NodeJS.Timeout>();
@@ -47,44 +51,6 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
   const {} = useContext(TiptapGraphFilterContext);
 
   const [isAIAssistEnabled, setIsAIAssistEnabled] = useState<boolean>(false);
-
-  // 新しいハイライトが検出されたときのコールバック
-  const handleNewHighlight = useCallback(
-    (editor: Editor, entityName: string) => {
-      console.log("----- New highlight detected -----\n", entityName);
-      // 挙動が安定しないためハイライトのアップデート処理は行わない
-      // setIsSuggestionLoading(true);
-      // setCursorPosition(getCursorPosition());
-      // entityInformationCompletion.mutate(
-      //   {
-      //     workspaceId: workspaceId,
-      //     entityName: entityName,
-      //   },
-      //   {
-      //     onSuccess: (data) => {
-      //       setIsTextSuggestionMode(true);
-      //       performTextCompletionSuggestion(
-      //         editor,
-      //         entityNames,
-      //         isUpdatingTextCompletionSuggestionRef,
-      //         data.entityInformationText,
-      //       );
-      //       setIsSuggestionLoading(false);
-      //       setCursorPosition(null);
-      //     },
-      //     onError: (error) => {
-      //       console.error(error);
-      //       setIsSuggestionLoading(false);
-      //       setCursorPosition(null);
-      //     },
-      //   },
-      // );
-      // if (onEntityClick) {
-      //   onEntityClick(entityName);
-      // }
-    },
-    [],
-  );
 
   // カスタムフックを使用
   const textCompletion = useTextCompletion({
@@ -97,7 +63,6 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
     editor: null,
     entities,
     onEntityClick,
-    onNewHighlight: handleNewHighlight,
     isTextSuggestionMode: textCompletion.isTextSuggestionMode,
   });
 
@@ -133,6 +98,9 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
         onTabKey: (editor) => textCompletion.handleTabKey(editor, editorRef),
         onEnterKey: (editor) => textCompletion.handleEnterKey(editor),
         onEscapeKey: (editor) => textCompletion.handleEscapeKey(editor),
+      }),
+      TextAlign.configure({
+        types: ["heading", "paragraph"],
       }),
     ],
     content,
@@ -222,6 +190,12 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
             editor={editor}
             className="h-full min-h-[200px] overflow-y-scroll rounded-md bg-slate-800 p-3 text-white focus-within:outline-none"
             onClick={handleClick}
+          />
+          <CustomBubbleMenu
+            editor={editor}
+            onGraphUpdate={onGraphUpdate}
+            setIsGraphEditor={setIsGraphEditor}
+            entities={entities}
           />
           {textCompletion.isSuggestionLoading &&
             textCompletion.cursorPosition && (

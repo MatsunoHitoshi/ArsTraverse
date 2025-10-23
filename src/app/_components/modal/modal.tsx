@@ -57,7 +57,7 @@ export const Modal = ({
               </Button>
             </div>
 
-            <div>{children}</div>
+            <div className="overflow-y-auto">{children}</div>
           </DialogPanel>
         </div>
       </div>

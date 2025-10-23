@@ -1,8 +1,10 @@
-"use client";
-
 import React, { useState } from "react";
 import { Button } from "../button/button";
-import type { AnnotationResponse, CustomNodeType } from "@/app/const/types";
+import type {
+  AnnotationResponse,
+  CustomNodeType,
+  GraphDocumentForFrontend,
+} from "@/app/const/types";
 import { convertJsonToText } from "@/app/_utils/tiptap/convert";
 import { AnnotationForm } from "./annotation-form";
 import Image from "next/image";
@@ -16,6 +18,7 @@ import {
 import { PlusIcon } from "../icons";
 import { HighlightedText } from "../common/highlighted-text";
 import { api } from "@/trpc/react";
+import { AdditionalGraphExtractionModal } from "./tiptap/tools/additional-graph-extraction-modal";
 
 interface AnnotationListProps {
   annotations: AnnotationResponse[];
@@ -26,20 +29,30 @@ interface AnnotationListProps {
   setFocusedNode: React.Dispatch<
     React.SetStateAction<CustomNodeType | undefined>
   >;
+  setIsGraphEditor: React.Dispatch<React.SetStateAction<boolean>>;
+  onGraphUpdate: (additionalGraph: GraphDocumentForFrontend) => void;
+  node: CustomNodeType;
 }
 
 export const AnnotationList: React.FC<AnnotationListProps> = ({
   annotations,
+  node,
   onRefetch,
   topicSpaceId,
   showOnlyTopLevel = true,
   handleGenerateAnnotationFromDocument,
   setFocusedNode,
+  setIsGraphEditor,
+  onGraphUpdate,
 }) => {
   const [parentAnnotationId, setParentAnnotationId] = useState<string | null>(
     null,
   );
-
+  const [annotationText, setAnnotationText] = useState<string>("");
+  const [
+    showAdditionalGraphExtractionModal,
+    setShowAdditionalGraphExtractionModal,
+  ] = useState(false);
   const [showAnnotationForm, setShowAnnotationForm] = useState(false);
   const [expandedReplies, setExpandedReplies] = useState<Set<string>>(
     new Set(),
@@ -72,8 +85,9 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
 
   // 表示する注釈を決定
   const displayAnnotations = showOnlyTopLevel
-    ? annotations?.filter((annotation) => !annotation.parentAnnotationId) ?? []
-    : annotations ?? [];
+    ? (annotations?.filter((annotation) => !annotation.parentAnnotationId) ??
+      [])
+    : (annotations ?? []);
 
   if (displayAnnotations.length === 0) {
     return (
@@ -134,6 +148,18 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
                   詳細
                 </Button>
               </Link>
+              <Button
+                size="small"
+                onClick={() => {
+                  setShowAdditionalGraphExtractionModal(true);
+                  setAnnotationText(
+                    `Node: ${node.name}(${node.label})\n${convertJsonToText(annotation.content)}`,
+                  );
+                }}
+                className="flex h-6 flex-row items-center justify-center bg-gray-700 px-2 text-xs"
+              >
+                グラフ生成
+              </Button>
             </div>
           </div>
 
@@ -290,6 +316,20 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
           void onRefetch();
         }}
       />
+      {setIsGraphEditor && (
+        <AdditionalGraphExtractionModal
+          text={annotationText}
+          isAdditionalGraphExtractionModalOpen={
+            showAdditionalGraphExtractionModal
+          }
+          setIsAdditionalGraphExtractionModalOpen={
+            setShowAdditionalGraphExtractionModal
+          }
+          setIsGraphEditor={setIsGraphEditor}
+          entities={entities}
+          onGraphUpdate={onGraphUpdate}
+        />
+      )}
     </div>
   );
 };

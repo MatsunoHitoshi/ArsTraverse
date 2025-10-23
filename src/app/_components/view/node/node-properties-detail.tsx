@@ -68,6 +68,10 @@ export const NodePropertiesDetail = ({
     );
   };
 
+  const onGraphUpdate = (additionalGraph: GraphDocumentForFrontend) => {
+    setNewGraphDocument(additionalGraph);
+  };
+
   return (
     <div className="flex w-full flex-col gap-4 px-6 py-2">
       <div className="flex flex-col gap-8">
@@ -141,6 +145,8 @@ export const NodePropertiesDetail = ({
                 node={node}
                 topicSpaceId={topicSpaceId}
                 setFocusedNode={setFocusedNode}
+                setIsGraphEditor={setOnEdit}
+                onGraphUpdate={onGraphUpdate}
               />
             </div>
 

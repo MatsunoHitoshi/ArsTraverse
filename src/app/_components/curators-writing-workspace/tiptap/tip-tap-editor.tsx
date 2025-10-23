@@ -1,5 +1,8 @@
 "use client";
-import type { CustomNodeType } from "@/app/const/types";
+import type {
+  CustomNodeType,
+  GraphDocumentForFrontend,
+} from "@/app/const/types";
 import { TipTapEditorContent } from "./tip-tap-editor-content";
 import { type JSONContent } from "@tiptap/react";
 import React from "react";
@@ -10,6 +13,8 @@ interface TipTapEditorProps {
   entities: CustomNodeType[];
   onEntityClick?: (entityName: string) => void;
   workspaceId: string;
+  onGraphUpdate?: (additionalGraph: GraphDocumentForFrontend) => void;
+  setIsGraphEditor: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 const TipTapEditor: React.FC<TipTapEditorProps> = (props) => {

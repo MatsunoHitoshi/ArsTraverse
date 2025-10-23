@@ -36,6 +36,7 @@ const ExtractInputSchema = z.object({
   fileUrl: z.string().url(),
   extractMode: z.string().optional(),
   isPlaneTextMode: z.boolean(),
+  additionalPrompt: z.string().optional(),
 });
 
 const TestInspectInputSchema = z.object({
@@ -62,7 +63,7 @@ export const kgRouter = createTRPCRouter({
   extractKG: publicProcedure
     .input(ExtractInputSchema)
     .mutation(async ({ input }) => {
-      const { fileUrl, extractMode, isPlaneTextMode } = input;
+      const { fileUrl, extractMode, isPlaneTextMode, additionalPrompt } = input;
 
       const localFilePath = await writeLocalFileFromUrl(
         fileUrl,
@@ -85,11 +86,12 @@ export const kgRouter = createTRPCRouter({
           extractMode === "langChain"
             ? new LangChainExtractor()
             : new AssistantsApiExtractor();
-        const nodesAndRelationships = await extractor.extract(
+        const nodesAndRelationships = await extractor.extract({
           localFilePath,
           isPlaneTextMode,
           schema,
-        );
+          additionalPrompt,
+        });
 
         if (!nodesAndRelationships) {
           return {

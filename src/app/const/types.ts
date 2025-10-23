@@ -121,6 +121,7 @@ export type NodeTypeForFrontend = {
   visible?: boolean;
   clustered?: { x: number; y: number };
   nodeColor?: string;
+  isAdditional?: boolean;
 };
 
 export type RelationshipTypeForFrontend = {
@@ -131,6 +132,7 @@ export type RelationshipTypeForFrontend = {
   targetId: string;
   topicSpaceId?: string;
   documentGraphId?: string;
+  isAdditional?: boolean;
 };
 
 export type PropertyTypeForFrontend = {

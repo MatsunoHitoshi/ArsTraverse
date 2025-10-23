@@ -65,6 +65,9 @@ export const useGraphEditor = ({
   const [initialGraphDocument, setInitialGraphDocument] =
     useState<GraphDocumentForFrontend | null>(null);
 
+  // 初期化フラグ（初回のみデータを設定するため）
+  const [isInitialized, setIsInitialized] = useState(false);
+
   // 編集状態の管理
   const [isEditor, setIsEditor] = useState<boolean>(false);
   const [isGraphUpdated, setIsGraphUpdated] = useState<boolean>(false);
@@ -92,12 +95,13 @@ export const useGraphEditor = ({
 
   // デフォルトグラフデータが変更されたときにローカル状態を更新
   useEffect(() => {
-    setGraphDocument(defaultGraphDocument ?? null);
-    // 初期状態も更新（初回のみ）
-    if (!initialGraphDocument && defaultGraphDocument) {
+    // 初回のみデータを設定
+    if (!isInitialized && defaultGraphDocument) {
+      setGraphDocument(defaultGraphDocument);
       setInitialGraphDocument(defaultGraphDocument);
+      setIsInitialized(true);
     }
-  }, [defaultGraphDocument, initialGraphDocument]);
+  }, [defaultGraphDocument, isInitialized]);
 
   // グラフの変更を検知して更新フラグを設定
   useEffect(() => {
@@ -145,6 +149,8 @@ export const useGraphEditor = ({
     if (graphDocument) {
       setInitialGraphDocument(graphDocument);
     }
+    // 初期化フラグをリセット（次回のデータ更新時に再初期化を許可）
+    setIsInitialized(false);
   };
 
   return {

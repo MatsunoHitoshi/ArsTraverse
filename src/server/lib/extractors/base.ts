@@ -9,12 +9,20 @@ export type NodesAndRelationships = {
 };
 
 export interface Extractor {
-  extract(
-    localFilePath: string,
-    isPlaneTextMode: boolean,
-    schema?: TransformerSchema,
-  ): Promise<NodesAndRelationships | null>;
+  extract({
+    localFilePath,
+    isPlaneTextMode,
+    schema,
+    additionalPrompt,
+  }: ExtractorOptions): Promise<NodesAndRelationships | null>;
 }
+
+export type ExtractorOptions = {
+  localFilePath: string;
+  isPlaneTextMode: boolean;
+  schema?: TransformerSchema;
+  additionalPrompt?: string;
+};
 
 export type TransformerSchema = {
   allowedNodes: string[];

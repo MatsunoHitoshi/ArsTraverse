@@ -4,6 +4,7 @@ import { textInspect } from "@/app/_utils/text/text-inspector";
 import { createExtraNode } from "@/app/_utils/kg/get-nodes-and-relationships-from-result";
 import type {
   Extractor,
+  ExtractorOptions,
   NodesAndRelationships,
   TransformerSchema,
 } from "./base";
@@ -13,26 +14,7 @@ import type {
   Node,
 } from "node_modules/@langchain/community/dist/graphs/document";
 
-export class LangChainExtractor implements Extractor {
-  async extract(
-    localFilePath: string,
-    isPlaneTextMode: boolean,
-    schema?: TransformerSchema,
-  ): Promise<NodesAndRelationships | null> {
-    try {
-      console.log(`Starting extraction for file: ${localFilePath}`);
-      const llm = new ChatOpenAI({
-        temperature: 0.1, // より低い温度で一貫性を向上
-        model: "gpt-4o-mini",
-        maxTokens: 4000, // より多くのトークンで詳細な抽出を可能にする
-      });
-      const transformerOptions = schema
-        ? {
-            llm: llm,
-            allowedNodes: schema.allowedNodes,
-            allowedRelationships: schema.allowedRelationships,
-            nodeProperties: ["name_ja", "name_en"],
-            additionalInstructions: `
+const additionalInstruction = `
 CRITICAL REQUIREMENT: For EVERY node extracted, you MUST provide BOTH name_ja and name_en properties.
 
 RULES:
@@ -52,9 +34,35 @@ EXAMPLE:
 - Output: { name_ja: "ヨーゼフ・ボイス", name_en: "Joseph Beuys" }
 
 Relationships must be expressed in uppercase English (e.g., HAS_ROOMMATE, WORKS_AT, LOCATED_IN).
-`,
+
+`;
+
+export class LangChainExtractor implements Extractor {
+  async extract(
+    options: ExtractorOptions,
+  ): Promise<NodesAndRelationships | null> {
+    const { localFilePath, isPlaneTextMode, schema, additionalPrompt } =
+      options;
+    try {
+      console.log(`Starting extraction for file: ${localFilePath}`);
+      const llm = new ChatOpenAI({
+        temperature: 0.1, // より低い温度で一貫性を向上
+        model: "gpt-4o-mini",
+        maxTokens: 4000, // より多くのトークンで詳細な抽出を可能にする
+      });
+      const transformerOptions = schema
+        ? {
+            llm: llm,
+            allowedNodes: schema.allowedNodes,
+            allowedRelationships: schema.allowedRelationships,
+            nodeProperties: ["name_ja", "name_en"],
+            additionalInstructions: `${additionalInstruction}\n${additionalPrompt}`,
           }
-        : { llm };
+        : {
+            llm,
+            nodeProperties: ["name_ja", "name_en"],
+            additionalInstructions: `${additionalInstruction}\n${additionalPrompt}`,
+          };
       const llmTransformer = new LLMGraphTransformer(transformerOptions);
 
       const documents = await textInspect(localFilePath, isPlaneTextMode);

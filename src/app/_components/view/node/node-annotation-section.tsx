@@ -1,12 +1,13 @@
-"use client";
-
 import React, { Fragment, useState } from "react";
 import { api } from "@/trpc/react";
 import { Button } from "../../button/button";
 import { AnnotationList } from "../../curators-writing-workspace/annotation-list";
 import { AnnotationForm } from "../../curators-writing-workspace/annotation-form";
 import { NodeReferencePanel } from "./node-reference-panel";
-import type { CustomNodeType } from "@/app/const/types";
+import type {
+  CustomNodeType,
+  GraphDocumentForFrontend,
+} from "@/app/const/types";
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
 
 interface NodeAnnotationSectionProps {
@@ -15,12 +16,16 @@ interface NodeAnnotationSectionProps {
   setFocusedNode: React.Dispatch<
     React.SetStateAction<CustomNodeType | undefined>
   >;
+  setIsGraphEditor: React.Dispatch<React.SetStateAction<boolean>>;
+  onGraphUpdate: (additionalGraph: GraphDocumentForFrontend) => void;
 }
 
 export const NodeAnnotationSection: React.FC<NodeAnnotationSectionProps> = ({
   node,
   topicSpaceId,
   setFocusedNode,
+  setIsGraphEditor,
+  onGraphUpdate,
 }) => {
   const [showAnnotationForm, setShowAnnotationForm] = useState(false);
   const [defaultAnnotationContent, setDefaultAnnotationContent] = useState("");
@@ -136,6 +141,9 @@ export const NodeAnnotationSection: React.FC<NodeAnnotationSectionProps> = ({
                   handleGenerateAnnotationFromDocument
                 }
                 setFocusedNode={setFocusedNode}
+                setIsGraphEditor={setIsGraphEditor}
+                onGraphUpdate={onGraphUpdate}
+                node={node}
               />
             )}
           </TabPanel>
