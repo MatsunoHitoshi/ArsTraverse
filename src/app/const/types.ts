@@ -11,6 +11,8 @@ import type {
   DocumentType,
   Prisma,
   AnnotationDiscussion,
+  GraphChangeType,
+  GraphChangeEntityType,
 } from "@prisma/client";
 import type { SimulationNodeDatum, SimulationLinkDatum } from "d3";
 
@@ -270,3 +272,14 @@ export type ReferenceSection = {
 };
 
 export type LocaleEnum = "ja" | "en";
+
+export type GraphEditChangeForFrontend = {
+  id: string;
+  proposalId: string;
+  changeType: GraphChangeType;
+  changeEntityType: GraphChangeEntityType;
+  changeEntityId: string;
+  previousState: Record<string, unknown>;
+  nextState: Record<string, unknown>;
+  createdAt: Date;
+};

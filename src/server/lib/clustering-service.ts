@@ -1,9 +1,34 @@
 export interface ClusteringParameters {
   algorithm: "KMEANS" | "DBSCAN" | "HIERARCHICAL";
-  nClusters?: number; // K-means用
-  eps?: number; // DBSCAN用
-  minSamples?: number; // DBSCAN用
+  // K-means固有パラメータ
+  nClusters?: number; // K-means用（必須）
+  useElbowMethod?: boolean; // エルボー法を使用するかどうか
+  elbowMethodRange?: { min: number; max: number }; // エルボー法の探索範囲
+  // DBSCAN固有パラメータ
+  eps?: number; // DBSCAN用（必須）
+  minSamples?: number; // DBSCAN用（必須）
+  // 階層的クラスタリング固有パラメータ
   linkage?: "ward" | "complete" | "average" | "single"; // 階層的クラスタリング用
+}
+
+// アルゴリズム固有のパラメータ型
+export interface KMeansParameters extends ClusteringParameters {
+  algorithm: "KMEANS";
+  nClusters: number; // 必須（エルボー法使用時は動的に決定）
+  useElbowMethod?: boolean;
+  elbowMethodRange?: { min: number; max: number };
+}
+
+export interface DBSCANParameters extends ClusteringParameters {
+  algorithm: "DBSCAN";
+  eps: number; // 必須
+  minSamples: number; // 必須
+}
+
+export interface HierarchicalParameters extends ClusteringParameters {
+  algorithm: "HIERARCHICAL";
+  nClusters: number; // 必須
+  linkage: "ward" | "complete" | "average" | "single"; // 必須
 }
 
 export interface ClusterResult {
@@ -28,10 +53,110 @@ export interface ClusteringResult {
     silhouetteScore?: number;
     inertia?: number;
     calinskiHarabaszScore?: number;
+    elbowMethodResult?: { optimalK: number; inertias: number[] };
   };
 }
 
 export class ClusteringService {
+  /**
+   * パラメータの妥当性を検証
+   */
+  validateParameters(params: ClusteringParameters): {
+    valid: boolean;
+    errors: string[];
+  } {
+    const errors: string[] = [];
+
+    switch (params.algorithm) {
+      case "KMEANS":
+        if (!params.nClusters || params.nClusters < 2) {
+          errors.push("K-meansのnClustersは2以上である必要があります");
+        }
+        if (params.nClusters && params.nClusters > 20) {
+          errors.push("K-meansのnClustersは20以下である必要があります");
+        }
+        break;
+
+      case "DBSCAN":
+        if (!params.eps || params.eps <= 0) {
+          errors.push("DBSCANのepsは0より大きい必要があります");
+        }
+        if (!params.minSamples || params.minSamples < 2) {
+          errors.push("DBSCANのminSamplesは2以上である必要があります");
+        }
+        if (params.eps && params.eps > 2.0) {
+          errors.push("DBSCANのepsは2.0以下である必要があります");
+        }
+        if (params.minSamples && params.minSamples > 20) {
+          errors.push("DBSCANのminSamplesは20以下である必要があります");
+        }
+        break;
+
+      case "HIERARCHICAL":
+        if (!params.nClusters || params.nClusters < 2) {
+          errors.push(
+            "階層的クラスタリングのnClustersは2以上である必要があります",
+          );
+        }
+        if (!params.linkage) {
+          errors.push("階層的クラスタリングのlinkageは必須です");
+        }
+        if (params.nClusters && params.nClusters > 20) {
+          errors.push(
+            "階層的クラスタリングのnClustersは20以下である必要があります",
+          );
+        }
+        break;
+
+      default:
+        errors.push(
+          `サポートされていないアルゴリズム: ${String(params.algorithm)}`,
+        );
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors,
+    };
+  }
+
+  /**
+   * デフォルトパラメータを取得
+   */
+  getDefaultParameters(
+    algorithm: "KMEANS" | "DBSCAN" | "HIERARCHICAL",
+  ): ClusteringParameters {
+    switch (algorithm) {
+      case "KMEANS":
+        return {
+          algorithm: "KMEANS",
+          nClusters: 5,
+        };
+      case "DBSCAN":
+        return {
+          algorithm: "DBSCAN",
+          eps: 0.15, // より細かいクラスター形成のための調整値
+          minSamples: 3, // より厳密なクラスター形成
+        };
+      case "HIERARCHICAL":
+        return {
+          algorithm: "HIERARCHICAL",
+          nClusters: 5,
+          linkage: "ward",
+        };
+      default:
+        throw new Error(
+          `サポートされていないアルゴリズム: ${String(algorithm)}`,
+        );
+    }
+  }
+
+  /**
+   * システム全体のデフォルトアルゴリズムを取得
+   */
+  getSystemDefaultAlgorithm(): "KMEANS" | "DBSCAN" | "HIERARCHICAL" {
+    return "DBSCAN";
+  }
   /**
    * K-meansクラスタリングを実行
    */
@@ -39,16 +164,37 @@ export class ClusteringService {
     coordinates: Array<{ x: number; y: number; annotationId: string }>,
     nClusters: number,
     maxIterations = 100,
+    useElbowMethod = false,
+    elbowMethodRange?: { min: number; max: number },
   ): Promise<ClusteringResult> {
     const n = coordinates.length;
-    if (n < nClusters) {
+
+    let optimalNClusters = nClusters;
+    let elbowMethodResult: { optimalK: number; inertias: number[] } | undefined;
+
+    // エルボー法を使用する場合
+    if (useElbowMethod) {
+      const range = elbowMethodRange ?? {
+        min: 2,
+        max: Math.min(10, Math.floor(n / 2)),
+      };
+      elbowMethodResult = await this.performElbowMethod(
+        coordinates,
+        range,
+        maxIterations,
+      );
+      optimalNClusters = elbowMethodResult.optimalK;
+      console.log(`エルボー法により最適なクラスタ数: ${optimalNClusters}`);
+    }
+
+    if (n < optimalNClusters) {
       throw new Error(
-        `データ数（${n}）がクラスター数（${nClusters}）より少ないです`,
+        `データ数（${n}）がクラスター数（${optimalNClusters}）より少ないです`,
       );
     }
 
     // 1. 初期クラスター中心をランダムに選択
-    const centers = this.initializeKMeansCenters(coordinates, nClusters);
+    const centers = this.initializeKMeansCenters(coordinates, optimalNClusters);
 
     // 2. K-meansアルゴリズムを実行
     const { finalCenters, assignments } = this.runKMeansIterations(
@@ -74,9 +220,120 @@ export class ClusteringService {
     return {
       clusters,
       algorithm: "KMEANS",
-      parameters: { algorithm: "KMEANS", nClusters },
-      qualityMetrics,
+      parameters: {
+        algorithm: "KMEANS",
+        nClusters: optimalNClusters,
+        useElbowMethod,
+        elbowMethodRange,
+      },
+      qualityMetrics: {
+        ...qualityMetrics,
+        elbowMethodResult,
+      },
     };
+  }
+
+  /**
+   * エルボー法を実行して最適なクラスタ数を決定
+   */
+  private async performElbowMethod(
+    coordinates: Array<{ x: number; y: number; annotationId: string }>,
+    range: { min: number; max: number },
+    maxIterations: number,
+  ): Promise<{ optimalK: number; inertias: number[] }> {
+    const inertias: number[] = [];
+    const kValues: number[] = [];
+
+    console.log(`エルボー法実行: k=${range.min}から${range.max}まで`);
+
+    // 各k値でK-meansを実行して慣性を計算
+    for (let k = range.min; k <= range.max; k++) {
+      try {
+        const centers = this.initializeKMeansCenters(coordinates, k);
+        const { finalCenters, assignments } = this.runKMeansIterations(
+          coordinates,
+          centers,
+          maxIterations,
+        );
+
+        // 慣性（Within-Cluster Sum of Squares）を計算
+        let inertia = 0;
+        coordinates.forEach((point, index) => {
+          const clusterId = assignments[index];
+          if (clusterId !== undefined && finalCenters[clusterId]) {
+            const distance = this.euclideanDistance(
+              point,
+              finalCenters[clusterId],
+            );
+            inertia += distance * distance;
+          }
+        });
+
+        inertias.push(inertia);
+        kValues.push(k);
+        console.log(`k=${k}: inertia=${inertia.toFixed(2)}`);
+      } catch (error) {
+        console.warn(`k=${k}でのK-means実行に失敗:`, error);
+        inertias.push(Infinity);
+        kValues.push(k);
+      }
+    }
+
+    // エルボー点を検出（慣性の減少率が最も急激に変化する点）
+    const optimalK = this.findElbowPoint(kValues, inertias);
+
+    console.log(`エルボー法完了: 最適なk=${optimalK}`);
+
+    return {
+      optimalK,
+      inertias,
+    };
+  }
+
+  /**
+   * エルボー点を検出
+   */
+  private findElbowPoint(kValues: number[], inertias: number[]): number {
+    if (inertias.length < 3) {
+      return kValues[Math.floor(inertias.length / 2)] ?? 2;
+    }
+
+    // 慣性の減少率を計算
+    const decreases: number[] = [];
+    for (let i = 1; i < inertias.length; i++) {
+      const decrease = inertias[i - 1]! - inertias[i]!;
+      decreases.push(decrease);
+    }
+
+    // 減少率の変化率（2次微分に相当）を計算
+    const acceleration: number[] = [];
+    for (let i = 1; i < decreases.length; i++) {
+      const accel = decreases[i - 1]! - decreases[i]!;
+      acceleration.push(accel);
+    }
+
+    // 最大の加速度変化点をエルボー点とする
+    let maxAccelIndex = 0;
+    let maxAccel = acceleration[0] ?? 0;
+
+    for (let i = 1; i < acceleration.length; i++) {
+      if ((acceleration[i] ?? 0) > maxAccel) {
+        maxAccel = acceleration[i] ?? 0;
+        maxAccelIndex = i;
+      }
+    }
+
+    // インデックスをk値に変換（+2は最初の2つのk値をスキップした分）
+    const optimalK =
+      kValues[maxAccelIndex + 2] ??
+      kValues[Math.floor(kValues.length / 2)] ??
+      2;
+
+    console.log(
+      `エルボー点検出: k=${optimalK} (加速度変化: ${maxAccel.toFixed(2)})`,
+    );
+
+    return optimalK;
   }
 
   /**
@@ -87,6 +344,8 @@ export class ClusteringService {
     eps: number,
     minSamples: number,
   ): Promise<ClusteringResult> {
+    // 座標の分布に基づいてepsを動的に調整
+    const adjustedEps = this.calculateOptimalEps(coordinates, eps);
     const n = coordinates.length;
     const visited: boolean[] = Array.from({ length: n }, () => false);
     const assignments: number[] = Array.from({ length: n }, () => -1); // -1はノイズ
@@ -96,7 +355,7 @@ export class ClusteringService {
       if (visited[i]) continue;
 
       visited[i] = true;
-      const neighbors = this.findNeighbors(coordinates, i, eps);
+      const neighbors = this.findNeighbors(coordinates, i, adjustedEps);
 
       if (neighbors.length < minSamples) {
         assignments[i] = -1; // ノイズ
@@ -107,7 +366,7 @@ export class ClusteringService {
           i,
           neighbors,
           clusterId,
-          eps,
+          adjustedEps,
           minSamples,
           visited,
           assignments,
@@ -126,7 +385,7 @@ export class ClusteringService {
     return {
       clusters,
       algorithm: "DBSCAN",
-      parameters: { algorithm: "DBSCAN", eps, minSamples },
+      parameters: { algorithm: "DBSCAN", eps: adjustedEps, minSamples },
       qualityMetrics: this.calculateDBSCANQualityMetrics(
         coordinates,
         assignments,
@@ -289,6 +548,60 @@ export class ClusteringService {
   }
 
   /**
+   * 座標の分布に基づいて最適なeps値を計算
+   */
+  private calculateOptimalEps(
+    coordinates: Array<{ x: number; y: number; annotationId: string }>,
+    defaultEps: number,
+  ): number {
+    if (coordinates.length < 2) return defaultEps;
+
+    // すべての点間の距離を計算
+    const distances: number[] = [];
+    for (let i = 0; i < coordinates.length; i++) {
+      for (let j = i + 1; j < coordinates.length; j++) {
+        const distance = this.euclideanDistance(
+          coordinates[i]!,
+          coordinates[j]!,
+        );
+        distances.push(distance);
+      }
+    }
+
+    if (distances.length === 0) return defaultEps;
+
+    // 距離をソート
+    distances.sort((a, b) => a - b);
+
+    // 距離の分布を分析
+    const minDistance = distances[0] ?? 0;
+    const maxDistance = distances[distances.length - 1] ?? 0;
+    const medianDistance = distances[Math.floor(distances.length / 2)] ?? 0;
+
+    // 座標が正規化されている場合（0-1の範囲）の調整
+    const isNormalized = maxDistance <= 1.5; // 正規化されていると判断
+
+    if (isNormalized) {
+      // 正規化された座標の場合、より小さなepsを使用（細かいクラスター形成）
+      const suggestedEps = Math.max(0.08, Math.min(0.25, medianDistance * 0.4));
+      console.log(
+        `正規化された座標を検出。調整前eps: ${defaultEps}, 調整後eps: ${suggestedEps}`,
+      );
+      return suggestedEps;
+    } else {
+      // 正規化されていない座標の場合、距離分布に基づいて調整
+      const suggestedEps = Math.max(
+        minDistance * 1.2,
+        Math.min(maxDistance * 0.25, medianDistance * 0.8),
+      );
+      console.log(
+        `非正規化座標を検出。調整前eps: ${defaultEps}, 調整後eps: ${suggestedEps}`,
+      );
+      return suggestedEps;
+    }
+  }
+
+  /**
    * DBSCANの近傍を検索
    */
   private findNeighbors(
@@ -325,10 +638,13 @@ export class ClusteringService {
     assignments: number[],
   ): void {
     let i = 0;
+    // 重複チェック用のSetを使用してパフォーマンスを向上
+    const neighborsSet = new Set(neighbors);
+
     while (i < neighbors.length) {
       const neighborIndex = neighbors[i];
 
-      if (neighborIndex && !visited[neighborIndex]) {
+      if (neighborIndex !== undefined && !visited[neighborIndex]) {
         visited[neighborIndex] = true;
         const newNeighbors = this.findNeighbors(
           coordinates,
@@ -337,11 +653,17 @@ export class ClusteringService {
         );
 
         if (newNeighbors.length >= minSamples) {
-          neighbors.push(...newNeighbors);
+          // 重複を避けるため、既にneighborsに含まれていないもののみ追加
+          for (const newNeighbor of newNeighbors) {
+            if (!neighborsSet.has(newNeighbor)) {
+              neighbors.push(newNeighbor);
+              neighborsSet.add(newNeighbor);
+            }
+          }
         }
       }
 
-      if (neighborIndex && assignments[neighborIndex] === -1) {
+      if (neighborIndex !== undefined && assignments[neighborIndex] === -1) {
         assignments[neighborIndex] = clusterId;
       }
 

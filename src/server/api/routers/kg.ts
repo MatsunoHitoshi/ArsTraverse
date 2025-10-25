@@ -49,6 +49,10 @@ const IntegrateGraphInputSchema = z.object({
   graphDocument: KnowledgeGraphInputSchema,
 });
 
+const GetNodesByIdsInputSchema = z.object({
+  nodeIds: z.array(z.string()),
+});
+
 const GetRelatedNodesInputSchema = z.object({
   nodeId: z.string(),
   topicSpaceId: z.string(),
@@ -60,6 +64,21 @@ export type NodeSchema = {
 };
 
 export const kgRouter = createTRPCRouter({
+  getNodesByIds: protectedProcedure
+    .input(GetNodesByIdsInputSchema)
+    .query(async ({ ctx, input }) => {
+      const nodes = await ctx.db.graphNode.findMany({
+        where: {
+          id: {
+            in: input.nodeIds,
+          },
+          deletedAt: null,
+        },
+      });
+
+      return nodes.map((node) => formNodeDataForFrontend(node));
+    }),
+
   extractKG: publicProcedure
     .input(ExtractInputSchema)
     .mutation(async ({ input }) => {
@@ -176,8 +195,16 @@ export const kgRouter = createTRPCRouter({
         where: { id: input.topicSpaceId, isDeleted: false },
         include: {
           admins: true,
-          graphNodes: true,
-          graphRelationships: true,
+          graphNodes: {
+            where: {
+              deletedAt: null,
+            },
+          },
+          graphRelationships: {
+            where: {
+              deletedAt: null,
+            },
+          },
         },
       });
 
@@ -310,8 +337,16 @@ export const kgRouter = createTRPCRouter({
       const topicSpace = await ctx.db.topicSpace.findFirst({
         where: { id: topicSpaceId, isDeleted: false },
         include: {
-          graphNodes: true,
-          graphRelationships: true,
+          graphNodes: {
+            where: {
+              deletedAt: null,
+            },
+          },
+          graphRelationships: {
+            where: {
+              deletedAt: null,
+            },
+          },
         },
       });
       if (!topicSpace) {
@@ -342,10 +377,46 @@ export const kgRouter = createTRPCRouter({
           neighborNodes.some((node) => l.toNodeId === node.id),
       );
 
+      // ノードの重複を除去
+      const allNodes = [sourceNode, ...neighborNodes];
+      const uniqueNodes = allNodes.filter(
+        (node, index, self) =>
+          index === self.findIndex((n) => n.id === node.id),
+      );
+
+      // リレーションシップの重複を除去
+      const allRelationships = [...sourceLinks, ...neighborLinks];
+      const uniqueRelationships = allRelationships.filter(
+        (rel, index, self) => index === self.findIndex((r) => r.id === rel.id),
+      );
+
+      console.log(`ソースノード: ${sourceNode.id}`);
+      console.log(`隣接ノード数: ${neighborNodes.length}`);
+      console.log(`ソースリンク数: ${sourceLinks.length}`);
+      console.log(`隣接リンク数: ${neighborLinks.length}`);
+      console.log(`重複除去前ノード数: ${allNodes.length}`);
+      console.log(`重複除去後ノード数: ${uniqueNodes.length}`);
+      console.log(`重複除去後リレーション数: ${uniqueRelationships.length}`);
+
       const unifiedGraphData = {
-        nodes: [sourceNode, ...neighborNodes],
-        relationships: [...sourceLinks, ...neighborLinks],
+        nodes: uniqueNodes,
+        relationships: uniqueRelationships,
       };
+
+      console.log(
+        "data: ",
+        JSON.stringify({
+          ...unifiedGraphData,
+          nodes: unifiedGraphData.nodes.map((node) => ({
+            documentGraphId: null,
+            topicSpaceId: null,
+            createdAt: null,
+            updatedAt: null,
+            deletedAt: null,
+            ...node,
+          })),
+        }),
+      );
 
       return formGraphDataForFrontend({
         ...unifiedGraphData,

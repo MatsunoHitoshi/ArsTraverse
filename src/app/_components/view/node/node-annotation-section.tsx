@@ -68,7 +68,6 @@ export const NodeAnnotationSection: React.FC<NodeAnnotationSectionProps> = ({
                   setDefaultAnnotationContent(chunk.description);
                   if (chunk.isComplete) {
                     setIsGenerating(false);
-                    console.log("解説文生成完了");
                   }
                 }
               } catch (error) {
@@ -83,8 +82,8 @@ export const NodeAnnotationSection: React.FC<NodeAnnotationSectionProps> = ({
           }
         },
         onError: (error) => {
-          console.error("解説文生成エラー:", error);
-          setDefaultAnnotationContent("解説文の生成に失敗しました");
+          console.error("生成エラー:", error);
+          setDefaultAnnotationContent("生成に失敗しました");
           setIsGenerating(false);
         },
       },

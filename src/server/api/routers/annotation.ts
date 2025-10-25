@@ -808,72 +808,13 @@ export const annotationRouter = createTRPCRouter({
       }
     }),
 
-  // 注釈をSourceDocumentとして統合
-  // source-document.tsのcreateWithGraphDataをフロントエンドから叩いてグラフとドキュメントのレコードを作った後に
-  // topic-space.tsのattachDocumentsを叩いてグラフを統合すればこの処理は不要
-
-  // integrateAnnotationAsDocument: protectedProcedure
-  //   .input(
-  //     z.object({
-  //       annotationId: z.string(),
-  //       topicSpaceId: z.string(),
-  //       extractedGraph: z.object({
-  //         nodes: z.array(z.any()),
-  //         edges: z.array(z.any()),
-  //       }),
-  //       url: z.string(),
-  //     }),
-  //   )
-  //   .mutation(async ({ ctx, input }) => {
-  //     const annotation = await ctx.db.annotation.findUnique({
-  //       where: {
-  //         id: input.annotationId,
-  //         isDeleted: false,
-  //       },
-  //     });
-
-  //     if (!annotation) {
-  //       throw new TRPCError({
-  //         code: "NOT_FOUND",
-  //         message: "注釈が見つかりません",
-  //       });
-  //     }
-
-  //     // SourceDocumentを作成
-  //     const sourceDocument = await ctx.db.sourceDocument.create({
-  //       data: {
-  //         name: `注釈から抽出: ${annotation.id}`,
-  //         url: input.url,
-  //         userId: ctx.session.user.id,
-  //         documentType: "INPUT_TXT",
-  //       },
-  //     });
-
-  //     // 注釈とSourceDocumentを関連付け
-  //     await ctx.db.annotation.update({
-  //       where: {
-  //         id: annotation.id,
-  //       },
-  //       data: {
-  //         sourceDocumentId: sourceDocument.id,
-  //       },
-  //     });
-
-  //     // TODO: 実際の知識グラフ統合ロジックを実装
-  //     // DocumentGraphの作成とGraphNode、GraphRelationshipの作成
-
-  //     return {
-  //       sourceDocument,
-  //       message: "注釈がSourceDocumentとして統合されました",
-  //     };
-  //   }),
-
   // 注釈のクラスタリング実行
   performAnnotationClustering: protectedProcedure
     .input(
       z.object({
         targetNodeId: z.string().optional(),
         targetRelationshipId: z.string().optional(),
+        topicSpaceId: z.string(), // 必須パラメータに変更
         params: z
           .object({
             featureExtraction: z.object({
@@ -893,9 +834,16 @@ export const annotationRouter = createTRPCRouter({
             clustering: z.object({
               algorithm: z
                 .enum(["KMEANS", "DBSCAN", "HIERARCHICAL"])
-                .default("KMEANS"),
+                .default("DBSCAN"),
               nClusters: z.number().min(2).max(20).optional(),
-              eps: z.number().min(0.1).max(2.0).optional(),
+              useElbowMethod: z.boolean().optional(),
+              elbowMethodRange: z
+                .object({
+                  min: z.number().min(2).max(10),
+                  max: z.number().min(2).max(20),
+                })
+                .optional(),
+              eps: z.number().min(0.05).max(2.0).optional(),
               minSamples: z.number().min(2).max(20).optional(),
               linkage: z
                 .enum(["ward", "complete", "average", "single"])
@@ -913,8 +861,26 @@ export const annotationRouter = createTRPCRouter({
 
         const orchestrator = new AnnotationClusteringOrchestrator(ctx.db);
 
-        // デフォルトパラメータを使用
-        const params = input.params ?? orchestrator.getDefaultParams();
+        // デフォルトパラメータを使用（アルゴリズムが指定されている場合はそれに応じたデフォルト）
+        let params = input.params ?? orchestrator.getDefaultParams();
+
+        // アルゴリズムが指定されている場合は、そのアルゴリズム用のデフォルトパラメータを使用
+        if (input.params?.clustering?.algorithm) {
+          params = orchestrator.getDefaultParamsForAlgorithm(
+            input.params.clustering.algorithm,
+          );
+          // ユーザーが指定したパラメータで上書き
+          if (input.params) {
+            params = {
+              ...params,
+              ...input.params,
+              clustering: {
+                ...params.clustering,
+                ...input.params.clustering,
+              },
+            };
+          }
+        }
 
         // パラメータの妥当性を検証
         const validation = orchestrator.validateParams(params);
@@ -925,15 +891,96 @@ export const annotationRouter = createTRPCRouter({
           });
         }
 
+        // TopicSpaceの存在確認
+        const topicSpace = await ctx.db.topicSpace.findFirst({
+          where: {
+            id: input.topicSpaceId,
+            // 必要に応じてユーザーアクセス権限のチェックを追加
+          },
+        });
+
+        if (!topicSpace) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "TopicSpaceが見つかりません",
+          });
+        }
+
+        // targetNodeId/targetRelationshipIdとの整合性チェック
+        if (input.targetNodeId) {
+          const node = await ctx.db.graphNode.findFirst({
+            where: {
+              id: input.targetNodeId,
+              topicSpaceId: input.topicSpaceId,
+              deletedAt: null,
+            },
+          });
+          if (!node) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "指定されたノードはこのTopicSpaceに属していません",
+            });
+          }
+        }
+
+        if (input.targetRelationshipId) {
+          const relationship = await ctx.db.graphRelationship.findFirst({
+            where: {
+              id: input.targetRelationshipId,
+              topicSpaceId: input.topicSpaceId,
+              deletedAt: null,
+            },
+          });
+          if (!relationship) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message:
+                "指定されたリレーションシップはこのTopicSpaceに属していません",
+            });
+          }
+        }
+
+        // TopicSpaceのノードを取得
+        const topicSpaceNodesData = await ctx.db.graphNode.findMany({
+          where: {
+            topicSpaceId: input.topicSpaceId,
+            deletedAt: null, // 削除されていないノードのみ
+          },
+          select: {
+            id: true,
+            name: true,
+          },
+        });
+        const topicSpaceNodes = topicSpaceNodesData
+          .map((node) => node.name)
+          .filter(Boolean);
+
         // クラスタリングを実行
         const result = await orchestrator.performClustering(
           input.targetNodeId,
           input.targetRelationshipId,
+          topicSpaceNodes,
           params,
         );
 
         // 統計情報を追加
         const statistics = orchestrator.getClusteringStatistics(result);
+
+        console.log(
+          "return value:\n",
+          JSON.stringify(
+            {
+              ...result,
+              clustering: {
+                ...result.clustering,
+                coordinates: result.dimensionalityReduction.coordinates,
+              },
+              statistics,
+            },
+            null,
+            2,
+          ),
+        );
 
         return {
           ...result,

@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -17,6 +15,7 @@ import {
   DeleteRecordModal,
   type DeleteRecordType,
 } from "../modal/delete-record-modal";
+import { ReplyIcon } from "../icons";
 
 interface AnnotationHierarchyProps {
   currentAnnotation: AnnotationResponse;
@@ -253,9 +252,10 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
             <Button
               size="small"
               onClick={() => setShowAnnotationForm(true)}
-              className="hover:bg-slate-600"
+              className="flex flex-row items-center justify-center gap-1 hover:bg-slate-600"
             >
-              返信を追加
+              <ReplyIcon width={16} height={16} color="white" />
+              返信
             </Button>
           </div>
 

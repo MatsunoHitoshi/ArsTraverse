@@ -15,7 +15,7 @@ import {
   getAnnotationTypeColor,
   getAnnotationTypeLabel,
 } from "@/app/_utils/annotation/type-utils";
-import { PlusIcon } from "../icons";
+import { PlusIcon, ReplyIcon } from "../icons";
 import { HighlightedText } from "../common/highlighted-text";
 import { api } from "@/trpc/react";
 import { AdditionalGraphExtractionModal } from "./tiptap/tools/additional-graph-extraction-modal";
@@ -112,7 +112,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
       {displayAnnotations.map((annotation) => (
         <div
           key={annotation.id}
-          className="rounded-lg border border-gray-600 bg-slate-800 p-3"
+          className="flex flex-col gap-2 rounded-lg border border-gray-600 bg-slate-800 p-3"
         >
           {/* 注釈ヘッダー */}
           <div className="mb-2 flex items-center justify-between">
@@ -132,44 +132,39 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
                 className="text-xs text-gray-500"
               />
             </div>
-            <div className="flex gap-1">
-              <Button
-                size="small"
-                onClick={() => handleReply(annotation.id)}
-                className="flex h-6 flex-row items-center justify-center bg-gray-700 px-2 text-xs"
-              >
-                返信
-              </Button>
+            <div className="flex flex-col items-end gap-1">
               <Link href={`/annotations/${annotation.id}`}>
                 <Button
-                  size="small"
-                  className="justify-centers flex h-6 flex-row items-center bg-gray-700 px-2 text-xs hover:bg-gray-600"
+                  size="medium"
+                  className="justify-centers flex flex-row items-center bg-gray-700 px-2 text-xs hover:bg-gray-600"
                 >
                   詳細
                 </Button>
               </Link>
-              <Button
-                size="small"
-                onClick={() => {
-                  setShowAdditionalGraphExtractionModal(true);
-                  setAnnotationText(
-                    `Node: ${node.name}(${node.label})\n${convertJsonToText(annotation.content)}`,
-                  );
-                }}
-                className="flex h-6 flex-row items-center justify-center bg-gray-700 px-2 text-xs"
-              >
-                グラフ生成
-              </Button>
             </div>
           </div>
 
-          <span
-            className={`flex w-max flex-row items-center justify-center rounded-full px-1 py-0.5 text-xs font-medium ${getAnnotationTypeColor(
-              annotation.type,
-            )}`}
-          >
-            {getAnnotationTypeLabel(annotation.type)}
-          </span>
+          <div className="flex w-full flex-row items-center justify-between">
+            <span
+              className={`flex w-max flex-row items-center justify-center rounded-full px-1 py-0.5 text-xs font-medium ${getAnnotationTypeColor(
+                annotation.type,
+              )}`}
+            >
+              {getAnnotationTypeLabel(annotation.type)}
+            </span>
+            <Button
+              size="small"
+              onClick={() => {
+                setShowAdditionalGraphExtractionModal(true);
+                setAnnotationText(
+                  `Node: ${node.name}(${node.label})\n${convertJsonToText(annotation.content)}`,
+                );
+              }}
+              className="flex h-6 flex-row items-center justify-center bg-gray-700 px-2 text-xs"
+            >
+              グラフ抽出
+            </Button>
+          </div>
 
           {/* 注釈内容 */}
           <div className="p-2 text-sm text-gray-200">
@@ -184,6 +179,17 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
                 );
               }}
             />
+          </div>
+
+          <div className="flex flex-col items-end gap-1">
+            <Button
+              size="small"
+              onClick={() => handleReply(annotation.id)}
+              className="flex h-6 flex-row items-center justify-center bg-gray-700 px-2 text-xs"
+            >
+              <ReplyIcon width={16} height={16} color="white" />
+              返信
+            </Button>
           </div>
 
           {/* 子注釈 */}

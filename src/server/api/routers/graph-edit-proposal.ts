@@ -9,21 +9,23 @@ import {
 } from "@prisma/client";
 import { KnowledgeGraphInputSchema } from "../schemas/knowledge-graph";
 import { TiptapContentSchema } from "./workspace";
+import { diffNodes, diffRelationships } from "@/app/_utils/kg/diff";
+import { formGraphDataForFrontend } from "@/app/_utils/kg/frontend-properties";
+import type {
+  NodeTypeForFrontend,
+  RelationshipTypeForFrontend,
+} from "@/app/const/types";
+import {
+  applyGraphChanges,
+  generateProposalChangeData,
+} from "@/server/lib/graph-update-utils";
 
 // 変更提案作成スキーマ
 const CreateProposalSchema = z.object({
   topicSpaceId: z.string(),
   title: z.string().min(1, "タイトルは必須です"),
-  description: z.string().optional(),
-  changes: z.array(
-    z.object({
-      changeType: z.nativeEnum(GraphChangeType),
-      changeEntityType: z.nativeEnum(GraphChangeEntityType),
-      changeEntityId: z.string(),
-      previousState: KnowledgeGraphInputSchema,
-      nextState: KnowledgeGraphInputSchema,
-    }),
-  ),
+  description: z.string().min(10, "説明は10文字以上必要です"),
+  newGraphData: KnowledgeGraphInputSchema,
 });
 
 // 変更提案更新スキーマ
@@ -31,17 +33,7 @@ const UpdateProposalSchema = z.object({
   proposalId: z.string(),
   title: z.string().min(1, "タイトルは必須です").optional(),
   description: z.string().optional(),
-  changes: z
-    .array(
-      z.object({
-        changeType: z.nativeEnum(GraphChangeType),
-        changeEntityType: z.nativeEnum(GraphChangeEntityType),
-        changeEntityId: z.string(),
-        previousState: KnowledgeGraphInputSchema,
-        nextState: KnowledgeGraphInputSchema,
-      }),
-    )
-    .optional(),
+  newGraphData: KnowledgeGraphInputSchema.optional(),
 });
 
 // コメント追加スキーマ
@@ -64,6 +56,8 @@ export const graphEditProposalRouter = createTRPCRouter({
         },
         include: {
           admins: true,
+          graphNodes: true,
+          graphRelationships: true,
         },
       });
 
@@ -74,32 +68,71 @@ export const graphEditProposalRouter = createTRPCRouter({
         });
       }
 
-      // 提案者をTopicSpaceのadminに追加（権限チェック）
-      const isAdmin = topicSpace.admins.some(
-        (admin) => admin.id === ctx.session.user.id,
-      );
-      if (!isAdmin) {
+      // ログインユーザーであれば誰でも変更提案を作成可能
+      // ただし、説明は必須とする（品質向上のため）
+      if (!input.description || input.description.trim().length < 10) {
         throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "このTopicSpaceに変更提案を作成する権限がありません",
+          code: "BAD_REQUEST",
+          message: "変更提案には10文字以上の説明が必要です",
         });
       }
 
+      // 現在のグラフデータを取得
+      const currentGraphData = formGraphDataForFrontend({
+        nodes: topicSpace.graphNodes,
+        relationships: topicSpace.graphRelationships,
+      });
+
+      // 新しいグラフデータ
+      const newGraphData = {
+        nodes: input.newGraphData.nodes as NodeTypeForFrontend[],
+        relationships: input.newGraphData
+          .relationships as RelationshipTypeForFrontend[],
+      };
+
+      // 差分を計算
+      const nodeDiffs = diffNodes(currentGraphData.nodes, newGraphData.nodes);
+      const relationshipDiffs = diffRelationships(
+        currentGraphData.relationships,
+        newGraphData.relationships,
+      );
+
+      // 変更がない場合はエラー
+      if (nodeDiffs.length === 0 && relationshipDiffs.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "変更が検出されませんでした",
+        });
+      }
+
+      // 変更提案を作成
       const proposal = await ctx.db.graphEditProposal.create({
         data: {
           title: input.title,
           description: input.description,
-          status: ProposalStatus.DRAFT,
+          // 下書き状態をスキップするが、今後下書き状態からの動線をする
+          status: ProposalStatus.PENDING,
           topicSpaceId: input.topicSpaceId,
           proposerId: ctx.session.user.id,
           changes: {
-            create: input.changes.map((change) => ({
-              changeType: change.changeType,
-              changeEntityType: change.changeEntityType,
-              changeEntityId: change.changeEntityId,
-              previousState: change.previousState,
-              nextState: change.nextState,
-            })),
+            create: [
+              // ノードの変更
+              ...nodeDiffs.map((diff) => ({
+                changeType: diff.type,
+                changeEntityType: GraphChangeEntityType.NODE,
+                changeEntityId: String(diff.original?.id ?? diff.updated?.id),
+                previousState: diff.original ?? {},
+                nextState: diff.updated ?? {},
+              })),
+              // リレーションシップの変更
+              ...relationshipDiffs.map((diff) => ({
+                changeType: diff.type,
+                changeEntityType: GraphChangeEntityType.EDGE,
+                changeEntityId: String(diff.original?.id ?? diff.updated?.id),
+                previousState: diff.original ?? {},
+                nextState: diff.updated ?? {},
+              })),
+            ],
           },
         },
         include: {
@@ -199,24 +232,70 @@ export const graphEditProposalRouter = createTRPCRouter({
         },
       });
 
-      // 変更内容も更新する場合
-      if (input.changes) {
-        // 既存の変更を削除
-        await ctx.db.graphEditChange.deleteMany({
-          where: { proposalId: input.proposalId },
+      // グラフデータも更新する場合
+      if (input.newGraphData) {
+        // TopicSpaceの現在のグラフデータを取得
+        const topicSpace = await ctx.db.topicSpace.findFirst({
+          where: { id: existingProposal.topicSpaceId },
+          include: {
+            graphNodes: true,
+            graphRelationships: true,
+          },
         });
 
-        // 新しい変更を追加
-        await ctx.db.graphEditChange.createMany({
-          data: input.changes.map((change) => ({
-            proposalId: input.proposalId,
-            changeType: change.changeType,
-            changeEntityType: change.changeEntityType,
-            changeEntityId: change.changeEntityId,
-            previousState: change.previousState,
-            nextState: change.nextState,
-          })),
-        });
+        if (topicSpace) {
+          // 現在のグラフデータ
+          const currentGraphData = formGraphDataForFrontend({
+            nodes: topicSpace.graphNodes,
+            relationships: topicSpace.graphRelationships,
+          });
+
+          // 新しいグラフデータ
+          const newGraphData = {
+            nodes: input.newGraphData.nodes as NodeTypeForFrontend[],
+            relationships: input.newGraphData
+              .relationships as RelationshipTypeForFrontend[],
+          };
+
+          // 差分を計算
+          const nodeDiffs = diffNodes(
+            currentGraphData.nodes,
+            newGraphData.nodes,
+          );
+          const relationshipDiffs = diffRelationships(
+            currentGraphData.relationships,
+            newGraphData.relationships,
+          );
+
+          // 既存の変更を削除
+          await ctx.db.graphEditChange.deleteMany({
+            where: { proposalId: input.proposalId },
+          });
+
+          // 新しい変更を追加
+          await ctx.db.graphEditChange.createMany({
+            data: [
+              // ノードの変更
+              ...nodeDiffs.map((diff) => ({
+                proposalId: input.proposalId,
+                changeType: diff.type,
+                changeEntityType: GraphChangeEntityType.NODE,
+                changeEntityId: String(diff.original?.id ?? diff.updated?.id),
+                previousState: diff.original ?? {},
+                nextState: diff.updated ?? {},
+              })),
+              // リレーションシップの変更
+              ...relationshipDiffs.map((diff) => ({
+                proposalId: input.proposalId,
+                changeType: diff.type,
+                changeEntityType: GraphChangeEntityType.EDGE,
+                changeEntityId: String(diff.original?.id ?? diff.updated?.id),
+                previousState: diff.original ?? {},
+                nextState: diff.updated ?? {},
+              })),
+            ],
+          });
+        }
       }
 
       return proposal;
@@ -785,36 +864,30 @@ export const graphEditProposalRouter = createTRPCRouter({
         },
       });
 
-      // 各変更を適用
-      for (const change of proposal.changes) {
-        if (change.changeEntityType === GraphChangeEntityType.NODE) {
-          if (change.changeType === GraphChangeType.UPDATE) {
-            await ctx.db.graphNode.update({
-              where: { id: change.changeEntityId },
-              data: { properties: change.nextState ?? {} },
-            });
-          }
-        } else if (change.changeEntityType === GraphChangeEntityType.EDGE) {
-          if (change.changeType === GraphChangeType.UPDATE) {
-            await ctx.db.graphRelationship.update({
-              where: { id: change.changeEntityId },
-              data: { properties: change.nextState ?? {} },
-            });
-          }
-        }
+      // プロポーザル変更から変更データを生成
+      const changeData = generateProposalChangeData(
+        proposal.changes.map((change) => ({
+          ...change,
+          previousState: change.previousState as Record<string, unknown>,
+          nextState: change.nextState as Record<string, unknown>,
+        })),
+        proposal.topicSpaceId,
+      );
 
-        // 変更履歴を記録
-        await ctx.db.nodeLinkChangeHistory.create({
-          data: {
-            changeType: change.changeType,
-            changeEntityType: change.changeEntityType,
-            changeEntityId: change.changeEntityId,
-            previousState: change.previousState ?? {},
-            nextState: change.nextState ?? {},
-            graphChangeHistoryId: graphChangeHistory.id,
-          },
-        });
-      }
+      // 変更を適用
+      await applyGraphChanges(ctx.db, proposal.topicSpaceId, changeData);
+
+      // 変更履歴を記録
+      await ctx.db.nodeLinkChangeHistory.createMany({
+        data: proposal.changes.map((change) => ({
+          changeType: change.changeType,
+          changeEntityType: change.changeEntityType,
+          changeEntityId: change.changeEntityId,
+          previousState: change.previousState ?? {},
+          nextState: change.nextState ?? {},
+          graphChangeHistoryId: graphChangeHistory.id,
+        })),
+      });
 
       // 提案をマージ済みに更新
       const updatedProposal = await ctx.db.graphEditProposal.update({
@@ -1156,5 +1229,61 @@ export const graphEditProposalRouter = createTRPCRouter({
       });
 
       return changeHistories;
+    }),
+
+  // 自分の変更提案一覧を取得
+  listMyProposals: protectedProcedure
+    .input(
+      z.object({
+        status: z.nativeEnum(ProposalStatus).optional(),
+        limit: z.number().optional().default(10),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const proposals = await ctx.db.graphEditProposal.findMany({
+        where: {
+          proposerId: ctx.session.user.id,
+          ...(input.status && { status: input.status }),
+        },
+        include: {
+          proposer: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+            },
+          },
+          reviewer: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+            },
+          },
+          lockedBy: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+            },
+          },
+          topicSpace: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          changes: true,
+          _count: {
+            select: {
+              comments: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: input.limit,
+      });
+
+      return proposals;
     }),
 });

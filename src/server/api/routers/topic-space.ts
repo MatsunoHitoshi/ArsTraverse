@@ -43,6 +43,11 @@ import {
   formTopicSpaceForFrontendPrivate,
   formTopicSpaceForFrontendPublic,
 } from "@/app/_utils/kg/frontend-properties";
+import {
+  applyGraphChanges,
+  generateGraphChangeData,
+  recordGraphChangeHistory,
+} from "@/server/lib/graph-update-utils";
 import { getTextReference } from "./source-document";
 import { KnowledgeGraphInputSchema } from "../schemas/knowledge-graph";
 import OpenAI from "openai";
@@ -292,6 +297,7 @@ export const topicSpaceRouter = createTRPCRouter({
   getByIdPublic: publicProcedure
     .input(TopicSpaceGetSchema)
     .query(async ({ ctx, input }) => {
+      console.log("input.id--------- ", input.id);
       const topicSpace = await ctx.db.topicSpace.findFirst({
         where: {
           id: input.id,
@@ -323,6 +329,7 @@ export const topicSpaceRouter = createTRPCRouter({
           ...topicSpace,
           nodes: topicSpace.graphNodes,
           relationships: topicSpace.graphRelationships,
+          admins: topicSpace.admins,
         },
         input.filterOption as TopicGraphFilterOption,
         ctx.session?.user.preferredLocale as LocaleEnum,
@@ -1103,16 +1110,28 @@ export const topicSpaceRouter = createTRPCRouter({
       }
       adminGuard(topicSpace, ctx);
 
-      const prevGraphData = formGraphDataForFrontend({
-        nodes: topicSpace.graphNodes,
-        relationships: topicSpace.graphRelationships,
-      });
-
       const sanitizedGraphData = {
         nodes: input.dataJson.nodes as NodeTypeForFrontend[],
         relationships: input.dataJson
           .relationships as RelationshipTypeForFrontend[],
       };
+
+      const changeData = generateGraphChangeData(
+        topicSpace.graphNodes.map((node) => formNodeDataForFrontend(node)),
+        topicSpace.graphRelationships.map((rel) =>
+          formRelationshipDataForFrontend(rel),
+        ),
+        sanitizedGraphData.nodes,
+        sanitizedGraphData.relationships,
+      );
+
+      await applyGraphChanges(ctx.db, topicSpace.id, changeData);
+
+      const prevGraphData = formGraphDataForFrontend({
+        nodes: topicSpace.graphNodes,
+        relationships: topicSpace.graphRelationships,
+      });
+
       const nodeDiffs = diffNodes(
         prevGraphData.nodes,
         sanitizedGraphData.nodes,
@@ -1122,126 +1141,14 @@ export const topicSpaceRouter = createTRPCRouter({
         sanitizedGraphData.relationships,
       );
 
-      const nodeCreateData = nodeDiffs
-        .filter((diff) => diff.type === GraphChangeType.ADD)
-        .map((diff) => diff.updated)
-        .filter((node) => node !== null);
-      const relationshipCreateData = relationshipDiffs
-        .filter((diff) => diff.type === GraphChangeType.ADD)
-        .map((diff) => diff.updated)
-        .filter((relationship) => relationship !== null);
-
-      const nodeDeleteData = nodeDiffs
-        .filter((diff) => diff.type === GraphChangeType.REMOVE)
-        .map((diff) => diff.original)
-        .filter((node) => node !== null);
-      const relationshipDeleteData = relationshipDiffs
-        .filter((diff) => diff.type === GraphChangeType.REMOVE)
-        .map((diff) => diff.original)
-        .filter((relationship) => relationship !== null);
-
-      const nodeUpdateData = nodeDiffs
-        .filter((diff) => diff.type === GraphChangeType.UPDATE)
-        .map((diff) => diff.updated)
-        .filter((node) => node !== null);
-      const relationshipUpdateData = relationshipDiffs
-        .filter((diff) => diff.type === GraphChangeType.UPDATE)
-        .map((diff) => diff.updated)
-        .filter((relationship) => relationship !== null);
-
-      await ctx.db.graphNode.createMany({
-        data: nodeCreateData.map((node) => ({
-          id: node.id,
-          name: node.name,
-          label: node.label,
-          properties: node.properties,
-          topicSpaceId: topicSpace.id,
-        })),
-      });
-      await ctx.db.graphRelationship.createMany({
-        data: relationshipCreateData.map((relationship) => ({
-          id: relationship.id,
-          type: relationship.type,
-          properties: relationship.properties,
-          fromNodeId: relationship.sourceId,
-          toNodeId: relationship.targetId,
-          topicSpaceId: topicSpace.id,
-        })),
-      });
-
-      for (const node of nodeUpdateData) {
-        await ctx.db.graphNode.update({
-          where: { id: node.id },
-          data: {
-            name: node.name,
-            properties: node.properties,
-            label: node.label,
-            topicSpaceId: topicSpace.id,
-          },
-        });
-      }
-      for (const relationship of relationshipUpdateData) {
-        await ctx.db.graphRelationship.update({
-          where: { id: relationship.id },
-          data: {
-            type: relationship.type,
-            properties: relationship.properties,
-            fromNodeId: relationship.sourceId,
-            toNodeId: relationship.targetId,
-            topicSpaceId: topicSpace.id,
-          },
-        });
-      }
-
-      await ctx.db.graphNode.updateMany({
-        where: { id: { in: nodeDeleteData.map((node) => node.id) } },
-        data: {
-          topicSpaceId: null,
-          deletedAt: new Date(),
-        },
-      });
-      await ctx.db.graphRelationship.updateMany({
-        where: {
-          id: {
-            in: relationshipDeleteData.map((relationship) => relationship.id),
-          },
-        },
-        data: {
-          topicSpaceId: null,
-          deletedAt: new Date(),
-        },
-      });
-
-      const graphChangeHistory = await ctx.db.graphChangeHistory.create({
-        data: {
-          recordType: GraphChangeRecordType.TOPIC_SPACE,
-          recordId: topicSpace.id,
-          description: "グラフを更新しました",
-          user: { connect: { id: ctx.session.user.id } },
-        },
-      });
-
-      await ctx.db.nodeLinkChangeHistory.createMany({
-        data: nodeDiffs.map((diff) => ({
-          changeType: diff.type,
-          changeEntityType: GraphChangeEntityType.NODE,
-          changeEntityId: String(diff.original?.id ?? diff.updated?.id),
-          previousState: diff.original ?? {},
-          nextState: diff.updated ?? {},
-          graphChangeHistoryId: graphChangeHistory.id,
-        })),
-      });
-
-      await ctx.db.nodeLinkChangeHistory.createMany({
-        data: relationshipDiffs.map((diff) => ({
-          changeType: diff.type,
-          changeEntityType: GraphChangeEntityType.EDGE,
-          changeEntityId: String(diff.original?.id ?? diff.updated?.id),
-          previousState: diff.original ?? {},
-          nextState: diff.updated ?? {},
-          graphChangeHistoryId: graphChangeHistory.id,
-        })),
-      });
+      await recordGraphChangeHistory(
+        ctx.db,
+        topicSpace.id,
+        "グラフを更新しました",
+        ctx.session.user.id,
+        nodeDiffs,
+        relationshipDiffs,
+      );
 
       const updatedTopicSpace = await ctx.db.topicSpace.findFirst({
         where: { id: input.id },
@@ -1305,7 +1212,7 @@ export const topicSpaceRouter = createTRPCRouter({
       if (!topicSpace) {
         throw new Error("TopicSpace not found");
       }
-      adminGuard(topicSpace, ctx);
+      // ログインユーザーであれば誰でもノード説明生成が可能
 
       const node = await ctx.db.graphNode.findFirst({
         where: { id: input.nodeId },

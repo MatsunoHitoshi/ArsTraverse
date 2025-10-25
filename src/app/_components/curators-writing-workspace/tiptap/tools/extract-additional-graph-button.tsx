@@ -3,7 +3,10 @@ import type { Editor } from "@tiptap/react";
 import { Button } from "@/app/_components/button/button";
 import { PlusIcon } from "@/app/_components/icons";
 import { AdditionalGraphExtractionModal } from "./additional-graph-extraction-modal";
-import { CustomNodeType, GraphDocumentForFrontend } from "@/app/const/types";
+import type {
+  CustomNodeType,
+  GraphDocumentForFrontend,
+} from "@/app/const/types";
 
 interface ExtractAdditionalGraphButtonProps {
   editor: Editor | null;
@@ -32,9 +35,10 @@ export const ExtractAdditionalGraphButton: React.FC<
       <Button
         size="small"
         onClick={() => setIsAdditionalGraphExtractionModalOpen(true)}
-        className={`flex h-8 w-8 items-center justify-center p-0`}
+        className={`flex h-8 items-center justify-center gap-1 p-0 text-xs`}
       >
         <PlusIcon height={16} width={16} color="white" />
+        グラフ抽出
       </Button>
 
       <AdditionalGraphExtractionModal

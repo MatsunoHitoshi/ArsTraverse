@@ -2,13 +2,13 @@
 
 import React, { useState } from "react";
 import { api } from "@/trpc/react";
+import { useSession } from "next-auth/react";
 import {
   GraphChangeEntityType,
   GraphChangeType,
   ProposalStatus,
 } from "@prisma/client";
 import { Button } from "../button/button";
-import { Badge } from "../badge/badge";
 import { Textarea } from "../textarea";
 import { formatRelativeTime } from "@/app/_utils/date/format-date";
 import { DiffViewer } from "./diff-viewer";
@@ -21,6 +21,13 @@ import {
   ArrowMergeIcon,
 } from "../icons";
 import Image from "next/image";
+import { getStatusBadge } from "./proposal-utils";
+import Link from "next/link";
+import {
+  GraphEditChangeForFrontend,
+  NodeTypeForFrontend,
+  RelationshipTypeForFrontend,
+} from "@/app/const/types";
 
 interface ProposalDetailProps {
   proposalId: string;
@@ -31,6 +38,7 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
   proposalId,
   onBack,
 }) => {
+  const { data: session } = useSession();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
 
@@ -120,46 +128,6 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
     },
   });
 
-  const getStatusBadge = (status: ProposalStatus) => {
-    const statusConfig = {
-      [ProposalStatus.DRAFT]: {
-        label: "下書き",
-        color: "bg-gray-100 text-gray-800",
-      },
-      [ProposalStatus.PENDING]: {
-        label: "レビュー待ち",
-        color: "bg-yellow-100 text-yellow-800",
-      },
-      [ProposalStatus.IN_REVIEW]: {
-        label: "レビュー中",
-        color: "bg-blue-100 text-blue-800",
-      },
-      [ProposalStatus.LOCKED]: {
-        label: "ロック済み",
-        color: "bg-purple-100 text-purple-800",
-      },
-      [ProposalStatus.APPROVED]: {
-        label: "承認済み",
-        color: "bg-green-100 text-green-800",
-      },
-      [ProposalStatus.REJECTED]: {
-        label: "却下",
-        color: "bg-red-100 text-red-800",
-      },
-      [ProposalStatus.MERGED]: {
-        label: "マージ済み",
-        color: "bg-emerald-100 text-emerald-800",
-      },
-      [ProposalStatus.CANCELLED]: {
-        label: "取り下げ",
-        color: "bg-gray-100 text-gray-600",
-      },
-    };
-
-    const config = statusConfig[status];
-    return <Badge className={config.color}>{config.label}</Badge>;
-  };
-
   const handleAction = async (action: () => Promise<unknown>) => {
     setIsSubmitting(true);
     try {
@@ -186,75 +154,89 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
   }
 
   const isAdmin = proposal.topicSpace.admins.some(
-    (admin) => admin.id === proposal.proposerId,
+    (admin) => admin.id === session?.user?.id,
   );
-  const isProposer = proposal.proposerId === proposal.proposerId;
+  const isProposer = proposal.proposerId === session?.user?.id;
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button size="small" onClick={onBack}>
-            ← 戻る
-          </Button>
-          <h1 className="text-2xl font-semibold">{proposal.title}</h1>
-          {getStatusBadge(proposal.status)}
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* メインコンテンツ */}
         <div className="space-y-6 lg:col-span-2">
           {/* 提案情報 */}
-          <div className="rounded-lg border bg-white p-6">
-            <h2 className="mb-4 text-lg font-semibold">提案内容</h2>
+          <div className="rounded-lg border border-gray-700 bg-slate-800 p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-white">提案内容</h2>
+              {getStatusBadge(proposal.status)}
+            </div>
 
             {proposal.description && (
               <div className="mb-4">
-                <h3 className="mb-2 text-sm font-medium text-gray-700">説明</h3>
-                <p className="whitespace-pre-wrap text-gray-600">
+                <h3 className="mb-2 text-sm font-medium text-gray-300">説明</h3>
+                <p className="whitespace-pre-wrap text-gray-400">
                   {proposal.description}
                 </p>
               </div>
             )}
 
             <div className="mb-4">
-              <h3 className="mb-2 text-sm font-medium text-gray-700">
+              <h3 className="mb-2 text-sm font-medium text-gray-300">
                 変更内容
               </h3>
               <DiffViewer
-                changes={
-                  proposal.changes as unknown as {
-                    changeType: GraphChangeType;
-                    changeEntityType: GraphChangeEntityType;
-                    changeEntityId: string;
-                    previousState: {
-                      nodes: unknown[];
-                      relationships: unknown[];
-                    };
-                    nextState: { nodes: unknown[]; relationships: unknown[] };
-                  }[]
-                }
+                changes={proposal.changes as GraphEditChangeForFrontend[]}
               />
             </div>
           </div>
 
           {/* コメントセクション */}
-          <div className="rounded-lg border bg-white p-6">
-            <h2 className="mb-4 text-lg font-semibold">コメント</h2>
+          <div className="rounded-lg border border-gray-700 bg-slate-800 p-6">
+            <h2 className="mb-4 text-lg font-semibold text-white">コメント</h2>
             <CommentSection proposalId={proposalId} />
           </div>
         </div>
 
         {/* サイドバー */}
         <div className="space-y-6">
+          {/* TopicSpace情報 */}
+          <div className="rounded-lg border border-gray-700 bg-slate-800 p-6">
+            <h3 className="mb-4 text-lg font-semibold text-white">
+              リポジトリ
+            </h3>
+
+            <div className="space-y-3 text-sm">
+              <div className="flex w-full items-center gap-1">
+                <div className="truncate text-lg text-gray-200">
+                  {proposal.topicSpace.name}
+                </div>
+              </div>
+
+              {proposal.topicSpace.description && (
+                <div>
+                  <div className="mt-1 text-gray-400">
+                    {proposal.topicSpace.description}
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-2">
+                <Link
+                  href={`/topic-spaces/${proposal.topicSpace.id}/graph`}
+                  className="inline-flex items-center gap-2 rounded-lg bg-slate-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-600"
+                >
+                  グラフを表示
+                </Link>
+              </div>
+            </div>
+          </div>
+
           {/* 提案情報 */}
-          <div className="rounded-lg border bg-white p-6">
-            <h3 className="mb-4 text-lg font-semibold">提案情報</h3>
+          <div className="rounded-lg border border-gray-700 bg-slate-800 p-6">
+            <h3 className="mb-4 text-lg font-semibold text-white">提案情報</h3>
 
             <div className="space-y-3 text-sm">
               <div>
-                <span className="font-medium text-gray-700">提案者:</span>
+                <span className="font-medium text-gray-300">提案者:</span>
                 <div className="mt-1 flex items-center gap-2">
                   {proposal.proposer.image && (
                     <Image
@@ -265,13 +247,15 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
                       width={24}
                     />
                   )}
-                  <span>{proposal.proposer.name ?? "不明"}</span>
+                  <span className="text-gray-400">
+                    {proposal.proposer.name ?? "不明"}
+                  </span>
                 </div>
               </div>
 
               {proposal.reviewer && (
                 <div>
-                  <span className="font-medium text-gray-700">
+                  <span className="font-medium text-gray-300">
                     レビュー担当:
                   </span>
                   <div className="mt-1 flex items-center gap-2">
@@ -284,14 +268,16 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
                         width={24}
                       />
                     )}
-                    <span>{proposal.reviewer.name ?? "不明"}</span>
+                    <span className="text-gray-400">
+                      {proposal.reviewer.name ?? "不明"}
+                    </span>
                   </div>
                 </div>
               )}
 
               {proposal.lockedBy && (
                 <div>
-                  <span className="font-medium text-gray-700">ロック中:</span>
+                  <span className="font-medium text-gray-300">ロック中:</span>
                   <div className="mt-1 flex items-center gap-2">
                     {proposal.lockedBy.image && (
                       <Image
@@ -302,7 +288,7 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
                         width={24}
                       />
                     )}
-                    <span className="text-purple-600">
+                    <span className="text-purple-400">
                       {proposal.lockedBy.name ?? "不明"}
                     </span>
                   </div>
@@ -310,18 +296,18 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
               )}
 
               <div>
-                <span className="font-medium text-gray-700">作成日時:</span>
-                <div className="mt-1">
+                <span className="font-medium text-gray-300">作成日時:</span>
+                <div className="mt-1 text-gray-400">
                   {formatRelativeTime(new Date(proposal.createdAt))}
                 </div>
               </div>
 
               {proposal.reviewedAt && (
                 <div>
-                  <span className="font-medium text-gray-700">
+                  <span className="font-medium text-gray-300">
                     レビュー開始:
                   </span>
-                  <div className="mt-1">
+                  <div className="mt-1 text-gray-400">
                     {formatRelativeTime(new Date(proposal.reviewedAt))}
                   </div>
                 </div>
@@ -329,8 +315,8 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
 
               {proposal.approvedAt && (
                 <div>
-                  <span className="font-medium text-gray-700">承認日時:</span>
-                  <div className="mt-1">
+                  <span className="font-medium text-gray-300">承認日時:</span>
+                  <div className="mt-1 text-gray-400">
                     {formatRelativeTime(new Date(proposal.approvedAt))}
                   </div>
                 </div>
@@ -338,8 +324,8 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
 
               {proposal.rejectedAt && (
                 <div>
-                  <span className="font-medium text-gray-700">却下日時:</span>
-                  <div className="mt-1">
+                  <span className="font-medium text-gray-300">却下日時:</span>
+                  <div className="mt-1 text-gray-400">
                     {formatRelativeTime(new Date(proposal.rejectedAt))}
                   </div>
                 </div>
@@ -347,8 +333,8 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
 
               {proposal.rejectionReason && (
                 <div>
-                  <span className="font-medium text-gray-700">却下理由:</span>
-                  <p className="mt-1 text-red-600">
+                  <span className="font-medium text-gray-300">却下理由:</span>
+                  <p className="mt-1 text-red-400">
                     {proposal.rejectionReason}
                   </p>
                 </div>
@@ -357,8 +343,10 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
           </div>
 
           {/* アクションボタン */}
-          <div className="rounded-lg border bg-white p-6">
-            <h3 className="mb-4 text-lg font-semibold">アクション</h3>
+          <div className="rounded-lg border border-gray-700 bg-slate-800 p-6">
+            <h3 className="mb-4 text-lg font-semibold text-white">
+              アクション
+            </h3>
 
             <div className="space-y-3">
               {/* ロック/ロック解除 */}
@@ -373,7 +361,7 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
                           )
                         }
                         disabled={isSubmitting}
-                        className="w-full"
+                        className="flex flex-row items-center justify-center gap-1 hover:bg-slate-600"
                       >
                         <LockClosedIcon height={16} width={16} color="white" />
                         ロック
@@ -388,7 +376,7 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
                         )
                       }
                       disabled={isSubmitting}
-                      className="w-full"
+                      className="lex flex-row items-center justify-center gap-1 hover:bg-slate-600"
                     >
                       <ArrowMergeIcon height={16} width={16} color="white" />
                       ロック解除
@@ -406,7 +394,7 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
                     )
                   }
                   disabled={isSubmitting}
-                  className="w-full"
+                  className="flex flex-row items-center justify-center gap-1 hover:bg-slate-600"
                 >
                   <EyeOpenIcon height={16} width={16} color="white" />
                   レビュー開始
@@ -422,9 +410,9 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
                     )
                   }
                   disabled={isSubmitting}
-                  className="w-full bg-green-600 hover:bg-green-700"
+                  className="flex flex-row items-center justify-center gap-1 hover:bg-slate-600"
                 >
-                  <CheckIcon height={16} width={16} color="white" />
+                  <CheckIcon height={16} width={16} color="green" />
                   承認
                 </Button>
               )}
@@ -437,22 +425,25 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
                     onChange={(e) => setRejectionReason(e.target.value)}
                     placeholder="却下理由を入力してください（任意）"
                     rows={2}
+                    className="block w-full rounded-lg border border-gray-700 bg-slate-700 px-3 py-2 text-sm/6 text-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
                   />
-                  <Button
-                    onClick={() =>
-                      handleAction(() =>
-                        rejectProposal.mutateAsync({
-                          proposalId,
-                          rejectionReason: rejectionReason || undefined,
-                        }),
-                      )
-                    }
-                    disabled={isSubmitting}
-                    className="w-full"
-                  >
-                    <CrossLargeIcon height={16} width={16} color="white" />
-                    却下
-                  </Button>
+                  <div className="flex w-full justify-end">
+                    <Button
+                      onClick={() =>
+                        handleAction(() =>
+                          rejectProposal.mutateAsync({
+                            proposalId,
+                            rejectionReason: rejectionReason || undefined,
+                          }),
+                        )
+                      }
+                      disabled={isSubmitting}
+                      className="flex flex-row items-center justify-center gap-1 hover:bg-slate-600"
+                    >
+                      <CrossLargeIcon height={16} width={16} color="red" />
+                      却下
+                    </Button>
+                  </div>
                 </div>
               )}
 
@@ -465,9 +456,9 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
                     )
                   }
                   disabled={isSubmitting}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700"
+                  className="flex flex-row items-center justify-center gap-1 hover:bg-slate-600"
                 >
-                  <ArrowMergeIcon height={16} width={16} color="white" />
+                  <ArrowMergeIcon height={16} width={16} color="green" />
                   マージ
                 </Button>
               )}

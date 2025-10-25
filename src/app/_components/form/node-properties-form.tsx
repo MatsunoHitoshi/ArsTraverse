@@ -6,7 +6,6 @@ import { api } from "@/trpc/react";
 import { PlusIcon, TrashIcon, FileTextIcon } from "../icons";
 import { Textarea } from "../textarea";
 import { ProposalCreateForm } from "../graph-edit-proposal/proposal-create-form";
-import { GraphChangeType, GraphChangeEntityType } from "@prisma/client";
 
 export const NodePropertiesForm = ({
   topicSpaceId,
@@ -64,53 +63,19 @@ export const NodePropertiesForm = ({
     setShowProposalForm(false);
   };
 
-  // 変更内容を生成
-  const generateChanges = () => {
-    const changes: {
-      changeType: GraphChangeType;
-      changeEntityType: GraphChangeEntityType;
-      changeEntityId: string;
-      previousState: { nodes: unknown[]; relationships: unknown[] };
-      nextState: { nodes: unknown[]; relationships: unknown[] };
-    }[] = [];
-
-    // プロパティの変更を検出
-    const originalProperties = node.properties;
-    const newProperties = properties;
-
-    // 変更されたプロパティを検出
-    const allKeys = new Set([
-      ...Object.keys(originalProperties),
-      ...Object.keys(newProperties),
-    ]);
-
-    for (const key of allKeys) {
-      const originalValue = originalProperties[key];
-      const newValue = newProperties[key];
-
-      if (originalValue !== newValue) {
-        changes.push({
-          changeType: GraphChangeType.UPDATE,
-          changeEntityType: GraphChangeEntityType.NODE,
-          changeEntityId: node.id,
-          previousState: { nodes: [originalProperties], relationships: [] },
-          nextState: {
-            nodes: [{ ...originalProperties, ...newProperties }],
-            relationships: [],
-          },
-        });
-        break; // ノード全体の変更として1つの変更にまとめる
-      }
-    }
-
-    return changes;
+  // 新しいグラフデータを生成
+  const generateNewGraphData = () => {
+    return {
+      nodes: [{ ...node, properties: properties }],
+      relationships: [],
+    };
   };
 
   if (showProposalForm) {
     return (
       <ProposalCreateForm
         topicSpaceId={topicSpaceId}
-        changes={generateChanges()}
+        newGraphData={generateNewGraphData()}
         onSuccess={handleProposalSuccess}
         onCancel={handleProposalCancel}
       />

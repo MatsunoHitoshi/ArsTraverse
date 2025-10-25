@@ -111,7 +111,7 @@ export const formTopicSpaceForFrontendPrivate = ({
 };
 
 export const formTopicSpaceForFrontendPublic = (
-  topicSpace: Omit<TopicSpace, "admins"> & {
+  topicSpace: TopicSpace & {
     nodes: GraphNode[];
     relationships: GraphRelationship[];
     sourceDocuments?: (SourceDocument & {
@@ -123,6 +123,7 @@ export const formTopicSpaceForFrontendPublic = (
         | null;
     })[];
     tags?: Tag[];
+    admins?: { id: string }[];
   },
   filterOption: TopicGraphFilterOption,
   preferredLocale?: LocaleEnum,
@@ -157,6 +158,7 @@ export const formTopicSpaceForFrontendPublic = (
             : null,
       })),
       tags: topicSpace.tags,
+      admins: topicSpace.admins,
     };
   }
 };

@@ -130,7 +130,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
   };
 
   if (isLoading) {
-    return <div className="text-gray-500">コメントを読み込み中...</div>;
+    return <div className="text-gray-400">コメントを読み込み中...</div>;
   }
 
   return (
@@ -142,7 +142,9 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
           onChange={(e) => setNewComment(e.target.value)}
           placeholder="コメントを入力してください..."
           rows={3}
+          className="block w-full rounded-lg border border-gray-700 bg-slate-700 px-3 py-2 text-sm/6 text-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
         />
+
         <div className="flex justify-end">
           <Button type="submit" disabled={!newComment.trim()}>
             コメントを追加
@@ -154,8 +156,8 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
       {comments && comments.length > 0 ? (
         <div className="space-y-4">
           {comments.map((comment) => (
-            <div key={comment.id} className="border-l-2 border-gray-200 pl-4">
-              <div className="rounded-lg bg-gray-50 p-4">
+            <div key={comment.id} className="border-l-2 border-gray-600 pl-4">
+              <div className="rounded-lg border border-gray-700 bg-slate-800 p-4">
                 <div className="mb-2 flex items-center gap-2">
                   {comment.author.image && (
                     <Image
@@ -166,7 +168,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
                       width={24}
                     />
                   )}
-                  <span className="text-sm font-medium">
+                  <span className="text-sm font-medium text-gray-300">
                     {comment.author.name ?? "不明"}
                   </span>
                   <span className="text-xs text-gray-500">
@@ -174,14 +176,15 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
                   </span>
                 </div>
 
-                <p className="whitespace-pre-wrap text-gray-700">
+                <p className="whitespace-pre-wrap text-gray-400">
                   {renderCommentContent(comment.content)}
                 </p>
 
-                <div className="mt-3">
+                <div className="mt-3 flex w-full flex-row justify-end">
                   <Button
                     size="small"
                     onClick={() => setReplyingTo(comment.id)}
+                    className="flex flex-row items-center justify-center gap-1 hover:bg-slate-600"
                   >
                     <ReplyIcon height={16} width={16} color="white" />
                     返信
@@ -198,6 +201,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
                       onChange={(e) => setReplyContent(e.target.value)}
                       placeholder="返信を入力してください..."
                       rows={2}
+                      className="block w-full rounded-lg border border-gray-700 bg-slate-700 px-3 py-2 text-sm/6 text-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
                     />
                     <div className="flex gap-2">
                       <Button
@@ -214,6 +218,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
                           setReplyingTo(null);
                           setReplyContent("");
                         }}
+                        className="bg-slate-600 hover:bg-slate-700"
                       >
                         キャンセル
                       </Button>
@@ -228,9 +233,9 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
                   {comment.childComments.map((reply) => (
                     <div
                       key={reply.id}
-                      className="ml-4 border-l-2 border-gray-100 pl-4"
+                      className="ml-4 border-l-2 border-gray-600 pl-4"
                     >
-                      <div className="rounded-lg bg-white p-3">
+                      <div className="rounded-lg border border-gray-700 bg-slate-800 p-3">
                         <div className="mb-2 flex items-center gap-2">
                           {reply.author.image && (
                             <Image
@@ -241,7 +246,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
                               width={20}
                             />
                           )}
-                          <span className="text-sm font-medium">
+                          <span className="text-sm font-medium text-gray-300">
                             {reply.author.name ?? "不明"}
                           </span>
                           <span className="text-xs text-gray-500">
@@ -249,7 +254,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
                           </span>
                         </div>
 
-                        <p className="whitespace-pre-wrap text-sm text-gray-700">
+                        <p className="whitespace-pre-wrap text-sm text-gray-400">
                           {renderCommentContent(reply.content)}
                         </p>
                       </div>
@@ -261,7 +266,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
           ))}
         </div>
       ) : (
-        <div className="py-8 text-center text-gray-500">
+        <div className="py-8 text-center text-gray-400">
           コメントがありません
         </div>
       )}

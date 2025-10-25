@@ -7,6 +7,7 @@ import { AnnotationForm } from "./annotation-form";
 import { AnnotationHistoryModal } from "./annotation-history-modal";
 import type { AnnotationResponse } from "@/app/const/types";
 import { convertJsonToText } from "@/app/_utils/tiptap/convert";
+import { ReplyIcon } from "../icons";
 
 interface AnnotationDetailModalProps {
   annotation: AnnotationResponse;
@@ -108,7 +109,12 @@ export const AnnotationDetailModal: React.FC<AnnotationDetailModalProps> = ({
 
         {/* アクションボタン */}
         <div className="mb-6 flex gap-2">
-          <Button size="small" onClick={() => setShowReplyForm(true)}>
+          <Button
+            size="small"
+            onClick={() => setShowReplyForm(true)}
+            className="flex flex-row items-center justify-center gap-1"
+          >
+            <ReplyIcon width={16} height={16} color="white" />
             返信
           </Button>
           <Button

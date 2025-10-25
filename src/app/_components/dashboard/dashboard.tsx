@@ -6,6 +6,7 @@ import { TabsContainer } from "../tab/tab";
 import { Button } from "../button/button";
 import { PlusIcon, TrashIcon } from "../icons";
 import { TopicSpaceList } from "../list/topic-space-list";
+import { MyProposalList } from "../graph-edit-proposal/my-proposal-list";
 import type { TopicSpaceResponse } from "@/app/const/types";
 import { TopicSpaceCreateModal } from "../topic-space/topic-space-create-modal";
 import { useState } from "react";
@@ -33,8 +34,8 @@ export const Dashboard = () => {
   return (
     <>
       <TabsContainer>
-        <div className="grid  grid-flow-row grid-cols-2 gap-8  p-4">
-          <div className="flex flex-col gap-8">
+        <div className="grid grid-flow-row grid-cols-2 gap-8 overflow-hidden p-4">
+          <div className="flex flex-col gap-8 overflow-scroll">
             <div className="flex flex-col gap-1">
               <div className="flex flex-row items-center justify-between">
                 <div className="text-lg font-semibold">最近のドキュメント</div>
@@ -82,14 +83,12 @@ export const Dashboard = () => {
               )}
             </div>
             <div className="flex flex-col gap-1">
-              <div className="h-8 text-lg font-semibold">
-                最近のアクティビティ
-              </div>
-              {/* {documents && <DocumentList documents={documents} end={5} />} */}
+              <div className="h-8 text-lg font-semibold">変更提案</div>
+              <MyProposalList limit={5} />
             </div>
           </div>
 
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 overflow-scroll">
             <div className="flex flex-row items-center justify-between">
               <div className="text-lg font-semibold">リポジトリ</div>
               <Button

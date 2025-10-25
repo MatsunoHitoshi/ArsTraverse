@@ -130,8 +130,8 @@ export const NodePropertiesDetail = ({
                       ) : (
                         <>
                           {newGraphDocument
-                            ? "グラフの再生成"
-                            : "descriptionからグラフを生成"}
+                            ? "グラフの再抽出"
+                            : "descriptionからグラフを抽出"}
                         </>
                       )}
                     </Button>

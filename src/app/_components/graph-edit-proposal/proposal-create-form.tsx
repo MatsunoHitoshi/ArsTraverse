@@ -1,30 +1,22 @@
-"use client";
-
 import React, { useState } from "react";
 import { Button } from "../button/button";
 import { TextInput } from "../input/text-input";
 import { Textarea } from "../textarea";
 import { api } from "@/trpc/react";
-import { GraphChangeType, GraphChangeEntityType } from "@prisma/client";
-// import type { CustomNodeType, CustomLinkType } from "@/app/const/types";
-import { DiffViewer } from "@/app/_components/graph-edit-proposal/diff-viewer";
 
 interface ProposalCreateFormProps {
   topicSpaceId: string;
-  changes: {
-    changeType: GraphChangeType;
-    changeEntityType: GraphChangeEntityType;
-    changeEntityId: string;
-    previousState: { nodes: unknown[]; relationships: unknown[] };
-    nextState: { nodes: unknown[]; relationships: unknown[] };
-  }[];
+  newGraphData: {
+    nodes: unknown[];
+    relationships: unknown[];
+  };
   onSuccess?: () => void;
   onCancel?: () => void;
 }
 
 export const ProposalCreateForm: React.FC<ProposalCreateFormProps> = ({
   topicSpaceId,
-  changes,
+  newGraphData,
   onSuccess,
   onCancel,
 }) => {
@@ -51,8 +43,8 @@ export const ProposalCreateForm: React.FC<ProposalCreateFormProps> = ({
       return;
     }
 
-    if (changes.length === 0) {
-      alert("変更内容がありません");
+    if (!description.trim() || description.trim().length < 10) {
+      alert("説明を10文字以上入力してください");
       return;
     }
 
@@ -62,8 +54,8 @@ export const ProposalCreateForm: React.FC<ProposalCreateFormProps> = ({
       await createProposal.mutateAsync({
         topicSpaceId,
         title: title.trim(),
-        description: description.trim() || undefined,
-        changes,
+        description: description.trim(),
+        newGraphData: newGraphData,
       });
     } catch (error) {
       console.error("提案作成に失敗しました:", error);
@@ -91,29 +83,30 @@ export const ProposalCreateForm: React.FC<ProposalCreateFormProps> = ({
 
           <div className="flex flex-col gap-2">
             <label htmlFor="description" className="text-sm font-medium">
-              説明
+              説明 <span className="text-red-500">*</span>
             </label>
             <Textarea
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="変更内容の詳細説明を入力してください（任意）"
+              placeholder="変更内容の詳細説明を入力してください（10文字以上）"
               rows={3}
             />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium">変更内容</label>
-            <div className="rounded-lg border bg-gray-50 p-4">
-              <DiffViewer changes={changes} />
-            </div>
           </div>
 
           <div className="flex justify-end gap-2">
             <Button type="button" onClick={onCancel} disabled={isSubmitting}>
               キャンセル
             </Button>
-            <Button type="submit" disabled={isSubmitting || !title.trim()}>
+            <Button
+              type="submit"
+              disabled={
+                isSubmitting ||
+                !title.trim() ||
+                !description.trim() ||
+                description.trim().length < 10
+              }
+            >
               {isSubmitting ? "作成中..." : "提案を作成"}
             </Button>
           </div>

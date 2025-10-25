@@ -42,7 +42,7 @@ export const PDFDropZone: React.FC<PDFDropZoneProps> = ({
             <p className="mb-2 text-lg text-gray-300">
               {processingStep === "upload" && "ファイルをアップロード中..."}
               {processingStep === "extract" && "テキストを抽出中..."}
-              {processingStep === "graph" && "知識グラフを生成中..."}
+              {processingStep === "graph" && "知識グラフを抽出中..."}
               {processingStep === "complete" && "完了しました！"}
             </p>
             {processingError && (

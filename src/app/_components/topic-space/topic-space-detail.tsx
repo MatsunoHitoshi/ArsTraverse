@@ -135,7 +135,7 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
           </div>
 
           <TabGroup className="h-max overflow-y-scroll" defaultIndex={0}>
-            <TabList className="sticky top-0 flex flex-row items-center gap-2 border-b border-slate-600 bg-slate-900 text-sm">
+            <TabList className="sticky top-0 z-10 flex flex-row items-center gap-2 border-b border-slate-600 bg-slate-900 text-sm">
               <Tab as={Fragment}>
                 {({ hover, selected }) => (
                   <div

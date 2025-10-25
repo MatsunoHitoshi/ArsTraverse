@@ -13,7 +13,7 @@ import type {
   CustomLinkType,
   AnnotationResponse,
 } from "@/app/const/types";
-import { ChevronLeftIcon } from "@/app/_components/icons";
+import { ChevronLeftIcon, ReplyIcon } from "@/app/_components/icons";
 import { useWindowSize } from "@/app/_hooks/use-window-size";
 
 export default function AnnotationDetailPage() {
@@ -67,6 +67,32 @@ export default function AnnotationDetailPage() {
     {
       targetNodeId: annotation?.targetNodeId ?? undefined,
       targetRelationshipId: annotation?.targetRelationshipId ?? undefined,
+      topicSpaceId: annotation?.targetNode?.topicSpaceId ?? "",
+      params: {
+        featureExtraction: {
+          maxFeatures: 1000,
+          minDf: 2,
+          maxDf: 0.95,
+          includeMetadata: true,
+          includeStructural: true,
+        },
+        dimensionalityReduction: {
+          nNeighbors: 15,
+          minDist: 0.1,
+          spread: 1.0,
+          nComponents: 2,
+          randomSeed: 42,
+        },
+        clustering: {
+          algorithm: "KMEANS",
+          nClusters: 5,
+          useElbowMethod: true,
+          elbowMethodRange: {
+            min: 2,
+            max: 8,
+          },
+        },
+      },
     },
     {
       enabled:
@@ -160,9 +186,10 @@ export default function AnnotationDetailPage() {
               <Button
                 size="small"
                 onClick={() => setShowAnnotationForm(true)}
-                className="hover:bg-slate-600"
+                className="flex flex-row items-center justify-center gap-1 hover:bg-slate-600"
               >
-                返信を追加
+                <ReplyIcon width={16} height={16} color="white" />
+                返信
               </Button>
             </div>
           </div>

@@ -58,8 +58,8 @@
     "edges": "エッジ",
     "properties": "プロパティ",
     "treeView": "ツリー表示",
-    "generateFromDescription": "descriptionからグラフを生成",
-    "regenerateGraph": "グラフの再生成",
+    "generateFromDescription": "descriptionからグラフを抽出",
+    "regenerateGraph": "グラフの再抽出",
     "relatedNodes": "関連ノード",
     "relatedLinks": "関連リンク"
   },

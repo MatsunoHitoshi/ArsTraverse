@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useRef, useEffect } from "react";
 import * as d3 from "d3";
 import { D3ZoomProvider } from "../zoom";
@@ -180,7 +178,7 @@ export function AnnotationMapD3Visualization({
       })
       .attr("fill", (d, i) => colorScale(i.toString()))
       .attr("fill-opacity", (d) =>
-        selectedClusterId === d.clusterId ? 0.6 : 0.1,
+        selectedClusterId === d.clusterId ? 0.45 : 0.1,
       )
       .attr("stroke", (d, i) => colorScale(i.toString()))
       .attr("stroke-width", (d) => (selectedClusterId === d.clusterId ? 3 : 2))
@@ -223,7 +221,20 @@ export function AnnotationMapD3Visualization({
       // 注釈の点を描画（クラスターに属する場合はクラスターの色を使用）
       annotationPoints
         .append("circle")
-        .attr("r", 4)
+        .attr("r", (d) => {
+          // currentAnnotationIdの場合は大きく表示
+          if (hierarchy?.currentAnnotationId === d.annotationId) {
+            return 8;
+          }
+          // 親子関係の注釈は少し大きく表示
+          if (
+            hierarchy?.parentAnnotationId === d.annotationId ||
+            hierarchy?.childAnnotationIds.includes(d.annotationId)
+          ) {
+            return 6;
+          }
+          return 4;
+        })
         .attr("fill", (d) => {
           // この注釈がどのクラスターに属するかを確認
           const cluster = clusters.find((c) =>
@@ -231,15 +242,90 @@ export function AnnotationMapD3Visualization({
           );
           return cluster ? colorScale(cluster.clusterId.toString()) : "white";
         })
-        .attr("fill-opacity", 0.8)
+        .attr("fill-opacity", (d) => {
+          // currentAnnotationIdの場合は不透明度を上げる
+          if (hierarchy?.currentAnnotationId === d.annotationId) {
+            return 1.0;
+          }
+          // 親子関係の注釈も少し不透明度を上げる
+          if (
+            hierarchy?.parentAnnotationId === d.annotationId ||
+            hierarchy?.childAnnotationIds.includes(d.annotationId)
+          ) {
+            return 0.9;
+          }
+          return 0.8;
+        })
         .attr("stroke", (d) => {
           const cluster = clusters.find((c) =>
             c.annotationIds.includes(d.annotationId),
           );
+          // 階層関係の注釈は白い境界線で統一
+          if (
+            hierarchy?.currentAnnotationId === d.annotationId ||
+            hierarchy?.parentAnnotationId === d.annotationId ||
+            hierarchy?.childAnnotationIds.includes(d.annotationId)
+          ) {
+            return "white";
+          }
           return cluster ? colorScale(cluster.clusterId.toString()) : "gray";
         })
-        .attr("stroke-width", 1)
         .style("cursor", "pointer");
+
+      // 現在の注釈にパルスアニメーションを追加
+      annotationPoints
+        .filter((d) => hierarchy?.currentAnnotationId === d.annotationId)
+        .append("circle")
+        .attr("r", 8)
+        .attr("fill", "none")
+        .attr("stroke", "white")
+        .attr("stroke-width", 2)
+        .attr("opacity", 0.6)
+        .style("pointer-events", "none")
+        .transition()
+        .duration(1500)
+        .ease(d3.easeLinear)
+        .attr("r", 18)
+        .attr("opacity", 0)
+        .on("end", function () {
+          const element = d3.select(this);
+          const pulseAnimation = () => {
+            element
+              .attr("r", 8)
+              .attr("opacity", 0.6)
+              .transition()
+              .duration(1500)
+              .ease(d3.easeLinear)
+              .attr("r", 18)
+              .attr("opacity", 0)
+              .on("end", pulseAnimation);
+          };
+          pulseAnimation();
+        });
+
+      //  // 親子関係の注釈に点線の境界線を追加
+      //   annotationPoints
+      //     .filter(
+      //       (d) =>
+      //         hierarchy?.parentAnnotationId === d.annotationId ||
+      //         (hierarchy?.childAnnotationIds.includes(d.annotationId) ?? false),
+      //     )
+      //     .append("circle")
+      //     .attr("r", (d) => {
+      //       if (hierarchy?.parentAnnotationId === d.annotationId) {
+      //         return 6;
+      //       }
+      //       if (hierarchy?.childAnnotationIds.includes(d.annotationId)) {
+      //         return 6;
+      //       }
+      //       return 4;
+      //     })
+      //     .attr("fill", "none")
+      //     .attr("stroke", "white")
+      //     .attr("stroke-width", 2)
+      //     .attr("stroke-dasharray", "3,3")
+      //     .attr("opacity", 0.8)
+      //     .style("pointer-events", "none");
 
       // 注釈のツールチップ
       annotationPoints

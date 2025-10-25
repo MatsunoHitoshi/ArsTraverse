@@ -12,6 +12,8 @@ import React, {
   useMemo,
   createContext,
 } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { D3ForceGraph } from "../d3/force/graph";
 import TipTapEditor from "./tiptap/tip-tap-editor";
 import type { Workspace } from "@prisma/client";
@@ -41,6 +43,7 @@ import {
   NodePropertyEditModal,
 } from "../modal/node-link-property-edit-modal";
 import { NodeLinkEditModal } from "../modal/node-link-edit-modal";
+import { ProposalCreateModal } from "./proposal-create-modal";
 // import { PlusCircleIcon } from "@heroicons/react/24/outline";
 
 interface CuratorsWritingWorkspaceProps {
@@ -74,6 +77,10 @@ const CuratorsWritingWorkspace = ({
   workspace,
   refetch,
 }: CuratorsWritingWorkspaceProps) => {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { data: session } = useSession();
+
   const DEFAULT_CONTENT: JSONContent = {
     type: "doc",
     content: [
@@ -94,6 +101,8 @@ const CuratorsWritingWorkspace = ({
     useState<boolean>(false);
   const [isPDFUploadModalOpen, setIsPDFUploadModalOpen] =
     useState<boolean>(false);
+  const [isProposalCreateModalOpen, setIsProposalCreateModalOpen] =
+    useState<boolean>(false);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
   const [displayTitle, setDisplayTitle] = useState(workspace.name);
 
@@ -108,9 +117,43 @@ const CuratorsWritingWorkspace = ({
   const [activeEntity, setActiveEntity] = useState<CustomNodeType | undefined>(
     undefined,
   );
-  const { data: topicSpace } = api.topicSpaces.getById.useQuery({
+  const { data: topicSpace } = api.topicSpaces.getByIdPublic.useQuery({
     id: topicSpaceId ?? "",
   });
+
+  const isAdmin = topicSpace?.admins?.some(
+    (admin) => admin.id === session?.user?.id,
+  );
+
+  // URLクエリパラメータからactiveEntityのIDを取得
+  const activeEntityId = searchParams.get("entityId");
+
+  // activeEntityが変更されたときにURLを更新
+  const updateActiveEntity = (entity: CustomNodeType | undefined) => {
+    setActiveEntity(entity);
+
+    const params = new URLSearchParams(searchParams.toString());
+    if (entity) {
+      params.set("entityId", entity.id);
+    } else {
+      params.delete("entityId");
+    }
+
+    // URLを更新（ブラウザ履歴に追加）
+    router.push(`?${params.toString()}`, { scroll: false });
+  };
+
+  // setFocusedNode用のラッパー関数（型互換性のため）
+  const setFocusedNodeWrapper = (
+    value: React.SetStateAction<CustomNodeType | undefined>,
+  ) => {
+    if (typeof value === "function") {
+      const newValue = value(activeEntity);
+      updateActiveEntity(newValue);
+    } else {
+      updateActiveEntity(value);
+    }
+  };
   const updateWorkspace = api.workspace.update.useMutation({
     onSuccess: (data) => {
       // 更新成功時に即座に表示タイトルを更新
@@ -160,9 +203,9 @@ const CuratorsWritingWorkspace = ({
     isNodeLinkAttachModalOpen,
     setIsNodeLinkAttachModalOpen,
     focusedNode,
-    setFocusedNode,
+    setFocusedNode: _setFocusedNode,
     focusedLink,
-    setFocusedLink,
+    setFocusedLink: _setFocusedLink,
     additionalGraph,
     setAdditionalGraph,
     onNodeContextMenu,
@@ -194,6 +237,20 @@ const CuratorsWritingWorkspace = ({
     );
 
   const nodes = graphDocument?.nodes ?? [];
+
+  // URLクエリパラメータに基づいてactiveEntityを設定
+  useEffect(() => {
+    if (activeEntityId && graphDocument?.nodes) {
+      const foundNode = graphDocument.nodes.find(
+        (node) => node.id === activeEntityId,
+      );
+      if (foundNode) {
+        setActiveEntity(foundNode);
+      }
+    } else if (!activeEntityId) {
+      setActiveEntity(undefined);
+    }
+  }, [activeEntityId, graphDocument?.nodes]);
 
   const tiptapFilteredGraphDocument = useMemo(() => {
     if (!graphDocument) return null;
@@ -289,7 +346,7 @@ const CuratorsWritingWorkspace = ({
   const handleEntityClick = (entityName: string) => {
     const foundNode = nodes.find((n: CustomNodeType) => n.name === entityName);
     if (foundNode) {
-      setActiveEntity(foundNode);
+      updateActiveEntity(foundNode);
     }
   };
 
@@ -335,23 +392,30 @@ const CuratorsWritingWorkspace = ({
 
   const onRecordUpdate = () => {
     if (!graphDocument) return;
-    updateGraphData.mutate(
-      {
-        id: topicSpaceId ?? "",
-        dataJson: graphDocument,
-      },
-      {
-        onSuccess: (res) => {
-          console.log("グラフの更新に成功しました", res);
-          void refetch();
-          setIsGraphEditor(false);
-          resetGraphUpdated();
+
+    if (isAdmin) {
+      // adminの場合は直接グラフを更新
+      updateGraphData.mutate(
+        {
+          id: topicSpaceId ?? "",
+          dataJson: graphDocument,
         },
-        onError: (error) => {
-          console.error("グラフの更新に失敗しました", error);
+        {
+          onSuccess: (res) => {
+            console.log("グラフの更新に成功しました", res);
+            void refetch();
+            setIsGraphEditor(false);
+            resetGraphUpdated();
+          },
+          onError: (error) => {
+            console.error("グラフの更新に失敗しました", error);
+          },
         },
-      },
-    );
+      );
+    } else {
+      // adminでない場合は変更提案作成モーダルを開く
+      setIsProposalCreateModalOpen(true);
+    }
   };
 
   return (
@@ -441,9 +505,9 @@ const CuratorsWritingWorkspace = ({
                           className="h-full w-full"
                           height={graphSize.height}
                           width={graphSize.width}
-                          setFocusedNode={setActiveEntity}
+                          setFocusedNode={setFocusedNodeWrapper}
                           focusedNode={activeEntity}
-                          onClose={() => setActiveEntity(undefined)}
+                          onClose={() => updateActiveEntity(undefined)}
                         />
                       ) : (
                         <D3ForceGraph
@@ -460,7 +524,7 @@ const CuratorsWritingWorkspace = ({
                           isLinkFiltered={false}
                           currentScale={currentScale}
                           setCurrentScale={setCurrentScale}
-                          setFocusedNode={setActiveEntity}
+                          setFocusedNode={setFocusedNodeWrapper}
                           focusedNode={activeEntity}
                           setFocusedLink={() => {
                             // リンクフォーカス機能は現在使用しない
@@ -520,9 +584,11 @@ const CuratorsWritingWorkspace = ({
                                     <Button
                                       size="small"
                                       onClick={onRecordUpdate}
-                                      className="flex items-center gap-1 text-sm"
+                                      className="flex items-center gap-1 text-xs"
                                     >
-                                      グラフを更新
+                                      {isAdmin
+                                        ? "グラフを更新"
+                                        : "変更提案を作成"}
                                     </Button>
                                   )}
                                 </>
@@ -575,7 +641,7 @@ const CuratorsWritingWorkspace = ({
               <NodeDetailPanel
                 activeEntity={activeEntity}
                 topicSpaceId={topicSpaceId}
-                setFocusedNode={setActiveEntity}
+                setFocusedNode={setFocusedNodeWrapper}
                 setIsGraphEditor={setIsGraphEditor}
                 onGraphUpdate={onGraphUpdate}
               />
@@ -616,6 +682,20 @@ const CuratorsWritingWorkspace = ({
           }}
         />
       </Modal>
+
+      {/* 変更提案作成モーダル */}
+      {graphDocument && (
+        <ProposalCreateModal
+          isOpen={isProposalCreateModalOpen}
+          setIsOpen={setIsProposalCreateModalOpen}
+          topicSpaceId={topicSpaceId ?? ""}
+          graphDocument={graphDocument}
+          onSuccess={() => {
+            setIsGraphEditor(false);
+            resetGraphUpdated();
+          }}
+        />
+      )}
 
       {/* グラフ編集用モーダル */}
       {isGraphEditor && graphDocument && (

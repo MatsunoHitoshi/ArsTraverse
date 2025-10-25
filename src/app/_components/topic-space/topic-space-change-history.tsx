@@ -150,11 +150,11 @@ export const TopicSpaceChangeHistory = ({
 
                       <div className="space-y-3">
                         <Textarea
-                          className="w-full"
                           value={rollbackReason}
                           onChange={(e) => setRollbackReason(e.target.value)}
                           placeholder="ロールバック理由を入力してください（任意）"
                           rows={2}
+                          className="block w-full rounded-lg border border-gray-700 bg-slate-700 px-3 py-2 text-sm/6 text-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
                         />
 
                         <div className="flex gap-2">

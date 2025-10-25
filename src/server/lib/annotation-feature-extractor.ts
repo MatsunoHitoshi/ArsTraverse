@@ -1,8 +1,10 @@
+import { convertJsonToText } from "@/app/_utils/tiptap/convert";
 import type { PrismaClient } from "@prisma/client";
+import type { JsonValue } from "@prisma/client/runtime/library";
 
 export interface AnnotationData {
   id: string;
-  content: Record<string, unknown>; // JSON content from TipTap
+  content: JsonValue; // JSON content from TipTap
   type: string;
   createdAt: Date;
   authorId: string;
@@ -17,53 +19,15 @@ export interface FeatureExtractionParams {
   maxDf?: number;
   includeMetadata?: boolean;
   includeStructural?: boolean;
+  topicSpaceNodes: string[]; // TopicSpaceのグラフノードリスト（必須）
 }
 
 export class AnnotationFeatureExtractor {
   private db: PrismaClient;
-  private stopWords: Set<string>;
   private artStopWords: Set<string>;
 
   constructor(db: PrismaClient) {
     this.db = db;
-    // 日本語のストップワード（簡易版）
-    this.stopWords = new Set([
-      "の",
-      "に",
-      "は",
-      "を",
-      "が",
-      "で",
-      "と",
-      "も",
-      "から",
-      "まで",
-      "です",
-      "である",
-      "だ",
-      "である",
-      "する",
-      "した",
-      "して",
-      "される",
-      "これ",
-      "それ",
-      "あれ",
-      "この",
-      "その",
-      "あの",
-      "ここ",
-      "そこ",
-      "あそこ",
-      "私",
-      "あなた",
-      "彼",
-      "彼女",
-      "私たち",
-      "あなたたち",
-      "彼ら",
-      "彼女ら",
-    ]);
 
     // 芸術用語に特化したストップワード（一般的な語彙を除去）
     this.artStopWords = new Set([
@@ -143,7 +107,7 @@ export class AnnotationFeatureExtractor {
    */
   async extractFeatures(
     annotations: AnnotationData[],
-    params: FeatureExtractionParams = {},
+    params: FeatureExtractionParams,
   ): Promise<{
     features: number[][];
     featureNames: string[];
@@ -155,19 +119,29 @@ export class AnnotationFeatureExtractor {
       maxDf = 0.95,
       includeMetadata = true,
       includeStructural = true,
+      topicSpaceNodes, // 必須パラメータ
     } = params;
 
-    // 1. テキスト特徴量の抽出（芸術用語に特化）
+    // TopicSpaceノードが空の場合はエラー
+    if (!topicSpaceNodes || topicSpaceNodes.length === 0) {
+      throw new Error("topicSpaceNodesは必須で、空配列は許可されません");
+    }
+
+    // 1. テキスト特徴量の抽出（TopicSpace特化）
     const textFeatures = await this.extractArtFocusedTextFeatures(annotations, {
       maxFeatures,
       minDf,
       maxDf,
+      topicSpaceNodes,
     });
 
     // 2. 解釈タイプ特徴量の抽出
     let interpretationFeatures: number[][] = [];
     if (includeMetadata) {
-      interpretationFeatures = this.extractInterpretationFeatures(annotations);
+      interpretationFeatures = this.extractInterpretationFeatures(
+        annotations,
+        topicSpaceNodes,
+      );
     }
 
     // 3. 議論の文脈特徴量の抽出
@@ -214,18 +188,28 @@ export class AnnotationFeatureExtractor {
    */
   private async extractArtFocusedTextFeatures(
     annotations: AnnotationData[],
-    params: { maxFeatures: number; minDf: number; maxDf: number },
+    params: {
+      maxFeatures: number;
+      minDf: number;
+      maxDf: number;
+      topicSpaceNodes: string[];
+    },
   ): Promise<number[][]> {
-    const { maxFeatures, minDf, maxDf } = params;
+    const { maxFeatures, minDf, maxDf, topicSpaceNodes } = params;
 
     // 1. テキストの前処理（芸術用語に特化）
     const processedTexts = annotations.map((annotation) => {
-      const text = this.extractTextFromContent(annotation.content);
+      const text = convertJsonToText(annotation.content);
       return this.preprocessArtText(text);
     });
 
-    // 2. 芸術用語の語彙を構築
-    const vocabulary = this.buildArtVocabulary(processedTexts, minDf, maxDf);
+    // 2. TopicSpace特化の語彙を構築
+    const vocabulary = this.buildArtVocabulary(
+      processedTexts,
+      minDf,
+      maxDf,
+      topicSpaceNodes,
+    );
     const limitedVocabulary = vocabulary.slice(0, maxFeatures);
 
     // 3. TF-IDF計算
@@ -254,59 +238,19 @@ export class AnnotationFeatureExtractor {
   }
 
   /**
-   * テキスト特徴量の抽出（TF-IDF）
-   */
-  private async extractTextFeatures(
-    annotations: AnnotationData[],
-    params: { maxFeatures: number; minDf: number; maxDf: number },
-  ): Promise<number[][]> {
-    const { maxFeatures, minDf, maxDf } = params;
-
-    // 1. テキストの前処理
-    const processedTexts = annotations.map((annotation) => {
-      const text = this.extractTextFromContent(annotation.content);
-      return this.preprocessText(text);
-    });
-
-    // 2. 語彙の構築
-    const vocabulary = this.buildVocabulary(processedTexts, minDf, maxDf);
-    const limitedVocabulary = vocabulary.slice(0, maxFeatures);
-
-    // 3. TF-IDF計算（独自実装）
-    const idfScores = this.calculateIdfScores(
-      processedTexts,
-      limitedVocabulary,
-    );
-
-    // 4. 特徴量ベクトルの生成
-    const features: number[][] = processedTexts.map((text) => {
-      const featureVector: number[] = Array.from(
-        { length: limitedVocabulary.length },
-        () => 0,
-      );
-
-      limitedVocabulary.forEach((term, index) => {
-        const tf = this.calculateTf(text, term);
-        const idf = idfScores.get(term) ?? 0;
-        featureVector[index] = tf * idf;
-      });
-
-      return featureVector;
-    });
-
-    return features;
-  }
-
-  /**
-   * 解釈タイプ特徴量の抽出（芸術的解釈に特化）
+   * 解釈タイプ特徴量の抽出（TopicSpace特化）
    */
   private extractInterpretationFeatures(
     annotations: AnnotationData[],
+    topicSpaceNodes: string[],
   ): number[][] {
     const features: number[][] = [];
 
     // 解釈の深さ特徴量
-    const depthFeatures = this.extractInterpretationDepthFeatures(annotations);
+    const depthFeatures = this.extractInterpretationDepthFeatures(
+      annotations,
+      topicSpaceNodes,
+    );
 
     // 解釈の方向性特徴量
     const directionFeatures =
@@ -319,33 +263,6 @@ export class AnnotationFeatureExtractor {
       const featureVector = [
         ...(depthFeatures[index] ?? []),
         ...(directionFeatures[index] ?? []),
-        ...(typeFeatures[index] ?? []),
-      ];
-      features.push(featureVector);
-    });
-
-    return features;
-  }
-
-  /**
-   * メタデータ特徴量の抽出
-   */
-  private extractMetadataFeatures(annotations: AnnotationData[]): number[][] {
-    const features: number[][] = [];
-
-    // 時間特徴量
-    const timeFeatures = this.extractTimeFeatures(annotations);
-
-    // 作成者特徴量
-    const authorFeatures = this.extractAuthorFeatures(annotations);
-
-    // 注釈タイプ特徴量
-    const typeFeatures = this.extractTypeFeatures(annotations);
-
-    annotations.forEach((annotation, index) => {
-      const featureVector = [
-        ...(timeFeatures[index] ?? []),
-        ...(authorFeatures[index] ?? []),
         ...(typeFeatures[index] ?? []),
       ];
       features.push(featureVector);
@@ -385,77 +302,6 @@ export class AnnotationFeatureExtractor {
   }
 
   /**
-   * 構造特徴量の抽出
-   */
-  private extractStructuralFeatures(annotations: AnnotationData[]): number[][] {
-    const features: number[][] = [];
-
-    // 階層レベル
-    const levelFeatures = this.extractLevelFeatures(annotations);
-
-    // 返信数
-    const replyCountFeatures = this.extractReplyCountFeatures(annotations);
-
-    // 親子関係の特徴
-    const relationshipFeatures = this.extractRelationshipFeatures(annotations);
-
-    annotations.forEach((annotation, index) => {
-      const featureVector = [
-        ...(levelFeatures[index] ?? []),
-        ...(replyCountFeatures[index] ?? []),
-        ...(relationshipFeatures[index] ?? []),
-      ];
-      features.push(featureVector);
-    });
-
-    return features;
-  }
-
-  /**
-   * TipTapのJSONコンテンツからテキストを抽出
-   */
-  private extractTextFromContent(content: Record<string, unknown>): string {
-    if (!content || typeof content !== "object") {
-      return "";
-    }
-
-    let text = "";
-
-    if (content.type === "doc" && content.content) {
-      text = this.extractTextFromNodes(
-        content.content as Record<string, unknown>[],
-      );
-    } else if (typeof content === "string") {
-      text = content;
-    }
-
-    return text;
-  }
-
-  /**
-   * TipTapノードからテキストを再帰的に抽出
-   */
-  private extractTextFromNodes(nodes: Record<string, unknown>[]): string {
-    let text = "";
-
-    nodes.forEach((node) => {
-      if (node.type === "text" && node.text) {
-        text += node.text as string;
-      } else if (node.content) {
-        text += this.extractTextFromNodes(
-          node.content as Record<string, unknown>[],
-        );
-      }
-
-      if (node.type === "paragraph" || node.type === "heading") {
-        text += " ";
-      }
-    });
-
-    return text;
-  }
-
-  /**
    * 芸術用語に特化したテキストの前処理
    */
   private preprocessArtText(text: string): string {
@@ -481,37 +327,13 @@ export class AnnotationFeatureExtractor {
   }
 
   /**
-   * テキストの前処理
-   */
-  private preprocessText(text: string): string {
-    // 1. 小文字化
-    let processed = text.toLowerCase();
-
-    // 2. 特殊文字の除去
-    processed = processed.replace(
-      /[^\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF\u3400-\u4DBF\w\s]/g,
-      " ",
-    );
-
-    // 3. 空白の正規化
-    processed = processed.replace(/\s+/g, " ").trim();
-
-    // 4. ストップワードの除去
-    const words = processed.split(" ");
-    const filteredWords = words.filter(
-      (word) => word.length > 1 && !this.stopWords.has(word),
-    );
-
-    return filteredWords.join(" ");
-  }
-
-  /**
-   * 芸術用語に特化した語彙の構築
+   * TopicSpace特化の語彙の構築
    */
   private buildArtVocabulary(
     texts: string[],
     minDf: number,
     maxDf: number,
+    topicSpaceNodes: string[],
   ): string[] {
     const termCounts = new Map<string, number>();
 
@@ -520,8 +342,11 @@ export class AnnotationFeatureExtractor {
       const uniqueWords = new Set(words);
 
       uniqueWords.forEach((word) => {
-        // 芸術用語の重み付け（長い単語や専門用語を優先）
-        const weight = this.calculateArtTermWeight(word);
+        // TopicSpace特化の重み付け
+        const weight = this.calculateContextualTermWeight(
+          word,
+          topicSpaceNodes,
+        );
         termCounts.set(word, (termCounts.get(word) ?? 0) + weight);
       });
     });
@@ -536,112 +361,44 @@ export class AnnotationFeatureExtractor {
       }
     });
 
-    // 芸術用語の重要度でソート
+    // TopicSpace特化の重要度でソート
     return vocabulary.sort((a, b) => {
-      const weightA = this.calculateArtTermWeight(a);
-      const weightB = this.calculateArtTermWeight(b);
+      const weightA = this.calculateContextualTermWeight(a, topicSpaceNodes);
+      const weightB = this.calculateContextualTermWeight(b, topicSpaceNodes);
       return weightB - weightA;
     });
   }
 
   /**
-   * 芸術用語の重み付け計算
+   * TopicSpace特化の用語重み付け計算
    */
-  private calculateArtTermWeight(term: string): number {
+  private calculateContextualTermWeight(
+    term: string,
+    topicSpaceNodes: string[],
+  ): number {
     let weight = 1.0;
 
     // 長い単語（専門用語の可能性）に重み付け
     if (term.length >= 4) weight += 0.5;
     if (term.length >= 6) weight += 0.5;
 
-    // 芸術関連のキーワードに重み付け
-    const artKeywords = [
-      "芸術",
-      "美術",
-      "絵画",
-      "彫刻",
-      "建築",
-      "デザイン",
-      "色彩",
-      "構図",
-      "技法",
-      "表現",
-      "作品",
-      "作家",
-      "画家",
-      "彫刻家",
-      "建築家",
-      "展覧会",
-      "美術館",
-      "ギャラリー",
-      "コレクション",
-      "キュレーター",
-      "批評",
-      "解釈",
-      "分析",
-      "研究",
-      "歴史",
-      "文化",
-      "社会",
-      "印象派",
-      "抽象",
-      "具象",
-      "リアリズム",
-      "ロマン主義",
-      "古典主義",
-      "現代",
-      "現代",
-      "前衛",
-      "ポストモダン",
-      "コンセプチュアル",
-    ];
-
-    if (artKeywords.some((keyword) => term.includes(keyword))) {
-      weight += 2.0;
+    // TopicSpaceのノードに含まれる用語に高い重み付け
+    if (topicSpaceNodes.includes(term)) {
+      weight += 3.0; // TopicSpace特化の最高重み
     }
 
     return weight;
   }
 
   /**
-   * 語彙の構築
-   */
-  private buildVocabulary(
-    texts: string[],
-    minDf: number,
-    maxDf: number,
-  ): string[] {
-    const termCounts = new Map<string, number>();
-
-    texts.forEach((text) => {
-      const words = text.split(" ");
-      const uniqueWords = new Set(words);
-
-      uniqueWords.forEach((word) => {
-        termCounts.set(word, (termCounts.get(word) ?? 0) + 1);
-      });
-    });
-
-    const totalDocs = texts.length;
-    const vocabulary: string[] = [];
-
-    termCounts.forEach((count, term) => {
-      const df = count / totalDocs;
-      if (df >= minDf && df <= maxDf) {
-        vocabulary.push(term);
-      }
-    });
-
-    return vocabulary.sort();
-  }
-
-  /**
    * TF（Term Frequency）の計算
    */
   private calculateTf(text: string, term: string): number {
-    const words = text.split(" ");
-    const termCount = words.filter((word) => word === term).length;
-    return termCount / words.length;
+    const words = text.toLowerCase().split(/\s+/);
+    const termCount = words.filter(
+      (word) => word === term.toLowerCase(),
+    ).length;
+    return words.length > 0 ? termCount / words.length : 0;
   }
 
   /**
@@ -655,14 +412,15 @@ export class AnnotationFeatureExtractor {
     const totalDocs = texts.length;
 
     vocabulary.forEach((term) => {
-      // その用語を含む文書数を計算
+      // その用語を含む文書数を計算（単語境界を考慮）
       const docsWithTerm = texts.filter((text) => {
-        const words = text.split(" ");
-        return words.includes(term);
+        const words = text.toLowerCase().split(/\s+/);
+        return words.includes(term.toLowerCase());
       }).length;
 
-      // IDF計算: log(totalDocs / docsWithTerm)
-      const idf = docsWithTerm > 0 ? Math.log(totalDocs / docsWithTerm) : 0;
+      // IDF計算: log((totalDocs + 1) / (docsWithTerm + 1))
+      // +1を加えることでゼロ除算を回避し、スムージング効果も得る
+      const idf = Math.log((totalDocs + 1) / (docsWithTerm + 1));
       idfScores.set(term, idf);
     });
 
@@ -831,65 +589,29 @@ export class AnnotationFeatureExtractor {
   }
 
   /**
-   * 解釈の深さ特徴量の抽出
+   * 解釈の深さ特徴量の抽出（TopicSpace特化）
    */
   private extractInterpretationDepthFeatures(
     annotations: AnnotationData[],
+    topicSpaceNodes: string[],
   ): number[][] {
     const features: number[][] = [];
 
     annotations.forEach((annotation) => {
-      const text = this.extractTextFromContent(annotation.content);
+      const text = convertJsonToText(annotation.content);
 
       // テキストの長さ（解釈の詳細度）
       const textLength = text.length;
       const normalizedLength = Math.min(textLength, 1000) / 1000;
 
-      // 専門用語の密度
-      const artTerms = [
-        "芸術",
-        "美術",
-        "絵画",
-        "彫刻",
-        "建築",
-        "デザイン",
-        "色彩",
-        "構図",
-        "技法",
-        "表現",
-        "作品",
-        "作家",
-        "画家",
-        "彫刻家",
-        "建築家",
-        "展覧会",
-        "美術館",
-        "ギャラリー",
-        "コレクション",
-        "キュレーター",
-        "批評",
-        "解釈",
-        "分析",
-        "研究",
-        "歴史",
-        "文化",
-        "社会",
-        "印象派",
-        "抽象",
-        "具象",
-        "リアリズム",
-        "ロマン主義",
-        "古典主義",
-        "現代",
-        "前衛",
-        "ポストモダン",
-        "コンセプチュアル",
-      ];
+      // TopicSpace特化の専門用語密度
+      const topicSpaceTermCount = topicSpaceNodes.filter((term) =>
+        text.includes(term),
+      ).length;
+      const normalizedTopicSpaceDensity =
+        topicSpaceTermCount / Math.max(topicSpaceNodes.length, 1);
 
-      const termCount = artTerms.filter((term) => text.includes(term)).length;
-      const normalizedTermDensity = termCount / artTerms.length;
-
-      features.push([normalizedLength, normalizedTermDensity]);
+      features.push([normalizedLength, normalizedTopicSpaceDensity]);
     });
 
     return features;
@@ -904,7 +626,7 @@ export class AnnotationFeatureExtractor {
     const features: number[][] = [];
 
     annotations.forEach((annotation) => {
-      const text = this.extractTextFromContent(annotation.content);
+      const text = convertJsonToText(annotation.content);
 
       // 肯定的/否定的な解釈
       const positiveWords = [

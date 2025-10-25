@@ -72,7 +72,10 @@ export class AnnotationClusteringOrchestrator {
   async performClustering(
     targetNodeId: string | undefined,
     targetRelationshipId: string | undefined,
-    params: AnnotationClusteringParams,
+    topicSpaceNodes: string[],
+    params: Omit<AnnotationClusteringParams, "featureExtraction"> & {
+      featureExtraction: Omit<FeatureExtractionParams, "topicSpaceNodes">;
+    },
   ): Promise<AnnotationClusteringResult> {
     const startTime = Date.now();
 
@@ -133,7 +136,10 @@ export class AnnotationClusteringOrchestrator {
       const featureStartTime = Date.now();
       const featureResult = await this.featureExtractor.extractFeatures(
         annotations,
-        params.featureExtraction,
+        {
+          ...params.featureExtraction,
+          topicSpaceNodes,
+        },
       );
       const featureTime = Date.now() - featureStartTime;
 
@@ -219,6 +225,9 @@ export class AnnotationClusteringOrchestrator {
         return await this.clusteringService.performKMeans(
           coordinates,
           params.nClusters ?? 5,
+          100, // maxIterations
+          params.useElbowMethod ?? false,
+          params.elbowMethodRange,
         );
 
       case "DBSCAN":
@@ -306,7 +315,7 @@ export class AnnotationClusteringOrchestrator {
     // AnnotationData形式に変換
     const annotationData: AnnotationData[] = annotations.map((annotation) => ({
       id: annotation.id,
-      content: annotation.content as Record<string, unknown>,
+      content: annotation.content,
       type: annotation.type,
       createdAt: annotation.createdAt,
       authorId: annotation.authorId,
@@ -319,9 +328,11 @@ export class AnnotationClusteringOrchestrator {
   }
 
   /**
-   * デフォルトパラメータを取得
+   * デフォルトパラメータを取得（topicSpaceNodesを除く）
    */
-  getDefaultParams(): AnnotationClusteringParams {
+  getDefaultParams(): Omit<AnnotationClusteringParams, "featureExtraction"> & {
+    featureExtraction: Omit<FeatureExtractionParams, "topicSpaceNodes">;
+  } {
     return {
       featureExtraction: {
         maxFeatures: 1000,
@@ -337,17 +348,35 @@ export class AnnotationClusteringOrchestrator {
         nComponents: 2,
         randomSeed: 42,
       },
-      clustering: {
-        algorithm: "KMEANS",
-        nClusters: 5,
-      },
+      clustering: this.clusteringService.getDefaultParameters(
+        this.clusteringService.getSystemDefaultAlgorithm(),
+      ),
+    };
+  }
+
+  /**
+   * アルゴリズム別のデフォルトパラメータを取得
+   */
+  getDefaultParamsForAlgorithm(
+    algorithm: "KMEANS" | "DBSCAN" | "HIERARCHICAL",
+  ): Omit<AnnotationClusteringParams, "featureExtraction"> & {
+    featureExtraction: Omit<FeatureExtractionParams, "topicSpaceNodes">;
+  } {
+    const baseParams = this.getDefaultParams();
+    return {
+      ...baseParams,
+      clustering: this.clusteringService.getDefaultParameters(algorithm),
     };
   }
 
   /**
    * パラメータの妥当性を検証
    */
-  validateParams(params: AnnotationClusteringParams): {
+  validateParams(
+    params: Omit<AnnotationClusteringParams, "featureExtraction"> & {
+      featureExtraction: Omit<FeatureExtractionParams, "topicSpaceNodes">;
+    },
+  ): {
     valid: boolean;
     errors: string[];
   } {
@@ -388,22 +417,12 @@ export class AnnotationClusteringOrchestrator {
       errors.push("minDistは0から1の間である必要があります");
     }
 
-    // クラスタリングパラメータの検証
-    if (
-      params.clustering.algorithm === "KMEANS" &&
-      params.clustering.nClusters &&
-      params.clustering.nClusters < 2
-    ) {
-      errors.push("K-meansのnClustersは2以上である必要があります");
-    }
-
-    if (params.clustering.algorithm === "DBSCAN") {
-      if (params.clustering.eps && params.clustering.eps <= 0) {
-        errors.push("DBSCANのepsは0より大きい必要があります");
-      }
-      if (params.clustering.minSamples && params.clustering.minSamples < 2) {
-        errors.push("DBSCANのminSamplesは2以上である必要があります");
-      }
+    // クラスタリングパラメータの検証（ClusteringServiceの検証を使用）
+    const clusteringValidation = this.clusteringService.validateParameters(
+      params.clustering,
+    );
+    if (!clusteringValidation.valid) {
+      errors.push(...clusteringValidation.errors);
     }
 
     return {
