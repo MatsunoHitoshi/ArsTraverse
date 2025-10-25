@@ -27,6 +27,7 @@ import {
   PinLeftIcon,
   PinRightIcon,
   PlusIcon,
+  ShareIcon,
 } from "../icons";
 import { LinkButton } from "../button/link-button";
 import { TopicSpaceAttachModal } from "../workspace/topic-space-attach-modal";
@@ -44,6 +45,7 @@ import {
 } from "../modal/node-link-property-edit-modal";
 import { NodeLinkEditModal } from "../modal/node-link-edit-modal";
 import { ProposalCreateModal } from "./proposal-create-modal";
+import { ShareTopicSpaceModal } from "./share-topic-space-modal";
 // import { PlusCircleIcon } from "@heroicons/react/24/outline";
 
 interface CuratorsWritingWorkspaceProps {
@@ -102,6 +104,8 @@ const CuratorsWritingWorkspace = ({
   const [isPDFUploadModalOpen, setIsPDFUploadModalOpen] =
     useState<boolean>(false);
   const [isProposalCreateModalOpen, setIsProposalCreateModalOpen] =
+    useState<boolean>(false);
+  const [isShareTopicSpaceModalOpen, setIsShareTopicSpaceModalOpen] =
     useState<boolean>(false);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
   const [displayTitle, setDisplayTitle] = useState(workspace.name);
@@ -564,6 +568,19 @@ const CuratorsWritingWorkspace = ({
                                       color="white"
                                     />
                                   </Button>
+                                  <Button
+                                    size="small"
+                                    onClick={() =>
+                                      setIsShareTopicSpaceModalOpen(true)
+                                    }
+                                    className="flex items-center gap-1"
+                                  >
+                                    <ShareIcon
+                                      height={16}
+                                      width={16}
+                                      color="white"
+                                    />
+                                  </Button>
                                 </>
                               ) : (
                                 <>
@@ -696,6 +713,14 @@ const CuratorsWritingWorkspace = ({
           }}
         />
       )}
+
+      {/* TopicSpace共有モーダル */}
+      <ShareTopicSpaceModal
+        isOpen={isShareTopicSpaceModalOpen}
+        setIsOpen={setIsShareTopicSpaceModalOpen}
+        topicSpaceId={topicSpace?.id ?? ""}
+        topicSpaceName={topicSpace?.name ?? ""}
+      />
 
       {/* グラフ編集用モーダル */}
       {isGraphEditor && graphDocument && (
