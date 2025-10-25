@@ -92,7 +92,7 @@ export const ShareTopicSpaceModal: React.FC<ShareTopicSpaceModalProps> = ({
             <p className="text-xs text-orange-500">
               <strong>共有について:</strong>
               <br />
-              このURLを共有すると、他のユーザーがこのTopicSpaceを閲覧できます。
+              このURLを共有すると、他のユーザーがこのリポジトリを閲覧できます。
               編集権限は管理者のみに制限されています。
             </p>
           </div>
