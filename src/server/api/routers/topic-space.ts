@@ -1190,9 +1190,7 @@ export const topicSpaceRouter = createTRPCRouter({
         );
         referenceSections.push({
           sourceDocument: sourceDocument,
-          relevantSections: relevantSections.map(
-            (section) => section.slice(150) + "...",
-          ),
+          relevantSections: relevantSections.map((section) => section + "..."),
         });
       }
 
