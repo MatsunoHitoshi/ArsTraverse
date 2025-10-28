@@ -73,6 +73,7 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [currentScale, setCurrentScale] = useState<number>(1);
   const [textPanelFull, setTextPanelFull] = useState<boolean>(false);
+  const [magnifierMode, setMagnifierMode] = useState(0);
 
   const onGraphFormUpdate = (additionalGraph: GraphDocumentForFrontend) => {
     console.log("onGraphUpdate", additionalGraph);
@@ -117,6 +118,8 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
               isEditor={isEditor}
               setIsEditing={setIsEditor}
               setNodeSearchQuery={setNodeSearchQuery}
+              magnifierMode={magnifierMode}
+              setMagnifierMode={setMagnifierMode}
               rightArea={
                 <div className="flex flex-row items-center gap-4">
                   <UrlCopy
@@ -176,6 +179,7 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
               onGraphUpdate={isEditor ? onGraphFormUpdate : undefined}
               onNodeContextMenu={isEditor ? onNodeContextMenu : undefined}
               onLinkContextMenu={isEditor ? onLinkContextMenu : undefined}
+              magnifierMode={magnifierMode}
               toolComponent={
                 <>
                   {isEditor && isGraphUpdated && (

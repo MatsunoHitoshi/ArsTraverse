@@ -115,6 +115,7 @@ export const MultiDocumentGraphEditor = ({
 
   const [currentScale, setCurrentScale] = useState<number>(1);
   const svgRef = useRef<SVGSVGElement>(null);
+  const [magnifierMode, setMagnifierMode] = useState(0);
 
   const isLargeGraph = (localGraphDocument?.nodes.length ?? 0) > 1300;
 
@@ -196,6 +197,7 @@ export const MultiDocumentGraphEditor = ({
                 onGraphUpdate={isEditor ? onGraphUpdate : undefined}
                 onNodeContextMenu={isEditor ? onNodeContextMenu : undefined}
                 onLinkContextMenu={isEditor ? onLinkContextMenu : undefined}
+                magnifierMode={magnifierMode}
                 toolComponent={
                   <>
                     <GraphTool
@@ -213,6 +215,8 @@ export const MultiDocumentGraphEditor = ({
                       setIsGraphFullScreen={setIsGraphFullScreen}
                       isDirectedLinks={isDirectedLinks}
                       setIsDirectedLinks={setIsDirectedLinks}
+                      magnifierMode={magnifierMode}
+                      setMagnifierMode={setMagnifierMode}
                     />
 
                     <GraphInfoPanel

@@ -3,6 +3,7 @@ import {
   EnterFullScreenIcon,
   ExitFullScreenIcon,
   ListBulletIcon,
+  ZoomInIcon,
 } from "../../icons";
 import { type TagOption, TagsInput } from "../../input/tags-input";
 import { ExportGraphButton } from "../../d3/export-graph-button";
@@ -22,6 +23,8 @@ export const GraphTool = ({
   setIsGraphFullScreen,
   isDirectedLinks = true,
   setIsDirectedLinks,
+  magnifierMode = 0,
+  setMagnifierMode,
 }: {
   setIsGraphFullScreen?: React.Dispatch<React.SetStateAction<boolean>>;
   isGraphFullScreen?: boolean;
@@ -37,6 +40,8 @@ export const GraphTool = ({
   isLargeGraph: boolean;
   isDirectedLinks?: boolean;
   setIsDirectedLinks?: React.Dispatch<React.SetStateAction<boolean>>;
+  magnifierMode?: number;
+  setMagnifierMode?: React.Dispatch<React.SetStateAction<number>>;
 }) => {
   return (
     <>
@@ -105,6 +110,28 @@ export const GraphTool = ({
             ) : (
               <EnterFullScreenIcon height={16} width={16} color="white" />
             )}
+          </button>
+        ) : (
+          <></>
+        )}
+        {!!setMagnifierMode ? (
+          <button
+            onClick={() => {
+              setMagnifierMode((prev) => (prev + 1) % 3);
+            }}
+            className={`rounded-lg p-2 backdrop-blur-sm ${
+              magnifierMode === 1
+                ? "bg-orange-500/40"
+                : magnifierMode === 2
+                  ? "bg-orange-700/40"
+                  : "bg-black/20"
+            }`}
+          >
+            <ZoomInIcon
+              height={16}
+              width={16}
+              color={magnifierMode > 0 ? "orange" : "white"}
+            />
           </button>
         ) : (
           <></>

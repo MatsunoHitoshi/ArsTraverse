@@ -28,6 +28,7 @@ import {
   PinRightIcon,
   PlusIcon,
   ShareIcon,
+  ZoomInIcon,
 } from "../icons";
 import { LinkButton } from "../button/link-button";
 import { TopicSpaceAttachModal } from "../workspace/topic-space-attach-modal";
@@ -109,6 +110,7 @@ const CuratorsWritingWorkspace = ({
     useState<boolean>(false);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
   const [displayTitle, setDisplayTitle] = useState(workspace.name);
+  const [magnifierMode, setMagnifierMode] = useState(0);
 
   // workspace.nameが更新されたらdisplayTitleも更新
   useEffect(() => {
@@ -545,6 +547,27 @@ const CuratorsWritingWorkspace = ({
                                   <Button
                                     size="small"
                                     onClick={() =>
+                                      setMagnifierMode((prev) => (prev + 1) % 3)
+                                    }
+                                    className={`flex items-center gap-1 ${
+                                      magnifierMode === 1
+                                        ? "bg-orange-500/40"
+                                        : magnifierMode === 2
+                                          ? "bg-orange-700/40"
+                                          : ""
+                                    }`}
+                                  >
+                                    <ZoomInIcon
+                                      height={16}
+                                      width={16}
+                                      color={
+                                        magnifierMode > 0 ? "orange" : "white"
+                                      }
+                                    />
+                                  </Button>
+                                  <Button
+                                    size="small"
+                                    onClick={() =>
                                       setIsGraphEditor(!isGraphEditor)
                                     }
                                     className="flex items-center gap-1"
@@ -624,6 +647,7 @@ const CuratorsWritingWorkspace = ({
                           onLinkContextMenu={
                             isGraphEditor ? onLinkContextMenu : undefined
                           }
+                          magnifierMode={magnifierMode}
                         />
                       )}
                     </>

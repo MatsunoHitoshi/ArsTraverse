@@ -3,6 +3,7 @@ import clsx from "clsx";
 import React from "react";
 import { Button } from "../button/button";
 import type { EdgeType } from "@/app/_utils/kg/get-tree-layout-data";
+import { ZoomInIcon } from "../icons";
 type ToolbarProps = {
   isLinkFiltered?: boolean;
   setIsLinkFiltered?: React.Dispatch<React.SetStateAction<boolean>>;
@@ -14,6 +15,8 @@ type ToolbarProps = {
   rightArea?: React.ReactNode;
   edgeType?: EdgeType;
   setEdgeType?: React.Dispatch<React.SetStateAction<EdgeType>>;
+  magnifierMode?: number;
+  setMagnifierMode?: React.Dispatch<React.SetStateAction<number>>;
 };
 export const Toolbar = ({
   isLinkFiltered,
@@ -26,10 +29,30 @@ export const Toolbar = ({
   rightArea,
   edgeType,
   setEdgeType,
+  magnifierMode,
+  setMagnifierMode,
 }: ToolbarProps) => {
   return (
     <div className="flex h-[46px] w-full flex-row items-center justify-between">
       <div className="flex w-full flex-row items-center gap-4">
+        {!!setMagnifierMode && magnifierMode !== undefined && (
+          <button
+            onClick={() => setMagnifierMode((prev) => (prev + 1) % 3)}
+            className={`flex items-center rounded-lg p-2 backdrop-blur-sm ${
+              magnifierMode === 1
+                ? "bg-orange-500/40"
+                : magnifierMode === 2
+                  ? "bg-orange-700/40"
+                  : "bg-black/20"
+            }`}
+          >
+            <ZoomInIcon
+              height={16}
+              width={16}
+              color={magnifierMode > 0 ? "orange" : "white"}
+            />
+          </button>
+        )}
         {!!setIsEditing && (
           <div className="flex flex-row items-center gap-2">
             <div className="text-sm">編集モード</div>

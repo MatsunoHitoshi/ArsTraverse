@@ -11,7 +11,7 @@ import {
   forceY,
   forceCollide,
 } from "d3";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { D3ZoomProvider } from "../zoom";
 import type { TopicGraphFilterOption } from "@/app/const/types";
 import {
@@ -21,6 +21,152 @@ import {
 
 import type { CustomNodeType, CustomLinkType } from "@/app/const/types";
 import { getNodeByIdForFrontend } from "@/app/_utils/kg/filter";
+import { MagnifierLens } from "../magnifier/magnifier-lens";
+
+// ノード描画用のコンポーネント
+const GraphNodeCircle = ({
+  graphNode,
+  isFocused,
+  isPathNode,
+  graphUnselected,
+  queryFiltered,
+  nodeMagnification,
+  isDragEditorTarget,
+  filterOption,
+  currentScale,
+  isGraphFullScreen,
+  isClustered,
+  focusedNode,
+  setFocusedNode,
+  onNodeContextMenu,
+  graphIdentifier,
+  nodeRef,
+}: {
+  graphNode: CustomNodeType;
+  isFocused: boolean;
+  isPathNode: boolean;
+  graphUnselected: boolean;
+  queryFiltered: boolean;
+  nodeMagnification: number;
+  isDragEditorTarget: boolean;
+  filterOption?: TopicGraphFilterOption;
+  currentScale: number;
+  isGraphFullScreen: boolean;
+  isClustered: boolean;
+  focusedNode: CustomNodeType | undefined;
+  setFocusedNode: React.Dispatch<
+    React.SetStateAction<CustomNodeType | undefined>
+  >;
+  onNodeContextMenu?: (node: CustomNodeType) => void;
+  graphIdentifier: string;
+  nodeRef: React.RefObject<SVGSVGElement>;
+}) => {
+  return (
+    <g
+      key={graphNode.id}
+      ref={nodeRef}
+      className={`${graphIdentifier}-node cursor-pointer`}
+      onClick={() => {
+        if (graphNode.id === focusedNode?.id) {
+          setFocusedNode(undefined);
+        } else {
+          setFocusedNode(graphNode);
+        }
+      }}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onNodeContextMenu?.(graphNode);
+      }}
+    >
+      <circle
+        r={
+          1.6 *
+          ((graphNode.neighborLinkCount ?? 0) * 0.1 + 3.6) *
+          (isNodeFiltered(graphNode, filterOption) ? 1 : 0.5) *
+          nodeMagnification
+        }
+        fill={
+          isFocused || isDragEditorTarget
+            ? "#ef7234"
+            : isPathNode
+              ? "#eae80c"
+              : graphNode.isAdditional
+                ? "#8b9dc3"
+                : graphUnselected
+                  ? "#324557"
+                  : isClustered && graphNode.nodeColor
+                    ? graphNode.nodeColor
+                    : "whitesmoke"
+        }
+        opacity={isNodeFiltered(graphNode, filterOption) ? 0.9 : 0.6}
+        cx={graphNode.x}
+        cy={graphNode.y}
+        stroke="#eae80c"
+        strokeWidth={queryFiltered ? 2.5 : 0}
+      />
+      {(currentScale > 0.7 || isGraphFullScreen) && (
+        <text
+          x={graphNode.x}
+          y={graphNode.y}
+          textAnchor="middle"
+          fill={
+            isFocused
+              ? "whitesmoke"
+              : queryFiltered
+                ? "#eab000"
+                : nodeMagnification >= 2.3
+                  ? "#ef7234"
+                  : isClustered
+                    ? "whitesmoke"
+                    : "dimgray"
+          }
+          fontSize={
+            (currentScale > 4 ? 3 : currentScale > 4 ? 4 : 6) *
+            nodeMagnification
+          }
+          fontWeight={nodeMagnification >= 2.3 ? "bold" : "normal"}
+        >
+          {graphNode.name}
+        </text>
+      )}
+    </g>
+  );
+};
+
+// ノードの可視性と拡大率を計算する関数
+const calculateNodeVisibility = (
+  graphNode: CustomNodeType,
+  focusedNode: CustomNodeType | undefined,
+  selectedPathData: GraphDocumentForFrontend | undefined,
+  nodeSearchQuery: string | undefined,
+  nodesInMagnifier: string[],
+  nodeMagnifications: Map<string, number>,
+): {
+  isFocused: boolean;
+  isPathNode: boolean;
+  queryFiltered: boolean;
+  nodeMagnification: number;
+} => {
+  const isFocused = graphNode.id === focusedNode?.id;
+  const isPathNode = !!selectedPathData?.nodes
+    .map((node) => node.id)
+    .includes(graphNode.id);
+  const queryFiltered =
+    !!nodeSearchQuery &&
+    nodeSearchQuery !== "" &&
+    graphNode.name.toLowerCase().includes(nodeSearchQuery.toLowerCase());
+  const isInMagnifier = nodesInMagnifier.includes(graphNode.id);
+  const nodeMagnification = isInMagnifier
+    ? (nodeMagnifications.get(graphNode.id) ?? 1)
+    : 1;
+
+  return {
+    isFocused,
+    isPathNode,
+    queryFiltered,
+    nodeMagnification,
+  };
+};
 
 // export interface CustomNodeType extends SimulationNodeDatum, NodeType {}
 // export interface CustomLinkType
@@ -86,6 +232,7 @@ export const D3ForceGraph = ({
     y: 0,
   },
   isDirectedLinks = true,
+  magnifierMode = 0,
 }: {
   svgRef: React.RefObject<SVGSVGElement>;
   height: number;
@@ -117,6 +264,7 @@ export const D3ForceGraph = ({
   onGraphUpdate?: (additionalGraph: GraphDocumentForFrontend) => void;
   graphIdentifier?: string;
   isDirectedLinks?: boolean;
+  magnifierMode?: number;
 }) => {
   const { nodes, relationships } = graphDocument;
   const initLinks = relationships as CustomLinkType[];
@@ -148,6 +296,14 @@ export const D3ForceGraph = ({
   );
   const [graphNodes, setGraphNodes] = useState<CustomNodeType[]>(initNodes);
   const [graphLinks, setGraphLinks] = useState<CustomLinkType[]>(newLinks);
+  const [nodesInMagnifier, setNodesInMagnifier] = useState<string[]>([]);
+  const [linksInMagnifier, setLinksInMagnifier] = useState<string[]>([]);
+  const [nodeMagnifications, setNodeMagnifications] = useState<
+    Map<string, number>
+  >(new Map());
+  const [linkMagnifications, setLinkMagnifications] = useState<
+    Map<string, number>
+  >(new Map());
   const tempLineRef = useRef<SVGLineElement>(null);
   const tempCircleRef = useRef<SVGCircleElement>(null);
   const nodeRef = useRef<SVGSVGElement>(null);
@@ -157,9 +313,40 @@ export const D3ForceGraph = ({
     targetNode: null,
   });
 
+  // MagnifierLensのコールバック関数をメモ化
+  const handleNodesInMagnifierChange = useCallback(
+    (nodeIds: string[], magnifications: Map<string, number>) => {
+      setNodesInMagnifier(nodeIds);
+      setNodeMagnifications(magnifications);
+    },
+    [],
+  );
+
+  const handleLinksInMagnifierChange = useCallback(
+    (linkIds: string[], magnifications: Map<string, number>) => {
+      setLinksInMagnifier(linkIds);
+      setLinkMagnifications(magnifications);
+    },
+    [],
+  );
+
   const distance = (d: CustomLinkType) => {
     return !!d.properties.distance ? Number(d.properties.distance) : 0;
   };
+
+  // ルーペモードがOFFになった時に拡大状態をリセット
+  useEffect(() => {
+    if (magnifierMode === 0) {
+      setNodesInMagnifier([]);
+      setLinksInMagnifier([]);
+      setNodeMagnifications(new Map());
+      setLinkMagnifications(new Map());
+    }
+  }, [magnifierMode]);
+
+  // magnifierModeに応じて半径を決定
+  const magnifierRadius =
+    magnifierMode === 1 ? 150 : magnifierMode === 2 ? 250 : 0;
 
   useEffect(() => {
     const centerX = (width ?? 10) / 2;
@@ -173,7 +360,7 @@ export const D3ForceGraph = ({
           .id((d) => d.id)
           .distance(
             (d) =>
-              38 *
+              45 *
               (distance(d) * distance(d) * distance(d) * distance(d) * 3 || 1),
           )
           .strength((d) => 0.125 / (distance(d) * distance(d) || 1)),
@@ -301,6 +488,10 @@ export const D3ForceGraph = ({
                 const isPathLink = selectedPathData?.relationships
                   .map((relationship) => relationship.id)
                   .includes(graphLink.id);
+                const isInMagnifier = linksInMagnifier.includes(graphLink.id);
+                const linkMagnification = isInMagnifier
+                  ? (linkMagnifications.get(graphLink.id) ?? 1)
+                  : 1;
 
                 const sourceNode = getNodeByIdForFrontend(
                   modSource.id,
@@ -379,7 +570,9 @@ export const D3ForceGraph = ({
                         //         ? `url(#gradient-${graphLink.id})`
                         //         : "white"
                         // }
-                        strokeWidth={(isFocused ? 2 : 1.2) * 1.5}
+                        strokeWidth={
+                          (isFocused ? 2 : 1.2) * linkMagnification * 1.5
+                        }
                         strokeOpacity={
                           isFocused
                             ? 1
@@ -453,106 +646,128 @@ export const D3ForceGraph = ({
                   );
                 }
               })}
-              {graphNodes.map((graphNode) => {
-                const isFocused = graphNode.id === focusedNode?.id;
-                const isPathNode = selectedPathData?.nodes
-                  .map((node) => node.id)
-                  .includes(graphNode.id);
-                const graphUnselected = selectedGraphData
-                  ? !selectedGraphData.nodes.some((node) => {
-                      return node.name === graphNode.name;
-                    })
-                  : false;
-                const queryFiltered =
-                  !!nodeSearchQuery &&
-                  nodeSearchQuery !== "" &&
-                  graphNode.name
-                    .toLowerCase()
-                    .includes(nodeSearchQuery.toLowerCase());
-
-                const isDragEditorTarget =
-                  isEditor &&
-                  dragState.isDragging &&
-                  (dragState.targetNode?.id === graphNode.id ||
-                    dragState.sourceNode?.id === graphNode.id);
-
-                if (
-                  (graphNode.visible ?? false) ||
-                  queryFiltered ||
-                  isFocused ||
-                  isPathNode
-                ) {
-                  return (
-                    <g
-                      key={graphNode.id}
-                      ref={nodeRef}
-                      className={`${graphIdentifier}-node cursor-pointer`}
-                      onClick={() => {
-                        if (graphNode.id === focusedNode?.id) {
-                          setFocusedNode(undefined);
-                        } else {
-                          setFocusedNode(graphNode);
-                        }
-                      }}
-                      onContextMenu={(event) => {
-                        event.preventDefault();
-                        onNodeContextMenu?.(graphNode);
-                      }}
-                    >
-                      <circle
-                        r={
-                          1.6 *
-                          ((graphNode.neighborLinkCount ?? 0) * 0.1 + 3.6) *
-                          (isNodeFiltered(graphNode, filterOption) ? 1 : 0.5)
-                        }
-                        fill={
-                          isFocused || isDragEditorTarget
-                            ? "#ef7234"
-                            : isPathNode
-                              ? "#eae80c"
-                              : graphNode.isAdditional
-                                ? "#8b9dc3"
-                                : graphUnselected
-                                  ? "#324557"
-                                  : isClustered && graphNode.nodeColor
-                                    ? graphNode.nodeColor
-                                    : "whitesmoke"
-                        }
-                        opacity={
-                          isNodeFiltered(graphNode, filterOption) ? 0.9 : 0.6
-                        }
-                        cx={graphNode.x}
-                        cy={graphNode.y}
-                        stroke="#eae80c"
-                        strokeWidth={queryFiltered ? 2.5 : 0}
-                      />
-                      {(currentScale > 0.7 || isGraphFullScreen) && (
-                        <text
-                          x={graphNode.x}
-                          y={graphNode.y}
-                          textAnchor="middle"
-                          fill={
-                            isFocused
-                              ? "whitesmoke"
-                              : queryFiltered
-                                ? "#eab000"
-                                : isClustered
-                                  ? "whitesmoke"
-                                  : "dimgray"
-                          }
-                          fontSize={
-                            currentScale > 4 ? 3 : currentScale > 4 ? 4 : 6
-                          }
-                        >
-                          {graphNode.name}
-                        </text>
-                      )}
-                    </g>
+              {/* 通常のノードを描画 */}
+              {graphNodes
+                .filter((graphNode) => {
+                  const visibility = calculateNodeVisibility(
+                    graphNode,
+                    focusedNode,
+                    selectedPathData,
+                    nodeSearchQuery,
+                    nodesInMagnifier,
+                    nodeMagnifications,
                   );
-                } else {
-                  return;
-                }
-              })}
+                  return (
+                    ((graphNode.visible ?? false) ||
+                      visibility.queryFiltered ||
+                      visibility.isFocused ||
+                      visibility.isPathNode) &&
+                    visibility.nodeMagnification < 2.3
+                  );
+                })
+                .map((graphNode) => {
+                  const visibility = calculateNodeVisibility(
+                    graphNode,
+                    focusedNode,
+                    selectedPathData,
+                    nodeSearchQuery,
+                    nodesInMagnifier,
+                    nodeMagnifications,
+                  );
+                  const graphUnselected = selectedGraphData
+                    ? !selectedGraphData.nodes.some((node) => {
+                        return node.name === graphNode.name;
+                      })
+                    : false;
+                  const isDragEditorTarget =
+                    isEditor &&
+                    dragState.isDragging &&
+                    (dragState.targetNode?.id === graphNode.id ||
+                      dragState.sourceNode?.id === graphNode.id);
+
+                  return (
+                    <GraphNodeCircle
+                      key={graphNode.id}
+                      graphNode={graphNode}
+                      isFocused={visibility.isFocused}
+                      isPathNode={visibility.isPathNode}
+                      graphUnselected={graphUnselected}
+                      queryFiltered={visibility.queryFiltered}
+                      nodeMagnification={visibility.nodeMagnification}
+                      isDragEditorTarget={isDragEditorTarget}
+                      filterOption={filterOption}
+                      currentScale={currentScale}
+                      isGraphFullScreen={isGraphFullScreen}
+                      isClustered={isClustered}
+                      focusedNode={focusedNode}
+                      setFocusedNode={setFocusedNode}
+                      onNodeContextMenu={onNodeContextMenu}
+                      graphIdentifier={graphIdentifier}
+                      nodeRef={nodeRef}
+                    />
+                  );
+                })}
+              {/* 拡大されているノードを最前面に描画 */}
+              {graphNodes
+                .filter((graphNode) => {
+                  const visibility = calculateNodeVisibility(
+                    graphNode,
+                    focusedNode,
+                    selectedPathData,
+                    nodeSearchQuery,
+                    nodesInMagnifier,
+                    nodeMagnifications,
+                  );
+                  return (
+                    ((graphNode.visible ?? false) ||
+                      visibility.queryFiltered ||
+                      visibility.isFocused ||
+                      visibility.isPathNode) &&
+                    visibility.nodeMagnification >= 2.3
+                  );
+                })
+                .map((graphNode) => {
+                  const visibility = calculateNodeVisibility(
+                    graphNode,
+                    focusedNode,
+                    selectedPathData,
+                    nodeSearchQuery,
+                    nodesInMagnifier,
+                    nodeMagnifications,
+                  );
+                  const graphUnselected = selectedGraphData
+                    ? !selectedGraphData.nodes.some((node) => {
+                        return node.name === graphNode.name;
+                      })
+                    : false;
+                  const isDragEditorTarget =
+                    isEditor &&
+                    dragState.isDragging &&
+                    (dragState.targetNode?.id === graphNode.id ||
+                      dragState.sourceNode?.id === graphNode.id);
+
+                  return (
+                    <GraphNodeCircle
+                      key={graphNode.id}
+                      graphNode={graphNode}
+                      isFocused={visibility.isFocused}
+                      isPathNode={visibility.isPathNode}
+                      graphUnselected={graphUnselected}
+                      queryFiltered={visibility.queryFiltered}
+                      nodeMagnification={visibility.nodeMagnification}
+                      isDragEditorTarget={isDragEditorTarget}
+                      filterOption={filterOption}
+                      currentScale={currentScale}
+                      isGraphFullScreen={isGraphFullScreen}
+                      isClustered={isClustered}
+                      focusedNode={focusedNode}
+                      setFocusedNode={setFocusedNode}
+                      onNodeContextMenu={onNodeContextMenu}
+                      graphIdentifier={graphIdentifier}
+                      nodeRef={nodeRef}
+                    />
+                  );
+                })}
               {isEditor && (
                 <>
                   <line
@@ -578,6 +793,21 @@ export const D3ForceGraph = ({
                 </>
               )}
             </D3ZoomProvider>
+            {magnifierMode > 0 && (
+              <MagnifierLens
+                svgRef={svgRef}
+                graphNodes={graphNodes}
+                graphLinks={graphLinks}
+                currentScale={currentScale}
+                currentTransformX={currentTransformX}
+                currentTransformY={currentTransformY}
+                magnifierRadius={magnifierRadius}
+                onNodesInMagnifierChange={handleNodesInMagnifierChange}
+                onLinksInMagnifierChange={handleLinksInMagnifierChange}
+                width={width}
+                height={height}
+              />
+            )}
           </svg>
         )}
       </div>

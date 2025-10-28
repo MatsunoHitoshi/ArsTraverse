@@ -5,7 +5,12 @@ import React, {
   useContext,
   useState,
 } from "react";
-import { useEditor, EditorContent, type JSONContent } from "@tiptap/react";
+import {
+  useEditor,
+  EditorContent,
+  type JSONContent,
+  type Editor,
+} from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
 import { EntityHighlight } from "./extensions/entity-highlight-extension";
 import { TextCompletionMark } from "./extensions/text-completion-mark";
@@ -24,6 +29,7 @@ import { useHighlight } from "./hooks/use-highlight";
 import { TiptapGraphFilterContext } from "..";
 import { HighlightVisibilityProvider } from "./contexts/highlight-visibility-context";
 import TextAlign from "@tiptap/extension-text-align";
+import { useMentionConfig } from "./hooks/use-mention-config";
 
 interface TipTapEditorContentProps {
   content: JSONContent;
@@ -88,6 +94,10 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
     ],
   );
 
+  const { mentionExtension, updateEditor } = useMentionConfig({
+    entities,
+  });
+
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -102,6 +112,7 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
       TextAlign.configure({
         types: ["heading", "paragraph"],
       }),
+      ...(mentionExtension ? [mentionExtension] : []),
     ],
     content,
     onUpdate: ({ editor }) => {
@@ -129,6 +140,13 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
     },
     immediatelyRender: true,
   });
+
+  // エディタインスタンスをmentionConfigに設定
+  useEffect(() => {
+    if (editor && updateEditor) {
+      updateEditor(editor);
+    }
+  }, [editor, updateEditor]);
 
   // エディタが作成されたらハイライトフックに設定
   useEffect(() => {
@@ -164,6 +182,20 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
         "テキスト提案モードがアクティブな場合、マウスクリックで無効化!!",
       );
       textCompletion.disableTextSuggestionMode(editor);
+    }
+
+    // クリックされた要素がメンションかどうかをチェック
+    const target = e.target as HTMLElement;
+    const mentionElement = target.closest('[data-type="mention"]');
+
+    if (mentionElement) {
+      const entityName = mentionElement.getAttribute("data-label");
+      if (entityName && onEntityClick) {
+        onEntityClick(entityName);
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
     }
 
     // ハイライトフックのクリック処理を使用
