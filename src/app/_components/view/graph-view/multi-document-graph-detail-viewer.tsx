@@ -56,6 +56,7 @@ export const MultiDocumentGraphDetailViewer = ({
     useState<TopicGraphFilterOption>();
 
   const [currentScale, setCurrentScale] = useState<number>(1);
+  const [magnifierMode, setMagnifierMode] = useState<number>(0);
   const svgRef = useRef<SVGSVGElement>(null);
 
   const isLargeGraph = graphDocument.nodes.length > 1300;
@@ -100,6 +101,7 @@ export const MultiDocumentGraphDetailViewer = ({
           selectedGraphData={selectedGraphData}
           nodeSearchQuery={nodeSearchQuery}
           isDirectedLinks={isDirectedLinks}
+          magnifierMode={magnifierMode}
           toolComponent={
             <>
               <GraphTool
@@ -117,6 +119,8 @@ export const MultiDocumentGraphDetailViewer = ({
                 setIsGraphFullScreen={setIsGraphFullScreen}
                 isDirectedLinks={isDirectedLinks}
                 setIsDirectedLinks={setIsDirectedLinks}
+                magnifierMode={magnifierMode}
+                setMagnifierMode={setMagnifierMode}
               />
               <GraphInfoPanel
                 focusedNode={focusedNode}
