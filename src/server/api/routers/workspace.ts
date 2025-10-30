@@ -52,6 +52,35 @@ const TextCompletionSchema = z.object({
   isDeepMode: z.boolean(),
 });
 
+// 部分グラフを直接受け取って補完を行うAPI用のスキーマ
+const GraphNodeFrontendSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  label: z.string(),
+  properties: z.record(z.any()),
+  topicSpaceId: z.string().optional(),
+});
+
+const GraphRelationshipFrontendSchema = z.object({
+  id: z.string().optional().default(""),
+  type: z.string().default("related"),
+  properties: z.record(z.any()).optional().default({}),
+  sourceId: z.string(),
+  targetId: z.string(),
+  topicSpaceId: z.string().optional(),
+});
+
+const GraphDocumentFrontendSchema = z.object({
+  nodes: z.array(GraphNodeFrontendSchema),
+  relationships: z.array(GraphRelationshipFrontendSchema),
+});
+
+const TextCompletionWithGraphSchema = z.object({
+  workspaceId: z.string(),
+  baseText: z.string(),
+  subgraph: GraphDocumentFrontendSchema,
+});
+
 // const EntityInformationCompletionSchema = z.object({
 //   workspaceId: z.string(),
 //   entityName: z.string(),
@@ -548,6 +577,75 @@ export const workspaceRouter = createTRPCRouter({
       }
 
       console.log("response: ", response.output_text);
+
+      const suggestion = response.output_text ?? "";
+      const withoutBaseText = suggestion.startsWith(baseText)
+        ? suggestion.slice(baseText.length)
+        : suggestion;
+      return withoutBaseText;
+    }),
+
+  // 部分グラフを直接受け取り、コンテキストとして利用して補完を行う
+  textCompletionWithGraph: protectedProcedure
+    .input(TextCompletionWithGraphSchema)
+    .mutation(async ({ ctx, input }) => {
+      const { workspaceId, baseText, subgraph } = input;
+
+      const workspace = await ctx.db.workspace.findFirst({
+        where: {
+          id: workspaceId,
+          isDeleted: false,
+          OR: [
+            { userId: ctx.session.user.id },
+            { collaborators: { some: { id: ctx.session.user.id } } },
+          ],
+        },
+        select: { id: true },
+      });
+
+      if (!workspace) {
+        throw new Error("Workspace not found or access denied");
+      }
+
+      const openai = new OpenAI();
+
+      // subgraph から簡潔なコンテキストテキストを生成
+      const nodeMap = new Map(subgraph.nodes.map((n) => [n.id, n]));
+      const contextLines: string[] = [];
+      for (const rel of subgraph.relationships) {
+        const source = nodeMap.get(rel.sourceId);
+        const target = nodeMap.get(rel.targetId);
+        if (source && target) {
+          contextLines.push(
+            `(${source.label}:${source.name}) -[${rel.type}]-> (${target.label}:${target.name})`,
+          );
+        }
+      }
+      if (contextLines.length === 0) {
+        // ノードのみの場合も簡単に列挙
+        for (const n of subgraph.nodes) {
+          contextLines.push(`(${n.label}:${n.name})`);
+        }
+      }
+      const graphContextText = contextLines.join("\n");
+
+      let response;
+      try {
+        response = await openai.responses.create({
+          model: "gpt-4.1-nano",
+          input: `あなたは知識グラフ記述の専門家です。以下の[グラフ文脈]に含まれる関係のみを根拠に、グラフの論理構造を忠実に文章化してください。事実は[グラフ文脈]の範囲を超えないでください。出力は1〜3文程度。\n
+===スタイル参照(文体のみ)===\n${baseText}\n
+===グラフ文脈===\n${graphContextText}`,
+        });
+      } catch (error) {
+        // フォールバック
+        response = await openai.responses.create({
+          model: "gpt-4.1-nano",
+          input: `以下の[グラフ文脈]の関係だけを根拠に、その論理構造を説明する短い文章(1〜3文)を書いてください。文体は[スタイル参照]に寄せてください。\n
+===スタイル参照(文体のみ)===\n${baseText}\n
+===グラフ文脈===\n${graphContextText}`,
+        });
+      }
 
       const suggestion = response.output_text ?? "";
       const withoutBaseText = suggestion.startsWith(baseText)

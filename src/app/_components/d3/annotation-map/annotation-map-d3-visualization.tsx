@@ -23,6 +23,8 @@ interface AnnotationMapD3VisualizationProps {
     author: { name: string | null };
     createdAt: Date;
   }>;
+  selectedAnnotationId: string | null;
+  setSelectedAnnotationId: React.Dispatch<React.SetStateAction<string | null>>;
   // 階層関係データ
   hierarchy?: {
     currentAnnotationId: string;
@@ -40,6 +42,8 @@ export function AnnotationMapD3Visualization({
   currentTransformY,
   setCurrentTransformY,
   selectedClusterId,
+  selectedAnnotationId,
+  setSelectedAnnotationId,
   onClusterClick,
   width,
   height,
@@ -260,6 +264,10 @@ export function AnnotationMapD3Visualization({
           const cluster = clusters.find((c) =>
             c.annotationIds.includes(d.annotationId),
           );
+          // 選択されているアノテーションは強調
+          if (selectedAnnotationId === d.annotationId) {
+            return "orange";
+          }
           // 階層関係の注釈は白い境界線で統一
           if (
             hierarchy?.currentAnnotationId === d.annotationId ||
@@ -270,7 +278,15 @@ export function AnnotationMapD3Visualization({
           }
           return cluster ? colorScale(cluster.clusterId.toString()) : "gray";
         })
-        .style("cursor", "pointer");
+        .attr("stroke-width", (d) => {
+          // 選択されているアノテーションは太い境界線
+          return selectedAnnotationId === d.annotationId ? 3 : 1;
+        })
+        .style("cursor", "pointer")
+        .on("click", function (event: MouseEvent, d) {
+          event.stopPropagation();
+          setSelectedAnnotationId(d.annotationId);
+        });
 
       // 現在の注釈にパルスアニメーションを追加
       annotationPoints
@@ -497,6 +513,8 @@ export function AnnotationMapD3Visualization({
     currentTransformX,
     currentTransformY,
     selectedClusterId,
+    selectedAnnotationId,
+    setSelectedAnnotationId,
     onClusterClick,
     height,
     width,

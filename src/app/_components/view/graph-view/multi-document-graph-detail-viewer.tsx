@@ -40,8 +40,8 @@ export const MultiDocumentGraphDetailViewer = ({
   const searchParams = useSearchParams();
   const nodeId = searchParams.get("nodeId");
   const node = graphDocument.nodes.find((n) => String(n.id) === nodeId);
+  const isList = searchParams.get("list") === "true";
 
-  const [isListOpen, setIsListOpen] = useState(false);
   const [focusedNode, setFocusedNode] = useState<CustomNodeType>();
   const [focusedLink, setFocusedLink] = useState<CustomLinkType>();
   const [isDirectedLinks, setIsDirectedLinks] = useState(true);
@@ -63,15 +63,13 @@ export const MultiDocumentGraphDetailViewer = ({
 
   return (
     <>
-      {isListOpen ? (
+      {isList ? (
         <div className="flex h-full w-full flex-row gap-1 bg-white/20">
           <div
             className={`overflow-scroll bg-slate-900 ${nodeId ? "w-1/3" : "w-full"}`}
           >
             <NodeLinkList
               graphDocument={graphDocument}
-              setIsListOpen={setIsListOpen}
-              isListOpen={isListOpen}
               topicSpaceId={topicSpaceId ?? ""}
               focusedNode={focusedNode}
             />
@@ -107,8 +105,6 @@ export const MultiDocumentGraphDetailViewer = ({
               <GraphTool
                 svgRef={svgRef}
                 currentScale={currentScale}
-                setIsListOpen={setIsListOpen}
-                isListOpen={isListOpen}
                 isLargeGraph={isLargeGraph}
                 hasTagFilter={true}
                 tags={tags}

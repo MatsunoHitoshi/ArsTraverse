@@ -16,6 +16,8 @@ import {
   type DeleteRecordType,
 } from "../modal/delete-record-modal";
 import { ReplyIcon } from "../icons";
+import { api } from "@/trpc/react";
+import { HighlightedText } from "../common/highlighted-text";
 
 interface AnnotationHierarchyProps {
   currentAnnotation: AnnotationResponse;
@@ -43,7 +45,10 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
     id: string;
     type: DeleteRecordType;
   }>();
-
+  const { data: topicSpace } = api.topicSpaces.getByIdPublic.useQuery({
+    id: topicSpaceId,
+  });
+  const entities = topicSpace?.graphData?.nodes ?? [];
   const handleEditClick = (annotation: AnnotationResponse) => {
     setEditingAnnotation(annotation);
     setShowEditForm(true);
@@ -136,9 +141,12 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
 
           {/* 内容 */}
           <div className="text-sm text-gray-200">
-            <div
-              dangerouslySetInnerHTML={{
-                __html: convertJsonToText(annotation.content),
+            <HighlightedText
+              text={convertJsonToText(annotation.content)}
+              entities={entities}
+              showEllipsis={false}
+              onEntityClick={(_entityName, entityId) => {
+                window.location.href = `/topic-spaces/${topicSpaceId}/graph?list=true&nodeId=${entityId}`;
               }}
             />
           </div>
@@ -204,9 +212,12 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
 
         {/* 内容 */}
         <div className="text-sm text-gray-200">
-          <div
-            dangerouslySetInnerHTML={{
-              __html: convertJsonToText(annotation.content),
+          <HighlightedText
+            text={convertJsonToText(annotation.content)}
+            entities={entities}
+            showEllipsis={false}
+            onEntityClick={(_entityName, entityId) => {
+              window.location.href = `/topic-spaces/${topicSpaceId}/graph?list=true&nodeId=${entityId}`;
             }}
           />
         </div>

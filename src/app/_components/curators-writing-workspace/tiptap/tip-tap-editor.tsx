@@ -15,6 +15,10 @@ interface TipTapEditorProps {
   workspaceId: string;
   onGraphUpdate?: (additionalGraph: GraphDocumentForFrontend) => void;
   setIsGraphEditor: React.Dispatch<React.SetStateAction<boolean>>;
+  setIsGraphSelectionMode?: React.Dispatch<React.SetStateAction<boolean>>;
+  completionWithSubgraphRef?: React.MutableRefObject<
+    ((subgraph: GraphDocumentForFrontend) => void) | null
+  >;
 }
 
 const TipTapEditor: React.FC<TipTapEditorProps> = (props) => {

@@ -18,7 +18,6 @@ import { NodeLinkEditModal } from "../../modal/node-link-edit-modal";
 import { api } from "@/trpc/react";
 import { useGraphEditor } from "@/app/_hooks/use-graph-editor";
 import { Button } from "../../button/button";
-import { diffNodes, diffRelationships } from "@/app/_utils/kg/diff";
 import { Switch } from "@headlessui/react";
 
 export const MultiDocumentGraphEditor = ({
@@ -103,7 +102,6 @@ export const MultiDocumentGraphEditor = ({
   const nodeId = searchParams.get("nodeId");
   const node = localGraphDocument?.nodes.find((n) => String(n.id) === nodeId);
 
-  const [isListOpen, setIsListOpen] = useState(isList);
   const [tags, setTags] = useState<TagOption>();
   const nodeLabels = Array.from(
     new Set(localGraphDocument?.nodes.map((n) => n.label) ?? []),
@@ -141,7 +139,7 @@ export const MultiDocumentGraphEditor = ({
 
   return (
     <>
-      {isListOpen ? (
+      {isList ? (
         <div className="flex h-full w-full flex-row gap-1 bg-white/20">
           <div
             className={`overflow-scroll bg-slate-900 ${nodeId ? "w-1/3" : "w-full"}`}
@@ -149,8 +147,6 @@ export const MultiDocumentGraphEditor = ({
             {localGraphDocument && (
               <NodeLinkList
                 graphDocument={localGraphDocument}
-                setIsListOpen={setIsListOpen}
-                isListOpen={isListOpen}
                 topicSpaceId={topicSpaceId ?? ""}
                 isEditor={true}
                 focusedNode={focusedNode}
@@ -203,8 +199,6 @@ export const MultiDocumentGraphEditor = ({
                     <GraphTool
                       svgRef={svgRef}
                       currentScale={currentScale}
-                      setIsListOpen={setIsListOpen}
-                      isListOpen={isListOpen}
                       isLargeGraph={isLargeGraph}
                       hasTagFilter={true}
                       tags={tags}

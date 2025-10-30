@@ -21,6 +21,7 @@ import { api } from "@/trpc/react";
 import { Button } from "../button/button";
 import type { JSONContent } from "@tiptap/react";
 import {
+  CheckIcon,
   ChevronLeftIcon,
   CrossLargeIcon,
   Pencil2Icon,
@@ -40,6 +41,7 @@ import { usePDFProcessing } from "./hooks/use-pdf-processing";
 import { Modal } from "../modal/modal";
 import { EditableTitle } from "./editable-title";
 import { useGraphEditor } from "@/app/_hooks/use-graph-editor";
+import { createSubgraphFromSelectedNodes } from "@/app/_utils/kg/create-subgraph-from-selected-nodes";
 import {
   LinkPropertyEditModal,
   NodePropertyEditModal,
@@ -111,6 +113,14 @@ const CuratorsWritingWorkspace = ({
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
   const [displayTitle, setDisplayTitle] = useState(workspace.name);
   const [magnifierMode, setMagnifierMode] = useState(0);
+  const [isGraphSelectionMode, setIsGraphSelectionMode] =
+    useState<boolean>(false);
+  const [selectedNodeIdsForAI, setSelectedNodeIdsForAI] = useState<string[]>(
+    [],
+  );
+  const completionWithSubgraphRef = useRef<
+    null | ((subgraph: GraphDocumentForFrontend) => void)
+  >(null);
 
   // workspace.nameが更新されたらdisplayTitleも更新
   useEffect(() => {
@@ -429,7 +439,11 @@ const CuratorsWritingWorkspace = ({
       {/* Left Column: Text Editor */}
       <div
         className={`flex h-[calc(100svh-80px)] flex-col transition-all duration-300 ${
-          isRightPanelOpen ? (isGraphEditor ? "w-1/2" : "w-2/3") : "w-full"
+          isRightPanelOpen
+            ? isGraphEditor || isGraphSelectionMode
+              ? "w-1/2"
+              : "w-2/3"
+            : "w-full"
         }`}
       >
         <div className="flex h-full flex-col bg-slate-900">
@@ -451,17 +465,22 @@ const CuratorsWritingWorkspace = ({
             </div>
 
             {/* Right Panel Toggle Button */}
-            <Button
-              size="small"
-              onClick={() => setIsRightPanelOpen(!isRightPanelOpen)}
-              className="flex items-center gap-1"
-            >
-              {isRightPanelOpen ? (
-                <PinRightIcon height={16} width={16} color="white" />
-              ) : (
+            <div className="flex items-center gap-1">
+              {/* <Button size="small" className="flex items-center gap-1">
                 <PinLeftIcon height={16} width={16} color="white" />
-              )}
-            </Button>
+              </Button> */}
+              <Button
+                size="small"
+                onClick={() => setIsRightPanelOpen(!isRightPanelOpen)}
+                className="flex items-center gap-1"
+              >
+                {isRightPanelOpen ? (
+                  <PinRightIcon height={16} width={16} color="white" />
+                ) : (
+                  <PinLeftIcon height={16} width={16} color="white" />
+                )}
+              </Button>
+            </div>
           </div>
 
           {/* TipTapエディタ */}
@@ -477,6 +496,12 @@ const CuratorsWritingWorkspace = ({
                 workspaceId={workspace.id}
                 onGraphUpdate={onGraphUpdate}
                 setIsGraphEditor={setIsGraphEditor}
+                setIsGraphSelectionMode={setIsGraphSelectionMode}
+                completionWithSubgraphRef={
+                  completionWithSubgraphRef as React.MutableRefObject<
+                    ((subgraph: GraphDocumentForFrontend) => void) | null
+                  >
+                }
               />
             </TiptapGraphFilterContext.Provider>
           </div>
@@ -487,7 +512,7 @@ const CuratorsWritingWorkspace = ({
       {isRightPanelOpen && (
         <div
           className={`flex h-[calc(100svh-80px)] flex-col transition-all duration-300 ${
-            isGraphEditor ? "w-1/2" : "w-1/3"
+            isGraphEditor || isGraphSelectionMode ? "w-1/2" : "w-1/3"
           }`}
         >
           {/* Knowledge Graph Viewer */}
@@ -535,11 +560,40 @@ const CuratorsWritingWorkspace = ({
                           setFocusedLink={() => {
                             // リンクフォーカス機能は現在使用しない
                           }}
-                          selectedGraphData={
-                            tiptapGraphFilterOption.mode !== "non-filtered"
-                              ? (tiptapSelectedGraphDocument ?? undefined)
-                              : undefined
-                          }
+                          selectedGraphData={(() => {
+                            // AIモード中: 選択ノードがなければハイライトなし
+                            if (isGraphSelectionMode) {
+                              if (
+                                graphDocument &&
+                                selectedNodeIdsForAI.length > 0
+                              ) {
+                                const selectedNodes =
+                                  graphDocument.nodes.filter((n) =>
+                                    selectedNodeIdsForAI.includes(n.id),
+                                  );
+                                const selectedRelationships =
+                                  graphDocument.relationships.filter(
+                                    (r) =>
+                                      selectedNodeIdsForAI.includes(
+                                        r.sourceId,
+                                      ) &&
+                                      selectedNodeIdsForAI.includes(r.targetId),
+                                  );
+                                return {
+                                  nodes: selectedNodes,
+                                  relationships: selectedRelationships,
+                                };
+                              }
+                              return undefined;
+                            }
+                            // 通常時: TipTapの絞り込みハイライトを適用
+                            if (
+                              tiptapGraphFilterOption.mode !== "non-filtered"
+                            ) {
+                              return tiptapSelectedGraphDocument ?? undefined;
+                            }
+                            return undefined;
+                          })()}
                           toolComponent={
                             <div className="absolute ml-1 mt-1 flex flex-row items-center gap-1">
                               {!isGraphEditor ? (
@@ -565,6 +619,57 @@ const CuratorsWritingWorkspace = ({
                                       }
                                     />
                                   </Button>
+                                  {isGraphSelectionMode && (
+                                    <div className="ml-2 flex items-center gap-2 rounded-md bg-slate-900/80 px-2 py-1 text-xs text-orange-200 backdrop-blur-sm">
+                                      <span>AIモード: ノードを選択</span>
+                                      {selectedNodeIdsForAI.length > 0 && (
+                                        <Button
+                                          size="small"
+                                          className="flex !h-6 !w-6 items-center justify-center !p-1 text-xs"
+                                          onClick={() => {
+                                            if (
+                                              !graphDocument ||
+                                              !completionWithSubgraphRef?.current
+                                            )
+                                              return;
+                                            const subgraph =
+                                              createSubgraphFromSelectedNodes(
+                                                graphDocument,
+                                                selectedNodeIdsForAI,
+                                              );
+                                            completionWithSubgraphRef.current(
+                                              subgraph,
+                                            );
+                                            // 終了処理
+                                            setIsGraphSelectionMode(false);
+                                            setSelectedNodeIdsForAI([]);
+                                          }}
+                                        >
+                                          <CheckIcon
+                                            height={16}
+                                            width={16}
+                                            color="green"
+                                          />
+                                        </Button>
+                                      )}
+
+                                      <Button
+                                        size="small"
+                                        className="flex !h-6 !w-6 items-center justify-center !p-1 text-xs"
+                                        onClick={() => {
+                                          // キャンセル: AIモード終了と選択クリア
+                                          setIsGraphSelectionMode(false);
+                                          setSelectedNodeIdsForAI([]);
+                                        }}
+                                      >
+                                        <CrossLargeIcon
+                                          height={14}
+                                          width={14}
+                                          color="red"
+                                        />
+                                      </Button>
+                                    </div>
+                                  )}
                                   <Button
                                     size="small"
                                     onClick={() =>
@@ -648,6 +753,15 @@ const CuratorsWritingWorkspace = ({
                             isGraphEditor ? onLinkContextMenu : undefined
                           }
                           magnifierMode={magnifierMode}
+                          // AIモード: ノード選択トグル
+                          isSelectionMode={isGraphSelectionMode}
+                          onNodeSelectionToggle={(node) => {
+                            setSelectedNodeIdsForAI((prev) =>
+                              prev.includes(node.id)
+                                ? prev.filter((id) => id !== node.id)
+                                : [...prev, node.id],
+                            );
+                          }}
                         />
                       )}
                     </>

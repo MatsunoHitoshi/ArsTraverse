@@ -27,6 +27,7 @@ import { MagnifierLens } from "../magnifier/magnifier-lens";
 const GraphNodeCircle = ({
   graphNode,
   isFocused,
+  isSelected,
   isPathNode,
   graphUnselected,
   queryFiltered,
@@ -41,9 +42,12 @@ const GraphNodeCircle = ({
   onNodeContextMenu,
   graphIdentifier,
   nodeRef,
+  isSelectionMode,
+  onNodeSelectionToggle,
 }: {
   graphNode: CustomNodeType;
   isFocused: boolean;
+  isSelected?: boolean;
   isPathNode: boolean;
   graphUnselected: boolean;
   queryFiltered: boolean;
@@ -60,6 +64,8 @@ const GraphNodeCircle = ({
   onNodeContextMenu?: (node: CustomNodeType) => void;
   graphIdentifier: string;
   nodeRef: React.RefObject<SVGSVGElement>;
+  isSelectionMode?: boolean;
+  onNodeSelectionToggle?: (node: CustomNodeType) => void;
 }) => {
   return (
     <g
@@ -67,6 +73,10 @@ const GraphNodeCircle = ({
       ref={nodeRef}
       className={`${graphIdentifier}-node cursor-pointer`}
       onClick={() => {
+        if (isSelectionMode) {
+          onNodeSelectionToggle?.(graphNode);
+          return;
+        }
         if (graphNode.id === focusedNode?.id) {
           setFocusedNode(undefined);
         } else {
@@ -86,7 +96,8 @@ const GraphNodeCircle = ({
           nodeMagnification
         }
         fill={
-          isFocused || isDragEditorTarget
+          // AIモード時のみ選択ノードをオレンジ
+          ((isSelectionMode && isSelected) ?? isFocused ?? isDragEditorTarget)
             ? "#ef7234"
             : isPathNode
               ? "#eae80c"
@@ -233,6 +244,8 @@ export const D3ForceGraph = ({
   },
   isDirectedLinks = true,
   magnifierMode = 0,
+  isSelectionMode,
+  onNodeSelectionToggle,
 }: {
   svgRef: React.RefObject<SVGSVGElement>;
   height: number;
@@ -265,6 +278,8 @@ export const D3ForceGraph = ({
   graphIdentifier?: string;
   isDirectedLinks?: boolean;
   magnifierMode?: number;
+  isSelectionMode?: boolean;
+  onNodeSelectionToggle?: (node: CustomNodeType) => void;
 }) => {
   const { nodes, relationships } = graphDocument;
   const initLinks = relationships as CustomLinkType[];
@@ -488,6 +503,18 @@ export const D3ForceGraph = ({
                 const isPathLink = selectedPathData?.relationships
                   .map((relationship) => relationship.id)
                   .includes(graphLink.id);
+                const isSelectedLink = (() => {
+                  if (!selectedGraphData) return false;
+                  const byId = selectedGraphData.relationships
+                    .map((r) => r.id)
+                    .includes(graphLink.id);
+                  if (byId) return true;
+                  return selectedGraphData.relationships.some(
+                    (r) =>
+                      r.sourceId === modSource.id &&
+                      r.targetId === modTarget.id,
+                  );
+                })();
                 const isInMagnifier = linksInMagnifier.includes(graphLink.id);
                 const linkMagnification = isInMagnifier
                   ? (linkMagnifications.get(graphLink.id) ?? 1)
@@ -555,11 +582,13 @@ export const D3ForceGraph = ({
                         stroke={
                           isFocused
                             ? "#ef7234"
-                            : isPathLink
-                              ? "#eae80c"
-                              : graphLink.isAdditional
-                                ? "#3769d4"
-                                : "white"
+                            : isSelectionMode && isSelectedLink
+                              ? "#ef7234"
+                              : isPathLink
+                                ? "#eae80c"
+                                : graphLink.isAdditional
+                                  ? "#3769d4"
+                                  : "white"
                         }
                         // stroke={
                         //   isFocused
@@ -571,15 +600,22 @@ export const D3ForceGraph = ({
                         //         : "white"
                         // }
                         strokeWidth={
-                          (isFocused ? 2 : 1.2) * linkMagnification * 1.5
+                          (isFocused || (isSelectionMode && isSelectedLink)
+                            ? 2
+                            : 1.2) *
+                          linkMagnification *
+                          1.5
                         }
                         strokeOpacity={
                           isFocused
                             ? 1
-                            : isGradient
-                              ? 0.04
-                              : (distance(graphLink) ? 0.6 : 0.4) /
-                                (distance(graphLink) * distance(graphLink) || 1)
+                            : isSelectionMode && isSelectedLink
+                              ? 0.9
+                              : isGradient
+                                ? 0.04
+                                : (distance(graphLink) ? 0.6 : 0.4) /
+                                  (distance(graphLink) * distance(graphLink) ||
+                                    1)
                         }
                         // strokeOpacity={isFocused ? 1 : isGradient ? 0.3 : 0.4}
                         x1={modSource.x}
@@ -690,6 +726,13 @@ export const D3ForceGraph = ({
                       key={graphNode.id}
                       graphNode={graphNode}
                       isFocused={visibility.isFocused}
+                      isSelected={
+                        selectedGraphData
+                          ? selectedGraphData.nodes.some(
+                              (node) => node.name === graphNode.name,
+                            )
+                          : false
+                      }
                       isPathNode={visibility.isPathNode}
                       graphUnselected={graphUnselected}
                       queryFiltered={visibility.queryFiltered}
@@ -704,6 +747,8 @@ export const D3ForceGraph = ({
                       onNodeContextMenu={onNodeContextMenu}
                       graphIdentifier={graphIdentifier}
                       nodeRef={nodeRef}
+                      isSelectionMode={isSelectionMode}
+                      onNodeSelectionToggle={onNodeSelectionToggle}
                     />
                   );
                 })}
@@ -751,6 +796,13 @@ export const D3ForceGraph = ({
                       key={graphNode.id}
                       graphNode={graphNode}
                       isFocused={visibility.isFocused}
+                      isSelected={
+                        selectedGraphData
+                          ? selectedGraphData.nodes.some(
+                              (node) => node.name === graphNode.name,
+                            )
+                          : false
+                      }
                       isPathNode={visibility.isPathNode}
                       graphUnselected={graphUnselected}
                       queryFiltered={visibility.queryFiltered}
@@ -765,6 +817,8 @@ export const D3ForceGraph = ({
                       onNodeContextMenu={onNodeContextMenu}
                       graphIdentifier={graphIdentifier}
                       nodeRef={nodeRef}
+                      isSelectionMode={isSelectionMode}
+                      onNodeSelectionToggle={onNodeSelectionToggle}
                     />
                   );
                 })}

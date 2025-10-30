@@ -5,12 +5,7 @@ import React, {
   useContext,
   useState,
 } from "react";
-import {
-  useEditor,
-  EditorContent,
-  type JSONContent,
-  type Editor,
-} from "@tiptap/react";
+import { useEditor, EditorContent, type JSONContent } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
 import { EntityHighlight } from "./extensions/entity-highlight-extension";
 import { TextCompletionMark } from "./extensions/text-completion-mark";
@@ -30,6 +25,8 @@ import { TiptapGraphFilterContext } from "..";
 import { HighlightVisibilityProvider } from "./contexts/highlight-visibility-context";
 import TextAlign from "@tiptap/extension-text-align";
 import { useMentionConfig } from "./hooks/use-mention-config";
+import { Button } from "../../button/button";
+import { CheckIcon, CrossLargeIcon } from "../../icons";
 
 interface TipTapEditorContentProps {
   content: JSONContent;
@@ -39,6 +36,10 @@ interface TipTapEditorContentProps {
   workspaceId: string;
   onGraphUpdate?: (additionalGraph: GraphDocumentForFrontend) => void;
   setIsGraphEditor: React.Dispatch<React.SetStateAction<boolean>>;
+  setIsGraphSelectionMode?: React.Dispatch<React.SetStateAction<boolean>>;
+  completionWithSubgraphRef?: React.MutableRefObject<
+    ((subgraph: GraphDocumentForFrontend) => void) | null
+  >;
 }
 
 export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
@@ -49,6 +50,8 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
   workspaceId,
   onGraphUpdate,
   setIsGraphEditor,
+  setIsGraphSelectionMode,
+  completionWithSubgraphRef,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const debounceTimeoutRef = useRef<NodeJS.Timeout>();
@@ -62,6 +65,7 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
   const textCompletion = useTextCompletion({
     workspaceId,
     isAIAssistEnabled,
+    onEnterAIMode: () => setIsGraphSelectionMode?.(true),
   });
 
   // ハイライト処理用のカスタムフック（エディタは後で設定）
@@ -134,7 +138,20 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
       }, 100);
     },
     editorProps: {
-      handleKeyDown: (_view, _event) => {
+      handleKeyDown: (_view, event) => {
+        // Cmd+S / Ctrl+S で即時保存（手動更新）
+        if (
+          event.key?.toLowerCase() === "s" &&
+          (event.metaKey || event.ctrlKey)
+        ) {
+          event.preventDefault();
+          // 進行中の遅延更新があればキャンセルし、即時で更新
+          if (updateTimeoutRef.current) {
+            clearTimeout(updateTimeoutRef.current);
+          }
+          onUpdate(editor.getJSON(), true);
+          return true;
+        }
         return false;
       },
     },
@@ -173,6 +190,20 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
       }
     };
   }, []);
+
+  // 親から呼び出せる補完リクエスト関数を登録
+  useEffect(() => {
+    if (!completionWithSubgraphRef) return;
+    completionWithSubgraphRef.current = (
+      subgraph: GraphDocumentForFrontend,
+    ) => {
+      if (!editor) return;
+      textCompletion.requestCompletionWithSubgraph(editor, subgraph);
+    };
+    return () => {
+      if (completionWithSubgraphRef) completionWithSubgraphRef.current = null;
+    };
+  }, [completionWithSubgraphRef, editor, textCompletion]);
 
   // エンティティハイライトのクリック処理
   const handleClick = (e: React.MouseEvent) => {
@@ -241,6 +272,38 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
                 <div className="flex items-center space-x-1 rounded-md bg-slate-700/60 px-2 py-1 shadow-lg">
                   <div className="h-3 w-3 animate-spin rounded-full border border-white border-t-transparent"></div>
                   <span className="text-xs text-white">生成中...</span>
+                </div>
+              </div>
+            )}
+          {textCompletion.isTextSuggestionMode &&
+            textCompletion.cursorPosition && (
+              <div
+                className="absolute z-10"
+                style={{
+                  left: `${textCompletion.cursorPosition.x}px`,
+                  top: `${textCompletion.cursorPosition.y}px`,
+                }}
+              >
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="small"
+                    className="flex !h-8 !w-8 items-center justify-center !bg-green-500/80 !p-1 backdrop-blur-sm"
+                    onClick={() => {
+                      // Enter確定と同様の処理
+                      textCompletion.handleEnterKey(editor);
+                    }}
+                  >
+                    <CheckIcon height={16} width={16} color="white" />
+                  </Button>
+                  <Button
+                    size="small"
+                    className="flex !h-8 !w-8 items-center justify-center !bg-red-500/80 !p-1 backdrop-blur-sm"
+                    onClick={() => {
+                      textCompletion.disableTextSuggestionMode(editor);
+                    }}
+                  >
+                    <CrossLargeIcon height={16} width={16} color="white" />
+                  </Button>
                 </div>
               </div>
             )}

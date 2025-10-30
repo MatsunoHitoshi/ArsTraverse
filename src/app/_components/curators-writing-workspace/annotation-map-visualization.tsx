@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import * as d3 from "d3";
 import { AnnotationMapD3Visualization } from "../d3/annotation-map/annotation-map-d3-visualization";
 import { convertJsonToText } from "@/app/_utils/tiptap/convert";
 import { api } from "@/trpc/react";
 import type { ClusteringResult } from "@/app/const/types";
+import Link from "next/link";
 
 interface AnnotationMapVisualizationProps {
   clusteringResult: ClusteringResult;
@@ -36,6 +37,10 @@ export function AnnotationMapVisualization({
   const [selectedClusterId, setSelectedClusterId] = useState<number | null>(
     null,
   );
+  // 選択された注釈の状態
+  const [selectedAnnotationId, setSelectedAnnotationId] = useState<
+    string | null
+  >(null);
 
   // クラスターに含まれる注釈IDを取得
   const clusterAnnotationIds = useMemo(() => {
@@ -63,6 +68,26 @@ export function AnnotationMapVisualization({
     setSelectedClusterId(clusterId);
   };
 
+  // 選択されたアノテーションの位置に注釈一覧をスクロール
+  useEffect(() => {
+    if (!selectedAnnotationId) return;
+
+    // 少し遅延させてDOMが更新されるのを待つ
+    const timer = setTimeout(() => {
+      const element = document.getElementById(
+        `annotation-${selectedAnnotationId}`,
+      );
+      if (element) {
+        element.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [selectedAnnotationId, annotations]);
+
   return (
     <div className="flex h-full flex-col" style={{ height: `${height}px` }}>
       {/* 可視化エリア */}
@@ -80,6 +105,8 @@ export function AnnotationMapVisualization({
           width={width}
           height={height - 300}
           annotations={annotations}
+          selectedAnnotationId={selectedAnnotationId}
+          setSelectedAnnotationId={setSelectedAnnotationId}
           hierarchy={hierarchy}
         />
       </div>
@@ -123,7 +150,7 @@ export function AnnotationMapVisualization({
                   className={`rounded p-3 text-sm transition-colors ${
                     isSelected
                       ? "border border-orange-600 bg-orange-900/20"
-                      : "bg-slate-800 hover:bg-slate-700"
+                      : "bg-slate-800 hover:bg-slate-500"
                   }`}
                   onClick={() => setSelectedClusterId(cluster.clusterId)}
                   style={{ cursor: "pointer" }}
@@ -145,24 +172,33 @@ export function AnnotationMapVisualization({
                   </div>
 
                   {/* クラスターに属する注釈の詳細 */}
-                  <div className="space-y-1">
+                  <div className="flex flex-col gap-1">
                     {clusterAnnotations.map((annotation) => (
-                      <div
+                      <Link
+                        href={`/annotations/${annotation.id}`}
                         key={annotation.id}
-                        className="rounded bg-slate-700 p-2 text-xs"
                       >
-                        <div className="mb-1 flex items-center gap-2">
-                          <span className="font-medium text-blue-400">
-                            {annotation.type}
-                          </span>
-                          <span className="text-gray-400">
-                            {annotation.author.name}
-                          </span>
+                        <div
+                          id={`annotation-${annotation.id}`}
+                          className={`rounded p-2 text-xs transition-colors ${
+                            selectedAnnotationId === annotation.id
+                              ? "border border-orange-500 bg-slate-900"
+                              : "bg-slate-700"
+                          }`}
+                        >
+                          <div className="mb-1 flex items-center gap-2">
+                            <span className="font-medium text-blue-400">
+                              {annotation.type}
+                            </span>
+                            <span className="text-gray-400">
+                              {annotation.author.name}
+                            </span>
+                          </div>
+                          <div className="line-clamp-2 text-gray-300">
+                            {convertJsonToText(annotation.content)}
+                          </div>
                         </div>
-                        <div className="line-clamp-2 text-gray-300">
-                          {convertJsonToText(annotation.content)}
-                        </div>
-                      </div>
+                      </Link>
                     ))}
                   </div>
                 </div>

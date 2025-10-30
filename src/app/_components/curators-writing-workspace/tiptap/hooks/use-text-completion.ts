@@ -7,15 +7,18 @@ import {
   clearAndDeleteTextCompletionMarks,
 } from "@/app/_utils/tiptap/text-completion";
 import { findEntityHighlights } from "@/app/_utils/text/find-entity-highlights";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 
 interface UseTextCompletionOptions {
   workspaceId: string;
   isAIAssistEnabled: boolean;
+  onEnterAIMode?: (cursor: { x: number; y: number } | null) => void;
 }
 
 export const useTextCompletion = ({
   workspaceId,
   isAIAssistEnabled,
+  onEnterAIMode,
 }: UseTextCompletionOptions) => {
   const [isTextSuggestionMode, setIsTextSuggestionMode] =
     useState<boolean>(false);
@@ -29,6 +32,8 @@ export const useTextCompletion = ({
   const isUpdatingTextCompletionSuggestionRef = useRef(false);
   const isTextSuggestionModeRef = useRef(false);
   const textCompletion = api.workspace.textCompletion.useMutation();
+  const textCompletionWithGraph =
+    api.workspace.textCompletionWithGraph.useMutation();
 
   // isTextSuggestionModeの状態をrefに同期
   useEffect(() => {
@@ -94,24 +99,24 @@ export const useTextCompletion = ({
   const handleTabKey = useCallback(
     (editor: Editor, editorRef: React.RefObject<HTMLDivElement>) => {
       if (isUpdatingTextCompletionSuggestionRef.current) return;
+      // ここでは即補完は行わず、AIモード（グラフ選択モード）へ移行
+      const cursor = getCursorPosition(editor, editorRef);
+      setCursorPosition(cursor);
+      onEnterAIMode?.(cursor);
+    },
+    [getCursorPosition, onEnterAIMode],
+  );
 
-      // 既にテキスト提案モードがアクティブな場合はDeepMode
-      const isDeepMode = isTextSuggestionModeRef.current;
-
+  // グラフ部分グラフを用いた補完を要求
+  const requestCompletionWithSubgraph = useCallback(
+    (editor: Editor, subgraph: GraphDocumentForFrontend) => {
       setIsSuggestionLoading(true);
-      setCursorPosition(getCursorPosition(editor, editorRef));
-
-      const cursorPos = editor.state.selection.from;
-      const nearbyEntities = getNearbyEntities(editor, cursorPos);
-
-      console.log("nearbyEntities: ", nearbyEntities);
-
-      textCompletion.mutate(
+      console.log("requestCompletionWithSubgraph: ", subgraph);
+      textCompletionWithGraph.mutate(
         {
-          workspaceId: workspaceId,
+          workspaceId,
           baseText: editor.getText(),
-          searchEntities: nearbyEntities,
-          isDeepMode,
+          subgraph,
         },
         {
           onSuccess: (suggestion) => {
@@ -122,14 +127,13 @@ export const useTextCompletion = ({
               );
             }
             setIsTextSuggestionMode(true);
-
             performTextCompletionSuggestion(
               editor,
               isUpdatingTextCompletionSuggestionRef,
               suggestion,
             );
             setIsSuggestionLoading(false);
-            setCursorPosition(null);
+            // カーソル位置は確認ボタン配置にも使うため保持
           },
           onError: (error) => {
             console.error(error);
@@ -139,7 +143,7 @@ export const useTextCompletion = ({
         },
       );
     },
-    [workspaceId, textCompletion, getCursorPosition, getNearbyEntities],
+    [textCompletionWithGraph, workspaceId],
   );
 
   // Enterキーが押された時の処理
@@ -173,5 +177,6 @@ export const useTextCompletion = ({
     handleTabKey,
     handleEnterKey,
     handleEscapeKey,
+    requestCompletionWithSubgraph,
   };
 };

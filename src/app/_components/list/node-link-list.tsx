@@ -6,14 +6,13 @@ import { CheckboxInput } from "../input/checkbox-input";
 import { MergeNodesForm } from "../form/merge-nodes-form";
 import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { PropertiesSummaryPanel } from "../d3/force/graph-info-panel";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type NodesSortType = "name" | "centrality" | "none";
 
 export const NodeLinkList = ({
   graphDocument,
-  setIsListOpen,
   focusedNode,
-  isListOpen,
   topicSpaceId,
   isEditor = false,
   refetch,
@@ -22,12 +21,10 @@ export const NodeLinkList = ({
   toolComponent,
 }: {
   graphDocument: GraphDocumentForFrontend;
-  setIsListOpen: (isListOpen: boolean) => void;
   topicSpaceId: string;
   focusedNode: CustomNodeType | undefined;
   nodeSearchQuery?: string;
   toolComponent?: React.ReactNode;
-  isListOpen: boolean;
   isClustered?: boolean;
   isEditor?: boolean;
   refetch?: () => void;
@@ -50,6 +47,8 @@ export const NodeLinkList = ({
       return graphNodes;
     }
   }, [sortType, graphDocument]);
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   return (
     <div className="flex w-full flex-col gap-2">
@@ -58,7 +57,12 @@ export const NodeLinkList = ({
         <button
           className="rounded-lg bg-black/20 p-2 backdrop-blur-sm"
           onClick={() => {
-            setIsListOpen(!isListOpen);
+            const isListOpen = searchParams.get("list") === "true";
+            if (isListOpen) {
+              router.replace("?list=false", { scroll: false });
+            } else {
+              router.replace("?list=true", { scroll: false });
+            }
           }}
         >
           <GraphIcon width={16} height={16} color="white" />

@@ -7,12 +7,11 @@ import {
 } from "../../icons";
 import { type TagOption, TagsInput } from "../../input/tags-input";
 import { ExportGraphButton } from "../../d3/export-graph-button";
+import { useSearchParams, usePathname } from "next/navigation";
 
 export const GraphTool = ({
   svgRef,
   currentScale,
-  isListOpen,
-  setIsListOpen,
   hasTagFilter = false,
   tags,
   setTags,
@@ -31,8 +30,6 @@ export const GraphTool = ({
   svgRef: React.RefObject<SVGSVGElement>;
   currentScale: number;
   hasTagFilter?: boolean;
-  setIsListOpen: (isListOpen: boolean) => void;
-  isListOpen: boolean;
   tags?: TagOption | undefined;
   setTags?: React.Dispatch<React.SetStateAction<TagOption | undefined>>;
   tagOptions?: TagOption[];
@@ -43,17 +40,28 @@ export const GraphTool = ({
   magnifierMode?: number;
   setMagnifierMode?: React.Dispatch<React.SetStateAction<number>>;
 }) => {
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
+  // listパラメータのトグル用URLを生成
+  const isListOpen = searchParams.get("list") === "true";
+  const listParams = new URLSearchParams(searchParams.toString());
+  if (isListOpen) {
+    listParams.delete("list");
+  } else {
+    listParams.set("list", "true");
+  }
+  const listUrl = `${pathname}?${listParams.toString()}`;
+
   return (
     <>
       <div className="absolute mt-2 flex flex-row items-center gap-2">
-        <button
+        <a
+          href={listUrl}
           className="rounded-lg bg-black/20 p-2 backdrop-blur-sm"
-          onClick={() => {
-            setIsListOpen(!isListOpen);
-          }}
         >
           <ListBulletIcon width={16} height={16} color="white" />
-        </button>
+        </a>
 
         {!!setIsDirectedLinks ? (
           <button
