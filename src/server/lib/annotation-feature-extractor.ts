@@ -103,7 +103,7 @@ export class AnnotationFeatureExtractor {
   }
 
   /**
-   * 芸術的解釈に特化した特徴量を抽出
+   * TopicSpace用語に特化した特徴量を抽出
    */
   async extractFeatures(
     annotations: AnnotationData[],
@@ -128,12 +128,15 @@ export class AnnotationFeatureExtractor {
     }
 
     // 1. テキスト特徴量の抽出（TopicSpace特化）
-    const textFeatures = await this.extractArtFocusedTextFeatures(annotations, {
-      maxFeatures,
-      minDf,
-      maxDf,
-      topicSpaceNodes,
-    });
+    const textFeatures = await this.extractTopicSpaceFocusedTextFeatures(
+      annotations,
+      {
+        maxFeatures,
+        minDf,
+        maxDf,
+        topicSpaceNodes,
+      },
+    );
 
     // 2. 解釈タイプ特徴量の抽出
     let interpretationFeatures: number[][] = [];
@@ -184,9 +187,9 @@ export class AnnotationFeatureExtractor {
   }
 
   /**
-   * 芸術用語に特化したテキスト特徴量の抽出
+   * TopicSpace用語に特化したテキスト特徴量の抽出
    */
-  private async extractArtFocusedTextFeatures(
+  private async extractTopicSpaceFocusedTextFeatures(
     annotations: AnnotationData[],
     params: {
       maxFeatures: number;
@@ -204,7 +207,7 @@ export class AnnotationFeatureExtractor {
     });
 
     // 2. TopicSpace特化の語彙を構築
-    const vocabulary = this.buildArtVocabulary(
+    const vocabulary = this.buildTopicSpaceVocabulary(
       processedTexts,
       minDf,
       maxDf,
@@ -329,7 +332,7 @@ export class AnnotationFeatureExtractor {
   /**
    * TopicSpace特化の語彙の構築
    */
-  private buildArtVocabulary(
+  private buildTopicSpaceVocabulary(
     texts: string[],
     minDf: number,
     maxDf: number,

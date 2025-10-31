@@ -91,9 +91,13 @@ export const Account = () => {
         </div>
 
         <div className="mb-6">
-          <div className="mb-4 text-lg font-semibold text-slate-50">
-            知識グラフの言語設定
+          <div className="flex flex-row items-end gap-2">
+            <div className="mb-4 text-lg font-semibold text-slate-50">
+              知識グラフの言語設定
+            </div>
+            <p className="mb-4 text-red-700">開発中です🙇‍♂️</p>
           </div>
+
           <p className="mb-6 text-slate-300">
             グラフ内のノード名の表示言語を設定できます。翻訳機能により、日本語と英語の両方の名前が自動的に生成されます。
           </p>
@@ -109,7 +113,8 @@ export const Account = () => {
                   selected={selectedLocale}
                   setSelected={handleLocaleChange}
                   placeholder="言語を選択"
-                  disabled={updateLocaleMutation.isPending}
+                  // disabled={updateLocaleMutation.isPending}
+                  disabled={true}
                 />
               </div>
             </div>

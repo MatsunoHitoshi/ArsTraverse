@@ -131,9 +131,6 @@ export const AnnotationForm: React.FC<AnnotationFormProps> = ({
 
           {/* エディター */}
           <div className="mb-4">
-            <label className="mb-2 block text-sm font-medium text-gray-500">
-              内容
-            </label>
             <div className="rounded-md bg-slate-800">
               <TiptapEditorToolbar
                 editor={editor}

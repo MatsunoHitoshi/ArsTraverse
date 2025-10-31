@@ -49,6 +49,7 @@ import {
 import { NodeLinkEditModal } from "../modal/node-link-edit-modal";
 import { ProposalCreateModal } from "./proposal-create-modal";
 import { ShareTopicSpaceModal } from "./share-topic-space-modal";
+import { DirectedLinksToggleButton } from "../view/graph-view/directed-links-toggle-button";
 // import { PlusCircleIcon } from "@heroicons/react/24/outline";
 
 interface CuratorsWritingWorkspaceProps {
@@ -204,6 +205,7 @@ const CuratorsWritingWorkspace = ({
   const graphContainerRef = useRef<HTMLDivElement>(null);
   const [graphSize, setGraphSize] = useState({ width: 400, height: 400 });
   const defaultGraphDocument = topicSpace?.graphData;
+  const [isDirectedLinks, setIsDirectedLinks] = useState<boolean>(false);
 
   // グラフ編集用のカスタムフック
   const {
@@ -556,6 +558,7 @@ const CuratorsWritingWorkspace = ({
                           currentScale={currentScale}
                           setCurrentScale={setCurrentScale}
                           setFocusedNode={setFocusedNodeWrapper}
+                          isDirectedLinks={isDirectedLinks}
                           focusedNode={activeEntity}
                           setFocusedLink={() => {
                             // リンクフォーカス機能は現在使用しない
@@ -709,6 +712,10 @@ const CuratorsWritingWorkspace = ({
                                       color="white"
                                     />
                                   </Button>
+                                  <DirectedLinksToggleButton
+                                    isDirectedLinks={isDirectedLinks}
+                                    setIsDirectedLinks={setIsDirectedLinks}
+                                  />
                                 </>
                               ) : (
                                 <>
@@ -736,6 +743,10 @@ const CuratorsWritingWorkspace = ({
                                         : "変更提案を作成"}
                                     </Button>
                                   )}
+                                  <DirectedLinksToggleButton
+                                    isDirectedLinks={isDirectedLinks}
+                                    setIsDirectedLinks={setIsDirectedLinks}
+                                  />
                                 </>
                               )}
                             </div>

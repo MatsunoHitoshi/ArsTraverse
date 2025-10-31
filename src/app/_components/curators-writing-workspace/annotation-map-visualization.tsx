@@ -126,14 +126,14 @@ export function AnnotationMapVisualization({
                 {clusteringResult.clusters?.length ?? 0}グループ
               </div>
             </div>
-            {clusteringResult.qualityMetrics?.silhouetteScore && (
+            {/* {clusteringResult.qualityMetrics?.silhouetteScore && (
               <div className="text-xs text-gray-400">
                 グルーピング精度:{" "}
                 <span className="font-bold text-blue-400">
                   {clusteringResult.qualityMetrics.silhouetteScore.toFixed(3)}
                 </span>
               </div>
-            )}
+            )} */}
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-3 pt-0">
