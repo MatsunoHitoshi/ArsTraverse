@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Modal } from "../modal/modal";
 import { Button } from "../button/button";
 import { CopyIcon, Link2Icon, CheckIcon } from "../icons";
+import Link from "next/link";
 
 interface ShareTopicSpaceModalProps {
   isOpen: boolean;
@@ -48,7 +49,17 @@ export const ShareTopicSpaceModal: React.FC<ShareTopicSpaceModalProps> = ({
         {/* コンテンツ */}
         <div className="space-y-4">
           <div>
-            <h3 className="mb-2 text-sm font-medium text-gray-600">共有URL</h3>
+            <div className="mb-2 flex flex-row items-center gap-2">
+              <h3 className="text-sm font-medium text-gray-600">共有URL</h3>
+              <Link
+                href={shareUrl}
+                target="_blank"
+                className="text-sm text-blue-500"
+              >
+                リポジトリに移動
+              </Link>
+            </div>
+
             <div className="flex items-center gap-2">
               <input
                 type="text"
