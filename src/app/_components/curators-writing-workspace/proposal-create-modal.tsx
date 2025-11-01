@@ -11,7 +11,7 @@ interface ProposalCreateModalProps {
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
   topicSpaceId: string;
   graphDocument: GraphDocumentForFrontend;
-  onSuccess: () => void;
+  onSuccess: (proposalId: string) => void;
 }
 
 export const ProposalCreateModal: React.FC<ProposalCreateModalProps> = ({
@@ -27,13 +27,8 @@ export const ProposalCreateModal: React.FC<ProposalCreateModalProps> = ({
   );
 
   const createProposal = api.graphEditProposal.createProposal.useMutation({
-    onSuccess: () => {
-      alert("変更提案を作成しました。管理者の承認をお待ちください。");
-      setIsOpen(false);
-      onSuccess();
-      // フォームをリセット
-      setTitle("グラフの変更提案");
-      setDescription("ワークスペースからグラフの変更を提案します");
+    onSuccess: (response) => {
+      onSuccess(response.id);
     },
     onError: (error) => {
       console.error("変更提案の作成に失敗しました", error);

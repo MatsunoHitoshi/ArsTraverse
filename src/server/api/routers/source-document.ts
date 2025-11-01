@@ -57,6 +57,7 @@ export const getTextReference = async (
     searchTerms,
     contextLength,
   );
+  console.log("======= relevantSections ========", relevantSections);
 
   return relevantSections;
 };

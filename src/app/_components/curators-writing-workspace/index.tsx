@@ -856,7 +856,8 @@ const CuratorsWritingWorkspace = ({
           setIsOpen={setIsProposalCreateModalOpen}
           topicSpaceId={topicSpaceId ?? ""}
           graphDocument={graphDocument}
-          onSuccess={() => {
+          onSuccess={(proposalId) => {
+            router.push(`/proposals/${proposalId}`);
             setIsGraphEditor(false);
             resetGraphUpdated();
           }}

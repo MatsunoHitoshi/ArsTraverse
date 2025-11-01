@@ -1160,6 +1160,7 @@ export const topicSpaceRouter = createTRPCRouter({
   getNodeReference: protectedProcedure
     .input(z.object({ id: z.string(), nodeId: z.string() }))
     .query(async ({ ctx, input }) => {
+      console.log("======= getNodeReference ========", input);
       const topicSpace = await ctx.db.topicSpace.findFirst({
         where: { id: input.id },
         include: {
@@ -1181,6 +1182,8 @@ export const topicSpaceRouter = createTRPCRouter({
 
       const referenceSections: ReferenceSection[] = [];
 
+      console.log("======= node.name ========", node.name);
+
       for (const sourceDocument of topicSpace.sourceDocuments) {
         const relevantSections = await getTextReference(
           ctx,
@@ -1188,6 +1191,7 @@ export const topicSpaceRouter = createTRPCRouter({
           [node.name],
           200,
         );
+        console.log("======= relevantSections ========", relevantSections);
         referenceSections.push({
           sourceDocument: sourceDocument,
           relevantSections: relevantSections.map((section) => section + "..."),
