@@ -269,7 +269,7 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
                   top: `${textCompletion.cursorPosition.y}px`,
                 }}
               >
-                <div className="flex items-center space-x-1 rounded-md bg-slate-700/60 px-2 py-1 shadow-lg">
+                <div className="flex items-center space-x-1 rounded-md bg-slate-950/60 px-2 py-1 shadow-lg backdrop-blur-sm">
                   <div className="h-3 w-3 animate-spin rounded-full border border-white border-t-transparent"></div>
                   <span className="text-xs text-white">生成中...</span>
                 </div>
