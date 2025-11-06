@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import type { GraphDocumentForFrontend } from "@/app/const/types";
 import type { CustomNodeType, CustomLinkType } from "@/app/const/types";
 import { D3ForceGraph } from "@/app/_components/d3/force/graph";
+import { D3SphericalGraph } from "@/app/_components/d3/spherical/spherical-graph";
 import { GraphInfoPanel } from "../../d3/force/graph-info-panel";
 import { GraphTool } from "../graph-view/graph-tool";
 import { useWindowSize } from "@/app/_hooks/use-window-size";
@@ -11,6 +12,8 @@ import type { TagOption } from "../../input/tags-input";
 import { useSession } from "next-auth/react";
 import { NodePropertiesDetail } from "../node/node-properties-detail";
 import { useSearchParams } from "next/navigation";
+import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
+import { Fragment } from "react";
 
 export const MultiDocumentGraphDetailViewer = ({
   graphDocument,
@@ -57,6 +60,7 @@ export const MultiDocumentGraphDetailViewer = ({
 
   const [currentScale, setCurrentScale] = useState<number>(1);
   const [magnifierMode, setMagnifierMode] = useState<number>(0);
+  const [graphViewMode, setGraphViewMode] = useState<"2d" | "3d">("2d");
   const svgRef = useRef<SVGSVGElement>(null);
 
   const isLargeGraph = graphDocument.nodes.length > 1300;
@@ -81,54 +85,118 @@ export const MultiDocumentGraphDetailViewer = ({
           )}
         </div>
       ) : (
-        <D3ForceGraph
-          svgRef={svgRef}
-          width={graphAreaWidth}
-          height={graphAreaHeight}
-          isLargeGraph={isLargeGraph}
-          graphDocument={graphDocument}
-          currentScale={currentScale}
-          setCurrentScale={setCurrentScale}
-          focusedNode={focusedNode}
-          setFocusedNode={setFocusedNode}
-          focusedLink={focusedLink}
-          setFocusedLink={setFocusedLink}
-          isGraphFullScreen={isGraphFullScreen}
-          isClustered={isClustered}
-          selectedPathData={selectedPathData}
-          selectedGraphData={selectedGraphData}
-          nodeSearchQuery={nodeSearchQuery}
-          isDirectedLinks={isDirectedLinks}
-          magnifierMode={magnifierMode}
-          toolComponent={
-            <>
-              <GraphTool
+        <TabGroup
+          selectedIndex={graphViewMode === "2d" ? 0 : 1}
+          onChange={(index) => setGraphViewMode(index === 0 ? "2d" : "3d")}
+        >
+          <TabList className="flex flex-row items-center gap-2 border-b border-slate-600 bg-slate-900 text-sm">
+            <Tab as={Fragment}>
+              {({ selected }) => (
+                <button
+                  className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${
+                    selected ? "border-b-2 border-white outline-none" : ""
+                  } hover:bg-white/10`}
+                >
+                  2Dグラフ
+                </button>
+              )}
+            </Tab>
+            <Tab as={Fragment}>
+              {({ selected }) => (
+                <button
+                  className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${
+                    selected ? "border-b-2 border-white outline-none" : ""
+                  } hover:bg-white/10`}
+                >
+                  3D球面グラフ
+                </button>
+              )}
+            </Tab>
+          </TabList>
+          <TabPanels>
+            <TabPanel>
+              <D3ForceGraph
                 svgRef={svgRef}
-                currentScale={currentScale}
+                width={graphAreaWidth}
+                height={graphAreaHeight}
                 isLargeGraph={isLargeGraph}
-                hasTagFilter={true}
-                tags={tags}
-                setTags={setTags}
-                tagOptions={tagOptions}
-                tagFilterOption={tagFilterOption}
+                graphDocument={graphDocument}
+                currentScale={currentScale}
+                setCurrentScale={setCurrentScale}
+                focusedNode={focusedNode}
+                setFocusedNode={setFocusedNode}
+                focusedLink={focusedLink}
+                setFocusedLink={setFocusedLink}
                 isGraphFullScreen={isGraphFullScreen}
-                setIsGraphFullScreen={setIsGraphFullScreen}
+                isClustered={isClustered}
+                selectedPathData={selectedPathData}
+                selectedGraphData={selectedGraphData}
+                nodeSearchQuery={nodeSearchQuery}
                 isDirectedLinks={isDirectedLinks}
-                setIsDirectedLinks={setIsDirectedLinks}
                 magnifierMode={magnifierMode}
-                setMagnifierMode={setMagnifierMode}
+                toolComponent={
+                  <>
+                    <GraphTool
+                      svgRef={svgRef}
+                      currentScale={currentScale}
+                      isLargeGraph={isLargeGraph}
+                      hasTagFilter={true}
+                      tags={tags}
+                      setTags={setTags}
+                      tagOptions={tagOptions}
+                      tagFilterOption={tagFilterOption}
+                      isGraphFullScreen={isGraphFullScreen}
+                      setIsGraphFullScreen={setIsGraphFullScreen}
+                      isDirectedLinks={isDirectedLinks}
+                      setIsDirectedLinks={setIsDirectedLinks}
+                      magnifierMode={magnifierMode}
+                      setMagnifierMode={setMagnifierMode}
+                    />
+                    <GraphInfoPanel
+                      focusedNode={focusedNode}
+                      focusedLink={focusedLink}
+                      graphDocument={graphDocument}
+                      topicSpaceId={topicSpaceId}
+                      // maxHeight={height}
+                      setFocusNode={setFocusedNode}
+                    />
+                  </>
+                }
+              />
+            </TabPanel>
+            <TabPanel>
+              <D3SphericalGraph
+                width={graphAreaWidth}
+                height={graphAreaHeight}
+                graphDocument={graphDocument}
+                currentScale={currentScale}
+                focusedNode={focusedNode}
+                setFocusedNode={setFocusedNode}
+                focusedLink={focusedLink}
+                setFocusedLink={setFocusedLink}
+                isGraphFullScreen={isGraphFullScreen}
+                isClustered={isClustered}
+                selectedPathData={selectedPathData}
+                selectedGraphData={selectedGraphData}
+                nodeSearchQuery={nodeSearchQuery}
+                tagFilterOption={tagFilterOption}
+                onNodeContextMenu={(_node) => {
+                  // 必要に応じてコンテキストメニューの処理を追加
+                }}
+                onLinkContextMenu={(_link) => {
+                  // 必要に応じてコンテキストメニューの処理を追加
+                }}
               />
               <GraphInfoPanel
                 focusedNode={focusedNode}
                 focusedLink={focusedLink}
                 graphDocument={graphDocument}
                 topicSpaceId={topicSpaceId}
-                // maxHeight={height}
                 setFocusNode={setFocusedNode}
               />
-            </>
-          }
-        />
+            </TabPanel>
+          </TabPanels>
+        </TabGroup>
       )}
     </>
   );
