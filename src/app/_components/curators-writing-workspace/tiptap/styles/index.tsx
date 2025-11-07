@@ -109,6 +109,40 @@ export const TiptapStyles = () => {
           margin-left: 0.25rem;
         }
       }
+
+      .ProseMirror {
+        position: relative;
+
+        img {
+          display: block;
+          height: auto;
+          max-width: 100%;
+
+          &.ProseMirror-selectednode {
+            outline: 4px solid #ef7234;
+          }
+        }
+
+        .resizable-image-container {
+          user-select: none;
+
+          &.ProseMirror-selectednode {
+            outline: 4px solid #ef7234;
+          }
+        }
+
+        .resize-handle {
+          transition: transform 0.1s ease;
+        }
+
+        .resize-handle:hover {
+          transform: scale(1.2);
+        }
+
+        .ProseMirror > div[data-type]:hover {
+          outline: 2px dashed blue; /* Example: a dashed blue border on hover */
+        }
+      }
     `}</style>
   );
 };

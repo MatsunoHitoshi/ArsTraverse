@@ -27,6 +27,9 @@ import TextAlign from "@tiptap/extension-text-align";
 import { useMentionConfig } from "./hooks/use-mention-config";
 import { Button } from "../../button/button";
 import { CheckIcon, CrossLargeIcon } from "../../icons";
+import FileHandler from "@tiptap/extension-file-handler";
+import { insertImageNode } from "@/app/_utils/tiptap/insert-image";
+import { ResizableImage } from "./extensions/resizable-image-extension";
 
 interface TipTapEditorContentProps {
   content: JSONContent;
@@ -58,7 +61,7 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
   const updateTimeoutRef = useRef<NodeJS.Timeout>();
   const DEBOUNCE_TIME = 1000;
   const {} = useContext(TiptapGraphFilterContext);
-
+  const [isImageInsert, setIsImageInsert] = useState<boolean>(false);
   const [isAIAssistEnabled, setIsAIAssistEnabled] = useState<boolean>(false);
 
   // カスタムフックを使用
@@ -107,11 +110,50 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
       StarterKit,
       EntityHighlight,
       TextCompletionMark,
+      ResizableImage,
       ...TeiCustomTagHighlightExtensions,
       KeyboardHandlerExtension.configure({
         onTabKey: (editor) => textCompletion.handleTabKey(editor, editorRef),
         onEnterKey: (editor) => textCompletion.handleEnterKey(editor),
         onEscapeKey: (editor) => textCompletion.handleEscapeKey(editor),
+      }),
+      FileHandler.configure({
+        allowedMimeTypes: [
+          "image/png",
+          "image/jpeg",
+          "image/gif",
+          "image/webp",
+        ],
+        onDrop: (currentEditor, files, pos) => {
+          Promise.all(
+            files.map((file) =>
+              insertImageNode(file, pos, currentEditor, setIsImageInsert),
+            ),
+          )
+            .then(() => {
+              onUpdate(currentEditor.getJSON(), true);
+            })
+            .catch((error) => {
+              console.error("画像の挿入中にエラーが発生しました:", error);
+            });
+        },
+        onPaste: (currentEditor, files, htmlContent) => {
+          if (htmlContent) {
+            return false;
+          }
+          const pos = currentEditor.state.selection.anchor;
+          Promise.all(
+            files.map((file) =>
+              insertImageNode(file, pos, currentEditor, setIsImageInsert),
+            ),
+          )
+            .then(() => {
+              onUpdate(currentEditor.getJSON(), true);
+            })
+            .catch((error) => {
+              console.error("画像の挿入中にエラーが発生しました:", error);
+            });
+        },
       }),
       TextAlign.configure({
         types: ["heading", "paragraph"],
