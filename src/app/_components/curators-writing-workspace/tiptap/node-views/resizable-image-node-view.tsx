@@ -181,8 +181,8 @@ export const ResizableImageNodeView: React.FC<NodeViewProps> = ({
         ref={imageRef}
         src={src}
         alt={alt}
-        width={width ?? 0}
-        height={height ?? 0}
+        width={width ?? 100}
+        height={height ?? 100}
         style={imageStyle}
         draggable={false}
       />
