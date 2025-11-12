@@ -70,17 +70,32 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
     }
   }, [innerWidth]);
 
-  // リサイズ開始
-  const handleResizeMouseDown = (e: React.MouseEvent) => {
+  // リサイズ開始（マウスとタッチの両方に対応）
+  const handleResizeStart = (
+    e: React.MouseEvent | React.TouchEvent,
+    clientX: number,
+    clientY: number,
+  ) => {
     e.preventDefault();
     e.stopPropagation();
     setIsResizing(true);
     setResizeStart({
-      x: e.clientX,
-      y: e.clientY,
+      x: clientX,
+      y: clientY,
       width: graphSize.width,
       height: graphSize.height,
     });
+  };
+
+  const handleResizeMouseDown = (e: React.MouseEvent) => {
+    handleResizeStart(e, e.clientX, e.clientY);
+  };
+
+  const handleResizeTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    if (touch) {
+      handleResizeStart(e, touch.clientX, touch.clientY);
+    }
   };
 
   // ダブルクリックでサイズをトグル
@@ -102,13 +117,13 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
     });
   };
 
-  // マウス移動処理
+  // マウス/タッチ移動処理
   useEffect(() => {
     if (!isResizing) return;
 
-    const handleMouseMove = (e: MouseEvent) => {
-      const deltaX = e.clientX - resizeStart.x;
-      const deltaY = e.clientY - resizeStart.y;
+    const handleMove = (clientX: number, clientY: number) => {
+      const deltaX = clientX - resizeStart.x;
+      const deltaY = clientY - resizeStart.y;
 
       const minWidth = 200;
       const minHeight = 200;
@@ -131,16 +146,32 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
       });
     };
 
-    const handleMouseUp = () => {
+    const handleMouseMove = (e: MouseEvent) => {
+      handleMove(e.clientX, e.clientY);
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      const touch = e.touches[0];
+      if (touch) {
+        handleMove(touch.clientX, touch.clientY);
+      }
+    };
+
+    const handleEnd = () => {
       setIsResizing(false);
     };
 
     window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("mouseup", handleEnd);
+    window.addEventListener("touchmove", handleTouchMove, { passive: false });
+    window.addEventListener("touchend", handleEnd);
 
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("mouseup", handleEnd);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleEnd);
     };
   }, [isResizing, resizeStart, innerWidth, innerHeight]);
 
@@ -337,6 +368,7 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
                   <div
                     ref={resizeHandleRef}
                     onMouseDown={handleResizeMouseDown}
+                    onTouchStart={handleResizeTouchStart}
                     onDoubleClick={handleResizeDoubleClick}
                     style={{
                       position: "absolute",
@@ -349,6 +381,7 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
                       cursor: "nesw-resize",
                       zIndex: 10,
                       rotate: "45deg",
+                      touchAction: "none", // タッチイベントのデフォルト動作を無効化
                     }}
                   />
                 </div>
