@@ -87,8 +87,12 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
   const handleResizeDoubleClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const toggleSmallSize = { width: 200, height: 200 };
-    const toggleLargeSize = { width: 800, height: 600 };
+    const minWidth = 200;
+    const minHeight = 200;
+    const windowMaxWidth = (innerWidth ?? 1920) * 0.8;
+    const windowMaxHeight = (innerHeight ?? 1080) * 0.8;
+    const toggleSmallSize = { width: minWidth, height: minHeight };
+    const toggleLargeSize = { width: windowMaxWidth, height: windowMaxHeight };
     const isLarge =
       graphSize.width >= (toggleSmallSize.width + toggleLargeSize.width) / 2 &&
       graphSize.height >= (toggleSmallSize.height + toggleLargeSize.height) / 2;
