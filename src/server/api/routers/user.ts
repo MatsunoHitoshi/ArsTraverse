@@ -1,5 +1,13 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
+import {
+  createTRPCRouter,
+  protectedProcedure,
+  publicProcedure,
+} from "@/server/api/trpc";
+import {
+  PUBLIC_USER_SELECT,
+  PRIVATE_USER_SELECT,
+} from "@/server/lib/user-select";
 
 export const userRouter = createTRPCRouter({
   // ユーザーのプロフィール情報を取得
@@ -8,13 +16,7 @@ export const userRouter = createTRPCRouter({
       where: {
         id: ctx.session.user.id,
       },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        preferredLocale: true,
-        image: true,
-      },
+      select: PRIVATE_USER_SELECT,
     });
   }),
 
@@ -49,4 +51,16 @@ export const userRouter = createTRPCRouter({
 
     return user?.preferredLocale ?? "ja";
   }),
+
+  // 公開用: ユーザーIDでユーザー情報を取得
+  getByIdPublic: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return ctx.db.user.findUnique({
+        where: {
+          id: input.id,
+        },
+        select: PUBLIC_USER_SELECT,
+      });
+    }),
 });

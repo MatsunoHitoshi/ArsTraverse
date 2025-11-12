@@ -58,6 +58,11 @@ export const ResizableImageNodeView: React.FC<NodeViewProps> = ({
 
   // リサイズ開始
   const handleResizeMouseDown = (e: React.MouseEvent) => {
+    if (!editor.isEditable) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
     setIsResizing(true);
@@ -75,12 +80,12 @@ export const ResizableImageNodeView: React.FC<NodeViewProps> = ({
 
   // マウス移動処理
   useEffect(() => {
-    if (!isResizing) return;
+    if (!isResizing || !editor.isEditable) return;
 
     const handleMouseMove = (e: MouseEvent) => {
       const editorElement = editor.view.dom.getBoundingClientRect();
 
-      if (isResizing) {
+      if (isResizing && editor.isEditable) {
         // リサイズ処理
         const deltaX = e.clientX - resizeStart.x;
         const deltaY = e.clientY - resizeStart.y;
@@ -154,7 +159,7 @@ export const ResizableImageNodeView: React.FC<NodeViewProps> = ({
     display: "inline-block",
     margin: "1.5rem 0",
     cursor: "default",
-    outline: selected ? "4px solid #ef7234" : "none",
+    outline: selected && editor.isEditable ? "4px solid #ef7234" : "none",
   };
 
   const imageStyle: React.CSSProperties = {
@@ -186,7 +191,7 @@ export const ResizableImageNodeView: React.FC<NodeViewProps> = ({
         style={imageStyle}
         draggable={false}
       />
-      {selected && (
+      {selected && editor.isEditable && (
         <div
           ref={resizeHandleRef}
           onMouseDown={handleResizeMouseDown}

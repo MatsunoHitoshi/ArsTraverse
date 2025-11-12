@@ -1,8 +1,7 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { D3ForceGraph } from "@/app/_components/d3/force/graph";
-import type { CustomNodeType, CustomLinkType } from "@/app/const/types";
 import { Toolbar } from "@/app/_components/toolbar/toolbar";
 import { api } from "@/trpc/react";
 import {
@@ -20,7 +19,6 @@ import {
 } from "../../modal/node-link-property-edit-modal";
 import { NodeLinkEditModal } from "../../modal/node-link-edit-modal";
 import { Button } from "../../button/button";
-import { diffNodes, diffRelationships } from "@/app/_utils/kg/diff";
 import { GraphSyncedText } from "../../document/graph-synced-text";
 import { useGraphEditor } from "@/app/_hooks/use-graph-editor";
 

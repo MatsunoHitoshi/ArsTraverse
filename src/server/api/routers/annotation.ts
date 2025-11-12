@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { AnnotationType, AnnotationChangeType } from "@prisma/client";
 import { TiptapContentSchema } from "./workspace";
 import { formGraphDataForFrontend } from "@/app/_utils/kg/frontend-properties";
+import { PUBLIC_USER_SELECT } from "@/server/lib/user-select";
 
 export const annotationRouter = createTRPCRouter({
   // 注釈IDで注釈を取得
@@ -14,11 +15,7 @@ export const annotationRouter = createTRPCRouter({
         where: { id: input.id, isDeleted: false },
         include: {
           author: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-            },
+            select: PUBLIC_USER_SELECT,
           },
           childAnnotations: {
             where: { isDeleted: false },
@@ -81,11 +78,7 @@ export const annotationRouter = createTRPCRouter({
         },
         include: {
           author: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-            },
+            select: PUBLIC_USER_SELECT,
           },
           targetNode: {
             select: {
@@ -164,11 +157,7 @@ export const annotationRouter = createTRPCRouter({
         },
         include: {
           author: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-            },
+            select: PUBLIC_USER_SELECT,
           },
           childAnnotations: {
             where: { isDeleted: false },
@@ -275,11 +264,7 @@ export const annotationRouter = createTRPCRouter({
         },
         include: {
           author: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-            },
+            select: PUBLIC_USER_SELECT,
           },
           childAnnotations: {
             where: { isDeleted: false },
@@ -340,11 +325,7 @@ export const annotationRouter = createTRPCRouter({
         },
         include: {
           author: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-            },
+            select: PUBLIC_USER_SELECT,
           },
           childAnnotations: {
             where: { isDeleted: false },
@@ -400,11 +381,7 @@ export const annotationRouter = createTRPCRouter({
         },
         include: {
           author: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-            },
+            select: PUBLIC_USER_SELECT,
           },
           targetNode: {
             select: {
@@ -562,11 +539,7 @@ export const annotationRouter = createTRPCRouter({
         },
         include: {
           author: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-            },
+            select: PUBLIC_USER_SELECT,
           },
         },
       });
@@ -629,11 +602,7 @@ export const annotationRouter = createTRPCRouter({
         },
         include: {
           author: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-            },
+            select: PUBLIC_USER_SELECT,
           },
         },
       });
@@ -737,11 +706,7 @@ export const annotationRouter = createTRPCRouter({
         },
         include: {
           changedBy: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-            },
+            select: PUBLIC_USER_SELECT,
           },
         },
         orderBy: {

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import { TRPCError } from "@trpc/server";
+import { PUBLIC_USER_SELECT } from "@/server/lib/user-select";
 import {
   ProposalStatus,
   GraphChangeType,
@@ -363,46 +364,26 @@ export const graphEditProposalRouter = createTRPCRouter({
         where: { id: input.proposalId },
         include: {
           proposer: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-            },
+            select: PUBLIC_USER_SELECT,
           },
           reviewer: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-            },
+            select: PUBLIC_USER_SELECT,
           },
           lockedBy: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-            },
+            select: PUBLIC_USER_SELECT,
           },
           changes: true,
           comments: {
             where: { isDeleted: false },
             include: {
               author: {
-                select: {
-                  id: true,
-                  name: true,
-                  image: true,
-                },
+                select: PUBLIC_USER_SELECT,
               },
               childComments: {
                 where: { isDeleted: false },
                 include: {
                   author: {
-                    select: {
-                      id: true,
-                      name: true,
-                      image: true,
-                    },
+                    select: PUBLIC_USER_SELECT,
                   },
                 },
                 orderBy: { createdAt: "asc" },

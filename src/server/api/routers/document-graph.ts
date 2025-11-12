@@ -5,6 +5,7 @@ import {
   protectedProcedure,
   publicProcedure,
 } from "@/server/api/trpc";
+import { PUBLIC_USER_SELECT } from "@/server/lib/user-select";
 import type {
   LocaleEnum,
   NodeTypeForFrontend,
@@ -41,7 +42,13 @@ export const documentGraphRouter = createTRPCRouter({
       const graph = await ctx.db.documentGraph.findFirst({
         where: { id: input.id, sourceDocument: { isDeleted: false } },
         include: {
-          sourceDocument: true,
+          sourceDocument: {
+            include: {
+              user: {
+                select: PUBLIC_USER_SELECT,
+              },
+            },
+          },
           graphNodes: true,
           graphRelationships: true,
         },

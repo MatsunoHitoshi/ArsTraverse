@@ -1,10 +1,11 @@
 "use client";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { Button } from "../button/button";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { DashboardIcon } from "../icons";
-import { loginProhibited } from "@/app/const/page-config";
+import { loginProhibited, spAllowed } from "@/app/const/page-config";
 import { usePathname } from "next/navigation";
 
 export const Header = () => {
@@ -12,8 +13,49 @@ export const Header = () => {
   const router = useRouter();
   const pathname = usePathname();
   const isLoginProhibited = loginProhibited(pathname);
+  const isSpAllowed = spAllowed(pathname);
+  const [isVisible, setIsVisible] = useState(true);
+  const lastScrollYRef = useRef(0);
+
+  useEffect(() => {
+    if (!isSpAllowed) {
+      return;
+    }
+
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      const scrollDownThreshold = 80; // 100px以上のスクロールで反応
+      const lastScrollY = lastScrollYRef.current;
+
+      // 上にスクロールした場合（少しでも上にスクロールしたら表示）
+      if (currentScrollY < lastScrollY) {
+        setIsVisible(true);
+      }
+      // 下にスクロールした場合（一定量以上スクロールしたら非表示）
+      else if (
+        currentScrollY > lastScrollY &&
+        currentScrollY > scrollDownThreshold
+      ) {
+        setIsVisible(false);
+      }
+      // トップに戻った場合は常に表示
+      else if (currentScrollY <= scrollDownThreshold) {
+        setIsVisible(true);
+      }
+
+      lastScrollYRef.current = currentScrollY;
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [isSpAllowed]);
+
   return (
-    <div className="z-20 w-full p-1">
+    <div
+      className={`z-20 w-full p-1 transition-transform duration-300 ease-in-out ${
+        isSpAllowed && !isVisible ? "-translate-y-full" : "translate-y-0"
+      }`}
+    >
       <div className="flex h-12 w-full flex-row items-center justify-between rounded-2xl bg-slate-700 text-slate-50">
         <div className="text-md font-semibold">
           <Button
@@ -73,7 +115,6 @@ export const Header = () => {
                       width={24}
                       className="rounded-full border border-slate-50"
                     />
-                    <div>{session.user.name}</div>
                   </Button>
                 </div>
 

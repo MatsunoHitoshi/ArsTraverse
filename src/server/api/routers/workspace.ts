@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
+import {
+  createTRPCRouter,
+  protectedProcedure,
+  publicProcedure,
+} from "@/server/api/trpc";
 import {
   type GraphNode,
   type GraphRelationship,
@@ -8,6 +12,8 @@ import {
 } from "@prisma/client";
 import OpenAI from "openai";
 import { env } from "@/env";
+import { formGraphDataForFrontend } from "@/app/_utils/kg/frontend-properties";
+import { PUBLIC_USER_SELECT } from "@/server/lib/user-select";
 
 export const TiptapContentSchema = z.object({
   type: z.string(),
@@ -120,10 +126,10 @@ export const workspaceRouter = createTRPCRouter({
           },
           tags: true,
           user: {
-            select: { id: true, name: true, email: true },
+            select: PUBLIC_USER_SELECT,
           },
           collaborators: {
-            select: { id: true, name: true, email: true },
+            select: PUBLIC_USER_SELECT,
           },
         },
       });
@@ -156,10 +162,10 @@ export const workspaceRouter = createTRPCRouter({
           },
           tags: true,
           user: {
-            select: { id: true, name: true, email: true },
+            select: PUBLIC_USER_SELECT,
           },
           collaborators: {
-            select: { id: true, name: true, email: true },
+            select: PUBLIC_USER_SELECT,
           },
         },
       });
@@ -195,17 +201,17 @@ export const workspaceRouter = createTRPCRouter({
           },
           tags: true,
           user: {
-            select: { id: true, name: true, email: true },
+            select: PUBLIC_USER_SELECT,
           },
           collaborators: {
-            select: { id: true, name: true, email: true },
+            select: PUBLIC_USER_SELECT,
           },
           writingHistory: {
             orderBy: { createdAt: "desc" },
             take: 10,
             include: {
               changedBy: {
-                select: { id: true, name: true, email: true },
+                select: PUBLIC_USER_SELECT,
               },
             },
           },
@@ -318,10 +324,10 @@ export const workspaceRouter = createTRPCRouter({
           referencedTopicSpaces: true,
           tags: true,
           user: {
-            select: { id: true, name: true, email: true },
+            select: PUBLIC_USER_SELECT,
           },
           collaborators: {
-            select: { id: true, name: true, email: true },
+            select: PUBLIC_USER_SELECT,
           },
         },
       });
@@ -357,7 +363,7 @@ export const workspaceRouter = createTRPCRouter({
         },
         include: {
           collaborators: {
-            select: { id: true, name: true, email: true },
+            select: PUBLIC_USER_SELECT,
           },
         },
       });
@@ -393,7 +399,7 @@ export const workspaceRouter = createTRPCRouter({
         },
         include: {
           collaborators: {
-            select: { id: true, name: true, email: true },
+            select: PUBLIC_USER_SELECT,
           },
         },
       });
@@ -414,10 +420,10 @@ export const workspaceRouter = createTRPCRouter({
       include: {
         tags: true,
         user: {
-          select: { id: true, name: true, email: true },
+          select: PUBLIC_USER_SELECT,
         },
         collaborators: {
-          select: { id: true, name: true, email: true },
+          select: PUBLIC_USER_SELECT,
         },
         _count: {
           select: {
@@ -730,5 +736,311 @@ export const workspaceRouter = createTRPCRouter({
       });
 
       return annotations;
+    }),
+
+  // extractGraphFromWorkspace: protectedProcedure
+  //   .input(z.object({ workspaceId: z.string() }))
+  //   .mutation(async ({ ctx, input }) => {
+  //     const { workspaceId } = input;
+
+  //     // ワークスペースの存在確認とアクセス権限チェック
+  //     const workspace = await ctx.db.workspace.findFirst({
+  //       where: {
+  //         id: workspaceId,
+  //         isDeleted: false,
+  //         OR: [
+  //           { userId: ctx.session.user.id },
+  //           { collaborators: { some: { id: ctx.session.user.id } } },
+  //         ],
+  //       },
+  //       include: {
+  //         referencedTopicSpaces: true,
+  //       },
+  //     });
+
+  //     if (!workspace) {
+  //       throw new Error("Workspace not found or access denied");
+  //     }
+
+  //     if (!workspace.content) {
+  //       throw new Error("Workspace content is empty");
+  //     }
+
+  //     // TipTapコンテンツをテキストに変換
+  //     const textContent = convertJsonToText(workspace.content);
+
+  //     if (!textContent.trim()) {
+  //       throw new Error("Workspace content is empty after conversion");
+  //     }
+
+  //     try {
+  //       // テキストをBlobに変換してSupabaseにアップロード
+  //       const textBlob = new Blob([textContent], {
+  //         type: "text/plain; charset=utf-8",
+  //       });
+
+  //       const fileUrl = await storageUtils.uploadFromBlob(
+  //         textBlob,
+  //         BUCKETS.PATH_TO_INPUT_TXT,
+  //       );
+
+  //       if (!fileUrl) {
+  //         throw new Error("ファイルのアップロードに失敗しました");
+  //       }
+
+  //       // グラフ抽出を実行
+  //       const localFilePath = await writeLocalFileFromUrl(
+  //         fileUrl,
+  //         `workspace_${workspaceId}.txt`,
+  //       );
+
+  //       const schema = {
+  //         allowedNodes: [],
+  //         allowedRelationships: [],
+  //       };
+
+  //       const extractor: Extractor = new LangChainExtractor();
+  //       const nodesAndRelationships = await extractor.extract({
+  //         localFilePath,
+  //         isPlaneTextMode: true,
+  //         schema,
+  //         additionalPrompt: "",
+  //       });
+
+  //       if (!nodesAndRelationships) {
+  //         throw new Error("グラフ抽出に失敗しました");
+  //       }
+
+  //       // データを正規化
+  //       const normalizedNodesAndRelationships = {
+  //         ...nodesAndRelationships,
+  //         nodes: nodesAndRelationships.nodes.map((n) => ({
+  //           id: n.id,
+  //           name: n.name,
+  //           label: n.label,
+  //           properties: n.properties ?? {},
+  //           documentGraphId: null,
+  //           topicSpaceId: null,
+  //           createdAt: null,
+  //           updatedAt: null,
+  //           deletedAt: null,
+  //         })),
+  //         relationships: nodesAndRelationships.relationships.map((r) => ({
+  //           id: r.id,
+  //           type: r.type,
+  //           properties: r.properties ?? {},
+  //           fromNodeId: r.sourceId,
+  //           toNodeId: r.targetId,
+  //           documentGraphId: null,
+  //           topicSpaceId: null,
+  //           createdAt: null,
+  //           updatedAt: null,
+  //           deletedAt: null,
+  //         })),
+  //       };
+
+  //       // データの曖昧性解消
+  //       const disambiguatedNodesAndRelationships = dataDisambiguation(
+  //         normalizedNodesAndRelationships,
+  //       );
+  //       const translatedGraphDocument = await completeTranslateProperties(
+  //         disambiguatedNodesAndRelationships,
+  //       );
+
+  //       // フロントエンド用の形式に変換
+  //       const graphDocument = formGraphDataForFrontend(
+  //         disambiguatedNodesAndRelationships,
+  //       );
+
+  //       // SourceDocumentを作成
+  //       const sourceDocument = await ctx.db.sourceDocument.create({
+  //         data: {
+  //           name: workspace.name,
+  //           url: fileUrl,
+  //           documentType: DocumentType.INPUT_TXT,
+  //           user: { connect: { id: ctx.session.user.id } },
+  //         },
+  //       });
+
+  //       // DocumentGraphを作成
+  //       const documentGraph = await ctx.db.documentGraph.create({
+  //         data: {
+  //           user: { connect: { id: ctx.session.user.id } },
+  //           sourceDocument: { connect: { id: sourceDocument.id } },
+  //           dataJson: {},
+  //         },
+  //       });
+
+  //       // GraphNodeとGraphRelationshipを作成
+  //       await ctx.db.graphNode.createMany({
+  //         data: translatedGraphDocument.nodes.map(
+  //           (node: NodeTypeForFrontend) => ({
+  //             id: node.id,
+  //             name: node.name,
+  //             label: node.label,
+  //             properties: node.properties ?? {},
+  //             documentGraphId: documentGraph.id,
+  //           }),
+  //         ),
+  //       });
+
+  //       await ctx.db.graphRelationship.createMany({
+  //         data: translatedGraphDocument.relationships.map(
+  //           (relationship: RelationshipTypeForFrontend) => ({
+  //             id: relationship.id,
+  //             fromNodeId: relationship.sourceId,
+  //             toNodeId: relationship.targetId,
+  //             type: relationship.type,
+  //             properties: relationship.properties ?? {},
+  //             documentGraphId: documentGraph.id,
+  //           }),
+  //         ),
+  //       });
+
+  //       // 参照しているTopicSpaceに関連付け
+  //       if (workspace.referencedTopicSpaces) {
+  //         const topicSpaces = await ctx.db.topicSpace.findMany({
+  //           where: {
+  //             id: {
+  //               in: workspace.referencedTopicSpaces.map((ts) => ts.id),
+  //             },
+  //           },
+  //         });
+
+  //         if (topicSpaces.length > 0) {
+  //           await ctx.db.sourceDocument.update({
+  //             where: { id: sourceDocument.id },
+  //             data: {
+  //               topicSpaces: {
+  //                 connect: topicSpaces.map((ts) => ({ id: ts.id })),
+  //               },
+  //             },
+  //           });
+  //         }
+  //       }
+
+  //       return {
+  //         sourceDocument,
+  //         documentGraph: {
+  //           ...documentGraph,
+  //           dataJson: graphDocument,
+  //         },
+  //       };
+  //     } catch (error) {
+  //       console.error("グラフ抽出エラー:", error);
+  //       throw new Error(
+  //         `グラフ抽出に失敗しました: ${error instanceof Error ? error.message : "Unknown error"}`,
+  //       );
+  //     }
+  //   }),
+
+  publish: protectedProcedure
+    .input(z.object({ workspaceId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const { workspaceId } = input;
+
+      // ワークスペースの存在確認とアクセス権限チェック
+      const workspace = await ctx.db.workspace.findFirst({
+        where: {
+          id: workspaceId,
+          isDeleted: false,
+          OR: [
+            { userId: ctx.session.user.id },
+            { collaborators: { some: { id: ctx.session.user.id } } },
+          ],
+        },
+      });
+
+      if (!workspace) {
+        throw new Error("Workspace not found or access denied");
+      }
+
+      // Workspace.statusをPUBLISHEDに更新
+      const updatedWorkspace = await ctx.db.workspace.update({
+        where: { id: workspaceId },
+        data: {
+          status: WorkspaceStatus.PUBLISHED,
+        },
+        include: {
+          referencedTopicSpaces: {
+            include: {
+              graphNodes: {
+                where: { deletedAt: null },
+              },
+              graphRelationships: {
+                where: { deletedAt: null },
+              },
+            },
+          },
+          tags: true,
+          user: {
+            select: PUBLIC_USER_SELECT,
+          },
+          collaborators: {
+            select: PUBLIC_USER_SELECT,
+          },
+        },
+      });
+
+      return updatedWorkspace;
+    }),
+
+  getPublishedById: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const { id } = input;
+
+      // status=PUBLISHEDかつisDeleted=falseのWorkspaceのみ取得
+      const workspace = await ctx.db.workspace.findFirst({
+        where: {
+          id,
+          status: WorkspaceStatus.PUBLISHED,
+          isDeleted: false,
+        },
+        include: {
+          referencedTopicSpaces: {
+            include: {
+              graphNodes: {
+                where: { deletedAt: null },
+              },
+              graphRelationships: {
+                where: { deletedAt: null },
+              },
+            },
+          },
+          tags: true,
+          user: {
+            select: PUBLIC_USER_SELECT,
+          },
+        },
+      });
+
+      if (!workspace) {
+        throw new Error("Published workspace not found");
+      }
+
+      // グラフデータの形式に変換（topic-space.tsと同じ方法を使用）
+      const allNodes: GraphNode[] = workspace.referencedTopicSpaces.flatMap(
+        (topicSpace: TopicSpace & { graphNodes: GraphNode[] }) =>
+          topicSpace.graphNodes,
+      );
+      const allRelationships: GraphRelationship[] =
+        workspace.referencedTopicSpaces.flatMap(
+          (
+            topicSpace: TopicSpace & {
+              graphRelationships: GraphRelationship[];
+            },
+          ) => topicSpace.graphRelationships,
+        );
+
+      const graphDocument = formGraphDataForFrontend({
+        nodes: allNodes,
+        relationships: allRelationships,
+      });
+
+      return {
+        ...workspace,
+        graphDocument,
+      };
     }),
 });

@@ -16,7 +16,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { D3ForceGraph } from "../d3/force/graph";
 import TipTapEditor from "./tiptap/tip-tap-editor";
-import type { Workspace } from "@prisma/client";
+import { WorkspaceStatus, type Workspace } from "@prisma/client";
 import { api } from "@/trpc/react";
 import { Button } from "../button/button";
 import type { JSONContent } from "@tiptap/react";
@@ -42,6 +42,7 @@ import { Modal } from "../modal/modal";
 import { EditableTitle } from "./editable-title";
 import { useGraphEditor } from "@/app/_hooks/use-graph-editor";
 import { createSubgraphFromSelectedNodes } from "@/app/_utils/kg/create-subgraph-from-selected-nodes";
+import { filterGraphByEntityNames } from "@/app/_utils/kg/filter-graph-by-entity-names";
 import {
   LinkPropertyEditModal,
   NodePropertyEditModal,
@@ -49,6 +50,7 @@ import {
 import { NodeLinkEditModal } from "../modal/node-link-edit-modal";
 import { ProposalCreateModal } from "./proposal-create-modal";
 import { ShareTopicSpaceModal } from "./share-topic-space-modal";
+import { PublishWorkspaceModal } from "./publish-workspace-modal";
 import { DirectedLinksToggleButton } from "../view/graph-view/directed-links-toggle-button";
 // import { PlusCircleIcon } from "@heroicons/react/24/outline";
 
@@ -119,6 +121,7 @@ const CuratorsWritingWorkspace = ({
   const [selectedNodeIdsForAI, setSelectedNodeIdsForAI] = useState<string[]>(
     [],
   );
+  const [isPublishModalOpen, setIsPublishModalOpen] = useState<boolean>(false);
   const completionWithSubgraphRef = useRef<
     null | ((subgraph: GraphDocumentForFrontend) => void)
   >(null);
@@ -271,30 +274,10 @@ const CuratorsWritingWorkspace = ({
   }, [activeEntityId, graphDocument?.nodes]);
 
   const tiptapFilteredGraphDocument = useMemo(() => {
-    if (!graphDocument) return null;
-    const filteredNodes = graphDocument?.nodes.filter((node) =>
-      tiptapGraphFilterOption.entities.includes(node.name),
+    return filterGraphByEntityNames(
+      graphDocument,
+      tiptapGraphFilterOption.entities,
     );
-    const filteredRelationships = graphDocument?.relationships.filter(
-      (relationship) => {
-        const ids = filteredNodes.map((node) => node.id);
-        return (
-          ids.includes(relationship.sourceId) ||
-          ids.includes(relationship.targetId)
-        );
-      },
-    );
-    const neighborNodes = graphDocument?.nodes.filter((node) =>
-      filteredRelationships.some(
-        (relationship) =>
-          relationship.sourceId === node.id ||
-          relationship.targetId === node.id,
-      ),
-    );
-    return {
-      nodes: neighborNodes,
-      relationships: filteredRelationships,
-    };
   }, [graphDocument, tiptapGraphFilterOption]);
 
   const tiptapSelectedGraphDocument = useMemo(() => {
@@ -471,6 +454,43 @@ const CuratorsWritingWorkspace = ({
               {/* <Button size="small" className="flex items-center gap-1">
                 <PinLeftIcon height={16} width={16} color="white" />
               </Button> */}
+              {/* <Button
+                size="small"
+                onClick={() => {
+                  setIsExtractingGraph(true);
+                  extractGraphFromWorkspace.mutate({
+                    workspaceId: workspace.id,
+                  });
+                }}
+                disabled={isExtractingGraph || isGraphExtracted}
+                className="flex items-center gap-1"
+                title="グラフを抽出"
+              >
+                {isExtractingGraph ? (
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                ) : (
+                  <FileTextIcon
+                    height={16}
+                    width={16}
+                    color={isGraphExtracted ? "green" : "white"}
+                  />
+                )}
+              </Button> */}
+              <Button
+                size="small"
+                onClick={() => setIsPublishModalOpen(true)}
+                className="flex items-center gap-1"
+              >
+                <ShareIcon
+                  height={16}
+                  width={16}
+                  color={
+                    workspace.status === WorkspaceStatus.PUBLISHED
+                      ? "green"
+                      : "white"
+                  }
+                />
+              </Button>
               <Button
                 size="small"
                 onClick={() => setIsRightPanelOpen(!isRightPanelOpen)}
@@ -870,6 +890,18 @@ const CuratorsWritingWorkspace = ({
         setIsOpen={setIsShareTopicSpaceModalOpen}
         topicSpaceId={topicSpace?.id ?? ""}
         topicSpaceName={topicSpace?.name ?? ""}
+      />
+
+      {/* 記事公開モーダル */}
+      <PublishWorkspaceModal
+        isOpen={isPublishModalOpen}
+        setIsOpen={setIsPublishModalOpen}
+        workspaceId={workspace.id}
+        workspaceStatus={workspace.status}
+        workspaceName={workspace.name}
+        onSuccess={() => {
+          void refetch();
+        }}
       />
 
       {/* グラフ編集用モーダル */}

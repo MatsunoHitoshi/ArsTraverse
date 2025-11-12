@@ -5,6 +5,7 @@ import {
   protectedProcedure,
   publicProcedure,
 } from "@/server/api/trpc";
+import { PUBLIC_USER_SELECT } from "@/server/lib/user-select";
 import type {
   LocaleEnum,
   NodeTypeForFrontend,
@@ -15,7 +16,7 @@ import { storageUtils } from "@/app/_utils/supabase/supabase";
 import { env } from "@/env";
 import { getTextFromDocumentFile } from "@/app/_utils/text/text";
 import { inspectFileTypeFromUrl } from "@/app/_utils/sys/file";
-import { DocumentType, PrismaClient } from "@prisma/client";
+import { DocumentType, type PrismaClient } from "@prisma/client";
 import { formDocumentGraphForFrontend } from "@/app/_utils/kg/frontend-properties";
 import { extractRelevantSections } from "@/app/_utils/text/extract-relevant-sections";
 import { KnowledgeGraphInputSchema } from "../schemas/knowledge-graph";
@@ -130,7 +131,9 @@ export const sourceDocumentRouter = createTRPCRouter({
       const document = await ctx.db.sourceDocument.findFirst({
         where: { id: input.id, isDeleted: false },
         include: {
-          user: true,
+          user: {
+            select: PUBLIC_USER_SELECT,
+          },
           graph: { include: { graphNodes: true, graphRelationships: true } },
         },
       });

@@ -1,4 +1,8 @@
-export const TiptapStyles = () => {
+export const TiptapStyles = ({
+  highlightHoverEffect = true,
+}: {
+  highlightHoverEffect?: boolean;
+}) => {
   return (
     <style jsx global>{`
       .ProseMirror {
@@ -55,8 +59,9 @@ export const TiptapStyles = () => {
       }
 
       .ProseMirror span[data-entity-name].entity-highlight:hover {
-        background-color: #fde68a !important;
-        color: #000000 !important;
+        ${highlightHoverEffect
+          ? "background-color: #fde68a !important; color: #000000 !important;"
+          : "text-decoration: none !important;"}
       }
 
       /* ハイライト表示/非表示の制御 */
