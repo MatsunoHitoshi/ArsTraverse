@@ -46,7 +46,7 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
   const svgRef = useRef<SVGSVGElement>(null);
 
   // グラフサイズの状態管理
-  const [graphSize, setGraphSize] = useState({ width: 300, height: 300 });
+  const [graphSize, setGraphSize] = useState({ width: 280, height: 280 });
   const [isResizing, setIsResizing] = useState(false);
   const [resizeStart, setResizeStart] = useState({
     x: 0,
@@ -207,12 +207,7 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
   return (
     <div className="flex flex-row gap-1">
       <div className="mx-auto my-8 flex w-full max-w-[760px] flex-col gap-2 bg-slate-900 p-4 font-sans">
-        <div
-          // className={`flex h-[calc(100svh-80px)] flex-col transition-all duration-300 ${
-          //   isRightPanelOpen ? "w-2/3" : "w-full"
-          // }`}
-          className="flex  w-full flex-col transition-all duration-300"
-        >
+        <div className="flex  w-full flex-col transition-all duration-300">
           <div className="flex flex-col gap-12 bg-slate-900">
             <div className="flex w-full flex-col items-start gap-8">
               <h1 className="text-4xl font-bold text-white">{workspaceName}</h1>
@@ -255,7 +250,7 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
 
                 <div
                   ref={graphContainerRef}
-                  className={`relative flex flex-col items-center justify-center rounded-lg border border-gray-300 bg-slate-900/75 text-gray-400 backdrop-blur-sm ${
+                  className={`relative flex flex-col items-center justify-center overflow-hidden rounded-lg border border-gray-300 bg-slate-900/75 text-gray-400 backdrop-blur-sm ${
                     !isResizing ? "transition-all duration-300 ease-in-out" : ""
                   }`}
                   style={{
@@ -335,22 +330,21 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
                       <p>グラフデータが見つかりません</p>
                     </div>
                   )}
-                  {/* リサイズハンドル（左下） */}
                   <div
                     ref={resizeHandleRef}
                     onMouseDown={handleResizeMouseDown}
                     onDoubleClick={handleResizeDoubleClick}
                     style={{
                       position: "absolute",
-                      left: "-8px",
-                      bottom: "-8px",
-                      width: "16px",
-                      height: "16px",
-                      backgroundColor: "#ef7234",
+                      left: "-10px",
+                      bottom: "-10px",
+                      width: "20px",
+                      height: "20px",
+                      backgroundColor: "darkgray",
                       border: "2px solid white",
-                      borderRadius: "50%",
                       cursor: "nesw-resize",
                       zIndex: 10,
+                      rotate: "45deg",
                     }}
                   />
                 </div>
