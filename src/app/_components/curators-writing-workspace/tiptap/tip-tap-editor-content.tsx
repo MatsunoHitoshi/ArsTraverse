@@ -30,6 +30,9 @@ import { CheckIcon, CrossLargeIcon } from "../../icons";
 import FileHandler from "@tiptap/extension-file-handler";
 import { insertImageNode } from "@/app/_utils/tiptap/insert-image";
 import { ResizableImage } from "./extensions/resizable-image-extension";
+import { api } from "@/trpc/react";
+import { BUCKETS } from "@/app/_utils/supabase/const";
+import { storageUtils } from "@/app/_utils/supabase/supabase";
 
 interface TipTapEditorContentProps {
   content: JSONContent;
@@ -63,6 +66,9 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
   const {} = useContext(TiptapGraphFilterContext);
   const [isImageInsert, setIsImageInsert] = useState<boolean>(false);
   const [isAIAssistEnabled, setIsAIAssistEnabled] = useState<boolean>(false);
+
+  // tRPCクライアントのutilsを取得（非同期処理で使用）
+  const utils = api.useUtils();
 
   // カスタムフックを使用
   const textCompletion = useTextCompletion({
@@ -138,21 +144,89 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
             });
         },
         onPaste: (currentEditor, files, htmlContent) => {
+          // HTMLコンテンツ内の画像URLを検出してアップロード
           if (htmlContent) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(htmlContent, "text/html");
+            const imgElements = doc.querySelectorAll("img");
+
+            if (imgElements.length > 0) {
+              // HTMLコンテンツ内に画像がある場合、それらを処理
+              const pos = currentEditor.state.selection.anchor;
+
+              // 各画像を順番に処理（位置を更新しながら）
+              let currentPos = pos;
+              void (async () => {
+                for (const img of Array.from(imgElements)) {
+                  const src = img.getAttribute("src");
+                  if (!src) continue;
+
+                  try {
+                    // tRPCを使用して画像を取得してからアップロード
+                    const imageData = await utils.image.getBase64FromUrl.fetch({
+                      url: src,
+                    });
+
+                    // 読み込み中メッセージを表示
+                    currentEditor.commands.insertContent({ type: "paragraph" });
+                    currentEditor
+                      .chain()
+                      .insertContentAt(
+                        currentPos,
+                        '<p><span style="color: #545476" class="text-v2-semantic-text-place-holder">読み込み中…</span></p>',
+                      )
+                      .focus()
+                      .run();
+
+                    // Supabaseにアップロード
+                    const imageURL = await storageUtils.uploadFromDataURL(
+                      imageData.dataUrl,
+                      BUCKETS.PATH_TO_RICH_TEXT_IMAGES,
+                    );
+
+                    // 読み込み中メッセージを削除して画像を挿入
+                    currentEditor.commands.deleteNode("paragraph");
+                    currentEditor.commands.setImage({
+                      src: imageURL,
+                    });
+
+                    setIsImageInsert(true);
+                    // 次の画像の位置を更新（画像挿入後の位置）
+                    currentPos = currentEditor.state.selection.anchor;
+                  } catch (error) {
+                    console.error(
+                      "画像のアップロード中にエラーが発生しました:",
+                      error,
+                    );
+                  }
+                }
+
+                onUpdate(currentEditor.getJSON(), true);
+              })();
+              return true; // 処理したのでデフォルトの動作を防ぐ
+            }
+            // 画像がない場合はデフォルトの動作に任せる
             return false;
           }
-          const pos = currentEditor.state.selection.anchor;
-          Promise.all(
-            files.map((file) =>
-              insertImageNode(file, pos, currentEditor, setIsImageInsert),
-            ),
-          )
-            .then(() => {
-              onUpdate(currentEditor.getJSON(), true);
-            })
-            .catch((error) => {
-              console.error("画像の挿入中にエラーが発生しました:", error);
-            });
+
+          // ファイルが貼り付けられた場合
+          if (files.length > 0) {
+            const pos = currentEditor.state.selection.anchor;
+            void Promise.all(
+              files.map((file) =>
+                insertImageNode(file, pos, currentEditor, setIsImageInsert),
+              ),
+            )
+              .then(() => {
+                onUpdate(currentEditor.getJSON(), true);
+              })
+              .catch((error) => {
+                console.error("画像の挿入中にエラーが発生しました:", error);
+              });
+            return true;
+          }
+
+          return false;
         },
       }),
       TextAlign.configure({

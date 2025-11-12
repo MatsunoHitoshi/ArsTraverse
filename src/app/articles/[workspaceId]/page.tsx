@@ -102,7 +102,7 @@ export default function ArticlePage() {
             userName={workspaceData.user.name ?? ""}
             userImage={workspaceData.user.image ?? ""}
           />
-          <div className="flex w-full flex-col gap-1 px-4 xl:hidden">
+          <div className="flex w-full flex-col gap-1 p-4 xl:hidden">
             <ProfileCard userId={workspaceData.userId} />
           </div>
         </div>

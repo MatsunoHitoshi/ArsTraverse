@@ -14,6 +14,7 @@ import { workspaceRouter } from "./routers/workspace";
 import { annotationRouter } from "./routers/annotation";
 import { graphEditProposalRouter } from "./routers/graph-edit-proposal";
 import { userRouter } from "./routers/user";
+import { imageRouter } from "./routers/image";
 
 /**
  * This is the primary router for your server.
@@ -36,6 +37,7 @@ export const appRouter = createTRPCRouter({
   annotation: annotationRouter,
   graphEditProposal: graphEditProposalRouter,
   user: userRouter,
+  image: imageRouter,
 });
 
 // export type definition of API
