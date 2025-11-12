@@ -340,12 +340,12 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
                     onDoubleClick={handleResizeDoubleClick}
                     style={{
                       position: "absolute",
-                      left: "-10px",
-                      bottom: "-10px",
-                      width: "20px",
-                      height: "20px",
-                      backgroundColor: "darkgray",
-                      border: "2px solid white",
+                      left: "-12px",
+                      bottom: "-12px",
+                      width: "24px",
+                      height: "24px",
+                      backgroundColor: "gray",
+                      border: "2px solid darkgray",
                       cursor: "nesw-resize",
                       zIndex: 10,
                       rotate: "45deg",
