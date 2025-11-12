@@ -24,14 +24,16 @@ export const Header = () => {
 
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
-      const scrollDownThreshold = 80; // 100px以上のスクロールで反応
+      const scrollDownThreshold = 80; // 80px以上のスクロールで反応
+      const scrollUpThreshold = 120; // 120px以上のスクロールで反応
       const lastScrollY = lastScrollYRef.current;
+      const scrollDelta = lastScrollY - currentScrollY; // 上方向へのスクロール量
 
-      // 上にスクロールした場合（少しでも上にスクロールしたら表示）
-      if (currentScrollY < lastScrollY) {
+      // 上にスクロールした場合（scrollUpThreshold以上上にスクロールしたら表示）
+      if (currentScrollY < lastScrollY && scrollDelta >= scrollUpThreshold) {
         setIsVisible(true);
       }
-      // 下にスクロールした場合（一定量以上スクロールしたら非表示）
+      // 下にスクロールした場合（scrollDownThreshold以上下にスクロールしたら非表示）
       else if (
         currentScrollY > lastScrollY &&
         currentScrollY > scrollDownThreshold

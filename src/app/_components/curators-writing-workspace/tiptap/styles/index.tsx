@@ -1,7 +1,9 @@
 export const TiptapStyles = ({
   highlightHoverEffect = true,
+  isReadOnly = false,
 }: {
   highlightHoverEffect?: boolean;
+  isReadOnly?: boolean;
 }) => {
   return (
     <style jsx global>{`
@@ -10,7 +12,7 @@ export const TiptapStyles = ({
         min-height: 200px;
         color: white;
         font-family: inherit;
-        line-height: 1.6;
+        line-height: ${isReadOnly ? "2.0" : "1.6"};
         margin-top: 12px;
         margin-bottom: 12px;
         margin-left: 4px;
@@ -18,7 +20,7 @@ export const TiptapStyles = ({
       }
 
       .ProseMirror p {
-        margin: 0.5em 0;
+        margin: ${isReadOnly ? "0.8em 0" : "0.5em 0"};
       }
 
       .ProseMirror p:first-child {

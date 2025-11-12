@@ -89,7 +89,7 @@ export const ReadOnlyTipTapViewer: React.FC<ReadOnlyTipTapViewerProps> = ({
             onClick={handleClick}
           />
         </div>
-        <TiptapStyles highlightHoverEffect={false} />
+        <TiptapStyles highlightHoverEffect={false} isReadOnly={true} />
       </div>
     </HighlightVisibilityProvider>
   );
