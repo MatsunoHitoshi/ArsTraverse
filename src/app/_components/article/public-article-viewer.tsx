@@ -12,7 +12,7 @@ import type { JSONContent } from "@tiptap/react";
 import { useWindowSize } from "@/app/_hooks/use-window-size";
 import { DirectedLinksToggleButton } from "../view/graph-view/directed-links-toggle-button";
 import { Button } from "../button/button";
-import { CrossLargeIcon, MapIcon, ZoomInIcon } from "../icons";
+import { CrossLargeIcon, GraphIcon, ZoomInIcon } from "../icons";
 import Image from "next/image";
 import { findEntityHighlights } from "@/app/_utils/text/find-entity-highlights";
 import { filterGraphByEntityNames } from "@/app/_utils/kg/filter-graph-by-entity-names";
@@ -389,7 +389,7 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
               </>
             ) : (
               <Button size="small" onClick={() => setIsGraphVisible(true)}>
-                <MapIcon width={16} height={16} color="white" />
+                <GraphIcon width={16} height={16} color="white" />
               </Button>
             )}
           </div>
