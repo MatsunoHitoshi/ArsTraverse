@@ -50,7 +50,7 @@ export const ExtractedGraphViewer = () => {
       },
       {
         onSuccess: (res) => {
-          router.push(`/graph/${res?.sourceDocument.id}`);
+          router.push(`/documents/${res?.sourceDocument.id}`);
         },
         onError: (e) => {
           console.log(e);
