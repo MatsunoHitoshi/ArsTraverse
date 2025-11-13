@@ -50,6 +50,39 @@ export const TiptapStyles = ({
         margin: 0.5rem 0 0.25rem 0;
       }
 
+      /* ハイライト表示/非表示の制御 - 通常のスタイルより前に定義して、確実に上書きできるようにする */
+      .ProseMirror.hide-highlights span[data-entity-name].entity-highlight,
+      .ProseMirror.hide-highlights span.entity-highlight[data-entity-name],
+      .hide-highlights.ProseMirror span[data-entity-name].entity-highlight,
+      .hide-highlights.ProseMirror span.entity-highlight[data-entity-name] {
+        text-decoration: none !important;
+        text-decoration-line: none !important;
+        text-decoration-style: none !important;
+        text-decoration-color: transparent !important;
+        text-decoration-thickness: 0 !important;
+        text-underline-offset: 0 !important;
+        background-color: transparent !important;
+        color: inherit !important;
+        cursor: default !important;
+        pointer-events: none !important;
+      }
+
+      .ProseMirror.hide-highlights
+        span[data-entity-name].entity-highlight:hover,
+      .ProseMirror.hide-highlights
+        span.entity-highlight[data-entity-name]:hover,
+      .hide-highlights.ProseMirror
+        span[data-entity-name].entity-highlight:hover,
+      .hide-highlights.ProseMirror
+        span.entity-highlight[data-entity-name]:hover {
+        text-decoration: none !important;
+        text-decoration-line: none !important;
+        text-decoration-style: none !important;
+        text-decoration-color: transparent !important;
+        background-color: transparent !important;
+        color: inherit !important;
+      }
+
       .ProseMirror span[data-entity-name].entity-highlight {
         cursor: pointer !important;
         transition: background-color 0.2s !important;
@@ -64,30 +97,6 @@ export const TiptapStyles = ({
         ${highlightHoverEffect
           ? "background-color: #fde68a !important; color: #000000 !important;"
           : "text-decoration: none !important;"}
-      }
-
-      /* ハイライト表示/非表示の制御 */
-      .ProseMirror.hide-highlights span[data-entity-name].entity-highlight {
-        text-decoration: none !important;
-        background-color: transparent !important;
-        color: inherit !important;
-        cursor: default !important;
-        pointer-events: none !important;
-      }
-
-      .ProseMirror.hide-highlights
-        span[data-entity-name].entity-highlight:hover {
-        background-color: transparent !important;
-        color: inherit !important;
-      }
-
-      /* TEIタグのハイライトも非表示にする */
-      .ProseMirror.hide-highlights span[data-pers-name="true"],
-      .ProseMirror.hide-highlights span[data-place-name="true"],
-      .ProseMirror.hide-highlights span[data-artwork="true"],
-      .ProseMirror.hide-highlights span[data-event="true"] {
-        text-decoration: none !important;
-        pointer-events: none !important;
       }
 
       .ProseMirror .text-completion-mark {

@@ -265,6 +265,7 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
                   content={content}
                   entities={graphDocument.nodes}
                   onEntityClick={handleEntityClick}
+                  isHighlightVisible={isGraphVisible}
                 />
               )}
             </div>

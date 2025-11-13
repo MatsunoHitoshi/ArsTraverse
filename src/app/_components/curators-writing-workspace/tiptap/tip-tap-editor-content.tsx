@@ -17,7 +17,7 @@ import type {
 import { EditorToolBar } from "./tools/editor-tool-bar";
 import { CustomBubbleMenu } from "./tools/bubble-menu";
 import { TeiCustomTagHighlightExtensions } from "./tei/tei-custom-tag-highlight-extension";
-import { TiptapStyles } from "./styles";
+import { TiptapStyles } from "./styles/tiptap-styles";
 import { KeyboardHandlerExtension } from "./extensions/keyboard-handler-extension";
 import { useTextCompletion } from "./hooks/use-text-completion";
 import { useHighlight } from "./hooks/use-highlight";

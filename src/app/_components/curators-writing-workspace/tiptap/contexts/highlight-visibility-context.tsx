@@ -1,6 +1,7 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect } from "react";
+import type { ReactNode } from "react";
 
 interface HighlightVisibilityContextType {
   isHighlightVisible: boolean;
@@ -16,12 +17,18 @@ export { HighlightVisibilityContext };
 
 interface HighlightVisibilityProviderProps {
   children: ReactNode;
+  initialValue?: boolean;
 }
 
 export const HighlightVisibilityProvider: React.FC<
   HighlightVisibilityProviderProps
-> = ({ children }) => {
-  const [isHighlightVisible, setIsHighlightVisible] = useState(true);
+> = ({ children, initialValue = true }) => {
+  const [isHighlightVisible, setIsHighlightVisible] = useState(initialValue);
+
+  // initialValueが変更されたときに状態を更新
+  useEffect(() => {
+    setIsHighlightVisible(initialValue);
+  }, [initialValue]);
 
   const toggleHighlightVisibility = () => {
     setIsHighlightVisible((prev) => !prev);
