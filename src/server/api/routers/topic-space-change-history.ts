@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, publicProcedure } from "../trpc";
 import { GraphChangeRecordType } from "@prisma/client";
 
 export const topicSpaceChangeHistoryRouter = createTRPCRouter({
-  listByTopicSpaceId: protectedProcedure
-    .input(z.object({ id: z.string() }))
+  listByTopicSpaceId: publicProcedure
+    .input(z.object({ id: z.string(), includeDetail: z.boolean().optional() }))
     .query(async ({ ctx, input }) => {
       const changeHistory = await ctx.db.graphChangeHistory.findMany({
         where: {
@@ -13,6 +13,7 @@ export const topicSpaceChangeHistoryRouter = createTRPCRouter({
         },
         include: {
           user: true,
+          nodeLinkChangeHistories: input.includeDetail ?? false,
         },
         orderBy: {
           createdAt: "desc",
@@ -21,7 +22,7 @@ export const topicSpaceChangeHistoryRouter = createTRPCRouter({
       return changeHistory;
     }),
 
-  getById: protectedProcedure
+  getById: publicProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       const changeHistory = await ctx.db.graphChangeHistory.findFirst({
