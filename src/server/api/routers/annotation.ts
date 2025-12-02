@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
+import {
+  createTRPCRouter,
+  protectedProcedure,
+  publicProcedure,
+} from "@/server/api/trpc";
 import { TRPCError } from "@trpc/server";
 import { AnnotationType, AnnotationChangeType } from "@prisma/client";
 import { TiptapContentSchema } from "./workspace";
@@ -251,6 +255,63 @@ export const annotationRouter = createTRPCRouter({
     }),
   // ノードの注釈一覧取得（議論の盛り上がり順）
   getNodeAnnotations: protectedProcedure
+    .input(
+      z.object({
+        nodeId: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const annotations = await ctx.db.annotation.findMany({
+        where: {
+          targetNodeId: input.nodeId,
+          isDeleted: false,
+        },
+        include: {
+          author: {
+            select: PUBLIC_USER_SELECT,
+          },
+          childAnnotations: {
+            where: { isDeleted: false },
+            include: {
+              author: {
+                select: {
+                  id: true,
+                  name: true,
+                  image: true,
+                },
+              },
+            },
+            orderBy: { createdAt: "asc" },
+          },
+          histories: {
+            orderBy: { createdAt: "desc" },
+            take: 5, // 最新5件の履歴
+          },
+          rootDiscussions: {
+            include: {
+              participants: {
+                select: {
+                  id: true,
+                  name: true,
+                  image: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: [
+          // 議論の盛り上がり順（子注釈数 + 議論の参加者数）
+          { childAnnotations: { _count: "desc" } },
+          { rootDiscussions: { _count: "desc" } },
+          { createdAt: "desc" },
+        ],
+      });
+
+      return annotations;
+    }),
+
+  // ノードの注釈一覧取得（公開用）
+  getNodeAnnotationsPublic: publicProcedure
     .input(
       z.object({
         nodeId: z.string(),

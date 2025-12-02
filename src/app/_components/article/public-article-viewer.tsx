@@ -18,6 +18,8 @@ import { findEntityHighlights } from "@/app/_utils/text/find-entity-highlights";
 import { filterGraphByEntityNames } from "@/app/_utils/kg/filter-graph-by-entity-names";
 import { select, zoomTransform, pointer, zoom } from "d3";
 import type * as d3 from "d3";
+import { BottomSheet } from "../modal/bottom-sheet";
+import { PublicNodeAnnotationSection } from "../view/node/public-node-annotation-section";
 
 interface PublicArticleViewerProps {
   content: JSONContent;
@@ -35,7 +37,7 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
   workspaceName,
   userName,
   userImage,
-}) => {
+}: PublicArticleViewerProps) => {
   const [innerWidth, innerHeight] = useWindowSize();
   const [activeEntity, setActiveEntity] = useState<CustomNodeType | undefined>(
     undefined,
@@ -44,6 +46,7 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
   const [magnifierMode, setMagnifierMode] = useState(0);
   const [currentScale, setCurrentScale] = useState<number>(1);
   const svgRef = useRef<SVGSVGElement>(null);
+  const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
 
   // グラフサイズの状態管理
   const [graphSize, setGraphSize] = useState({ width: 280, height: 280 });
@@ -232,6 +235,7 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
     );
     if (foundNode) {
       setActiveEntity(foundNode);
+      setIsBottomSheetOpen(true);
     }
   };
 
@@ -265,7 +269,7 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
                   content={content}
                   entities={graphDocument.nodes}
                   onEntityClick={handleEntityClick}
-                  isHighlightVisible={isGraphVisible}
+                  isHighlightVisible={isGraphVisible || isBottomSheetOpen}
                 />
               )}
             </div>
@@ -395,6 +399,105 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
           </div>
         </div>
       </div>
+
+      <BottomSheet isOpen={isBottomSheetOpen} setIsOpen={setIsBottomSheetOpen}>
+        <div className="flex flex-col gap-4">
+          {activeEntity && (
+            <div className="flex flex-col gap-2 text-white">
+              <div className="flex flex-col">
+                <div className="text-sm text-gray-400">
+                  {activeEntity.label}
+                </div>
+                <div className="text-2xl font-bold">{activeEntity.name}</div>
+              </div>
+
+              <PublicNodeAnnotationSection
+                node={activeEntity}
+                topicSpaceId={topicSpaceId}
+                setFocusedNode={setActiveEntity}
+              />
+            </div>
+          )}
+
+          {/* Mobile Graph View */}
+          <div className="flex flex-col gap-2 xl:hidden">
+            <div className="relative flex h-[300px] w-full flex-col items-center justify-center overflow-hidden rounded-lg border border-gray-700 bg-slate-900/50">
+              {filteredGraphDocument ? (
+                <>
+                  {activeEntity ? (
+                    <RelatedNodesAndLinksViewer
+                      node={activeEntity}
+                      topicSpaceId={topicSpaceId}
+                      className="h-full w-full"
+                      height={graphSize.height}
+                      width={graphSize.width}
+                      setFocusedNode={setActiveEntity}
+                      focusedNode={activeEntity}
+                      onClose={() => updateActiveEntity(undefined)}
+                    />
+                  ) : (
+                    <D3ForceGraph
+                      key={`graph-${graphSize.width}-${graphSize.height}`}
+                      svgRef={svgRef}
+                      width={graphSize.width}
+                      height={graphSize.height}
+                      graphDocument={filteredGraphDocument}
+                      isLinkFiltered={false}
+                      currentScale={currentScale}
+                      setCurrentScale={setCurrentScale}
+                      setFocusedNode={setActiveEntity}
+                      isDirectedLinks={isDirectedLinks}
+                      focusedNode={activeEntity}
+                      setFocusedLink={() => {
+                        // リンクフォーカス機能は現在使用しない
+                      }}
+                      toolComponent={
+                        <div className="absolute ml-1 mt-1 flex flex-row items-center gap-1">
+                          <Button
+                            size="small"
+                            onClick={() =>
+                              setMagnifierMode((prev) => (prev + 1) % 3)
+                            }
+                            className={`flex items-center gap-1 ${
+                              magnifierMode === 1
+                                ? "bg-orange-500/40"
+                                : magnifierMode === 2
+                                  ? "bg-orange-700/40"
+                                  : ""
+                            }`}
+                          >
+                            <ZoomInIcon
+                              height={16}
+                              width={16}
+                              color={magnifierMode > 0 ? "orange" : "white"}
+                            />
+                          </Button>
+                          <DirectedLinksToggleButton
+                            isDirectedLinks={isDirectedLinks}
+                            setIsDirectedLinks={setIsDirectedLinks}
+                          />
+                        </div>
+                      }
+                      focusedLink={undefined}
+                      isLargeGraph={false}
+                      isEditor={false}
+                      magnifierMode={magnifierMode}
+                      isSelectionMode={false}
+                      onNodeSelectionToggle={() => {
+                        // 選択モードは使用しない
+                      }}
+                    />
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-gray-400">
+                  グラフデータが見つかりません
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </BottomSheet>
     </div>
   );
 };
