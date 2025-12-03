@@ -2,6 +2,7 @@
 
 import { api } from "@/trpc/react";
 import Image from "next/image";
+import { Input } from "@headlessui/react";
 import { NodeLinkChangeHistory } from "./node-link-change-history";
 import { useState } from "react";
 import { Button } from "../button/button";
@@ -25,6 +26,14 @@ export const TopicSpaceChangeHistory = ({
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(
     null,
   );
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const filteredChangeHistories = changeHistories?.filter((history) => {
+    if (!searchTerm) return true;
+    return history.description
+      ?.toLowerCase()
+      .includes(searchTerm.toLowerCase());
+  });
 
   const rollbackChange = api.graphEditProposal.rollbackChange.useMutation({
     onSuccess: () => {
@@ -58,18 +67,28 @@ export const TopicSpaceChangeHistory = ({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="text-base font-semibold">変更履歴</div>
-        <Button size="small" onClick={() => refetch()}>
-          <ReloadIcon height={16} width={16} color="white" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Input
+            className="block w-48 rounded-lg border border-gray-700 bg-slate-700 px-3 py-1.5 text-sm/6 text-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+            placeholder="履歴を検索..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <Button size="small" onClick={() => refetch()}>
+            <ReloadIcon height={16} width={16} color="white" />
+          </Button>
+        </div>
       </div>
 
-      {changeHistories.length === 0 ? (
+      {filteredChangeHistories?.length === 0 ? (
         <div className="py-8 text-center text-gray-500">
-          変更履歴がありません
+          {searchTerm
+            ? "検索条件に一致する履歴がありません"
+            : "変更履歴がありません"}
         </div>
       ) : (
         <div className="space-y-4">
-          {changeHistories.map((history) => (
+          {filteredChangeHistories?.map((history) => (
             <div key={history.id} className="rounded-lg border p-6">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
