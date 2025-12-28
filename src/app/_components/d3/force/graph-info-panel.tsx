@@ -4,6 +4,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   TriangleRightIcon,
+  ClipboardIcon,
 } from "../../icons";
 import type { CustomLinkType, CustomNodeType } from "@/app/const/types";
 import {
@@ -75,6 +76,36 @@ export const GraphInfoPanel = ({
     return getNodeByIdForFrontend(neighborId, graphNodes);
   });
 
+  const handleCopyStatistics = async () => {
+    const data = {
+      summary: {
+        nodeCount,
+        edgeCount: linkCount,
+        diameter: graphStatistics.diameter,
+        avgPathLength: graphStatistics.avgPathLength,
+      },
+      distributions: {
+        nodeTypes: nodeTypeCounts,
+        edgeTypes: linkTypeCounts,
+      },
+      topDegreeNodes: graphStatistics.topDegreeNodes.map((n) => ({
+        id: n.id,
+        name: n.name,
+        label: n.label,
+        degree: n.degree,
+      })),
+      timestamp: new Date().toISOString(),
+    };
+
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+      alert("グラフ統計情報をクリップボードにコピーしました");
+    } catch (err) {
+      console.error("Failed to copy:", err);
+      alert("コピーに失敗しました");
+    }
+  };
+
   return (
     <div
       className={`absolute flex max-h-[500px] flex-row items-start gap-2 overflow-y-scroll rounded-l-lg bg-black/20 p-4 backdrop-blur-sm ${isPanelOpen ? "right-[9px] w-[400px] pr-14" : "right-[9px] w-0 pr-12"}`}
@@ -96,8 +127,17 @@ export const GraphInfoPanel = ({
         <div className="flex w-full flex-col gap-6 overflow-x-hidden">
           {/* グラフ全体情報 */}
           <div className="flex w-full flex-col gap-2 rounded-md border border-slate-400 p-2">
-            <div className="w-full font-semibold text-slate-50">
-              グラフ基本情報
+            <div className="flex w-full items-center justify-between font-semibold text-slate-50">
+              <div>グラフ基本情報</div>
+              <button
+                onClick={() => {
+                  void handleCopyStatistics();
+                }}
+                className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-700 p-1 text-slate-50 hover:bg-slate-600"
+                title="分析用データをコピー"
+              >
+                <ClipboardIcon width={14} height={14} color="white" />
+              </button>
             </div>
             <Disclosure defaultOpen={false}>
               <DisclosureButton className="group flex w-full flex-row items-center gap-2 text-sm text-slate-200">
