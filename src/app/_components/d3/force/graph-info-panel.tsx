@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Button } from "../../button/button";
 import {
   ChevronLeftIcon,
@@ -14,6 +14,8 @@ import {
 import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { usePathname, useRouter } from "next/navigation";
 import { getNodeByIdForFrontend } from "@/app/_utils/kg/filter";
+
+import { calculateGraphStatistics } from "@/app/_utils/kg/bfs";
 
 type GraphInfoPanelProps = {
   focusedNode: CustomNodeType | undefined;
@@ -36,6 +38,10 @@ export const GraphInfoPanel = ({
 }: GraphInfoPanelProps) => {
   const [isPanelOpen, setIsPanelOpen] = useState<boolean>(true);
   const { nodes: graphNodes, relationships: graphLinks } = graphDocument;
+
+  const graphStatistics = useMemo(() => {
+    return calculateGraphStatistics(graphDocument);
+  }, [graphDocument]);
 
   // グラフ統計情報の計算
   const nodeCount = graphNodes.length;
@@ -103,6 +109,30 @@ export const GraphInfoPanel = ({
               <DisclosurePanel className="flex flex-col gap-2 pl-6 text-sm text-slate-200">
                 <div>ノード数: {nodeCount}</div>
                 <div>エッジ数: {linkCount}</div>
+                <div>
+                  平均ホップ数: {graphStatistics.avgPathLength.toFixed(2)}
+                </div>
+                <div>直径: {graphStatistics.diameter}</div>
+
+                <div className="font-semibold text-slate-400">
+                  重要エンティティ（ハブ）:
+                </div>
+                <div className="flex flex-col gap-1 pl-2">
+                  {graphStatistics.topDegreeNodes.map((node) => (
+                    <button
+                      key={node.id}
+                      className="flex w-full cursor-pointer items-center justify-between rounded p-1 text-left hover:bg-white/10"
+                      onClick={() => setFocusNode(node)}
+                    >
+                      <span className="flex-1 truncate text-xs">
+                        {node.name}
+                      </span>
+                      <span className="ml-2 rounded bg-slate-600 px-1 text-xs">
+                        {node.degree}
+                      </span>
+                    </button>
+                  ))}
+                </div>
 
                 <div className="font-semibold text-slate-400">
                   ノードタイプ内訳:
