@@ -165,7 +165,7 @@ export const calculateGraphStatistics = (graph: GraphDocumentForFrontend) => {
 
   // 計算コスト削減のため、ノード数が多すぎる場合はサンプリング
   const calculationNodes =
-    graphNodes.length > 500
+    graphNodes.length > 800
       ? topDegreeNodes
           .map((n) => graphNodes.find((gn) => gn.id === n.id))
           .filter((n): n is NodeTypeForFrontend => !!n)
