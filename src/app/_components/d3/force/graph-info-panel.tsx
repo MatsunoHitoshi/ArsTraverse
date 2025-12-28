@@ -37,6 +37,26 @@ export const GraphInfoPanel = ({
   const [isPanelOpen, setIsPanelOpen] = useState<boolean>(true);
   const { nodes: graphNodes, relationships: graphLinks } = graphDocument;
 
+  // グラフ統計情報の計算
+  const nodeCount = graphNodes.length;
+  const linkCount = graphLinks.length;
+
+  const nodeTypeCounts = graphNodes.reduce(
+    (acc, node) => {
+      acc[node.label] = (acc[node.label] ?? 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+
+  const linkTypeCounts = graphLinks.reduce(
+    (acc, link) => {
+      acc[link.type] = (acc[link.type] ?? 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+
   const neighborLinks = graphLinks.filter((link) => {
     return (
       link.sourceId === focusedNode?.id || link.targetId === focusedNode?.id
@@ -68,6 +88,49 @@ export const GraphInfoPanel = ({
 
       {isPanelOpen && (
         <div className="flex w-full flex-col gap-6 overflow-x-hidden">
+          {/* グラフ全体情報 */}
+          <div className="flex w-full flex-col gap-2 rounded-md border border-slate-400 p-2">
+            <div className="w-full font-semibold text-slate-50">
+              グラフ基本情報
+            </div>
+            <Disclosure defaultOpen={false}>
+              <DisclosureButton className="group flex w-full flex-row items-center gap-2 text-sm text-slate-200">
+                <div className="group-data-[open]:rotate-90">
+                  <TriangleRightIcon height={16} width={16} color="white" />
+                </div>
+                <div>概要を表示</div>
+              </DisclosureButton>
+              <DisclosurePanel className="flex flex-col gap-2 pl-6 text-sm text-slate-200">
+                <div>ノード数: {nodeCount}</div>
+                <div>エッジ数: {linkCount}</div>
+
+                <div className="font-semibold text-slate-400">
+                  ノードタイプ内訳:
+                </div>
+                <div className="pl-2">
+                  {Object.entries(nodeTypeCounts).map(([type, count]) => (
+                    <div key={type} className="flex justify-between">
+                      <span>{type}</span>
+                      <span>{count}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="font-semibold text-slate-400">
+                  エッジタイプ内訳:
+                </div>
+                <div className="pl-2">
+                  {Object.entries(linkTypeCounts).map(([type, count]) => (
+                    <div key={type} className="flex justify-between">
+                      <span>{type}</span>
+                      <span>{count}</span>
+                    </div>
+                  ))}
+                </div>
+              </DisclosurePanel>
+            </Disclosure>
+          </div>
+
           <div className="flex h-full w-full flex-col gap-2 rounded-md border border-slate-400 p-2">
             <div className="w-full font-semibold text-slate-50">
               選択中のノード
