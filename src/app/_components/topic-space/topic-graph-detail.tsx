@@ -247,6 +247,15 @@ export const TopicGraphDetail = ({
               selectedPathData={pathData}
               selectedGraphData={selectedGraphData ?? undefined}
               nodeSearchQuery={nodeSearchQuery}
+              sourceDocuments={topicSpace.sourceDocuments?.map((doc) => ({
+                id: doc.id,
+                graph: doc.graph
+                  ? {
+                      id: doc.graph.id,
+                      dataJson: doc.graph.dataJson as GraphDocumentForFrontend,
+                    }
+                  : null,
+              }))}
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center p-4">
