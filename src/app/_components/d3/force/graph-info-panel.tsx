@@ -83,6 +83,8 @@ export const GraphInfoPanel = ({
         edgeCount: linkCount,
         diameter: graphStatistics.diameter,
         avgPathLength: graphStatistics.avgPathLength,
+        avgClusteringCoeff: graphStatistics.avgClusteringCoeff,
+        globalClusteringCoeff: graphStatistics.globalClusteringCoeff,
       },
       distributions: {
         nodeTypes: nodeTypeCounts,
@@ -153,6 +155,14 @@ export const GraphInfoPanel = ({
                   平均ホップ数: {graphStatistics.avgPathLength.toFixed(2)}
                 </div>
                 <div>直径: {graphStatistics.diameter}</div>
+                <div>
+                  大域的クラスター係数:{" "}
+                  {graphStatistics.globalClusteringCoeff?.toFixed(3)}
+                </div>
+                <div>
+                  平均クラスター係数:{" "}
+                  {graphStatistics.avgClusteringCoeff?.toFixed(3)}
+                </div>
 
                 <div className="font-semibold text-slate-400">
                   重要エンティティ（ハブ）:

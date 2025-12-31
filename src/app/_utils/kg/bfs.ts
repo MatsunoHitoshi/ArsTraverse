@@ -186,10 +186,57 @@ export const calculateGraphStatistics = (graph: GraphDocumentForFrontend) => {
 
   const avgPathLength = pathCount > 0 ? totalDist / pathCount : 0;
 
+  // 3. クラスター係数の計算
+  let totalLocalClusteringCoeff = 0;
+  let totalNumeratorGlobal = 0; // Σ(2 * links)
+  let totalDenominatorGlobal = 0; // Σ(k * (k - 1))
+
+  // adjはすでに無向グラフとして構築済み
+  for (const node of graphNodes) {
+    const neighbors = adj.get(node.id) ?? [];
+    const k = neighbors.length; // 次数
+
+    if (k < 2) continue; // 隣接ノードが2つ未満なら係数は0
+
+    let links = 0;
+    // 隣接ノード同士が繋がっているか確認
+    for (let i = 0; i < k; i++) {
+      for (let j = i + 1; j < k; j++) {
+        const u = neighbors[i];
+        const v = neighbors[j];
+        if (u && v && adj.get(u)?.includes(v)) {
+          links++;
+        }
+      }
+    }
+
+    const possibleLinks = k * (k - 1);
+
+    // 局所クラスター係数 C_i = 2 * links / (k * (k - 1))
+    const ci = (2 * links) / possibleLinks;
+    totalLocalClusteringCoeff += ci;
+
+    // 大域的クラスター係数用集計
+    totalNumeratorGlobal += 2 * links;
+    totalDenominatorGlobal += possibleLinks;
+  }
+
+  const avgClusteringCoeff =
+    graphNodes.length > 0 ? totalLocalClusteringCoeff / graphNodes.length : 0;
+
+  // 大域的クラスター係数 = (3 * 三角形数) / (連結トリプレット数)
+  // = Σ(2 * links) / Σ(k * (k - 1))
+  const globalClusteringCoeff =
+    totalDenominatorGlobal > 0
+      ? totalNumeratorGlobal / totalDenominatorGlobal
+      : 0;
+
   return {
     topDegreeNodes,
     diameter: maxDist,
     avgPathLength,
+    avgClusteringCoeff,
+    globalClusteringCoeff,
   };
 };
 
