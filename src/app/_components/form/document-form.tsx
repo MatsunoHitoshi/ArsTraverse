@@ -252,7 +252,7 @@ export const DocumentForm = ({
                 <div className="flex flex-row justify-end">
                   {isPlaneTextMode || inspectResult.length > 0 ? (
                     <Button type="submit" isLoading={isProcessing}>
-                      概念グラフを抽出する
+                      グラフを構築する
                     </Button>
                   ) : (
                     <Button type="submit" isLoading={isProcessing}>
