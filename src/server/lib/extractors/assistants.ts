@@ -6,7 +6,9 @@ import type {
   ExtractorOptions,
   NodesAndRelationships,
   TransformerSchema,
+  CustomMappingRules,
 } from "./base";
+import { buildMappingPrompt } from "./base";
 
 const generateSystemMessageWithSchema = (schema: string) => {
   return `
@@ -25,8 +27,8 @@ Relationships: [["Alice", "roommate", "Bob"]]
 ${schema}`;
 };
 
-const generateSystemMessage = () => {
-  return `
+const generateSystemMessage = (customMappingRules?: CustomMappingRules) => {
+  let baseMessage = `
 Provide a set of Nodes in the form [ENTITY_ID, TYPE, PROPERTIES] and a set of Relationships in the form [ENTITY_ID_1, RELATIONSHIP, ENTITY_ID_2, PROPERTIES] from attached data.
 Attempt to extract as many Nodes and Relationships as you can.
 It is important that the ENTITY_ID_1 and ENTITY_ID_2 exists as Nodes with a matching ENTITY_ID.
@@ -41,14 +43,26 @@ Data: Alice lawyer and is 25 years old and Bob is her roommate since 2001. Bob w
 Nodes: ["alice", "Person", {"age": 25, "occupation": "lawyer", "name":"Alice"}], ["bob", "Person", {"occupation": "journalist", "name": "Bob"}], ["alice.com", "Webpage", {"url": "www.alice.com"}], ["bob.com", "Webpage", {"url": "www.bob.com"}]
 Relationships: ["alice", "roommate", "bob", {"start": 2021}], ["alice", "owns", "alice.com", {}], ["bob", "owns", "bob.com", {}]
     `;
+
+  const mappingPrompt = buildMappingPrompt(customMappingRules);
+  if (mappingPrompt) {
+    baseMessage += mappingPrompt;
+  }
+
+  return baseMessage;
 };
 // 型が合わなくなったので、一旦使わない
 export class AssistantsApiExtractor implements Extractor {
   async extract(
     options: ExtractorOptions,
   ): Promise<NodesAndRelationships | null> {
-    const { localFilePath, isPlaneTextMode, schema, additionalPrompt } =
-      options;
+    const {
+      localFilePath,
+      isPlaneTextMode,
+      schema,
+      additionalPrompt,
+      customMappingRules,
+    } = options;
     const openai = new OpenAI();
     const assistant = await openai.beta.assistants.create({
       name: "Graph Database Assistant",
@@ -70,7 +84,7 @@ export class AssistantsApiExtractor implements Extractor {
           role: "user",
           content: schema
             ? generateSystemMessageWithSchema(String(schema))
-            : generateSystemMessage(),
+            : generateSystemMessage(customMappingRules),
           attachments: [
             { file_id: inputFile.id, tools: [{ type: "file_search" }] },
           ],
@@ -82,7 +96,7 @@ export class AssistantsApiExtractor implements Extractor {
       "prompt: ",
       schema
         ? generateSystemMessageWithSchema(String(schema))
-        : generateSystemMessage(),
+        : generateSystemMessage(customMappingRules),
     );
 
     const run = await openai.beta.threads.runs.createAndPoll(thread.id, {

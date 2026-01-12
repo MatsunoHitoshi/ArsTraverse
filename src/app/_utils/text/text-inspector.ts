@@ -88,8 +88,15 @@ export const textInspect = async (
   }
 
   const textSplitter = new TokenTextSplitter({
-    chunkSize: options?.chunkSize ?? 1024,
-    chunkOverlap: options?.chunkOverlap ?? 32,
+    // 知識グラフ抽出に最適化されたチャンクサイズ
+    // コンテキストウィンドウが128,000トークンあっても、2,048-4,096トークンが最適
+    // 理由: システムプロンプト(2,000+) + 出力予約(16,000)を考慮し、
+    //       エンティティ間の関係を正確に抽出できる適切なサイズを維持
+    // より大きなチャンク(8,000+)は精度低下のリスクがある
+    chunkSize: options?.chunkSize ?? 2048,
+    // オーバーラップを増やしてチャンク境界での情報損失を防ぐ
+    // chunkSizeの10-15%が推奨
+    chunkOverlap: options?.chunkOverlap ?? 256,
   });
 
   const documents: Document[] = [];

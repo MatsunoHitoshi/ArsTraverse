@@ -20,6 +20,7 @@ import { diffNodes, diffRelationships } from "@/app/_utils/kg/diff";
 import type { Extractor } from "@/server/lib/extractors/base";
 import { AssistantsApiExtractor } from "@/server/lib/extractors/assistants";
 import { LangChainExtractor } from "@/server/lib/extractors/langchain";
+import { IterativeGraphExtractor } from "@/server/lib/extractors/iterative";
 import { getNeighborNodes } from "@/app/_utils/kg/get-tree-layout-data";
 import {
   formGraphDataForFrontend,
@@ -28,6 +29,9 @@ import {
 } from "@/app/_utils/kg/frontend-properties";
 import { KnowledgeGraphInputSchema } from "../schemas/knowledge-graph";
 import { completeTranslateProperties } from "@/app/_utils/kg/node-name-translation";
+import { ChatOpenAI } from "@langchain/openai";
+import { HumanMessage } from "@langchain/core/messages";
+import type { TextChunk } from "@/server/lib/extractors/base";
 // import type { Prisma } from "@prisma/client";
 // import { GraphDataStatus } from "@prisma/client";
 // import { stripGraphData } from "@/app/_utils/kg/data-strip";
@@ -37,6 +41,50 @@ const ExtractInputSchema = z.object({
   extractMode: z.string().optional(),
   isPlaneTextMode: z.boolean(),
   additionalPrompt: z.string().optional(),
+  customMappingRules: z
+    .object({
+      sampleText: z.string(),
+      chunks: z.array(
+        z.object({
+          text: z.string(),
+          type: z.string(),
+          startIndex: z.number(),
+          endIndex: z.number(),
+          suggestedRole: z.enum([
+            "node",
+            "node_property",
+            "edge_property",
+            "edge",
+            "ignore",
+          ]),
+        }),
+      ),
+      mappings: z.array(
+        z.object({
+          chunkIndex: z.number(),
+          role: z.enum([
+            "node",
+            "node_property",
+            "edge_property",
+            "edge",
+            "ignore",
+          ]),
+          nodeLabel: z.string().optional(),
+          propertyName: z.string().optional(),
+          edgePropertyName: z.string().optional(),
+          relationshipType: z.string().optional(),
+        }),
+      ),
+    })
+    .optional(),
+});
+
+const AnalyzeTextStructureInputSchema = z.object({
+  sampleText: z.string(),
+});
+
+const ConvertToEdgeTypeInputSchema = z.object({
+  text: z.string(),
 });
 
 const TestInspectInputSchema = z.object({
@@ -79,10 +127,170 @@ export const kgRouter = createTRPCRouter({
       return nodes.map((node) => formNodeDataForFrontend(node));
     }),
 
+  analyzeTextStructure: publicProcedure
+    .input(AnalyzeTextStructureInputSchema)
+    .mutation(async ({ input }) => {
+      const { sampleText } = input;
+
+      try {
+        const llm = new ChatOpenAI({
+          temperature: 0.0,
+          model: "gpt-4o-mini",
+          maxTokens: 2000,
+        });
+
+        const prompt = `Break down the following text into semantic chunks (segments). For each chunk, provide the text content, position information, and a recommended role in the knowledge graph (node, node property, edge property, or ignore).
+
+Text: "${sampleText}"
+
+Output format (JSON):
+{
+  "chunks": [
+    {
+      "text": "chunk text",
+      "type": "chunk type (e.g., date, category, event, location, description, etc.)",
+      "startIndex": start position (character count),
+      "endIndex": end position (character count),
+      "suggestedRole": "node" | "node_property" | "edge_property" | "edge" | "ignore"
+    }
+  ]
+}
+
+Important formatting rules:
+- Node labels MUST always be in English PascalCase (e.g., Person, Event, Location, Organization)
+- Edge types MUST always be in UPPER_SNAKE_CASE (e.g., HAS_ROOMMATE, WORKS_AT, OCCURRED_ON, LOCATED_IN)
+- The "type" field should reflect the semantic category of the chunk, not the formatting
+
+Guidelines:
+- Split the text into semantically meaningful units
+- Separate different types of information (dates, locations, categories, event names, etc.) into different chunks
+- suggestedRole should indicate how the information should be treated in the knowledge graph:
+  - "node": Information that should be treated as an independent node (e.g., event names, location names, subjects or objects in sentences). The type should be in PascalCase English.
+  - "node_property": Information that should be treated as a node property (e.g., descriptions, details)
+  - "edge_property": Information that should be treated as a relationship (edge) property (e.g., dates, occurrence times, durations)
+  - "edge": Information that determines the relationship type (e.g., categories, keywords indicating relationship types, predicates in sentences). The type should be in UPPER_SNAKE_CASE English.
+  - "ignore": Information that should not be included in the graph`;
+
+        const response = await llm.invoke([new HumanMessage(prompt)]);
+        const responseText = response.content as string;
+
+        // JSONを抽出（マークダウンコードブロックからも抽出可能）
+        let jsonText = responseText.trim();
+        if (jsonText.includes("```json")) {
+          jsonText =
+            jsonText.split("```json")[1]?.split("```")[0]?.trim() ?? jsonText;
+        } else if (jsonText.includes("```")) {
+          jsonText =
+            jsonText.split("```")[1]?.split("```")[0]?.trim() ?? jsonText;
+        }
+
+        const parsed = JSON.parse(jsonText) as { chunks: TextChunk[] };
+
+        return {
+          data: {
+            chunks: parsed.chunks,
+          },
+        };
+      } catch (error) {
+        console.error("Text structure analysis error:", error);
+        return {
+          data: {
+            chunks: [],
+            error: `テキスト解析エラー: ${String(error)}`,
+          },
+        };
+      }
+    }),
+
+  convertToEdgeType: publicProcedure
+    .input(ConvertToEdgeTypeInputSchema)
+    .mutation(async ({ input }) => {
+      const { text } = input;
+
+      try {
+        const llm = new ChatOpenAI({
+          temperature: 0.0,
+          model: "gpt-4o-mini",
+          maxTokens: 500,
+        });
+
+        const prompt = `Convert the following text to an English UPPER_SNAKE_CASE relationship type for a knowledge graph.
+
+Input text: "${text}"
+
+Requirements:
+1. If the text is in Japanese or any other non-English language, translate it to English first
+2. Convert the English text to UPPER_SNAKE_CASE format
+3. Use clear, descriptive relationship type names (e.g., HAS_ROOMMATE, WORKS_AT, OCCURRED_ON, LOCATED_IN)
+4. Remove any special characters, spaces, or punctuation
+5. Use underscores to separate words
+6. Return ONLY the converted text in UPPER_SNAKE_CASE format, without any explanation or additional text
+
+Examples:
+- "ルームメイト" → "HAS_ROOMMATE"
+- "音楽" → "MUSIC" or "IN_CATEGORY"
+- "happened on" → "HAPPENED_ON"
+- "works at" → "WORKS_AT"
+- "カテゴリ" → "IN_CATEGORY" or "HAS_CATEGORY"
+
+Output:`;
+
+        const response = await llm.invoke([new HumanMessage(prompt)]);
+        const responseText = (response.content as string).trim();
+
+        // 余分な説明やマークダウンを除去
+        let edgeType = responseText
+          .replace(/```[\s\S]*?```/g, "") // コードブロックを除去
+          .replace(/^[^A-Z_]*/, "") // 最初の非大文字・アンダースコア文字を除去
+          .replace(/[^A-Z_]*$/, "") // 最後の非大文字・アンダースコア文字を除去
+          .trim();
+
+        // 行の最初のUPPER_SNAKE_CASEを抽出
+        const match = edgeType.match(/^[A-Z][A-Z0-9_]*/);
+        if (match) {
+          edgeType = match[0];
+        }
+
+        // 空の場合は元のテキストを大文字に変換して返す（フォールバック）
+        if (!edgeType || edgeType.length === 0) {
+          edgeType = text
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g, "_")
+            .replace(/_+/g, "_")
+            .replace(/^_|_$/g, "");
+        }
+
+        return {
+          data: {
+            edgeType,
+          },
+        };
+      } catch (error) {
+        console.error("Edge type conversion error:", error);
+        // エラー時はフォールバック処理
+        const fallbackEdgeType = text
+          .toUpperCase()
+          .replace(/[^A-Z0-9]/g, "_")
+          .replace(/_+/g, "_")
+          .replace(/^_|_$/g, "");
+        return {
+          data: {
+            edgeType: fallbackEdgeType || "RELATED_TO",
+          },
+        };
+      }
+    }),
+
   extractKG: publicProcedure
     .input(ExtractInputSchema)
     .mutation(async ({ input }) => {
-      const { fileUrl, extractMode, isPlaneTextMode, additionalPrompt } = input;
+      const {
+        fileUrl,
+        extractMode,
+        isPlaneTextMode,
+        additionalPrompt,
+        customMappingRules,
+      } = input;
 
       const localFilePath = await writeLocalFileFromUrl(
         fileUrl,
@@ -101,15 +309,21 @@ export const kgRouter = createTRPCRouter({
 
       try {
         console.log("type: ", extractMode);
-        const extractor: Extractor =
-          extractMode === "langChain"
-            ? new LangChainExtractor()
-            : new AssistantsApiExtractor();
+        let extractor: Extractor;
+        if (extractMode === "iterative") {
+          extractor = new IterativeGraphExtractor();
+        } else if (extractMode === "langChain") {
+          extractor = new LangChainExtractor();
+        } else {
+          extractor = new AssistantsApiExtractor();
+        }
+
         const nodesAndRelationships = await extractor.extract({
           localFilePath,
           isPlaneTextMode,
           schema,
           additionalPrompt,
+          customMappingRules,
         });
 
         if (!nodesAndRelationships) {

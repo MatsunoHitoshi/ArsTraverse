@@ -47,12 +47,13 @@ type NodeJson = {
 
 export const createExtraNode = (
   targetName: string,
+  targetLabel: string,
   nodesJson: NodeJson[] | undefined,
 ): NodeTypeForFrontend => {
   const newNode: NodeTypeForFrontend = {
     id: createId(),
     name: targetName,
-    label: "ExtraNode",
+    label: targetLabel,
     properties: {},
   };
   if (nodesJson) {
@@ -102,13 +103,13 @@ export const getNodesAndRelationshipsFromResult = (result: string) => {
     const source =
       nodesJson?.find((node) => {
         return node.name === sourceName;
-      }) ?? createExtraNode(sourceName, nodesJson);
+      }) ?? createExtraNode(sourceName, "ExtraNode", nodesJson);
 
     const targetName = itemSanitize(relationship[2] ?? "");
     const target =
       nodesJson?.find((node) => {
         return targetName === node.name;
-      }) ?? createExtraNode(targetName, nodesJson);
+      }) ?? createExtraNode(targetName, "ExtraNode", nodesJson);
 
     return {
       id: index,

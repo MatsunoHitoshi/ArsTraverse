@@ -6,6 +6,7 @@ import { Toolbar } from "@/app/_components/toolbar/toolbar";
 import { api } from "@/trpc/react";
 import {
   Link2Icon,
+  ListBulletIcon,
   TriangleDownIcon,
   TriangleRightIcon,
 } from "@/app/_components/icons";
@@ -21,8 +22,16 @@ import { NodeLinkEditModal } from "../../modal/node-link-edit-modal";
 import { Button } from "../../button/button";
 import { GraphSyncedText } from "../../document/graph-synced-text";
 import { useGraphEditor } from "@/app/_hooks/use-graph-editor";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { NodeLinkList } from "../../list/node-link-list";
+import { NodePropertiesDetail } from "../node/node-properties-detail";
 
 export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const isList = searchParams.get("list") === "true";
+
   const { data: graphData, refetch } = api.documentGraph.getById.useQuery({
     id: graphId,
   });
@@ -73,6 +82,9 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
   const [textPanelFull, setTextPanelFull] = useState<boolean>(false);
   const [magnifierMode, setMagnifierMode] = useState(0);
 
+  const nodeId = searchParams.get("nodeId");
+  const node = graphDocument?.nodes.find((n) => String(n.id) === nodeId);
+
   const onGraphFormUpdate = (additionalGraph: GraphDocumentForFrontend) => {
     console.log("onGraphUpdate", additionalGraph);
     if (isEditor) {
@@ -120,6 +132,25 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
               setMagnifierMode={setMagnifierMode}
               rightArea={
                 <div className="flex flex-row items-center gap-4">
+                  <button
+                    onClick={() => {
+                      const newSearchParams = new URLSearchParams(searchParams);
+                      if (isList) {
+                        newSearchParams.set("list", "false");
+                      } else {
+                        newSearchParams.set("list", "true");
+                      }
+                      router.replace(
+                        `${pathname}?${newSearchParams.toString()}`,
+                        { scroll: false },
+                      );
+                    }}
+                    className={`flex items-center justify-center rounded-lg p-2 hover:bg-white/10 ${
+                      isList ? "bg-white/20" : ""
+                    }`}
+                  >
+                    <ListBulletIcon width={16} height={16} color="white" />
+                  </button>
                   <UrlCopy
                     messagePosition="inButton"
                     className="flex !h-8 !w-8 flex-row items-center justify-center px-0 py-0"
@@ -158,86 +189,114 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
             />
           </div>
 
-          {graphDocument && (
-            <D3ForceGraph
-              svgRef={svgRef}
-              width={graphAreaWidth}
-              height={graphAreaHeight}
-              graphDocument={graphDocument}
-              isLinkFiltered={isLinkFiltered}
-              nodeSearchQuery={nodeSearchQuery}
-              currentScale={currentScale}
-              setCurrentScale={setCurrentScale}
-              setFocusedNode={setFocusedNode}
-              focusedNode={focusedNode}
-              setFocusedLink={setFocusedLink}
-              focusedLink={focusedLink}
-              isLargeGraph={false}
-              isEditor={isEditor}
-              onGraphUpdate={isEditor ? onGraphFormUpdate : undefined}
-              onNodeContextMenu={isEditor ? onNodeContextMenu : undefined}
-              onLinkContextMenu={isEditor ? onLinkContextMenu : undefined}
-              magnifierMode={magnifierMode}
-              toolComponent={
-                <>
-                  {isEditor && isGraphUpdated && (
-                    <div className="p-2">
-                      <Button
-                        type="button"
-                        className="!w-max text-sm"
-                        isLoading={updateGraph.isPending}
-                        onClick={() => {
-                          onUpdateRecord();
-                        }}
-                      >
-                        グラフを更新
-                      </Button>
-                    </div>
-                  )}
-
-                  <GraphInfoPanel
-                    focusedNode={focusedNode}
-                    focusedLink={focusedLink}
-                    graphDocument={graphDocument}
-                    setFocusNode={setFocusedNode}
+          {isList && graphDocument ? (
+            <div className="flex h-full w-full flex-row gap-1 overflow-hidden bg-white/20">
+              <div
+                className={`overflow-scroll bg-slate-900 ${nodeId ? "w-1/3" : "w-full"}`}
+              >
+                <NodeLinkList
+                  graphDocument={graphDocument}
+                  topicSpaceId={""}
+                  refetch={refetch}
+                  focusedNode={focusedNode}
+                  isEditor={isEditor}
+                  nodeSearchQuery={nodeSearchQuery}
+                />
+              </div>
+              {node && (
+                <div className="w-2/3 overflow-scroll bg-slate-900">
+                  <NodePropertiesDetail
+                    node={node}
+                    topicSpaceId={""}
+                    refetch={refetch}
+                    enableEdit={isEditor}
                   />
+                </div>
+              )}
+            </div>
+          ) : (
+            graphDocument && (
+              <D3ForceGraph
+                svgRef={svgRef}
+                width={graphAreaWidth}
+                height={graphAreaHeight}
+                graphDocument={graphDocument}
+                isLinkFiltered={isLinkFiltered}
+                nodeSearchQuery={nodeSearchQuery}
+                currentScale={currentScale}
+                setCurrentScale={setCurrentScale}
+                setFocusedNode={setFocusedNode}
+                focusedNode={focusedNode}
+                setFocusedLink={setFocusedLink}
+                focusedLink={focusedLink}
+                isLargeGraph={false}
+                isEditor={isEditor}
+                onGraphUpdate={isEditor ? onGraphFormUpdate : undefined}
+                onNodeContextMenu={isEditor ? onNodeContextMenu : undefined}
+                onLinkContextMenu={isEditor ? onLinkContextMenu : undefined}
+                magnifierMode={magnifierMode}
+                toolComponent={
+                  <>
+                    {isEditor && isGraphUpdated && (
+                      <div className="p-2">
+                        <Button
+                          type="button"
+                          className="!w-max text-sm"
+                          isLoading={updateGraph.isPending}
+                          onClick={() => {
+                            onUpdateRecord();
+                          }}
+                        >
+                          グラフを更新
+                        </Button>
+                      </div>
+                    )}
 
-                  <div className="absolute flex w-1/3 flex-row gap-2 rounded-r-lg bg-black/20 px-4 py-3 text-sm text-white backdrop-blur-sm">
-                    <div>
-                      <button
-                        onClick={() => {
-                          setTextPanelFull(!textPanelFull);
-                        }}
+                    <GraphInfoPanel
+                      focusedNode={focusedNode}
+                      focusedLink={focusedLink}
+                      graphDocument={graphDocument}
+                      setFocusNode={setFocusedNode}
+                      topicSpaceId=""
+                    />
+
+                    <div className="absolute flex w-1/3 flex-row gap-2 rounded-r-lg bg-black/20 px-4 py-3 text-sm text-white backdrop-blur-sm">
+                      <div>
+                        <button
+                          onClick={() => {
+                            setTextPanelFull(!textPanelFull);
+                          }}
+                        >
+                          {textPanelFull ? (
+                            <TriangleDownIcon
+                              height={18}
+                              width={18}
+                              color="white"
+                            />
+                          ) : (
+                            <TriangleRightIcon
+                              height={18}
+                              width={18}
+                              color="white"
+                            />
+                          )}
+                        </button>
+                      </div>
+                      <div
+                        className={`overflow-y-scroll whitespace-pre-wrap text-sm ${textPanelFull ? "max-h-[500px]" : "max-h-[60px]"}`}
                       >
-                        {textPanelFull ? (
-                          <TriangleDownIcon
-                            height={18}
-                            width={18}
-                            color="white"
-                          />
-                        ) : (
-                          <TriangleRightIcon
-                            height={18}
-                            width={18}
-                            color="white"
-                          />
-                        )}
-                      </button>
+                        <GraphSyncedText
+                          focusedLink={focusedLink}
+                          focusedNode={focusedNode}
+                          text={graphData.sourceDocument.text}
+                          graphNodes={defaultGraphData?.nodes ?? []}
+                        />
+                      </div>
                     </div>
-                    <div
-                      className={`overflow-y-scroll whitespace-pre-wrap text-sm ${textPanelFull ? "max-h-[500px]" : "max-h-[60px]"}`}
-                    >
-                      <GraphSyncedText
-                        focusedLink={focusedLink}
-                        focusedNode={focusedNode}
-                        text={graphData.sourceDocument.text}
-                        graphNodes={defaultGraphData?.nodes ?? []}
-                      />
-                    </div>
-                  </div>
-                </>
-              }
-            />
+                  </>
+                }
+              />
+            )
           )}
           {isEditor && graphDocument && (
             <>

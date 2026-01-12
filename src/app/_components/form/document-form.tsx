@@ -10,6 +10,9 @@ import { Switch } from "@headlessui/react";
 import { Textarea } from "../textarea";
 import type { Document } from "@langchain/core/documents";
 import { DocumentUploadTipsModal } from "../tips/document-upload-tips-modal";
+import { ListboxInput } from "../input/listbox-input";
+import { SchemaBuilderModal } from "../kg/schema-builder/schema-builder-modal";
+import type { CustomMappingRules } from "@/server/lib/extractors/base";
 
 type DocumentFormProps = {
   file: File | null;
@@ -29,14 +32,22 @@ export const DocumentForm = ({
   documentUrl,
 }: DocumentFormProps) => {
   const [isPlaneTextMode, setIsPlaneTextMode] = useState<boolean>(false);
+  const [extractMode, setExtractMode] = useState<string>("iterative");
   const [text, setText] = useState<string>();
   const fileInputRef = useRef(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [inspectResult, setInspectResult] = useState<Document[]>([]);
   const [isOpenTips, setIsOpenTips] = useState<boolean>(false);
+  const [isOpenSchemaBuilder, setIsOpenSchemaBuilder] =
+    useState<boolean>(false);
+  const [customMappingRules, setCustomMappingRules] = useState<
+    CustomMappingRules | undefined
+  >(undefined);
 
   const extractKG = api.kg.extractKG.useMutation();
   const textInspect = api.kg.textInspect.useMutation();
+
+  console.log("customMappingRules", customMappingRules);
 
   const extract = (fileUrl: string) => {
     setIsProcessing(true);
@@ -44,8 +55,9 @@ export const DocumentForm = ({
     extractKG.mutate(
       {
         fileUrl: fileUrl,
-        extractMode: "langChain",
+        extractMode: extractMode,
         isPlaneTextMode: isPlaneTextMode,
+        customMappingRules: customMappingRules,
       },
       {
         onSuccess: (res) => {
@@ -248,6 +260,37 @@ export const DocumentForm = ({
               >
                 <span className="size-4 translate-x-1 rounded-full bg-white transition group-data-[checked]:translate-x-6" />
               </Switch>
+              {process.env.NODE_ENV === "development" && (
+                <div className="flex flex-row items-center gap-2">
+                  <div className="text-sm">抽出モード</div>
+                  <ListboxInput
+                    options={[
+                      { value: "langChain", label: "標準" },
+                      { value: "iterative", label: "反復的抽出" },
+                      { value: "assistants", label: "OpenAI Assistants" },
+                    ]}
+                    selected={extractMode}
+                    setSelected={setExtractMode}
+                    disabled={isProcessing}
+                    className="w-60"
+                    // buttonClassName="bg-white text-slate-900 border border-slate-300 shadow-none py-2"
+                    // optionsClassName="bg-white text-slate-900"
+                  />
+                </div>
+              )}
+
+              <div className="flex flex-row items-center gap-2">
+                <Button
+                  type="button"
+                  onClick={() => setIsOpenSchemaBuilder(true)}
+                  disabled={isProcessing}
+                  className="bg-slate-700 text-sm hover:bg-slate-600"
+                >
+                  {customMappingRules
+                    ? "✓ 抽出形式の設定変更"
+                    : "抽出形式の設定"}
+                </Button>
+              </div>
               {((!!text && isPlaneTextMode) || (file && !isPlaneTextMode)) && (
                 <div className="flex flex-row justify-end">
                   {isPlaneTextMode || inspectResult.length > 0 ? (
@@ -266,6 +309,13 @@ export const DocumentForm = ({
         </div>
       </form>
       <DocumentUploadTipsModal isOpen={isOpenTips} setIsOpen={setIsOpenTips} />
+      <SchemaBuilderModal
+        isOpen={isOpenSchemaBuilder}
+        setIsOpen={setIsOpenSchemaBuilder}
+        onSave={(rules) => {
+          setCustomMappingRules(rules);
+        }}
+      />
     </>
   );
 };

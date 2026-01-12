@@ -8,6 +8,7 @@ import { formGraphDataForFrontend } from "@/app/_utils/kg/frontend-properties";
 import type { Extractor } from "@/server/lib/extractors/base";
 import { AssistantsApiExtractor } from "@/server/lib/extractors/assistants";
 import { LangChainExtractor } from "@/server/lib/extractors/langchain";
+import { IterativeGraphExtractor } from "@/server/lib/extractors/iterative";
 import { convertJsonToText } from "@/app/_utils/tiptap/convert";
 import { completeTranslateProperties } from "@/app/_utils/kg/node-name-translation";
 
@@ -96,10 +97,14 @@ export class AnnotationGraphExtractor {
       };
 
       // エクストラクターを選択
-      const extractor: Extractor =
-        extractMode === "langChain"
-          ? new LangChainExtractor()
-          : new AssistantsApiExtractor();
+      let extractor: Extractor;
+      if (extractMode === "iterative") {
+        extractor = new IterativeGraphExtractor();
+      } else if (extractMode === "langChain") {
+        extractor = new LangChainExtractor();
+      } else {
+        extractor = new AssistantsApiExtractor();
+      }
 
       // グラフ抽出を実行
       const nodesAndRelationships = await extractor.extract({

@@ -657,3 +657,17 @@ model ProposalComment {
   @@index([proposalId])
   @@index([authorId])
 }
+
+// 翻訳キャッシュ
+model TranslationCache {
+  id              String   @id @default(cuid())
+  sourceText      String
+  sourceLang      String
+  targetLang      String
+  translatedText  String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([sourceText, sourceLang, targetLang])
+  @@index([sourceText])
+}
