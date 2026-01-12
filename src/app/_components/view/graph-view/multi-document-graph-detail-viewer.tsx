@@ -129,17 +129,19 @@ export const MultiDocumentGraphDetailViewer = ({
                 </button>
               )}
             </Tab>
-            {/* <Tab as={Fragment}>
-              {({ selected }) => (
-                <button
-                  className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${
-                    selected ? "border-b-2 border-white outline-none" : ""
-                  } hover:bg-white/10`}
-                >
-                  3D球面グラフ
-                </button>
-              )}
-            </Tab> */}
+            {process.env.NODE_ENV === "development" && (
+              <Tab as={Fragment}>
+                {({ selected }) => (
+                  <button
+                    className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${
+                      selected ? "border-b-2 border-white outline-none" : ""
+                    } hover:bg-white/10`}
+                  >
+                    3D球面グラフ
+                  </button>
+                )}
+              </Tab>
+            )}
             {process.env.NODE_ENV === "development" && (
               <Tab as={Fragment}>
                 {({ selected }) => (
@@ -205,37 +207,40 @@ export const MultiDocumentGraphDetailViewer = ({
                 }
               />
             </TabPanel>
-            <TabPanel>
-              <D3SphericalGraph
-                width={graphAreaWidth}
-                height={graphAreaHeight}
-                graphDocument={graphDocument}
-                currentScale={currentScale}
-                focusedNode={focusedNode}
-                setFocusedNode={setFocusedNode}
-                focusedLink={focusedLink}
-                setFocusedLink={setFocusedLink}
-                isGraphFullScreen={isGraphFullScreen}
-                isClustered={isClustered}
-                selectedPathData={selectedPathData}
-                selectedGraphData={selectedGraphData}
-                nodeSearchQuery={nodeSearchQuery}
-                tagFilterOption={tagFilterOption}
-                onNodeContextMenu={(_node) => {
-                  // 必要に応じてコンテキストメニューの処理を追加
-                }}
-                onLinkContextMenu={(_link) => {
-                  // 必要に応じてコンテキストメニューの処理を追加
-                }}
-              />
-              <GraphInfoPanel
-                focusedNode={focusedNode}
-                focusedLink={focusedLink}
-                graphDocument={graphDocument}
-                topicSpaceId={topicSpaceId}
-                setFocusNode={setFocusedNode}
-              />
-            </TabPanel>
+
+            {process.env.NODE_ENV === "development" && (
+              <TabPanel>
+                <D3SphericalGraph
+                  width={graphAreaWidth}
+                  height={graphAreaHeight}
+                  graphDocument={graphDocument}
+                  currentScale={currentScale}
+                  focusedNode={focusedNode}
+                  setFocusedNode={setFocusedNode}
+                  focusedLink={focusedLink}
+                  setFocusedLink={setFocusedLink}
+                  isGraphFullScreen={isGraphFullScreen}
+                  isClustered={isClustered}
+                  selectedPathData={selectedPathData}
+                  selectedGraphData={selectedGraphData}
+                  nodeSearchQuery={nodeSearchQuery}
+                  tagFilterOption={tagFilterOption}
+                  onNodeContextMenu={(_node) => {
+                    // 必要に応じてコンテキストメニューの処理を追加
+                  }}
+                  onLinkContextMenu={(_link) => {
+                    // 必要に応じてコンテキストメニューの処理を追加
+                  }}
+                />
+                <GraphInfoPanel
+                  focusedNode={focusedNode}
+                  focusedLink={focusedLink}
+                  graphDocument={graphDocument}
+                  topicSpaceId={topicSpaceId}
+                  setFocusNode={setFocusedNode}
+                />
+              </TabPanel>
+            )}
             {process.env.NODE_ENV === "development" && (
               <TabPanel>
                 <div
