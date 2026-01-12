@@ -290,7 +290,7 @@ export const SchemaBuilderModal = ({
         <div className="flex flex-col gap-2">
           <label className="text-sm font-semibold">サンプルテキスト</label>
           <Textarea
-            placeholder="例: 2024/12/01（音楽） アイドルグループ「RYUTist」のメンバー全員が卒業＆グループ活動休止..."
+            placeholder="例: 2025/12/01（音楽） ..."
             value={sampleText}
             onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
               setSampleText(e.target.value)
