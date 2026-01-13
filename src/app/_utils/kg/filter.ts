@@ -3,7 +3,7 @@ import type {
   RelationshipTypeForFrontend,
   TopicGraphFilterOption,
 } from "@/app/const/types";
-import type { GraphNode, GraphRelationship, TopicSpace } from "@prisma/client";
+import type { GraphNode, GraphRelationship } from "@prisma/client";
 import { nodePathSearch } from "./bfs";
 import { env } from "@/env";
 import { createId } from "@/app/_utils/cuid/cuid";

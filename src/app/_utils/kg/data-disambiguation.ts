@@ -3,6 +3,8 @@ import type { NodeTypeForFrontend } from "@/app/const/types";
 import type { GraphNode, GraphRelationship } from "@prisma/client";
 
 const deleteDuplicatedRelationships = (relationships: GraphRelationship[]) => {
+  // 注意: エッジのプロパティは考慮せず、From/To/Typeが同じものを重複とみなして最初の一つだけを残します。
+  // プロパティが異なる同一タイプのエッジを区別したい場合は、このロジックを修正する必要があります。
   const filteredRelationships = relationships.filter((relationship, index) => {
     return (
       index ===

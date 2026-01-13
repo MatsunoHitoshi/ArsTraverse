@@ -33,8 +33,6 @@ export const AdditionalGraphExtractionModal: React.FC<
   entities,
   centralSubject,
 }) => {
-  const [extractedGraph, setExtractedGraph] =
-    useState<GraphDocumentForFrontend | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
 
   const extractKG = api.kg.extractKG.useMutation();
@@ -113,14 +111,13 @@ export const AdditionalGraphExtractionModal: React.FC<
         {
           onSuccess: (data) => {
             if (data?.data?.graph) {
-              // 既存のエンティティと重複するノードを統合
+                  // 既存のエンティティと重複するノードを統合
               console.log("data.data.graph\n", data.data.graph);
               const mergedGraph = mergeWithExistingEntities(
                 data.data.graph,
                 entities,
               );
               console.log("mergedGraph\n", mergedGraph);
-              setExtractedGraph(mergedGraph);
               if (onGraphUpdate) {
                 onGraphUpdate(mergedGraph);
                 setIsAdditionalGraphExtractionModalOpen(false);

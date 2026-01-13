@@ -15,12 +15,14 @@ import { Fragment } from "react";
 // 編集は扱わない
 export const MultiDocumentGraphViewer = ({
   graphDocument,
-  topicSpaceId,
+  contextId,
+  contextType,
   refetch,
   highlightData,
 }: {
   graphDocument: GraphDocumentForFrontend;
-  topicSpaceId: string;
+  contextId: string;
+  contextType: "topicSpace" | "document";
   refetch: () => void;
   highlightData?: {
     addedNodeIds: Set<string>;
@@ -68,8 +70,8 @@ export const MultiDocumentGraphViewer = ({
           >
             <NodeLinkList
               graphDocument={graphDocument}
-              contextId={topicSpaceId ?? ""}
-              contextType="topicSpace"
+              contextId={contextId ?? ""}
+              contextType={contextType}
               refetch={refetch}
               focusedNode={focusedNode}
             />
@@ -78,8 +80,8 @@ export const MultiDocumentGraphViewer = ({
             <div className="w-2/3 overflow-scroll bg-slate-900">
               <NodePropertiesDetail
                 node={node}
-                contextId={topicSpaceId}
-                contextType="topicSpace"
+                contextId={contextId}
+                contextType={contextType}
                 refetch={refetch}
               />
             </div>
@@ -148,8 +150,8 @@ export const MultiDocumentGraphViewer = ({
                       focusedNode={focusedNode}
                       focusedLink={focusedLink}
                       graphDocument={graphDocument}
-                      contextId={topicSpaceId}
-                      contextType="topicSpace"
+                      contextId={contextId}
+                      contextType={contextType}
                       // maxHeight={height}
                       setFocusNode={setFocusedNode}
                     />
@@ -182,8 +184,8 @@ export const MultiDocumentGraphViewer = ({
                   focusedNode={focusedNode}
                   focusedLink={focusedLink}
                   graphDocument={graphDocument}
-                  contextId={topicSpaceId}
-                  contextType="topicSpace"
+                  contextId={contextId}
+                  contextType={contextType}
                   setFocusNode={setFocusedNode}
                 />
               </TabPanel>

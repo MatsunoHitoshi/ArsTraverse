@@ -44,15 +44,6 @@ export const addStaticPropertiesForFrontend = (graph: {
   };
 };
 
-const getNeighborLinkCount = (
-  node: GraphNode,
-  links: GraphRelationship[],
-): number => {
-  return links.filter((link) => {
-    return link.fromNodeId === node.id || link.toNodeId === node.id;
-  }).length;
-};
-
 export const formTopicSpaceForFrontendPrivate = ({
   topicSpace,
   filterOption,

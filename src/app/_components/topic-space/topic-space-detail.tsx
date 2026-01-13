@@ -276,7 +276,8 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
           {topicSpace.graphData ? (
             <MultiDocumentGraphViewer
               graphDocument={topicSpace.graphData as GraphDocumentForFrontend}
-              topicSpaceId={id}
+              contextId={id}
+              contextType="topicSpace"
               refetch={refetch}
               highlightData={highlightData}
             />
