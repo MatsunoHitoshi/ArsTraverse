@@ -3,7 +3,10 @@ import { BubbleMenu } from "@tiptap/react/menus";
 import type { Editor } from "@tiptap/react";
 import { TiptapEditorToolbar } from "./tiptap-editor-toolbar";
 import { ExtractAdditionalGraphButton } from "./extract-additional-graph-button";
-import { CustomNodeType, GraphDocumentForFrontend } from "@/app/const/types";
+import type {
+  CustomNodeType,
+  GraphDocumentForFrontend,
+} from "@/app/const/types";
 
 interface BubbleMenuProps {
   editor: Editor;

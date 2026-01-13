@@ -303,7 +303,8 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
                       {activeEntity ? (
                         <RelatedNodesAndLinksViewer
                           node={activeEntity}
-                          topicSpaceId={topicSpaceId}
+                          contextId={topicSpaceId}
+                          contextType="topicSpace"
                           className="h-full w-full"
                           height={graphSize.height}
                           width={graphSize.width}
@@ -427,7 +428,8 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
                   {activeEntity ? (
                     <RelatedNodesAndLinksViewer
                       node={activeEntity}
-                      topicSpaceId={topicSpaceId}
+                      contextId={topicSpaceId}
+                      contextType="topicSpace"
                       className="h-full w-full"
                       height={graphSize.height}
                       width={graphSize.width}

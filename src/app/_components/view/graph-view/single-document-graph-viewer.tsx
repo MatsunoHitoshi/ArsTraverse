@@ -77,6 +77,7 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
   const [innerWidth, innerHeight] = useWindowSize();
   const graphAreaWidth = (innerWidth ?? 100) - 18;
   const graphAreaHeight = (innerHeight ?? 300) - 130;
+  const areaHeight = (innerHeight ?? 300) - 80;
   const svgRef = useRef<SVGSVGElement>(null);
   const [currentScale, setCurrentScale] = useState<number>(1);
   const [textPanelFull, setTextPanelFull] = useState<boolean>(false);
@@ -120,7 +121,10 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
         {/* <div className="w-1/3 overflow-y-hidden text-sm text-white">
           <div className="text-sm">{graphData.sourceDocument.text}</div>
         </div> */}
-        <div className="flex h-full w-full flex-col divide-y divide-slate-400 overflow-hidden rounded-md border border-slate-400  text-slate-50">
+        <div
+          className="flex w-full flex-col divide-y divide-slate-400 overflow-hidden rounded-md border border-slate-400 text-slate-50"
+          style={{ height: areaHeight }}
+        >
           <div className="px-4">
             <Toolbar
               isLinkFiltered={isLinkFiltered}
@@ -196,10 +200,11 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
               >
                 <NodeLinkList
                   graphDocument={graphDocument}
-                  topicSpaceId={""}
+                  contextId={graphId}
+                  contextType="document"
                   refetch={refetch}
                   focusedNode={focusedNode}
-                  isEditor={isEditor}
+                  isEditor={false}
                   nodeSearchQuery={nodeSearchQuery}
                 />
               </div>
@@ -207,9 +212,10 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
                 <div className="w-2/3 overflow-scroll bg-slate-900">
                   <NodePropertiesDetail
                     node={node}
-                    topicSpaceId={""}
+                    contextId={graphId}
+                    contextType="document"
                     refetch={refetch}
-                    enableEdit={isEditor}
+                    enableEdit={false}
                   />
                 </div>
               )}
@@ -257,7 +263,8 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
                       focusedLink={focusedLink}
                       graphDocument={graphDocument}
                       setFocusNode={setFocusedNode}
-                      topicSpaceId=""
+                      contextId={graphId}
+                      contextType="document"
                     />
 
                     <div className="absolute flex w-1/3 flex-row gap-2 rounded-r-lg bg-black/20 px-4 py-3 text-sm text-white backdrop-blur-sm">

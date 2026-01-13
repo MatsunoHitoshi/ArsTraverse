@@ -86,13 +86,18 @@ export const MultiDocumentGraphDetailViewer = ({
           >
             <NodeLinkList
               graphDocument={graphDocument}
-              topicSpaceId={topicSpaceId ?? ""}
+              contextId={topicSpaceId ?? ""}
+              contextType="topicSpace"
               focusedNode={focusedNode}
             />
           </div>
           {nodeId && (
             <div className="w-2/3 overflow-scroll bg-slate-900">
-              <NodePropertiesDetail node={node} topicSpaceId={topicSpaceId} />
+              <NodePropertiesDetail
+                node={node}
+                contextId={topicSpaceId}
+                contextType="topicSpace"
+              />
             </div>
           )}
         </div>
@@ -199,7 +204,8 @@ export const MultiDocumentGraphDetailViewer = ({
                       focusedNode={focusedNode}
                       focusedLink={focusedLink}
                       graphDocument={graphDocument}
-                      topicSpaceId={topicSpaceId}
+                      contextId={topicSpaceId}
+                      contextType="topicSpace"
                       // maxHeight={height}
                       setFocusNode={setFocusedNode}
                     />
@@ -236,7 +242,8 @@ export const MultiDocumentGraphDetailViewer = ({
                   focusedNode={focusedNode}
                   focusedLink={focusedLink}
                   graphDocument={graphDocument}
-                  topicSpaceId={topicSpaceId}
+                  contextId={topicSpaceId}
+                  contextType="topicSpace"
                   setFocusNode={setFocusedNode}
                 />
               </TabPanel>
@@ -328,7 +335,8 @@ export const MultiDocumentGraphDetailViewer = ({
                   focusedNode={focusedNode}
                   focusedLink={focusedLink}
                   graphDocument={graphDocument}
-                  topicSpaceId={topicSpaceId}
+                  contextId={topicSpaceId}
+                  contextType="topicSpace"
                   setFocusNode={setFocusedNode}
                 />
               </TabPanel>

@@ -3,12 +3,16 @@ import { Button } from "../button/button";
 import { TextInput } from "../input/text-input";
 import { Textarea } from "../textarea";
 import { api } from "@/trpc/react";
+import type {
+  NodeTypeForFrontend,
+  RelationshipTypeForFrontend,
+} from "@/app/const/types";
 
 interface ProposalCreateFormProps {
   topicSpaceId: string;
   newGraphData: {
-    nodes: unknown[];
-    relationships: unknown[];
+    nodes: NodeTypeForFrontend[];
+    relationships: RelationshipTypeForFrontend[];
   };
   onSuccess?: () => void;
   onCancel?: () => void;

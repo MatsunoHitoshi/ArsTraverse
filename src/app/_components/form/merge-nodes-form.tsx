@@ -62,7 +62,8 @@ export const MergeNodesForm = ({
                   </div>
                   <PropertiesSummaryPanel
                     node={node}
-                    topicSpaceId={topicSpaceId}
+                    contextId={topicSpaceId}
+                    contextType="topicSpace"
                   />
                 </div>
               );
@@ -85,7 +86,8 @@ export const MergeNodesForm = ({
             {mergeNodes[0] && (
               <PropertiesSummaryPanel
                 node={mergeNodes[0]}
-                topicSpaceId={topicSpaceId}
+                contextId={topicSpaceId}
+                contextType="topicSpace"
               />
             )}
           </div>

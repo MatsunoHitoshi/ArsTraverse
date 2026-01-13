@@ -15,7 +15,10 @@ import {
   GraphChangeEntityType,
   GraphChangeRecordType,
   GraphChangeType,
+  type GraphNode,
+  type GraphRelationship,
 } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { diffNodes, diffRelationships } from "@/app/_utils/kg/diff";
 import type { Extractor } from "@/server/lib/extractors/base";
 import { AssistantsApiExtractor } from "@/server/lib/extractors/assistants";
@@ -32,6 +35,10 @@ import { completeTranslateProperties } from "@/app/_utils/kg/node-name-translati
 import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage } from "@langchain/core/messages";
 import type { TextChunk } from "@/server/lib/extractors/base";
+import type {
+  NodeTypeForFrontend,
+  RelationshipTypeForFrontend,
+} from "@/app/const/types";
 // import type { Prisma } from "@prisma/client";
 // import { GraphDataStatus } from "@prisma/client";
 // import { stripGraphData } from "@/app/_utils/kg/data-strip";
@@ -103,7 +110,49 @@ const GetNodesByIdsInputSchema = z.object({
 
 const GetRelatedNodesInputSchema = z.object({
   nodeId: z.string(),
-  topicSpaceId: z.string(),
+  contextId: z.string(),
+  contextType: z.enum(["topicSpace", "document"]),
+});
+
+const DocumentSchema = z.object({
+  pageContent: z.string(),
+  metadata: z.record(z.any()),
+});
+
+const ExtractPhase1InputSchema = z.object({
+  documents: z.array(DocumentSchema),
+  schema: z
+    .object({
+      allowedNodes: z.array(z.string()),
+      allowedRelationships: z.array(z.string()),
+    })
+    .optional(),
+  additionalPrompt: z.string().optional(),
+  customMappingRules: ExtractInputSchema.shape.customMappingRules,
+});
+
+const ExtractPhase2InputSchema = ExtractPhase1InputSchema.extend({
+  contextualInfo: z.string(),
+});
+
+const NodeInputSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  label: z.string(),
+  properties: z.record(z.string()),
+});
+
+const RelationshipInputSchema = z.object({
+  id: z.string(),
+  sourceId: z.string(),
+  targetId: z.string(),
+  type: z.string(),
+  properties: z.record(z.string()),
+});
+
+const FinalizeGraphInputSchema = z.object({
+  nodes: z.array(NodeInputSchema),
+  relationships: z.array(RelationshipInputSchema),
 });
 
 export type NodeSchema = {
@@ -112,6 +161,133 @@ export type NodeSchema = {
 };
 
 export const kgRouter = createTRPCRouter({
+  finalizeGraph: publicProcedure
+    .input(FinalizeGraphInputSchema)
+    .mutation(async ({ input }) => {
+      const { nodes, relationships } = input;
+
+      try {
+        const normalizedNodesAndRelationships = {
+          nodes: nodes.map((n) => ({
+            id: n.id,
+            name: n.name,
+            label: n.label,
+            properties: n.properties ?? {},
+            documentGraphId: null,
+            topicSpaceId: null,
+            createdAt: null,
+            updatedAt: null,
+            deletedAt: null,
+          })),
+          relationships: relationships.map((r) => ({
+            id: r.id,
+            type: r.type,
+            properties: r.properties ?? {},
+            fromNodeId: r.sourceId,
+            toNodeId: r.targetId,
+            documentGraphId: null,
+            topicSpaceId: null,
+            createdAt: null,
+            updatedAt: null,
+            deletedAt: null,
+          })),
+        };
+
+        const disambiguatedNodesAndRelationships = dataDisambiguation(
+          normalizedNodesAndRelationships,
+        );
+        const graphDocument = await completeTranslateProperties(
+          disambiguatedNodesAndRelationships,
+        );
+        return {
+          data: {
+            graph: formGraphDataForFrontend(graphDocument),
+          },
+        };
+      } catch (error) {
+        console.error("Graph finalization failed:", error);
+        return {
+          data: { graph: null, error: "グラフ構築エラー" },
+        };
+      }
+    }),
+
+  extractPhase1: publicProcedure
+    .input(ExtractPhase1InputSchema)
+    .mutation(async ({ input }) => {
+      const { documents, schema, additionalPrompt, customMappingRules } = input;
+
+      try {
+        const extractor = new IterativeGraphExtractor();
+        const nodesAndRelationships = await extractor.extractPhase1(documents, {
+          localFilePath: "", // Not used in phase 1 direct call
+          isPlaneTextMode: false, // Not used
+          schema,
+          additionalPrompt,
+          customMappingRules,
+        });
+
+        return {
+          data: {
+            nodes: nodesAndRelationships.nodes,
+            relationships: nodesAndRelationships.relationships,
+          },
+        };
+      } catch (error) {
+        console.error("Phase 1 extraction failed:", error);
+        return {
+          data: {
+            nodes: [],
+            relationships: [],
+            error: "Phase 1 extraction failed",
+          },
+        };
+      }
+    }),
+
+  extractPhase2: publicProcedure
+    .input(ExtractPhase2InputSchema)
+    .mutation(async ({ input }) => {
+      const {
+        documents,
+        contextualInfo,
+        schema,
+        additionalPrompt,
+        customMappingRules,
+      } = input;
+
+      try {
+        const extractor = new IterativeGraphExtractor();
+        const nodesAndRelationships = await extractor.extractPhase2(
+          documents,
+          contextualInfo,
+          {
+            localFilePath: "",
+            isPlaneTextMode: false,
+            schema,
+            additionalPrompt,
+            customMappingRules,
+          },
+        );
+
+        return {
+          data: {
+            nodes: nodesAndRelationships.nodes,
+            relationships: nodesAndRelationships.relationships,
+          },
+        };
+      } catch (error) {
+        console.error("Phase 2 extraction failed:", error);
+        return {
+          data: {
+            nodes: [],
+            relationships: [],
+            error: "Phase 2 extraction failed",
+          },
+        };
+      }
+    }),
+
   getNodesByIds: protectedProcedure
     .input(GetNodesByIdsInputSchema)
     .query(async ({ ctx, input }) => {
@@ -435,12 +611,100 @@ Output:`;
         relationships: topicSpace.graphRelationships,
       };
 
+      console.log("=== バックエンド統合処理開始 ===");
+      console.log("既存グラフ - ノード数:", prevGraphData.nodes.length);
+      console.log("既存グラフ - エッジ数:", prevGraphData.relationships.length);
+      // 型アサーションを適用
+      const nodes = input.graphDocument.nodes as NodeTypeForFrontend[];
+      const relationships = input.graphDocument
+        .relationships as RelationshipTypeForFrontend[];
+
+      console.log("受信データ - ノード数:", nodes.length);
+      console.log("受信データ - エッジ数:", relationships.length);
+      console.log(
+        "受信エッジ詳細（sourceId/targetId形式）:",
+        relationships.map((rel) => ({
+          id: rel.id,
+          type: rel.type,
+          sourceId: rel.sourceId,
+          targetId: rel.targetId,
+        })),
+      );
+
+      // フロントエンドから送信されるグラフデータ（sourceId/targetId形式）を
+      // fuseGraphsが期待する形式（fromNodeId/toNodeId形式）に変換
+      const targetGraphForFusion: {
+        nodes: GraphNode[];
+        relationships: GraphRelationship[];
+      } = {
+        nodes: nodes.map(
+          (node): GraphNode => ({
+            id: node.id,
+            name: node.name,
+            label: node.label,
+            properties: (node.properties ?? {}) as Prisma.JsonValue,
+            topicSpaceId: node.topicSpaceId ?? null,
+            documentGraphId: node.documentGraphId ?? null,
+            createdAt: null,
+            updatedAt: null,
+            deletedAt: null,
+          }),
+        ),
+        relationships: relationships.map(
+          (rel): GraphRelationship => ({
+            id: rel.id,
+            type: rel.type,
+            properties: (rel.properties ?? {}) as Prisma.JsonValue,
+            fromNodeId: rel.sourceId,
+            toNodeId: rel.targetId,
+            topicSpaceId: rel.topicSpaceId ?? null,
+            documentGraphId: rel.documentGraphId ?? null,
+            createdAt: null,
+            updatedAt: null,
+            deletedAt: null,
+          }),
+        ),
+      };
+
+      console.log(
+        "変換後グラフ - ノード数:",
+        targetGraphForFusion.nodes.length,
+      );
+      console.log(
+        "変換後グラフ - エッジ数:",
+        targetGraphForFusion.relationships.length,
+      );
+      console.log(
+        "変換後エッジ詳細（fromNodeId/toNodeId形式）:",
+        targetGraphForFusion.relationships.map((rel) => ({
+          id: rel.id,
+          type: rel.type,
+          fromNodeId: rel.fromNodeId,
+          toNodeId: rel.toNodeId,
+        })),
+      );
+
       const labelCheck = false;
       const updatedGraphData = await fuseGraphs({
         sourceGraph: prevGraphData,
-        targetGraph: input.graphDocument,
+        targetGraph: targetGraphForFusion,
         labelCheck,
       });
+
+      console.log("fuseGraphs後 - ノード数:", updatedGraphData.nodes.length);
+      console.log(
+        "fuseGraphs後 - エッジ数:",
+        updatedGraphData.relationships.length,
+      );
+      console.log(
+        "fuseGraphs後エッジ詳細:",
+        updatedGraphData.relationships.map((rel) => ({
+          id: rel.id,
+          type: rel.type,
+          fromNodeId: rel.fromNodeId,
+          toNodeId: rel.toNodeId,
+        })),
+      );
 
       const newGraphWithProperties = attachGraphProperties(
         updatedGraphData,
@@ -491,6 +755,20 @@ Output:`;
           formRelationshipDataForFrontend(r),
         ),
       );
+      console.log("エッジ差分計算結果 - 総数:", relationshipDiffs.length);
+      console.log(
+        "エッジ差分詳細:",
+        relationshipDiffs.map((diff) => ({
+          type: diff.type,
+          originalId: diff.original?.id,
+          updatedId: diff.updated?.id,
+          originalSourceId: diff.original?.sourceId,
+          originalTargetId: diff.original?.targetId,
+          updatedSourceId: diff.updated?.sourceId,
+          updatedTargetId: diff.updated?.targetId,
+        })),
+      );
+
       const addedRelationshipsData = relationshipDiffs
         .filter((diff) => diff.type === GraphChangeType.ADD)
         .map((relationship) => ({
@@ -501,9 +779,26 @@ Output:`;
           toNodeId: relationship.updated?.targetId ?? "",
           topicSpaceId: topicSpace.id,
         }));
-      await ctx.db.graphRelationship.createMany({
-        data: addedRelationshipsData,
-      });
+
+      console.log("追加されるエッジ数:", addedRelationshipsData.length);
+      console.log(
+        "追加されるエッジ詳細:",
+        addedRelationshipsData.map((rel) => ({
+          id: rel.id,
+          type: rel.type,
+          fromNodeId: rel.fromNodeId,
+          toNodeId: rel.toNodeId,
+        })),
+      );
+
+      if (addedRelationshipsData.length > 0) {
+        await ctx.db.graphRelationship.createMany({
+          data: addedRelationshipsData,
+        });
+        console.log("エッジをデータベースに追加しました");
+      } else {
+        console.log("追加するエッジがありません");
+      }
 
       // 詳細な変更差分の履歴保存
       const nodeChangeHistories = nodeDiffs.map((diff: NodeDiffType) => {
@@ -546,31 +841,62 @@ Output:`;
   getRelatedNodes: publicProcedure
     .input(GetRelatedNodesInputSchema)
     .query(async ({ ctx, input }) => {
-      const { nodeId, topicSpaceId } = input;
+      const { nodeId, contextId, contextType } = input;
 
-      const topicSpace = await ctx.db.topicSpace.findFirst({
-        where: { id: topicSpaceId, isDeleted: false },
-        include: {
-          graphNodes: {
-            where: {
-              deletedAt: null,
+      let graphData;
+
+      if (contextType === "topicSpace") {
+        const topicSpace = await ctx.db.topicSpace.findFirst({
+          where: { id: contextId, isDeleted: false },
+          include: {
+            graphNodes: {
+              where: {
+                deletedAt: null,
+              },
+            },
+            graphRelationships: {
+              where: {
+                deletedAt: null,
+              },
             },
           },
-          graphRelationships: {
-            where: {
-              deletedAt: null,
+        });
+        if (!topicSpace) {
+          throw new Error("TopicSpace not found");
+        }
+
+        graphData = {
+          nodes: topicSpace.graphNodes,
+          relationships: topicSpace.graphRelationships,
+        };
+      } else {
+        // Document context
+        const documentGraph = await ctx.db.documentGraph.findFirst({
+          where: { id: contextId },
+          include: {
+            graphNodes: {
+              where: {
+                deletedAt: null,
+              },
+            },
+            graphRelationships: {
+              where: {
+                deletedAt: null,
+              },
             },
           },
-        },
-      });
-      if (!topicSpace) {
-        throw new Error("TopicSpace not found");
+        });
+
+        if (!documentGraph) {
+          throw new Error("DocumentGraph not found");
+        }
+
+        graphData = {
+          nodes: documentGraph.graphNodes,
+          relationships: documentGraph.graphRelationships,
+        };
       }
 
-      const graphData = {
-        nodes: topicSpace.graphNodes,
-        relationships: topicSpace.graphRelationships,
-      };
       const sourceNode = graphData.nodes.find((node) => node.id === nodeId) ?? {
         id: nodeId,
         name: "",

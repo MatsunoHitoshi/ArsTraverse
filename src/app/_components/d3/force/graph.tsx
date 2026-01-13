@@ -108,25 +108,56 @@ const GraphNodeCircle = memo(function GraphNodeCircle({
           (isNodeFiltered(graphNode, filterOption) ? 1 : 0.5) *
           nodeMagnification
         }
+        data-node-id={graphNode.id}
+        data-is-added={graphNode.isAddedInHistory}
+        data-is-removed={graphNode.isRemovedInHistory}
         fill={
           // AIモード時のみ選択ノードをオレンジ
           ((isSelectionMode && isSelected) ?? isFocused ?? isDragEditorTarget)
             ? "#ef7234"
             : isPathNode
               ? "#eae80c"
-              : graphNode.isAdditional
-                ? "#8b9dc3"
-                : graphUnselected
-                  ? "#324557"
-                  : isClustered && graphNode.nodeColor
-                    ? graphNode.nodeColor
-                    : "whitesmoke"
+              : graphNode.isAddedInHistory
+                ? "#10b981" // 変更履歴で追加されたノードは緑色
+                : graphNode.isRemovedInHistory
+                  ? "#ef4444" // 変更履歴で削除されたノードは赤色
+                  : graphNode.isMergeTarget
+                    ? "#10b981" // 統合予定ノードは緑色
+                    : graphNode.isAdditional
+                      ? "#8b9dc3"
+                      : graphUnselected
+                        ? "#324557"
+                        : isClustered && graphNode.nodeColor
+                          ? graphNode.nodeColor
+                          : "whitesmoke"
         }
-        opacity={isNodeFiltered(graphNode, filterOption) ? 0.9 : 0.6}
+        opacity={
+          graphNode.isExistingContext
+            ? 0.3 // 既存グラフのコンテキストノードは薄く表示
+            : isNodeFiltered(graphNode, filterOption)
+              ? 0.9
+              : 0.6
+        }
         cx={graphNode.x}
         cy={graphNode.y}
-        stroke="#eae80c"
-        strokeWidth={queryFiltered ? 2.5 : 0}
+        stroke={
+          graphNode.isAddedInHistory
+            ? "#10b981" // 変更履歴で追加されたノードの枠線も緑色
+            : graphNode.isRemovedInHistory
+              ? "#ef4444" // 変更履歴で削除されたノードの枠線も赤色
+              : graphNode.isMergeTarget
+                ? "#10b981" // 統合予定ノードの枠線も緑色
+                : "#eae80c"
+        }
+        strokeWidth={
+          (graphNode.isAddedInHistory ??
+          graphNode.isRemovedInHistory ??
+          graphNode.isMergeTarget)
+            ? 2.5 // ハイライトノードの枠線を太く
+            : queryFiltered
+              ? 2.5
+              : 0
+        }
       />
       {(currentScale > 0.7 || isGraphFullScreen) && (
         <text
@@ -211,6 +242,7 @@ export const D3ForceGraph = ({
   magnifierMode = 0,
   isSelectionMode,
   onNodeSelectionToggle,
+  highlightData,
 }: {
   svgRef: React.RefObject<SVGSVGElement>;
   height: number;
@@ -245,11 +277,18 @@ export const D3ForceGraph = ({
   magnifierMode?: number;
   isSelectionMode?: boolean;
   onNodeSelectionToggle?: (node: CustomNodeType) => void;
+  highlightData?: {
+    addedNodeIds: Set<string>;
+    removedNodeIds: Set<string>;
+    addedLinkIds: Set<string>;
+    removedLinkIds: Set<string>;
+  };
 }) => {
   const { nodes, relationships } = graphDocument;
   const initLinks = relationships as CustomLinkType[];
   const initNodes = isLinkFiltered ? linkFilter(nodes, initLinks) : nodes;
 
+  // ハイライト情報は後で適用するため、initNodesとnewLinksはhighlightDataに依存しない
   const newLinks = useMemo(() => {
     return initLinks.map((d) => {
       const source = getNodeByIdForFrontend(
@@ -276,6 +315,46 @@ export const D3ForceGraph = ({
   );
   const [graphNodes, setGraphNodes] = useState<CustomNodeType[]>(initNodes);
   const [graphLinks, setGraphLinks] = useState<CustomLinkType[]>(newLinks);
+
+  // highlightDataが変更されたら、既存のノードとリンクのプロパティを更新
+  // （D3のシミュレーションをリセットしないように、状態を置き換えずにプロパティのみ更新）
+  useEffect(() => {
+    if (!highlightData) {
+      // highlightDataがない場合は、プロパティをクリア
+      setGraphNodes((prevNodes) =>
+        prevNodes.map((node) => ({
+          ...node,
+          isAddedInHistory: false,
+          isRemovedInHistory: false,
+        })),
+      );
+      setGraphLinks((prevLinks) =>
+        prevLinks.map((link) => ({
+          ...link,
+          isAddedInHistory: false,
+          isRemovedInHistory: false,
+        })),
+      );
+      return;
+    }
+
+    // 既存のノードとリンクのプロパティのみを更新
+    setGraphNodes((prevNodes) =>
+      prevNodes.map((node) => ({
+        ...node,
+        isAddedInHistory: highlightData.addedNodeIds.has(node.id),
+        isRemovedInHistory: highlightData.removedNodeIds.has(node.id),
+      })),
+    );
+
+    setGraphLinks((prevLinks) =>
+      prevLinks.map((link) => ({
+        ...link,
+        isAddedInHistory: highlightData.addedLinkIds.has(link.id),
+        isRemovedInHistory: highlightData.removedLinkIds.has(link.id),
+      })),
+    );
+  }, [highlightData]);
 
   const [nodesInMagnifier, setNodesInMagnifier] = useState<string[]>([]);
   const [linksInMagnifier, setLinksInMagnifier] = useState<string[]>([]);
@@ -389,6 +468,19 @@ export const D3ForceGraph = ({
   const lastUpdateTimeRef = useRef<number>(0);
   const THROTTLE_MS = 16; // 約60fps
 
+  // graphNodesとgraphLinksの最新の状態をrefで保持して、updateGraph内で参照できるようにする
+  const graphNodesRef = useRef<CustomNodeType[]>(graphNodes);
+  const graphLinksRef = useRef<CustomLinkType[]>(graphLinks);
+
+  // graphNodesとgraphLinksが変更されたらrefを更新
+  useEffect(() => {
+    graphNodesRef.current = graphNodes;
+  }, [graphNodes]);
+
+  useEffect(() => {
+    graphLinksRef.current = graphLinks;
+  }, [graphLinks]);
+
   // MagnifierLensのコールバック関数をメモ化
   const handleNodesInMagnifierChange = useCallback(
     (nodeIds: string[], magnifications: Map<string, number>) => {
@@ -483,9 +575,7 @@ export const D3ForceGraph = ({
     simulation.alphaTarget(0); // 目標alpha値は0（通常通り）
 
     // requestAnimationFrameでスロットリングしてsetStateを最適化
-    // initNodesのMapを作成して、元のプロパティを保持できるようにする
-    const initNodesMap = new Map<string, CustomNodeType>();
-    initNodes.forEach((node) => initNodesMap.set(node.id, node));
+    // graphNodesRefとgraphLinksRefは既にトップレベルで定義されているので、ここでは使用するだけ
 
     const updateGraph = () => {
       // シミュレーションの最新のノードデータを取得
@@ -505,17 +595,23 @@ export const D3ForceGraph = ({
                   ? 8
                   : 10;
 
+      // graphNodesの最新の状態からプロパティを取得するためのMapを作成
+      const currentGraphNodesMap = new Map<string, CustomNodeType>();
+      graphNodesRef.current.forEach((node) =>
+        currentGraphNodesMap.set(node.id, node),
+      );
+
       // シミュレーションで更新された位置情報（x, y, vx, vy, fx, fy）と
-      // 元のノードのプロパティ（nodeColor, isAdditionalなど）をマージ
+      // 最新のノードのプロパティ（nodeColor, isAdditional, isAddedInHistoryなど）をマージ
       const updatedNodes = currentNodes.map((node) => {
-        const originalNode = initNodesMap.get(node.id);
+        const currentGraphNode = currentGraphNodesMap.get(node.id);
         const nodeVisible =
           isGraphFullScreen ||
           !(isLargeGraph && (node.neighborLinkCount ?? 0) <= visibleByScaling);
 
-        // originalNodeが存在する場合は元のプロパティを保持し、存在しない場合はnodeをそのまま使用
+        // currentGraphNodeが存在する場合は最新のプロパティを保持し、存在しない場合はnodeをそのまま使用
         return {
-          ...(originalNode ?? node), // 元のノードのプロパティ（nodeColor, isAdditionalなど）を保持
+          ...(currentGraphNode ?? node), // 最新のノードのプロパティ（nodeColor, isAdditional, isAddedInHistoryなど）を保持
           ...node, // シミュレーションで更新された位置情報（x, y, vx, vy, fx, fy）を上書き
           visible: nodeVisible,
         };
@@ -528,7 +624,13 @@ export const D3ForceGraph = ({
       const nodeMapForLinks = new Map<string, CustomNodeType>();
       updatedNodes.forEach((node) => nodeMapForLinks.set(node.id, node));
 
-      // newLinksのsourceとtargetを最新のノードに更新
+      // graphLinksの最新の状態からプロパティを取得するためのMapを作成
+      const currentGraphLinksMap = new Map<string, CustomLinkType>();
+      graphLinksRef.current.forEach((link) =>
+        currentGraphLinksMap.set(link.id, link),
+      );
+
+      // newLinksのsourceとtargetを最新のノードに更新し、最新のプロパティを保持
       const updatedLinks = newLinks.map((link) => {
         // link.sourceとlink.targetはCustomNodeType型なので、直接idにアクセス可能
         const sourceId =
@@ -547,8 +649,10 @@ export const D3ForceGraph = ({
         const targetNode = nodeMapForLinks.get(targetId);
 
         if (sourceNode && targetNode) {
+          const currentGraphLink = currentGraphLinksMap.get(link.id);
           return {
-            ...link,
+            ...(currentGraphLink ?? link), // 最新のリンクのプロパティ（isAddedInHistoryなど）を保持
+            ...link, // 元のリンクのプロパティ
             source: sourceNode,
             target: targetNode,
           };
@@ -677,6 +781,12 @@ export const D3ForceGraph = ({
                 const sourceNodeVisible = sourceNode?.visible ?? false;
                 const targetNodeVisible = targetNode?.visible ?? false;
 
+                // 既存コンテキストエッジかどうかを判定
+                const isExistingContextLink =
+                  graphLink.isExistingContext ??
+                  sourceNode?.isExistingContext ??
+                  targetNode?.isExistingContext;
+
                 if (
                   (sourceNodeVisible || targetNodeVisible) &&
                   modSource.x !== undefined &&
@@ -730,38 +840,44 @@ export const D3ForceGraph = ({
                             ? "#ef7234"
                             : isSelectionMode && isSelectedLink
                               ? "#ef7234"
-                              : isPathLink
-                                ? "#eae80c"
-                                : graphLink.isAdditional
-                                  ? "#3769d4"
-                                  : "white"
+                              : graphLink.isAddedInHistory
+                                ? "#10b981" // 変更履歴で追加されたエッジは緑色
+                                : graphLink.isRemovedInHistory
+                                  ? "#ef4444" // 変更履歴で削除されたエッジは赤色
+                                  : isPathLink
+                                    ? "#eae80c"
+                                    : graphLink.isAdditional
+                                      ? "#3769d4"
+                                      : "white"
                         }
-                        // stroke={
-                        //   isFocused
-                        //     ? "#ef7234"
-                        //     : isPathLink
-                        //       ? "#eae80c"
-                        //       : isGradient
-                        //         ? `url(#gradient-${graphLink.id})`
-                        //         : "white"
-                        // }
-                        strokeWidth={
-                          (isFocused || (isSelectionMode && isSelectedLink)
-                            ? 2
-                            : 1.2) *
-                          linkMagnification *
-                          1.5
-                        }
+                        data-link-id={graphLink.id}
+                        data-is-added={graphLink.isAddedInHistory}
+                        data-is-removed={graphLink.isRemovedInHistory}
                         strokeOpacity={
-                          isFocused
-                            ? 1
-                            : isSelectionMode && isSelectedLink
-                              ? 0.9
-                              : isGradient
-                                ? 0.04
-                                : (distance(graphLink) ? 0.6 : 0.4) /
-                                  (distance(graphLink) * distance(graphLink) ||
-                                    1)
+                          (graphLink.isAddedInHistory ??
+                          graphLink.isRemovedInHistory)
+                            ? 0.8 // ハイライトエッジは少し濃く
+                            : isFocused
+                              ? 1
+                              : isSelectionMode && isSelectedLink
+                                ? 0.9
+                                : graphLink.isExistingContext
+                                  ? 0.2 // 既存グラフのコンテキストエッジは薄く
+                                  : isGradient
+                                    ? 0.04
+                                    : (distance(graphLink) ? 0.6 : 0.4) /
+                                      (distance(graphLink) *
+                                        distance(graphLink) || 1)
+                        }
+                        strokeWidth={
+                          (graphLink.isAddedInHistory ??
+                          graphLink.isRemovedInHistory)
+                            ? 2.5 // ハイライトエッジは太く
+                            : (isFocused || (isSelectionMode && isSelectedLink)
+                                ? 2
+                                : 1.2) *
+                              linkMagnification *
+                              1.5
                         }
                         // strokeOpacity={isFocused ? 1 : isGradient ? 0.3 : 0.4}
                         x1={modSource.x}

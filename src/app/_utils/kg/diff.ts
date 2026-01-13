@@ -15,8 +15,8 @@ const shapeRelationshipData = (
     id: relationship.id,
     type: relationship.type,
     properties: relationship.properties,
-    targetId: relationship.sourceId,
-    sourceId: relationship.targetId,
+    sourceId: relationship.sourceId,
+    targetId: relationship.targetId,
     documentGraphId: relationship.documentGraphId,
     topicSpaceId: relationship.topicSpaceId,
   };

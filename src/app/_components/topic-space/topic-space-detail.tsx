@@ -16,7 +16,7 @@ import {
 import { DocumentList, DocumentListMenuButton } from "../list/document-list";
 import type { DocumentResponse } from "@/app/const/types";
 import { Button } from "../button/button";
-import { Fragment, useState } from "react";
+import { Fragment, useState, useCallback } from "react";
 import { DocumentAttachModal } from "./document-attach-modal";
 import { LinkButton } from "../button/link-button";
 import { MultiDocumentGraphViewer } from "../view/graph-view/multi-document-graph-viewer";
@@ -26,6 +26,30 @@ import { TopicSpaceChangeHistory } from "./topic-space-change-history";
 import { ProposalList } from "../graph-edit-proposal/proposal-list";
 
 export const TopicSpaceDetail = ({ id }: { id: string }) => {
+  // 変更履歴のハイライト情報を管理
+  const [highlightData, setHighlightData] = useState<{
+    addedNodeIds: Set<string>;
+    removedNodeIds: Set<string>;
+    addedLinkIds: Set<string>;
+    removedLinkIds: Set<string>;
+  }>({
+    addedNodeIds: new Set(),
+    removedNodeIds: new Set(),
+    addedLinkIds: new Set(),
+    removedLinkIds: new Set(),
+  });
+
+  const handleHighlightChange = useCallback(
+    (highlight: {
+      addedNodeIds: Set<string>;
+      removedNodeIds: Set<string>;
+      addedLinkIds: Set<string>;
+      removedLinkIds: Set<string>;
+    }) => {
+      setHighlightData(highlight);
+    },
+    [],
+  );
   const { data: session } = useSession();
   const { data: topicSpace, refetch } = api.topicSpaces.getById.useQuery({
     id: id,
@@ -240,7 +264,10 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
                 <ProposalList topicSpaceId={id} />
               </TabPanel>
               <TabPanel>
-                <TopicSpaceChangeHistory topicSpaceId={id} />
+                <TopicSpaceChangeHistory
+                  topicSpaceId={id}
+                  onHighlightChange={handleHighlightChange}
+                />
               </TabPanel>
             </TabPanels>
           </TabGroup>
@@ -251,6 +278,7 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
               graphDocument={topicSpace.graphData as GraphDocumentForFrontend}
               topicSpaceId={id}
               refetch={refetch}
+              highlightData={highlightData}
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center p-4">

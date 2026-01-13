@@ -124,6 +124,10 @@ export type NodeTypeForFrontend = {
   clustered?: { x: number; y: number };
   nodeColor?: string;
   isAdditional?: boolean;
+  isMergeTarget?: boolean;
+  isExistingContext?: boolean;
+  isAddedInHistory?: boolean; // 変更履歴で追加されたノード
+  isRemovedInHistory?: boolean; // 変更履歴で削除されたノード
 };
 
 export type RelationshipTypeForFrontend = {
@@ -135,6 +139,9 @@ export type RelationshipTypeForFrontend = {
   topicSpaceId?: string;
   documentGraphId?: string;
   isAdditional?: boolean;
+  isExistingContext?: boolean;
+  isAddedInHistory?: boolean; // 変更履歴で追加されたエッジ
+  isRemovedInHistory?: boolean; // 変更履歴で削除されたエッジ
 };
 
 export type PropertyTypeForFrontend = {

@@ -554,7 +554,8 @@ const CuratorsWritingWorkspace = ({
                       {activeEntity ? (
                         <RelatedNodesAndLinksViewer
                           node={activeEntity}
-                          topicSpaceId={topicSpace.id}
+                          contextId={topicSpace.id}
+                          contextType="topicSpace"
                           className="h-full w-full"
                           height={graphSize.height}
                           width={graphSize.width}

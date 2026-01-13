@@ -8,7 +8,8 @@ import { Button } from "../../button/button";
 
 export const RelatedNodesAndLinksViewer = ({
   node,
-  topicSpaceId,
+  contextId,
+  contextType,
   className,
   height,
   width,
@@ -17,7 +18,8 @@ export const RelatedNodesAndLinksViewer = ({
   onClose,
 }: {
   node: CustomNodeType;
-  topicSpaceId: string;
+  contextId: string;
+  contextType: "topicSpace" | "document";
   className?: string;
   height?: number;
   width?: number;
@@ -29,7 +31,8 @@ export const RelatedNodesAndLinksViewer = ({
 }) => {
   const { data: relatedNodesAndLinks } = api.kg.getRelatedNodes.useQuery({
     nodeId: node.id,
-    topicSpaceId: topicSpaceId,
+    contextId: contextId,
+    contextType: contextType,
   });
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);

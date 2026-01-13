@@ -4,7 +4,7 @@ import { api } from "@/trpc/react";
 import Image from "next/image";
 import { Input } from "@headlessui/react";
 import { NodeLinkChangeHistory } from "./node-link-change-history";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "../button/button";
 import { Textarea } from "../textarea";
 import { ResetIcon, ChevronRightIcon, ReloadIcon } from "../icons";
@@ -12,8 +12,15 @@ import { formatRelativeTime } from "@/app/_utils/date/format-date";
 
 export const TopicSpaceChangeHistory = ({
   topicSpaceId,
+  onHighlightChange,
 }: {
   topicSpaceId: string;
+  onHighlightChange?: (highlight: {
+    addedNodeIds: Set<string>;
+    removedNodeIds: Set<string>;
+    addedLinkIds: Set<string>;
+    removedLinkIds: Set<string>;
+  }) => void;
 }) => {
   const { data: changeHistories, refetch } =
     api.topicSpaceChangeHistory.listByTopicSpaceId.useQuery({
@@ -21,6 +28,26 @@ export const TopicSpaceChangeHistory = ({
     });
 
   const [detailHistoryId, setDetailHistoryId] = useState<string | null>(null);
+  const prevDetailHistoryIdRef = useRef<string | null>(null);
+
+  // 詳細が閉じられた時、または別の履歴が開かれた時にハイライトを解除
+  useEffect(() => {
+    // detailHistoryIdが変更されたとき（閉じられた、または別の履歴が開かれた）
+    if (
+      prevDetailHistoryIdRef.current !== detailHistoryId &&
+      prevDetailHistoryIdRef.current !== null &&
+      onHighlightChange
+    ) {
+      // 前のハイライトをクリア
+      onHighlightChange({
+        addedNodeIds: new Set(),
+        removedNodeIds: new Set(),
+        addedLinkIds: new Set(),
+        removedLinkIds: new Set(),
+      });
+    }
+    prevDetailHistoryIdRef.current = detailHistoryId;
+  }, [detailHistoryId, onHighlightChange]);
   const [isRollingBack, setIsRollingBack] = useState<string | null>(null);
   const [rollbackReason, setRollbackReason] = useState("");
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(
@@ -204,7 +231,11 @@ export const TopicSpaceChangeHistory = ({
 
                   {/* 変更内容の詳細表示 */}
                   {detailHistoryId === history.id && (
-                    <NodeLinkChangeHistory graphChangeHistoryId={history.id} />
+                    <NodeLinkChangeHistory
+                      key={history.id} // keyを追加して、履歴が切り替わったときにコンポーネントを再マウント
+                      graphChangeHistoryId={history.id}
+                      onHighlightChange={onHighlightChange}
+                    />
                   )}
                 </div>
               </div>

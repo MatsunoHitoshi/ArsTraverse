@@ -157,7 +157,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
               onClick={() => {
                 setShowAdditionalGraphExtractionModal(true);
                 setAnnotationText(
-                  `Node: ${node.name}(${node.label})\n${convertJsonToText(annotation.content)}`,
+                  `[Node: ${node.name}(${node.label})]\n ${convertJsonToText(annotation.content)}`,
                 );
               }}
               className="flex h-6 flex-row items-center justify-center bg-gray-700 px-2 text-xs"
@@ -334,6 +334,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
           setIsGraphEditor={setIsGraphEditor}
           entities={entities}
           onGraphUpdate={onGraphUpdate}
+          centralSubject={node}
         />
       )}
     </div>

@@ -4,22 +4,22 @@ import { useSession } from "next-auth/react";
 import { TabsContainer } from "../tab/tab";
 import { DocumentList, DocumentListMenuButton } from "../list/document-list";
 import { DocumentDetail } from "./document-detail";
-import { Button } from "../button/button";
-import { Pencil2Icon, PlusIcon, TrashIcon } from "../icons";
-import { useRouter } from "next/navigation";
+import { Pencil2Icon, TrashIcon } from "../icons";
 import { useState } from "react";
 import { DeleteRecordModal } from "../modal/delete-record-modal";
 import { DocumentEditModal } from "./document-edit-modal";
+import { Pagination } from "../pagination/pagination";
 export const Documents = ({ id }: { id?: string }) => {
   const { data: session } = useSession();
-  const { data: documents, refetch } =
-    api.sourceDocument.getListBySession.useQuery();
-  const document = documents?.find((document) => {
-    return document.id === id;
+  const [page, setPage] = useState(1);
+  const { data, refetch } = api.sourceDocument.getListBySession.useQuery({
+    page,
+    limit: 30,
   });
+  const documents = data?.items;
+
   const [deleteModalOpen, setDeleteModalOpen] = useState<boolean>(false);
   const [deleteDocumentId, setDeleteDocumentId] = useState<string>();
-  const router = useRouter();
   const [editModalOpen, setEditModalOpen] = useState<boolean>(false);
   const [editDocumentId, setEditDocumentId] = useState<string | null>(null);
 
@@ -63,10 +63,16 @@ export const Documents = ({ id }: { id?: string }) => {
                 }}
               />
             )}
+            <Pagination
+              currentPage={page}
+              totalPages={data?.totalPages ?? 1}
+              onPageChange={setPage}
+              className="mt-4"
+            />
           </div>
         </div>
         <div className="flex flex-col gap-2">
-          {id && document ? (
+          {id ? (
             <DocumentDetail documentId={id} />
           ) : (
             <div className="m-4 rounded-md border border-slate-400 p-4">
