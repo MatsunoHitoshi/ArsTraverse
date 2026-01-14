@@ -24,7 +24,6 @@ import type {
   NodeDiffType,
   RelationshipDiffType,
 } from "@/app/_utils/kg/get-nodes-and-relationships-from-result";
-import { updateKgProperties } from "@/app/_utils/kg/filter";
 import {
   GraphChangeEntityType,
   GraphChangeRecordType,
@@ -827,10 +826,22 @@ export const topicSpaceRouter = createTRPCRouter({
       const prevNodes = topicSpace.graphNodes;
       const prevRelationships = topicSpace.graphRelationships;
 
-      const updatedGraphData = updateKgProperties(input.dataJson, {
-        nodes: prevNodes,
-        relationships: prevRelationships,
-      });
+      const updatedGraphData = {
+        nodes: prevNodes.map((node) => {
+          const updateNode = input.dataJson.nodes.find((n) => n.id === node.id);
+          return (updateNode ??
+            formNodeDataForFrontend(node)) as NodeTypeForFrontend;
+        }),
+        relationships: prevRelationships.map((rel) => {
+          const updateRel = input.dataJson.relationships.find(
+            (r) => r.id === rel.id,
+          );
+          return (updateRel ??
+            formRelationshipDataForFrontend(
+              rel,
+            )) as RelationshipTypeForFrontend;
+        }),
+      };
 
       const graphChangeHistory = await ctx.db.graphChangeHistory.create({
         data: {
@@ -843,13 +854,11 @@ export const topicSpaceRouter = createTRPCRouter({
 
       const nodeDiffs = diffNodes(
         prevNodes.map((node) => formNodeDataForFrontend(node)),
-        updatedGraphData.nodes.map((node) => formNodeDataForFrontend(node)),
+        updatedGraphData.nodes,
       );
       const relationshipDiffs = diffRelationships(
         prevRelationships.map((r) => formRelationshipDataForFrontend(r)),
-        updatedGraphData.relationships.map((r) =>
-          formRelationshipDataForFrontend(r),
-        ),
+        updatedGraphData.relationships,
       );
 
       const nodeUpdateData = nodeDiffs

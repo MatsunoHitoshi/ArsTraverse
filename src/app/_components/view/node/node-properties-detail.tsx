@@ -14,12 +14,14 @@ import { NodeAnnotationSection } from "./node-annotation-section";
 
 export const NodePropertiesDetail = ({
   node,
-  topicSpaceId,
+  contextId,
+  contextType,
   refetch,
   enableEdit = false,
 }: {
   node: CustomNodeType | undefined;
-  topicSpaceId: string;
+  contextId: string;
+  contextType: "topicSpace" | "document";
   refetch?: () => void;
   enableEdit?: boolean;
 }) => {
@@ -31,6 +33,7 @@ export const NodePropertiesDetail = ({
     useState<GraphDocumentForFrontend | null>(null);
 
   const [onEdit, setOnEdit] = useState<boolean>(false);
+  const [isGraphEditorMode, setIsGraphEditorMode] = useState<boolean>(false);
   const [focusedNode, setFocusedNode] = useState<CustomNodeType | undefined>(
     undefined,
   );
@@ -70,6 +73,7 @@ export const NodePropertiesDetail = ({
 
   const onGraphUpdate = (additionalGraph: GraphDocumentForFrontend) => {
     setNewGraphDocument(additionalGraph);
+    setIsGraphEditorMode(true);
   };
 
   return (
@@ -91,17 +95,20 @@ export const NodePropertiesDetail = ({
             <div className="flex w-full flex-col items-start gap-1">
               <RelatedNodesAndLinksViewer
                 node={node}
-                topicSpaceId={topicSpaceId}
+                contextId={contextId}
+                contextType={contextType}
                 setFocusedNode={setFocusedNode}
                 focusedNode={focusedNode}
                 className="flex w-full flex-col gap-1 rounded-md border border-gray-600"
               />
-              <a
-                className="w-max cursor-pointer rounded-md bg-slate-500 p-2 text-sm text-white"
-                href={`/topic-spaces/${topicSpaceId}/tree/${node.id}`}
-              >
-                ツリー表示
-              </a>
+              {contextType === "topicSpace" && (
+                <a
+                  className="w-max cursor-pointer rounded-md bg-slate-500 p-2 text-sm text-white"
+                  href={`/topic-spaces/${contextId}/tree/${node.id}`}
+                >
+                  ツリー表示
+                </a>
+              )}
             </div>
 
             <div className="flex flex-row items-center gap-3">
@@ -140,38 +147,47 @@ export const NodePropertiesDetail = ({
               )}
             </div>
 
-            <div className="flex w-full flex-col gap-4">
-              <NodeAnnotationSection
-                node={node}
-                topicSpaceId={topicSpaceId}
-                setFocusedNode={setFocusedNode}
-                setIsGraphEditor={setOnEdit}
-                onGraphUpdate={onGraphUpdate}
-              />
-            </div>
-
-            {topicSpaceId && refetch && newGraphDocument && (
-              <AdditionalGraphViewer
-                graphDocument={newGraphDocument}
-                setGraphDocument={setNewGraphDocument}
-                topicSpaceId={topicSpaceId}
-                refetch={refetch}
-              />
-            )}
-
             {onEdit && enableEdit && refetch ? (
               <div className="flex w-full flex-col gap-1">
                 <NodePropertiesForm
                   node={node}
-                  topicSpaceId={topicSpaceId}
+                  topicSpaceId={contextType === "topicSpace" ? contextId : ""}
                   refetch={refetch}
                   setIsEditing={setOnEdit}
                   enableProposalMode={true}
                 />
               </div>
             ) : (
-              <PropertiesDetailPanel data={node} topicSpaceId={topicSpaceId} />
+              <PropertiesDetailPanel
+                data={node}
+                contextId={contextId}
+                contextType={contextType}
+              />
             )}
+
+            {contextType === "topicSpace" && (
+              <div className="flex w-full flex-col gap-4">
+                <NodeAnnotationSection
+                  node={node}
+                  topicSpaceId={contextType === "topicSpace" ? contextId : ""}
+                  setFocusedNode={setFocusedNode}
+                  setIsGraphEditor={setIsGraphEditorMode}
+                  onGraphUpdate={onGraphUpdate}
+                />
+              </div>
+            )}
+
+            {contextType === "topicSpace" &&
+              refetch &&
+              newGraphDocument &&
+              isGraphEditorMode && (
+                <AdditionalGraphViewer
+                  graphDocument={newGraphDocument}
+                  setGraphDocument={setNewGraphDocument}
+                  topicSpaceId={contextId}
+                  refetch={refetch}
+                />
+              )}
           </div>
         </div>
       </div>

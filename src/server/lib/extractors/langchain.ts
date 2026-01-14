@@ -30,7 +30,7 @@ export class LangChainExtractor implements Extractor {
       console.log(`Starting extraction for file: ${localFilePath}`);
       const llm = new ChatOpenAI({
         temperature: 0.1, // より低い温度で一貫性を向上
-        model: "gpt-4o-mini",
+        model: "gpt-4o",
         maxTokens: 16000, // より多くのトークンで詳細な抽出を可能にする
       });
 

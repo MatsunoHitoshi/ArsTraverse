@@ -154,14 +154,41 @@ export const sourceDocumentRouter = createTRPCRouter({
       };
     }),
 
-  getListBySession: protectedProcedure.query(({ ctx }) => {
-    const userId = ctx.session.user.id;
-    return ctx.db.sourceDocument.findMany({
-      where: { userId: userId, isDeleted: false },
-      orderBy: { createdAt: "desc" },
-      include: { graph: { select: { id: true } } },
-    });
-  }),
+  getListBySession: protectedProcedure
+    .input(
+      z
+        .object({
+          limit: z.number().min(1).max(100).default(30),
+          page: z.number().min(1).default(1),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const limit = input?.limit ?? 30;
+      const page = input?.page ?? 1;
+      const skip = (page - 1) * limit;
+
+      const [items, totalCount] = await Promise.all([
+        ctx.db.sourceDocument.findMany({
+          where: { userId: userId, isDeleted: false },
+          orderBy: { createdAt: "desc" },
+          include: { graph: { select: { id: true } } },
+          take: limit,
+          skip: skip,
+        }),
+        ctx.db.sourceDocument.count({
+          where: { userId: userId, isDeleted: false },
+        }),
+      ]);
+
+      return {
+        items,
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        currentPage: page,
+      };
+    }),
 
   create: protectedProcedure
     .input(SourceDocumentSchema)

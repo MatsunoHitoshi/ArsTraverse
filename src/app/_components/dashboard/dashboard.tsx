@@ -18,8 +18,12 @@ import Link from "next/link";
 
 export const Dashboard = () => {
   const { data: session } = useSession();
-  const { data: documents, refetch: refetchDocuments } =
-    api.sourceDocument.getListBySession.useQuery();
+  const { data: documentsData, refetch: refetchDocuments } =
+    api.sourceDocument.getListBySession.useQuery({
+      page: 1,
+      limit: 5,
+    });
+  const documents = documentsData?.items;
   const { data: topicSpaces, refetch: refetchTopicSpaces } =
     api.topicSpaces.getListBySession.useQuery();
   const [topicSpaceCreateModalOpen, setTopicSpaceCreateModalOpen] =

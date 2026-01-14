@@ -13,7 +13,8 @@ type NodesSortType = "name" | "centrality" | "none";
 export const NodeLinkList = ({
   graphDocument,
   focusedNode,
-  topicSpaceId,
+  contextId,
+  contextType,
   isEditor = false,
   refetch,
   isClustered = false,
@@ -21,7 +22,8 @@ export const NodeLinkList = ({
   toolComponent,
 }: {
   graphDocument: GraphDocumentForFrontend;
-  topicSpaceId: string;
+  contextId: string;
+  contextType: "topicSpace" | "document";
   focusedNode: CustomNodeType | undefined;
   nodeSearchQuery?: string;
   toolComponent?: React.ReactNode;
@@ -38,10 +40,16 @@ export const NodeLinkList = ({
 
   const sortedGraphNodes = useMemo(() => {
     if (sortType === "name") {
-      return graphNodes.sort((a, b) => a.name.localeCompare(b.name));
+      return [...graphNodes].sort((a, b) => a.name.localeCompare(b.name));
     } else if (sortType === "centrality") {
-      return graphNodes.sort(
-        (a, b) => (b.neighborLinkCount ?? 0) - (a.neighborLinkCount ?? 0),
+      const degrees = new Map<string, number>();
+      graphDocument.relationships.forEach((l) => {
+        degrees.set(l.sourceId, (degrees.get(l.sourceId) ?? 0) + 1);
+        degrees.set(l.targetId, (degrees.get(l.targetId) ?? 0) + 1);
+      });
+
+      return [...graphNodes].sort(
+        (a, b) => (degrees.get(b.id) ?? 0) - (degrees.get(a.id) ?? 0),
       );
     } else {
       return graphNodes;
@@ -68,7 +76,7 @@ export const NodeLinkList = ({
           <GraphIcon width={16} height={16} color="white" />
         </button>
 
-        {isEditor && (
+        {isEditor && contextType === "topicSpace" && (
           <>
             <Button
               className="!text-xs"
@@ -150,7 +158,8 @@ export const NodeLinkList = ({
 
                 <PropertiesSummaryPanel
                   node={node}
-                  topicSpaceId={topicSpaceId}
+                  contextId={contextId}
+                  contextType={contextType}
                   withDetail={true}
                 />
               </div>
@@ -158,17 +167,21 @@ export const NodeLinkList = ({
           );
         })}
       </div>
-      {mergeNodes && setMergeNodes && topicSpaceId && refetch && (
-        <MergeNodesForm
-          isOpen={isMergeNodesEditModalOpen}
-          setIsOpen={setIsMergeNodesEditModalOpen}
-          mergeNodes={mergeNodes}
-          setMergeNodes={setMergeNodes}
-          topicSpaceId={topicSpaceId}
-          refetch={refetch}
-          setIsNodeMergeMode={setIsNodeMergeMode}
-        />
-      )}
+      {mergeNodes &&
+        setMergeNodes &&
+        contextId &&
+        contextType === "topicSpace" &&
+        refetch && (
+          <MergeNodesForm
+            isOpen={isMergeNodesEditModalOpen}
+            setIsOpen={setIsMergeNodesEditModalOpen}
+            mergeNodes={mergeNodes}
+            setMergeNodes={setMergeNodes}
+            topicSpaceId={contextId}
+            refetch={refetch}
+            setIsNodeMergeMode={setIsNodeMergeMode}
+          />
+        )}
     </div>
   );
 };

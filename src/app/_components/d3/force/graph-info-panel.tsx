@@ -25,7 +25,8 @@ type GraphInfoPanelProps = {
     React.SetStateAction<CustomNodeType | undefined>
   >;
   graphDocument: GraphDocumentForFrontend;
-  topicSpaceId?: string;
+  contextId: string;
+  contextType: "topicSpace" | "document";
   // maxHeight: number;
 };
 
@@ -34,7 +35,8 @@ export const GraphInfoPanel = ({
   focusedLink,
   setFocusNode,
   graphDocument,
-  topicSpaceId,
+  contextId,
+  contextType,
   // maxHeight,
 }: GraphInfoPanelProps) => {
   const [isPanelOpen, setIsPanelOpen] = useState<boolean>(true);
@@ -288,10 +290,10 @@ export const GraphInfoPanel = ({
               {/* )} */}
 
               <DisclosurePanel className="flex w-full flex-col gap-2 pl-5">
-                {!!topicSpaceId && (
+                {contextType === "topicSpace" && (
                   <a
                     className="w-max cursor-pointer rounded-md bg-slate-500 p-2 text-sm text-white"
-                    href={`/topic-spaces/${topicSpaceId}/tree/${focusedNode?.id}`}
+                    href={`/topic-spaces/${contextId}/tree/${focusedNode?.id}`}
                   >
                     ツリー表示
                   </a>
@@ -366,11 +368,13 @@ export const GraphInfoPanel = ({
 
 export const PropertiesSummaryPanel = ({
   node,
-  topicSpaceId,
+  contextId,
+  contextType,
   withDetail = false,
 }: {
   node: CustomNodeType;
-  topicSpaceId: string;
+  contextId: string;
+  contextType: "topicSpace" | "document";
   withDetail?: boolean;
 }) => {
   const router = useRouter();
@@ -408,9 +412,9 @@ export const PropertiesSummaryPanel = ({
                 </a>
               ) : (
                 <>
-                  {key == "tag" ? (
+                  {key == "tag" && contextType === "topicSpace" ? (
                     <a
-                      href={`/topic-spaces/${topicSpaceId}/tags/${value}?cut-off=2`}
+                      href={`/topic-spaces/${contextId}/tags/${value}?cut-off=2`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="underline hover:no-underline"
@@ -432,10 +436,12 @@ export const PropertiesSummaryPanel = ({
 
 export const PropertiesDetailPanel = ({
   data,
-  topicSpaceId,
+  contextId,
+  contextType,
 }: {
   data: CustomNodeType | CustomLinkType;
-  topicSpaceId?: string;
+  contextId: string;
+  contextType: "topicSpace" | "document";
 }) => {
   return (
     <div className="flex flex-col gap-3">
@@ -454,9 +460,9 @@ export const PropertiesDetailPanel = ({
               </a>
             ) : (
               <>
-                {key == "tag" ? (
-                  <a
-                    href={`/topic-spaces/${topicSpaceId}/tags/${value}?cut-off=2`}
+                  {key == "tag" && contextType === "topicSpace" ? (
+                    <a
+                      href={`/topic-spaces/${contextId}/tags/${value}?cut-off=2`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="underline hover:no-underline"

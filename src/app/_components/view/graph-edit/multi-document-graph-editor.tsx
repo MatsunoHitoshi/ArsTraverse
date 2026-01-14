@@ -147,7 +147,8 @@ export const MultiDocumentGraphEditor = ({
             {localGraphDocument && (
               <NodeLinkList
                 graphDocument={localGraphDocument}
-                topicSpaceId={topicSpaceId ?? ""}
+                contextId={topicSpaceId ?? ""}
+                contextType="topicSpace"
                 isEditor={true}
                 focusedNode={focusedNode}
                 refetch={refetch}
@@ -159,7 +160,8 @@ export const MultiDocumentGraphEditor = ({
             <div className="w-2/3 overflow-scroll bg-slate-900">
               <NodePropertiesDetail
                 node={node}
-                topicSpaceId={topicSpaceId}
+                contextId={topicSpaceId}
+                contextType="topicSpace"
                 refetch={refetch}
                 enableEdit={true}
               />
@@ -217,7 +219,8 @@ export const MultiDocumentGraphEditor = ({
                       focusedNode={focusedNode}
                       focusedLink={focusedLink}
                       graphDocument={localGraphDocument}
-                      topicSpaceId={topicSpaceId}
+                      contextId={topicSpaceId}
+                      contextType="topicSpace"
                       // maxHeight={height}
                       setFocusNode={setFocusedNode}
                     />

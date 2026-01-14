@@ -3,6 +3,8 @@ import type { NodeTypeForFrontend } from "@/app/const/types";
 import type { GraphNode, GraphRelationship } from "@prisma/client";
 
 const deleteDuplicatedRelationships = (relationships: GraphRelationship[]) => {
+  // 注意: エッジのプロパティは考慮せず、From/To/Typeが同じものを重複とみなして最初の一つだけを残します。
+  // プロパティが異なる同一タイプのエッジを区別したい場合は、このロジックを修正する必要があります。
   const filteredRelationships = relationships.filter((relationship, index) => {
     return (
       index ===
@@ -19,16 +21,6 @@ const deleteDuplicatedRelationships = (relationships: GraphRelationship[]) => {
     id: createId(),
   }));
   return mergedRelationships;
-};
-
-const deleteDuplicatedNodes = (nodes: GraphNode[]) => {
-  const filteredNodes = nodes.filter((node, index) => {
-    return (
-      index ===
-      nodes.findIndex((n) => n.name === node.name && n.label === node.label)
-    );
-  });
-  return filteredNodes;
 };
 
 export const mergerNodes = (
@@ -160,9 +152,56 @@ const simpleMerge = (graph: {
   relationships: GraphRelationship[];
 }) => {
   const { nodes, relationships } = graph;
-  const mergedRelationships = deleteDuplicatedRelationships(relationships);
-  const mergedNodes = deleteDuplicatedNodes(nodes);
-  return { nodes: mergedNodes, relationships: mergedRelationships };
+
+  // 1. Identify unique nodes and build ID mapping
+  const uniqueNodes: GraphNode[] = [];
+  const idMapping = new Map<string, string>(); // oldId -> newId (kept Id)
+
+  nodes.forEach((node) => {
+    // Find if we already have a node with same name/label
+    const existingNode = uniqueNodes.find(
+      (n) => n.name === node.name && n.label === node.label,
+    );
+
+    if (existingNode) {
+      // Map this node's ID to the existing node's ID
+      idMapping.set(node.id, existingNode.id);
+    } else {
+      // Keep this node
+      uniqueNodes.push(node);
+      idMapping.set(node.id, node.id);
+    }
+  });
+
+  // 2. Remap relationships
+  const remappedRelationships = relationships.map((rel) => {
+    const newFromId = idMapping.get(rel.fromNodeId);
+    const newToId = idMapping.get(rel.toNodeId);
+
+    if (!newFromId || !newToId) {
+      // If a relationship refers to a node that is not in the node list, keep it as is.
+      // This might happen if the node list is incomplete, but in that case the relationship is already invalid.
+      // We'll keep the original IDs to avoid introducing undefined, but these will likely be dangling.
+      return {
+        ...rel,
+        fromNodeId: newFromId ?? rel.fromNodeId,
+        toNodeId: newToId ?? rel.toNodeId,
+      };
+    }
+
+    return {
+      ...rel,
+      fromNodeId: newFromId,
+      toNodeId: newToId,
+    };
+  });
+
+  // 3. Deduplicate relationships
+  const mergedRelationships = deleteDuplicatedRelationships(
+    remappedRelationships,
+  );
+
+  return { nodes: uniqueNodes, relationships: mergedRelationships };
 };
 
 export const dataDisambiguation = (graph: {

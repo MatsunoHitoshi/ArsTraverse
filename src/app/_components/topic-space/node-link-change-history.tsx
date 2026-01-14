@@ -1,13 +1,21 @@
 import { ChangeTypeMap, EntityTypeMap } from "@/app/const/types";
 import { api } from "@/trpc/react";
 import { Input } from "@headlessui/react";
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { ListboxInput } from "../input/listbox-input";
+import { GraphChangeType, GraphChangeEntityType } from "@prisma/client";
 
 export const NodeLinkChangeHistory = ({
   graphChangeHistoryId,
+  onHighlightChange,
 }: {
   graphChangeHistoryId: string;
+  onHighlightChange?: (highlight: {
+    addedNodeIds: Set<string>;
+    removedNodeIds: Set<string>;
+    addedLinkIds: Set<string>;
+    removedLinkIds: Set<string>;
+  }) => void;
 }) => {
   const { data: graphChangeHistory } =
     api.topicSpaceChangeHistory.getById.useQuery({
@@ -17,8 +25,6 @@ export const NodeLinkChangeHistory = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedChangeType, setSelectedChangeType] = useState("ALL");
   const [selectedEntityType, setSelectedEntityType] = useState("ALL");
-
-  if (!graphChangeHistory) return null;
 
   const changeTypeOptions = [
     { value: "ALL", label: "動作" },
@@ -36,30 +42,90 @@ export const NodeLinkChangeHistory = ({
     })),
   ];
 
-  const filteredHistories = graphChangeHistory.nodeLinkChangeHistories.filter(
-    (history) => {
-      if (
-        selectedChangeType !== "ALL" &&
-        history.changeType !== selectedChangeType
-      )
-        return false;
+  const filteredHistories = useMemo(() => {
+    if (!graphChangeHistory) return [];
+    return graphChangeHistory.nodeLinkChangeHistories.filter(
+      (history) => {
+        if (
+          selectedChangeType !== "ALL" &&
+          history.changeType !== selectedChangeType
+        )
+          return false;
 
-      if (
-        selectedEntityType !== "ALL" &&
-        history.changeEntityType !== selectedEntityType
-      )
-        return false;
+        if (
+          selectedEntityType !== "ALL" &&
+          history.changeEntityType !== selectedEntityType
+        )
+          return false;
 
-      if (!searchTerm) return true;
-      const previousState = JSON.stringify(history.previousState, null, 2);
-      const nextState = JSON.stringify(history.nextState, null, 2);
-      const term = searchTerm.toLowerCase();
-      return (
-        previousState.toLowerCase().includes(term) ||
-        nextState.toLowerCase().includes(term)
-      );
-    },
-  );
+        if (!searchTerm) return true;
+        const previousState = JSON.stringify(history.previousState, null, 2);
+        const nextState = JSON.stringify(history.nextState, null, 2);
+        const term = searchTerm.toLowerCase();
+        return (
+          previousState.toLowerCase().includes(term) ||
+          nextState.toLowerCase().includes(term)
+        );
+      },
+    );
+  }, [graphChangeHistory, selectedChangeType, selectedEntityType, searchTerm]);
+
+  // 追加・削除されたノードとエッジのIDを抽出
+  const highlightData = useMemo(() => {
+    const addedNodeIds = new Set<string>();
+    const removedNodeIds = new Set<string>();
+    const addedLinkIds = new Set<string>();
+    const removedLinkIds = new Set<string>();
+
+    filteredHistories.forEach((history) => {
+      const entityId = history.changeEntityId;
+      const changeType = history.changeType;
+      const entityType = history.changeEntityType;
+
+      if (entityType === GraphChangeEntityType.NODE) {
+        if (changeType === GraphChangeType.ADD) {
+          addedNodeIds.add(entityId);
+        } else if (changeType === GraphChangeType.REMOVE) {
+          removedNodeIds.add(entityId);
+        }
+      } else if (entityType === GraphChangeEntityType.EDGE) {
+        if (changeType === GraphChangeType.ADD) {
+          addedLinkIds.add(entityId);
+        } else if (changeType === GraphChangeType.REMOVE) {
+          removedLinkIds.add(entityId);
+        }
+      }
+    });
+
+    return {
+      addedNodeIds,
+      removedNodeIds,
+      addedLinkIds,
+      removedLinkIds,
+    };
+  }, [filteredHistories]);
+
+  // ハイライト情報を親コンポーネントに通知
+  useEffect(() => {
+    if (!onHighlightChange) return;
+    
+    // マウント時またはhighlightDataが変更されたときにハイライトを更新
+    onHighlightChange(highlightData);
+    
+    // アンマウント時にハイライトをクリア
+    return () => {
+      if (onHighlightChange) {
+        onHighlightChange({
+          addedNodeIds: new Set(),
+          removedNodeIds: new Set(),
+          addedLinkIds: new Set(),
+          removedLinkIds: new Set(),
+        });
+      }
+    };
+  }, [highlightData, onHighlightChange]);
+
+  if (!graphChangeHistory) return null;
 
   return (
     <div className="mt-2 flex flex-col gap-2">

@@ -5,7 +5,11 @@ import { Button } from "../button/button";
 import { storageUtils } from "@/app/_utils/supabase/supabase";
 import { BUCKETS } from "@/app/_utils/supabase/const";
 import { api } from "@/trpc/react";
-import type { GraphDocumentForFrontend } from "@/app/const/types";
+import type {
+  GraphDocumentForFrontend,
+  NodeTypeForFrontend,
+  RelationshipTypeForFrontend,
+} from "@/app/const/types";
 import { Switch } from "@headlessui/react";
 import { Textarea } from "../textarea";
 import type { Document } from "@langchain/core/documents";
@@ -24,6 +28,8 @@ type DocumentFormProps = {
   documentUrl: string | null;
 };
 
+const BATCH_SIZE = 5;
+
 export const DocumentForm = ({
   file,
   setFile,
@@ -36,6 +42,7 @@ export const DocumentForm = ({
   const [text, setText] = useState<string>();
   const fileInputRef = useRef(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [progress, setProgress] = useState<string>("");
   const [inspectResult, setInspectResult] = useState<Document[]>([]);
   const [isOpenTips, setIsOpenTips] = useState<boolean>(false);
   const [isOpenSchemaBuilder, setIsOpenSchemaBuilder] =
@@ -46,12 +53,117 @@ export const DocumentForm = ({
 
   const extractKG = api.kg.extractKG.useMutation();
   const textInspect = api.kg.textInspect.useMutation();
+  const extractPhase1 = api.kg.extractPhase1.useMutation();
+  const extractPhase2 = api.kg.extractPhase2.useMutation();
+  const finalizeGraph = api.kg.finalizeGraph.useMutation();
 
-  console.log("customMappingRules", customMappingRules);
+  const extractIteratively = async (fileUrl: string) => {
+    setIsProcessing(true);
+    setProgress("ドキュメントを解析中...");
+
+    try {
+      // 1. Inspect text to get chunks
+      const inspectRes = await textInspect.mutateAsync({
+        fileUrl,
+        isPlaneTextMode,
+      });
+
+      if (!inspectRes.data.documents) {
+        throw new Error("ドキュメントの解析に失敗しました。");
+      }
+
+      const documents = inspectRes.data.documents;
+      let accumulatedNodes: NodeTypeForFrontend[] = [];
+      let accumulatedRelationships: RelationshipTypeForFrontend[] = [];
+
+      // 2. Phase 1 Loop
+      for (let i = 0; i < documents.length; i += BATCH_SIZE) {
+        const batch = documents.slice(i, i + BATCH_SIZE);
+        setProgress(
+          `フェーズ1: 初期抽出中... (${Math.min(i + BATCH_SIZE, documents.length)}/${documents.length})`,
+        );
+
+        const res = await extractPhase1.mutateAsync({
+          documents: batch,
+          customMappingRules,
+          // schema, additionalPrompt could be added here if needed
+        });
+
+        if (res.data) {
+          accumulatedNodes = [...accumulatedNodes, ...res.data.nodes];
+          accumulatedRelationships = [
+            ...accumulatedRelationships,
+            ...res.data.relationships,
+          ];
+        }
+      }
+
+      // Deduplicate nodes for context
+      const uniqueNodesMap = new Map<string, NodeTypeForFrontend>();
+      accumulatedNodes.forEach((n) => {
+        if (!uniqueNodesMap.has(n.name)) uniqueNodesMap.set(n.name, n);
+      });
+      const uniqueNodes = Array.from(uniqueNodesMap.values());
+
+      // Build Context
+      const contextString = uniqueNodes
+        .map((n) => {
+          const ja = n.properties?.name_ja ? `(${n.properties.name_ja})` : "";
+          return `- ${n.name} [${n.label}] ${ja}`;
+        })
+        .join("\n");
+
+      // 3. Phase 2 Loop
+      for (let i = 0; i < documents.length; i += BATCH_SIZE) {
+        const batch = documents.slice(i, i + BATCH_SIZE);
+        setProgress(
+          `フェーズ2: 文脈補完中... (${Math.min(i + BATCH_SIZE, documents.length)}/${documents.length})`,
+        );
+
+        const res = await extractPhase2.mutateAsync({
+          documents: batch,
+          contextualInfo: contextString,
+          customMappingRules,
+        });
+
+        if (res.data) {
+          // We only care about new relationships mostly, but we collect everything and deduplicate later
+          accumulatedNodes = [...accumulatedNodes, ...res.data.nodes];
+          accumulatedRelationships = [
+            ...accumulatedRelationships,
+            ...res.data.relationships,
+          ];
+        }
+      }
+
+      // 4. Finalize
+      setProgress("グラフを構築中...");
+      const finalRes = await finalizeGraph.mutateAsync({
+        nodes: accumulatedNodes,
+        relationships: accumulatedRelationships,
+      });
+
+      if (finalRes.data.graph) {
+        setGraphDocument(finalRes.data.graph);
+      }
+
+      setIsProcessing(false);
+      setProgress("");
+    } catch (error) {
+      console.error(error);
+      alert("処理中にエラーが発生しました。");
+      setIsProcessing(false);
+      setProgress("");
+    }
+  };
 
   const extract = (fileUrl: string) => {
-    setIsProcessing(true);
+    if (extractMode === "iterative") {
+      void extractIteratively(fileUrl);
+      return;
+    }
 
+    setIsProcessing(true);
     extractKG.mutate(
       {
         fileUrl: fileUrl,
@@ -273,8 +385,6 @@ export const DocumentForm = ({
                     setSelected={setExtractMode}
                     disabled={isProcessing}
                     className="w-60"
-                    // buttonClassName="bg-white text-slate-900 border border-slate-300 shadow-none py-2"
-                    // optionsClassName="bg-white text-slate-900"
                   />
                 </div>
               )}
@@ -292,15 +402,22 @@ export const DocumentForm = ({
                 </Button>
               </div>
               {((!!text && isPlaneTextMode) || (file && !isPlaneTextMode)) && (
-                <div className="flex flex-row justify-end">
-                  {isPlaneTextMode || inspectResult.length > 0 ? (
-                    <Button type="submit" isLoading={isProcessing}>
-                      グラフを構築する
-                    </Button>
-                  ) : (
-                    <Button type="submit" isLoading={isProcessing}>
-                      テキストを抽出する
-                    </Button>
+                <div className="flex flex-col items-end gap-2">
+                  <div className="flex flex-row justify-end">
+                    {isPlaneTextMode || inspectResult.length > 0 ? (
+                      <Button type="submit" isLoading={isProcessing}>
+                        グラフを構築する
+                      </Button>
+                    ) : (
+                      <Button type="submit" isLoading={isProcessing}>
+                        テキストを抽出する
+                      </Button>
+                    )}
+                  </div>
+                  {progress && (
+                    <div className="animate-pulse text-xs text-slate-600">
+                      {progress}
+                    </div>
                   )}
                 </div>
               )}

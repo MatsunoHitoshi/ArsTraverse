@@ -43,7 +43,9 @@ export const TopicSpaceCreateModal = ({
   setIsOpen,
 }: TopicSpaceCreateModalProps) => {
   const { data: session } = useSession();
-  const { data: documents } = api.sourceDocument.getListBySession.useQuery();
+  const { data: documentsData } =
+    api.sourceDocument.getListBySession.useQuery();
+  const documents = documentsData?.items;
   const [selectedDocument, setSelectedDocument] =
     useState<DocumentResponse | null>(null);
   const createTopicSpace = api.topicSpaces.create.useMutation();
@@ -53,9 +55,9 @@ export const TopicSpaceCreateModal = ({
   const filteredDocuments =
     query === ""
       ? documents
-      : documents?.filter((document: DocumentResponse) => {
+      : (documents?.filter((document: DocumentResponse) => {
           return document.name.toLowerCase().includes(query.toLowerCase());
-        }) ?? [];
+        }) ?? []);
 
   const submit: SubmitHandler<TopicSpaceCreateForm> = (
     data: TopicSpaceCreateForm,

@@ -19,6 +19,7 @@ interface AdditionalGraphExtractionModalProps {
   onGraphUpdate?: (additionalGraph: GraphDocumentForFrontend) => void;
   setIsGraphEditor: React.Dispatch<React.SetStateAction<boolean>>;
   entities: CustomNodeType[];
+  centralSubject?: CustomNodeType;
 }
 
 export const AdditionalGraphExtractionModal: React.FC<
@@ -30,17 +31,60 @@ export const AdditionalGraphExtractionModal: React.FC<
   onGraphUpdate,
   setIsGraphEditor,
   entities,
+  centralSubject,
 }) => {
-  const [extractedGraph, setExtractedGraph] =
-    useState<GraphDocumentForFrontend | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
 
   const extractKG = api.kg.extractKG.useMutation();
+
+  const { data: relatedGraphData } = api.kg.getRelatedNodes.useQuery(
+    {
+      nodeId: centralSubject?.id ?? "",
+      contextId: centralSubject?.topicSpaceId ?? "",
+      contextType: "topicSpace",
+    },
+    {
+      enabled: !!centralSubject?.id && !!centralSubject?.topicSpaceId,
+      staleTime: Infinity,
+    },
+  );
 
   const handleExtractGraph = async () => {
     if (!text.trim()) {
       alert("テキストが選択されていません");
       return;
+    }
+
+    // 隣接ノード情報の構築
+    let contextPrompt = "";
+    if (centralSubject && relatedGraphData) {
+      const relationships = relatedGraphData.relationships.filter(
+        (r) =>
+          r.sourceId === centralSubject.id || r.targetId === centralSubject.id,
+      );
+
+      const relationshipDescriptions: string[] = [];
+
+      relationships.forEach((rel) => {
+        const isSource = rel.sourceId === centralSubject.id;
+        const otherNodeId = isSource ? rel.targetId : rel.sourceId;
+        const otherNode = relatedGraphData.nodes.find(
+          (n) => n.id === otherNodeId,
+        );
+
+        if (otherNode) {
+          const relationStr = isSource
+            ? `"${centralSubject.name}" --[${rel.type}]--> "${otherNode.name}"(${otherNode.label})`
+            : `"${otherNode.name}"(${otherNode.label}) --[${rel.type}]--> "${centralSubject.name}"`;
+          relationshipDescriptions.push(relationStr);
+        }
+      });
+
+      const uniqueRelationships = Array.from(new Set(relationshipDescriptions));
+
+      if (uniqueRelationships.length > 0) {
+        contextPrompt = `\n\nExisting Graph Context (use these connections as reference):\n${uniqueRelationships.join("\n")}\n\nIf any of these existing nodes appear in the text, use their exact names to connect them. Also, look for relationships between these existing nodes and any NEW nodes you extract, or refine existing relationships if the text provides more detail.`;
+      }
     }
 
     setIsExtracting(true);
@@ -60,20 +104,20 @@ export const AdditionalGraphExtractionModal: React.FC<
           fileUrl,
           isPlaneTextMode: true,
           extractMode: "langChain",
-          additionalPrompt:
-            "If the text contains a 'Node: [name]([label])', extract the node as a primary node in the graph.",
+          additionalPrompt: centralSubject
+            ? `The text starts with 'Node: ${centralSubject.name}(${centralSubject.label})', which identifies the CENTRAL SUBJECT. You MUST extract this central subject as a node. CRITICAL: Do not stop there. You MUST analyze the entire text to extract ALL other relevant entities, concepts, and attributes as SEPARATE nodes. Then, create meaningful RELATIONSHIPS connecting the central subject to these other nodes. ADDITIONALLY, identify and extract relationships BETWEEN the other extracted nodes to create a rich, interconnected graph structure, not just a star shape centered on the subject. The goal is to build a comprehensive graph centered around the specified node but including all relevant internal connections.${contextPrompt}`
+            : "",
         },
         {
           onSuccess: (data) => {
             if (data?.data?.graph) {
-              // 既存のエンティティと重複するノードを統合
+                  // 既存のエンティティと重複するノードを統合
               console.log("data.data.graph\n", data.data.graph);
               const mergedGraph = mergeWithExistingEntities(
                 data.data.graph,
                 entities,
               );
               console.log("mergedGraph\n", mergedGraph);
-              setExtractedGraph(mergedGraph);
               if (onGraphUpdate) {
                 onGraphUpdate(mergedGraph);
                 setIsAdditionalGraphExtractionModalOpen(false);
@@ -124,15 +168,14 @@ export const AdditionalGraphExtractionModal: React.FC<
         // 重複するノードをマッピング
         nodeMapping.set(extractedNode.id, matchingEntity.id);
 
-        // 抽出されたノードを削除
+        // 抽出されたノードを既存のエンティティ情報で置換（IDを合わせるため）
+        // これにより、リンクの端点となるノードがグラフデータに含まれることが保証される
         const nodeIndex = mergedNodes.findIndex(
           (node) => node.id === extractedNode.id,
         );
         if (nodeIndex !== -1) {
-          mergedNodes.splice(nodeIndex, 1);
+          mergedNodes[nodeIndex] = { ...matchingEntity };
         }
-
-        // 既存のエンティティノードは追加しない（編集用の追加データとして）
       }
     });
 

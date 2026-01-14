@@ -15,12 +15,21 @@ import { Fragment } from "react";
 // 編集は扱わない
 export const MultiDocumentGraphViewer = ({
   graphDocument,
-  topicSpaceId,
+  contextId,
+  contextType,
   refetch,
+  highlightData,
 }: {
   graphDocument: GraphDocumentForFrontend;
-  topicSpaceId: string;
+  contextId: string;
+  contextType: "topicSpace" | "document";
   refetch: () => void;
+  highlightData?: {
+    addedNodeIds: Set<string>;
+    removedNodeIds: Set<string>;
+    addedLinkIds: Set<string>;
+    removedLinkIds: Set<string>;
+  };
 }) => {
   const [innerWidth, innerHeight] = useWindowSize();
   const graphAreaWidth = (innerWidth ?? 100) / 2 - 24;
@@ -61,7 +70,8 @@ export const MultiDocumentGraphViewer = ({
           >
             <NodeLinkList
               graphDocument={graphDocument}
-              topicSpaceId={topicSpaceId ?? ""}
+              contextId={contextId ?? ""}
+              contextType={contextType}
               refetch={refetch}
               focusedNode={focusedNode}
             />
@@ -70,7 +80,8 @@ export const MultiDocumentGraphViewer = ({
             <div className="w-2/3 overflow-scroll bg-slate-900">
               <NodePropertiesDetail
                 node={node}
-                topicSpaceId={topicSpaceId}
+                contextId={contextId}
+                contextType={contextType}
                 refetch={refetch}
               />
             </div>
@@ -123,6 +134,7 @@ export const MultiDocumentGraphViewer = ({
                 setFocusedLink={setFocusedLink}
                 isDirectedLinks={isDirectedLinks}
                 magnifierMode={magnifierMode}
+                highlightData={highlightData}
                 toolComponent={
                   <>
                     <GraphTool
@@ -138,7 +150,8 @@ export const MultiDocumentGraphViewer = ({
                       focusedNode={focusedNode}
                       focusedLink={focusedLink}
                       graphDocument={graphDocument}
-                      topicSpaceId={topicSpaceId}
+                      contextId={contextId}
+                      contextType={contextType}
                       // maxHeight={height}
                       setFocusNode={setFocusedNode}
                     />
@@ -171,7 +184,8 @@ export const MultiDocumentGraphViewer = ({
                   focusedNode={focusedNode}
                   focusedLink={focusedLink}
                   graphDocument={graphDocument}
-                  topicSpaceId={topicSpaceId}
+                  contextId={contextId}
+                  contextType={contextType}
                   setFocusNode={setFocusedNode}
                 />
               </TabPanel>
