@@ -9,6 +9,7 @@ import {
   type GraphRelationship,
   type TopicSpace,
   WorkspaceStatus,
+  type Prisma,
 } from "@prisma/client";
 import OpenAI from "openai";
 import { env } from "@/env";
@@ -19,6 +20,16 @@ export const TiptapContentSchema = z.object({
   type: z.string(),
   content: z.array(z.any()).optional(),
 });
+
+const CuratorialContextSchema = z
+  .object({
+    stance: z.string().optional(),
+    extractionRules: z
+      .union([z.record(z.unknown()), z.array(z.unknown())])
+      .optional(),
+    negativeArchive: z.array(z.string()).optional(),
+  })
+  .catchall(z.unknown());
 
 const CreateWorkspaceSchema = z.object({
   name: z.string().min(1, "ワークスペース名は必須です"),
@@ -39,6 +50,7 @@ const UpdateWorkspaceSchema = z.object({
   status: z.nativeEnum(WorkspaceStatus).optional(),
   referencedTopicSpaceIds: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional(),
+  curatorialContext: CuratorialContextSchema.optional(),
 });
 
 const AddCollaboratorSchema = z.object({
@@ -312,6 +324,8 @@ export const workspaceRouter = createTRPCRouter({
         where: { id },
         data: {
           ...dataToUpdate,
+          curatorialContext:
+            dataToUpdate.curatorialContext as Prisma.InputJsonValue,
           referencedTopicSpaces: referencedTopicSpaceIds
             ? {
                 set: referencedTopicSpaceIds.map((topicSpaceId) => ({

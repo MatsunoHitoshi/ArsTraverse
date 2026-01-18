@@ -4,6 +4,8 @@ import type {
   CustomNodeType,
   GraphDocumentForFrontend,
   TiptapGraphFilterOption,
+  LayoutInstruction,
+  CuratorialContext,
 } from "@/app/const/types";
 import React, {
   useState,
@@ -14,32 +16,29 @@ import React, {
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { D3ForceGraph } from "../d3/force/graph";
 import TipTapEditor from "./tiptap/tip-tap-editor";
-import { WorkspaceStatus, type Workspace } from "@prisma/client";
+import type { Workspace } from "@prisma/client";
 import { api } from "@/trpc/react";
 import { Button } from "../button/button";
 import type { JSONContent } from "@tiptap/react";
 import {
   CheckIcon,
-  ChevronLeftIcon,
   CrossLargeIcon,
   Pencil2Icon,
-  PinLeftIcon,
-  PinRightIcon,
   PlusIcon,
   ShareIcon,
   ZoomInIcon,
+  ChatBubbleIcon,
+  ResetIcon,
 } from "../icons";
-import { LinkButton } from "../button/link-button";
+
 import { TopicSpaceAttachModal } from "../workspace/topic-space-attach-modal";
-import { RelatedNodesAndLinksViewer } from "../view/graph-view/related-nodes-viewer";
+
 import { findEntityHighlights } from "@/app/_utils/text/find-entity-highlights";
-import { NodeDetailPanel } from "./node-detail-panel";
+
 import { PDFDropZone } from "./pdf-drop-zone";
 import { usePDFProcessing } from "./hooks/use-pdf-processing";
 import { Modal } from "../modal/modal";
-import { EditableTitle } from "./editable-title";
 import { useGraphEditor } from "@/app/_hooks/use-graph-editor";
 import { createSubgraphFromSelectedNodes } from "@/app/_utils/kg/create-subgraph-from-selected-nodes";
 import { filterGraphByEntityNames } from "@/app/_utils/kg/filter-graph-by-entity-names";
@@ -52,6 +51,11 @@ import { ProposalCreateModal } from "./proposal-create-modal";
 import { ShareTopicSpaceModal } from "./share-topic-space-modal";
 import { PublishWorkspaceModal } from "./publish-workspace-modal";
 import { DirectedLinksToggleButton } from "../view/graph-view/directed-links-toggle-button";
+import { SnapshotStoryboard } from "./artifact/snapshot-storyboard";
+import { useMetaGraphStory } from "@/app/_hooks/use-meta-graph-story";
+import { WorkspaceToolbar } from "./workspace-toolbar";
+import { GraphViewContainer } from "./graph-view-container";
+import { RightPanelContainer } from "./right-panel-container";
 // import { PlusCircleIcon } from "@heroicons/react/24/outline";
 
 interface CuratorsWritingWorkspaceProps {
@@ -125,6 +129,26 @@ const CuratorsWritingWorkspace = ({
   const completionWithSubgraphRef = useRef<
     null | ((subgraph: GraphDocumentForFrontend) => void)
   >(null);
+
+  // 右パネルの状態管理
+  const [rightPanelMode, setRightPanelMode] = useState<"detail" | "copilot">(
+    "detail",
+  );
+  const [layoutInstruction, setLayoutInstruction] =
+    useState<LayoutInstruction | null>(null);
+  const [filteredGraphData, setFilteredGraphData] =
+    useState<GraphDocumentForFrontend | null>(null);
+
+  // ストーリーテリングモード
+  const [isStorytellingMode, setIsStorytellingMode] = useState<boolean>(false);
+
+  // メタグラフ関連の状態
+  const [isMetaGraphMode, setIsMetaGraphMode] = useState<boolean>(false);
+
+  // 現在フォーカス中のコミュニティID（ストーリーテリングモード用）
+  const [focusedCommunityId, setFocusedCommunityId] = useState<string | null>(
+    null,
+  );
 
   // workspace.nameが更新されたらdisplayTitleも更新
   useEffect(() => {
@@ -224,9 +248,9 @@ const CuratorsWritingWorkspace = ({
     isNodeLinkAttachModalOpen,
     setIsNodeLinkAttachModalOpen,
     focusedNode,
-    setFocusedNode: _setFocusedNode,
+    setFocusedNode,
     focusedLink,
-    setFocusedLink: _setFocusedLink,
+    setFocusedLink,
     additionalGraph,
     setAdditionalGraph,
     onNodeContextMenu,
@@ -242,6 +266,14 @@ const CuratorsWritingWorkspace = ({
       console.error("グラフの更新に失敗しました", error);
     },
   });
+
+  // メタグラフストーリー生成用のカスタムフック
+  const metaGraphStory = useMetaGraphStory(
+    graphDocument,
+    filteredGraphData,
+    workspace,
+    isMetaGraphMode,
+  );
 
   // PDF処理用のカスタムフック
   const { isProcessingPDF, processingStep, processingError, handlePDFUpload } =
@@ -432,100 +464,84 @@ const CuratorsWritingWorkspace = ({
         }`}
       >
         <div className="flex h-full flex-col bg-slate-900">
-          <div className="mb-2 flex w-full flex-row items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <LinkButton
-                href="/workspaces"
-                className="flex !h-8 !w-8 items-center justify-center"
-              >
-                <div className="h-4 w-4">
-                  <ChevronLeftIcon height={16} width={16} color="white" />
-                </div>
-              </LinkButton>
-              <EditableTitle
-                title={displayTitle}
-                onSave={handleTitleSave}
-                isPending={updateWorkspace.isPending}
-              />
-            </div>
-
-            {/* Right Panel Toggle Button */}
-            <div className="flex items-center gap-1">
-              {/* <Button size="small" className="flex items-center gap-1">
-                <PinLeftIcon height={16} width={16} color="white" />
-              </Button> */}
-              {/* <Button
-                size="small"
-                onClick={() => {
-                  setIsExtractingGraph(true);
-                  extractGraphFromWorkspace.mutate({
-                    workspaceId: workspace.id,
-                  });
-                }}
-                disabled={isExtractingGraph || isGraphExtracted}
-                className="flex items-center gap-1"
-                title="グラフを抽出"
-              >
-                {isExtractingGraph ? (
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                ) : (
-                  <FileTextIcon
-                    height={16}
-                    width={16}
-                    color={isGraphExtracted ? "green" : "white"}
-                  />
-                )}
-              </Button> */}
-              <Button
-                size="small"
-                onClick={() => setIsPublishModalOpen(true)}
-                className="flex items-center gap-1"
-              >
-                <ShareIcon
-                  height={16}
-                  width={16}
-                  color={
-                    workspace.status === WorkspaceStatus.PUBLISHED
-                      ? "green"
-                      : "white"
-                  }
-                />
-              </Button>
-              <Button
-                size="small"
-                onClick={() => setIsRightPanelOpen(!isRightPanelOpen)}
-                className="flex items-center gap-1"
-              >
-                {isRightPanelOpen ? (
-                  <PinRightIcon height={16} width={16} color="white" />
-                ) : (
-                  <PinLeftIcon height={16} width={16} color="white" />
-                )}
-              </Button>
-            </div>
-          </div>
+          <WorkspaceToolbar
+            workspace={workspace}
+            displayTitle={displayTitle}
+            onTitleSave={handleTitleSave}
+            isTitlePending={updateWorkspace.isPending}
+            isStorytellingMode={isStorytellingMode}
+            onStorytellingModeToggle={() => {
+              if (!isStorytellingMode) {
+                setIsMetaGraphMode(true);
+              }
+              setIsStorytellingMode(!isStorytellingMode);
+            }}
+            isMetaGraphMode={isMetaGraphMode}
+            onMetaGraphModeToggle={() => {
+              setIsMetaGraphMode(!isMetaGraphMode);
+            }}
+            isRightPanelOpen={isRightPanelOpen}
+            onRightPanelToggle={() => setIsRightPanelOpen(!isRightPanelOpen)}
+            onPublish={() => setIsPublishModalOpen(true)}
+            onShare={() => setIsShareTopicSpaceModalOpen(true)}
+            graphDocument={graphDocument}
+            isMetaGraphGenerating={metaGraphStory.isLoading}
+          />
 
           {/* TipTapエディタ */}
           <div className="h-full max-h-full flex-grow overflow-y-hidden">
-            <TiptapGraphFilterContext.Provider
-              value={{ tiptapGraphFilterOption, setTiptapGraphFilterOption }}
-            >
-              <TipTapEditor
-                content={editorContent}
-                onUpdate={onEditorContentUpdate}
-                entities={nodes}
-                onEntityClick={handleEntityClick}
+            {isStorytellingMode ? (
+              <SnapshotStoryboard
                 workspaceId={workspace.id}
-                onGraphUpdate={onGraphUpdate}
-                setIsGraphEditor={setIsGraphEditor}
-                setIsGraphSelectionMode={setIsGraphSelectionMode}
-                completionWithSubgraphRef={
-                  completionWithSubgraphRef as React.MutableRefObject<
-                    ((subgraph: GraphDocumentForFrontend) => void) | null
-                  >
+                metaGraphSummaries={metaGraphStory.metaGraphData?.summaries}
+                narrativeFlow={metaGraphStory.metaGraphData?.narrativeFlow}
+                detailedStories={metaGraphStory.metaGraphData?.detailedStories}
+                preparedCommunities={
+                  metaGraphStory.metaGraphData?.preparedCommunities
                 }
+                narrativeActions={metaGraphStory.actions}
+                isRegeneratingTransitions={
+                  metaGraphStory.isRegeneratingTransitions
+                }
+                onCommunityFocus={(communityId) => {
+                  // コミュニティにフォーカスしたときにグラフビューを更新
+                  setFocusedCommunityId(communityId);
+                }}
+                metaGraphData={
+                  metaGraphStory.metaGraphData
+                    ? {
+                        metaNodes: [],
+                        metaGraph: metaGraphStory.metaGraphData.metaGraph,
+                      }
+                    : undefined
+                }
+                currentContent={editorContent}
+                onContentUpdate={(content) => {
+                  setEditorContent(content);
+                  void refetch();
+                }}
               />
-            </TiptapGraphFilterContext.Provider>
+            ) : (
+              <TiptapGraphFilterContext.Provider
+                value={{ tiptapGraphFilterOption, setTiptapGraphFilterOption }}
+              >
+                <TipTapEditor
+                  content={editorContent}
+                  onUpdate={onEditorContentUpdate}
+                  entities={nodes}
+                  onEntityClick={handleEntityClick}
+                  workspaceId={workspace.id}
+                  onGraphUpdate={onGraphUpdate}
+                  setIsGraphEditor={setIsGraphEditor}
+                  setIsGraphSelectionMode={setIsGraphSelectionMode}
+                  completionWithSubgraphRef={
+                    completionWithSubgraphRef as React.MutableRefObject<
+                      ((subgraph: GraphDocumentForFrontend) => void) | null
+                    >
+                  }
+                />
+              </TiptapGraphFilterContext.Provider>
+            )}
           </div>
         </div>
       </div>
@@ -534,7 +550,9 @@ const CuratorsWritingWorkspace = ({
       {isRightPanelOpen && (
         <div
           className={`flex h-[calc(100svh-80px)] flex-col transition-all duration-300 ${
-            isGraphEditor || isGraphSelectionMode ? "w-1/2" : "w-1/3"
+            isGraphEditor || isGraphSelectionMode || isStorytellingMode
+              ? "w-1/2"
+              : "w-1/3"
           }`}
         >
           {/* Knowledge Graph Viewer */}
@@ -550,253 +568,268 @@ const CuratorsWritingWorkspace = ({
               {topicSpace ? (
                 <>
                   {graphDocument ? (
-                    <>
-                      {activeEntity ? (
-                        <RelatedNodesAndLinksViewer
-                          node={activeEntity}
-                          contextId={topicSpace.id}
-                          contextType="topicSpace"
-                          className="h-full w-full"
-                          height={graphSize.height}
-                          width={graphSize.width}
-                          setFocusedNode={setFocusedNodeWrapper}
-                          focusedNode={activeEntity}
-                          onClose={() => updateActiveEntity(undefined)}
-                        />
-                      ) : (
-                        <D3ForceGraph
-                          key={`graph-${isRightPanelOpen}-${graphSize.width}-${graphSize.height}`}
-                          svgRef={svgRef}
-                          width={graphSize.width}
-                          height={graphSize.height}
-                          // defaultPosition={defaultPosition}
-                          graphDocument={
-                            tiptapGraphFilterOption.mode === "filtered"
-                              ? (tiptapFilteredGraphDocument ?? graphDocument)
-                              : graphDocument
+                    <GraphViewContainer
+                      topicSpace={topicSpace}
+                      graphDocument={graphDocument}
+                      activeEntity={activeEntity}
+                      layoutInstruction={layoutInstruction}
+                      filteredGraphData={filteredGraphData}
+                      isMetaGraphMode={isMetaGraphMode}
+                      metaGraphData={
+                        metaGraphStory.metaGraphData
+                          ? {
+                              metaGraph: metaGraphStory.metaGraphData.metaGraph,
+                              communityMap:
+                                metaGraphStory.metaGraphData.communityMap,
+                            }
+                          : null
+                      }
+                      metaGraphSummaries={
+                        metaGraphStory.metaGraphData?.summaries ?? []
+                      }
+                      narrativeFlow={
+                        metaGraphStory.metaGraphData?.narrativeFlow
+                      }
+                      focusedCommunityId={focusedCommunityId}
+                      graphSize={graphSize}
+                      svgRef={svgRef}
+                      currentScale={currentScale}
+                      setCurrentScale={setCurrentScale}
+                      setFocusedNode={setFocusedNodeWrapper}
+                      tiptapGraphFilterOption={tiptapGraphFilterOption}
+                      graphDocumentForDisplay={
+                        tiptapGraphFilterOption.mode === "filtered"
+                          ? (tiptapFilteredGraphDocument ?? graphDocument)
+                          : graphDocument
+                      }
+                      isGraphEditor={isGraphEditor}
+                      isGraphSelectionMode={isGraphSelectionMode}
+                      selectedNodeIdsForAI={selectedNodeIdsForAI}
+                      completionWithSubgraphRef={completionWithSubgraphRef}
+                      isDirectedLinks={isDirectedLinks}
+                      setIsDirectedLinks={setIsDirectedLinks}
+                      magnifierMode={magnifierMode}
+                      setMagnifierMode={setMagnifierMode}
+                      isRightPanelOpen={isRightPanelOpen}
+                      isLargeGraph={false}
+                      onGraphUpdate={isGraphEditor ? onGraphUpdate : undefined}
+                      onNodeContextMenu={
+                        isGraphEditor ? onNodeContextMenu : undefined
+                      }
+                      onLinkContextMenu={
+                        isGraphEditor ? onLinkContextMenu : undefined
+                      }
+                      onNodeSelectionToggle={(node) => {
+                        setSelectedNodeIdsForAI((prev) =>
+                          prev.includes(node.id)
+                            ? prev.filter((id) => id !== node.id)
+                            : [...prev, node.id],
+                        );
+                      }}
+                      selectedGraphData={(() => {
+                        if (isGraphSelectionMode) {
+                          if (
+                            graphDocument &&
+                            selectedNodeIdsForAI.length > 0
+                          ) {
+                            const selectedNodes = graphDocument.nodes.filter(
+                              (n) => selectedNodeIdsForAI.includes(n.id),
+                            );
+                            const selectedRelationships =
+                              graphDocument.relationships.filter(
+                                (r) =>
+                                  selectedNodeIdsForAI.includes(r.sourceId) &&
+                                  selectedNodeIdsForAI.includes(r.targetId),
+                              );
+                            return {
+                              nodes: selectedNodes,
+                              relationships: selectedRelationships,
+                            };
                           }
-                          isLinkFiltered={false}
-                          currentScale={currentScale}
-                          setCurrentScale={setCurrentScale}
-                          setFocusedNode={setFocusedNodeWrapper}
-                          isDirectedLinks={isDirectedLinks}
-                          focusedNode={activeEntity}
-                          setFocusedLink={() => {
-                            // リンクフォーカス機能は現在使用しない
-                          }}
-                          selectedGraphData={(() => {
-                            // AIモード中: 選択ノードがなければハイライトなし
-                            if (isGraphSelectionMode) {
-                              if (
-                                graphDocument &&
-                                selectedNodeIdsForAI.length > 0
-                              ) {
-                                const selectedNodes =
-                                  graphDocument.nodes.filter((n) =>
-                                    selectedNodeIdsForAI.includes(n.id),
-                                  );
-                                const selectedRelationships =
-                                  graphDocument.relationships.filter(
-                                    (r) =>
-                                      selectedNodeIdsForAI.includes(
-                                        r.sourceId,
-                                      ) &&
-                                      selectedNodeIdsForAI.includes(r.targetId),
-                                  );
-                                return {
-                                  nodes: selectedNodes,
-                                  relationships: selectedRelationships,
-                                };
-                              }
-                              return undefined;
-                            }
-                            // 通常時: TipTapの絞り込みハイライトを適用
-                            if (
-                              tiptapGraphFilterOption.mode !== "non-filtered"
-                            ) {
-                              return tiptapSelectedGraphDocument ?? undefined;
-                            }
-                            return undefined;
-                          })()}
-                          toolComponent={
-                            <div className="absolute ml-1 mt-1 flex flex-row items-center gap-1">
-                              {!isGraphEditor ? (
-                                <>
-                                  <Button
-                                    size="small"
-                                    onClick={() =>
-                                      setMagnifierMode((prev) => (prev + 1) % 3)
-                                    }
-                                    className={`flex items-center gap-1 ${
-                                      magnifierMode === 1
-                                        ? "bg-orange-500/40"
-                                        : magnifierMode === 2
-                                          ? "bg-orange-700/40"
-                                          : ""
-                                    }`}
-                                  >
-                                    <ZoomInIcon
-                                      height={16}
-                                      width={16}
-                                      color={
-                                        magnifierMode > 0 ? "orange" : "white"
-                                      }
-                                    />
-                                  </Button>
-                                  {isGraphSelectionMode && (
-                                    <div className="ml-2 flex items-center gap-2 rounded-md bg-slate-900/80 px-2 py-1 text-xs text-orange-200 backdrop-blur-sm">
-                                      <span>AIモード: ノードを選択</span>
-                                      {selectedNodeIdsForAI.length > 0 && (
-                                        <Button
-                                          size="small"
-                                          className="flex !h-6 !w-6 items-center justify-center !p-1 text-xs"
-                                          onClick={() => {
-                                            if (
-                                              !graphDocument ||
-                                              !completionWithSubgraphRef?.current
-                                            )
-                                              return;
-                                            const subgraph =
-                                              createSubgraphFromSelectedNodes(
-                                                graphDocument,
-                                                selectedNodeIdsForAI,
-                                              );
-                                            completionWithSubgraphRef.current(
-                                              subgraph,
-                                            );
-                                            // 終了処理
-                                            setIsGraphSelectionMode(false);
-                                            setSelectedNodeIdsForAI([]);
-                                          }}
-                                        >
-                                          <CheckIcon
-                                            height={16}
-                                            width={16}
-                                            color="green"
-                                          />
-                                        </Button>
-                                      )}
-
-                                      <Button
-                                        size="small"
-                                        className="flex !h-6 !w-6 items-center justify-center !p-1 text-xs"
-                                        onClick={() => {
-                                          // キャンセル: AIモード終了と選択クリア
-                                          setIsGraphSelectionMode(false);
-                                          setSelectedNodeIdsForAI([]);
-                                        }}
-                                      >
-                                        <CrossLargeIcon
-                                          height={14}
-                                          width={14}
-                                          color="red"
-                                        />
-                                      </Button>
-                                    </div>
-                                  )}
-                                  <Button
-                                    size="small"
-                                    onClick={() =>
-                                      setIsGraphEditor(!isGraphEditor)
-                                    }
-                                    className="flex items-center gap-1"
-                                  >
-                                    <Pencil2Icon
-                                      height={16}
-                                      width={16}
-                                      color="white"
-                                    />
-                                  </Button>
-                                  <Button
-                                    size="small"
-                                    onClick={() =>
-                                      setIsPDFUploadModalOpen(true)
-                                    }
-                                    className="flex items-center gap-1"
-                                  >
-                                    <PlusIcon
-                                      height={16}
-                                      width={16}
-                                      color="white"
-                                    />
-                                  </Button>
-                                  <Button
-                                    size="small"
-                                    onClick={() =>
-                                      setIsShareTopicSpaceModalOpen(true)
-                                    }
-                                    className="flex items-center gap-1"
-                                  >
-                                    <ShareIcon
-                                      height={16}
-                                      width={16}
-                                      color="white"
-                                    />
-                                  </Button>
-                                  <DirectedLinksToggleButton
-                                    isDirectedLinks={isDirectedLinks}
-                                    setIsDirectedLinks={setIsDirectedLinks}
-                                  />
-                                </>
-                              ) : (
-                                <>
-                                  <Button
-                                    size="small"
-                                    onClick={() =>
-                                      setIsGraphEditor(!isGraphEditor)
-                                    }
-                                    className="flex items-center gap-1"
-                                  >
-                                    <CrossLargeIcon
-                                      height={16}
-                                      width={16}
-                                      color="white"
-                                    />
-                                  </Button>
-                                  {isGraphUpdated && (
+                          return undefined;
+                        }
+                        if (tiptapGraphFilterOption.mode !== "non-filtered") {
+                          return tiptapSelectedGraphDocument ?? undefined;
+                        }
+                        return undefined;
+                      })()}
+                      toolComponent={
+                        <div className="absolute ml-1 mt-1 flex flex-row items-center gap-1">
+                          {!isGraphEditor ? (
+                            <>
+                              <Button
+                                size="small"
+                                onClick={() =>
+                                  setMagnifierMode((prev) => (prev + 1) % 3)
+                                }
+                                className={`flex items-center gap-1 ${
+                                  magnifierMode === 1
+                                    ? "bg-orange-500/40"
+                                    : magnifierMode === 2
+                                      ? "bg-orange-700/40"
+                                      : ""
+                                }`}
+                              >
+                                <ZoomInIcon
+                                  height={16}
+                                  width={16}
+                                  color={magnifierMode > 0 ? "orange" : "white"}
+                                />
+                              </Button>
+                              {isGraphSelectionMode && (
+                                <div className="ml-2 flex items-center gap-2 rounded-md bg-slate-900/80 px-2 py-1 text-xs text-orange-200 backdrop-blur-sm">
+                                  <span>AIモード: ノードを選択</span>
+                                  {selectedNodeIdsForAI.length > 0 && (
                                     <Button
                                       size="small"
-                                      onClick={onRecordUpdate}
-                                      className="flex items-center gap-1 text-xs"
+                                      className="flex !h-6 !w-6 items-center justify-center !p-1 text-xs"
+                                      onClick={() => {
+                                        if (
+                                          !graphDocument ||
+                                          !completionWithSubgraphRef?.current
+                                        )
+                                          return;
+                                        const subgraph =
+                                          createSubgraphFromSelectedNodes(
+                                            graphDocument,
+                                            selectedNodeIdsForAI,
+                                          );
+                                        completionWithSubgraphRef.current(
+                                          subgraph,
+                                        );
+                                        setIsGraphSelectionMode(false);
+                                        setSelectedNodeIdsForAI([]);
+                                      }}
                                     >
-                                      {isAdmin
-                                        ? "グラフを更新"
-                                        : "変更提案を作成"}
+                                      <CheckIcon
+                                        height={16}
+                                        width={16}
+                                        color="green"
+                                      />
                                     </Button>
                                   )}
-                                  <DirectedLinksToggleButton
-                                    isDirectedLinks={isDirectedLinks}
-                                    setIsDirectedLinks={setIsDirectedLinks}
-                                  />
-                                </>
+                                  <Button
+                                    size="small"
+                                    className="flex !h-6 !w-6 items-center justify-center !p-1 text-xs"
+                                    onClick={() => {
+                                      setIsGraphSelectionMode(false);
+                                      setSelectedNodeIdsForAI([]);
+                                    }}
+                                  >
+                                    <CrossLargeIcon
+                                      height={14}
+                                      width={14}
+                                      color="red"
+                                    />
+                                  </Button>
+                                </div>
                               )}
-                            </div>
-                          }
-                          focusedLink={undefined}
-                          isLargeGraph={false}
-                          isEditor={isGraphEditor}
-                          onGraphUpdate={
-                            isGraphEditor ? onGraphUpdate : undefined
-                          }
-                          onNodeContextMenu={
-                            isGraphEditor ? onNodeContextMenu : undefined
-                          }
-                          onLinkContextMenu={
-                            isGraphEditor ? onLinkContextMenu : undefined
-                          }
-                          magnifierMode={magnifierMode}
-                          // AIモード: ノード選択トグル
-                          isSelectionMode={isGraphSelectionMode}
-                          onNodeSelectionToggle={(node) => {
-                            setSelectedNodeIdsForAI((prev) =>
-                              prev.includes(node.id)
-                                ? prev.filter((id) => id !== node.id)
-                                : [...prev, node.id],
-                            );
-                          }}
-                        />
-                      )}
-                    </>
+                              <Button
+                                size="small"
+                                onClick={() => setIsGraphEditor(!isGraphEditor)}
+                                className="flex items-center gap-1"
+                              >
+                                <Pencil2Icon
+                                  height={16}
+                                  width={16}
+                                  color="white"
+                                />
+                              </Button>
+                              <Button
+                                size="small"
+                                onClick={() => {
+                                  setRightPanelMode(
+                                    rightPanelMode === "copilot"
+                                      ? "detail"
+                                      : "copilot",
+                                  );
+                                }}
+                                className={`flex items-center gap-1 ${
+                                  rightPanelMode === "copilot"
+                                    ? "bg-blue-600"
+                                    : ""
+                                }`}
+                              >
+                                <ChatBubbleIcon
+                                  height={16}
+                                  width={16}
+                                  color="white"
+                                />
+                              </Button>
+                              <Button
+                                size="small"
+                                onClick={() => setIsPDFUploadModalOpen(true)}
+                                className="flex items-center gap-1"
+                              >
+                                <PlusIcon
+                                  height={16}
+                                  width={16}
+                                  color="white"
+                                />
+                              </Button>
+                              <Button
+                                size="small"
+                                onClick={() =>
+                                  setIsShareTopicSpaceModalOpen(true)
+                                }
+                                className="flex items-center gap-1"
+                              >
+                                <ShareIcon
+                                  height={16}
+                                  width={16}
+                                  color="white"
+                                />
+                              </Button>
+                              <DirectedLinksToggleButton
+                                isDirectedLinks={isDirectedLinks}
+                                setIsDirectedLinks={setIsDirectedLinks}
+                              />
+                              {layoutInstruction && (
+                                <Button
+                                  size="small"
+                                  onClick={() => setLayoutInstruction(null)}
+                                  className="flex items-center gap-1 bg-red-500/80 hover:bg-red-600/80"
+                                >
+                                  <ResetIcon
+                                    height={16}
+                                    width={16}
+                                    color="white"
+                                  />
+                                  レイアウトをリセット
+                                </Button>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                size="small"
+                                onClick={() => setIsGraphEditor(!isGraphEditor)}
+                                className="flex items-center gap-1"
+                              >
+                                <CrossLargeIcon
+                                  height={16}
+                                  width={16}
+                                  color="white"
+                                />
+                              </Button>
+                              {isGraphUpdated && (
+                                <Button
+                                  size="small"
+                                  onClick={onRecordUpdate}
+                                  className="flex items-center gap-1 text-xs"
+                                >
+                                  {isAdmin ? "グラフを更新" : "変更提案を作成"}
+                                </Button>
+                              )}
+                              <DirectedLinksToggleButton
+                                isDirectedLinks={isDirectedLinks}
+                                setIsDirectedLinks={setIsDirectedLinks}
+                              />
+                            </>
+                          )}
+                        </div>
+                      }
+                    />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center">
                       <p>グラフデータが見つかりません</p>
@@ -818,29 +851,33 @@ const CuratorsWritingWorkspace = ({
             </div>
           </div>
 
-          {/* Detail/Evidence Panel */}
+          {/* Detail/Evidence Panel or Copilot */}
           <div
             className={`relative flex-shrink-0 overflow-y-hidden ${
               isGraphEditor ? "flex-[1]" : "flex-1"
             }`}
           >
-            {topicSpaceId ? (
-              <NodeDetailPanel
-                activeEntity={activeEntity}
-                topicSpaceId={topicSpaceId}
-                setFocusedNode={setFocusedNodeWrapper}
-                setIsGraphEditor={setIsGraphEditor}
-                onGraphUpdate={onGraphUpdate}
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center rounded-b-lg border border-t-0 border-gray-300 bg-slate-800 text-gray-400">
-                <div className="text-center">
-                  <p className="text-sm">
-                    リポジトリを選択すると詳細パネルが表示されます
-                  </p>
-                </div>
-              </div>
-            )}
+            <RightPanelContainer
+              rightPanelMode={rightPanelMode}
+              activeEntity={activeEntity}
+              topicSpaceId={topicSpaceId}
+              setFocusedNode={setFocusedNodeWrapper}
+              setIsGraphEditor={setIsGraphEditor}
+              onGraphUpdate={onGraphUpdate}
+              workspaceId={workspace.id}
+              currentGraphData={graphDocument}
+              curatorialContext={
+                workspace.curatorialContext as CuratorialContext | null
+              }
+              onLayoutInstruction={(instruction) => {
+                console.log("Layout instruction received:", instruction);
+                setLayoutInstruction(instruction);
+              }}
+              onFilteredGraphData={(filteredGraph) => {
+                setFilteredGraphData(filteredGraph);
+              }}
+              isGraphEditor={isGraphEditor}
+            />
           </div>
         </div>
       )}

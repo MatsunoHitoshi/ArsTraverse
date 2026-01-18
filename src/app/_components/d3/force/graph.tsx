@@ -188,11 +188,6 @@ const GraphNodeCircle = memo(function GraphNodeCircle({
   );
 });
 
-// export interface CustomNodeType extends SimulationNodeDatum, NodeType {}
-// export interface CustomLinkType
-//   extends SimulationLinkDatum<CustomNodeType>,
-//     RelationshipType {}
-
 const linkFilter = (nodes: CustomNodeType[], links: CustomLinkType[]) => {
   const filteredNodes = nodes.filter((node) => {
     return links.find((link) => {
