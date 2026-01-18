@@ -89,20 +89,16 @@ export const WorkspaceToolbar = ({
           <StackIcon height={16} width={16} color="white" />
           ストーリーテリングモード
         </Button>
-        {graphDocument && (
+        {graphDocument && isMetaGraphMode && (
           <Button
             size="small"
             onClick={onMetaGraphModeToggle}
-            className={`flex items-center gap-1 ${
+            className={`flex items-center gap-2 ${
               isMetaGraphMode ? "bg-indigo-600" : ""
             }`}
             disabled={isMetaGraphGenerating}
           >
-            {isMetaGraphGenerating
-              ? "生成中..."
-              : isMetaGraphMode
-                ? "詳細表示"
-                : "メタグラフ表示"}
+            {isMetaGraphGenerating ? "生成中..." : "モードを終了"}
           </Button>
         )}
         <Button
