@@ -16,7 +16,7 @@ import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { usePathname, useRouter } from "next/navigation";
 import { getNodeByIdForFrontend } from "@/app/_utils/kg/filter";
 
-import { calculateGraphStatistics } from "@/app/_utils/kg/bfs";
+import { calculateGraphStatistics } from "@/app/_utils/kg/graph-statistics";
 
 type GraphInfoPanelProps = {
   focusedNode: CustomNodeType | undefined;

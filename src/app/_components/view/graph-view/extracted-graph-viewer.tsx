@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { DocumentForm } from "@/app/_components/form/document-form";
 import type { GraphDocumentForFrontend } from "@/app/const/types";
@@ -23,6 +23,8 @@ export const ExtractedGraphViewer = () => {
   const submitSourceDocumentWithGraph =
     api.sourceDocument.createWithGraphData.useMutation();
 
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
   const [currentScale, setCurrentScale] = useState<number>(1);
   const [focusedNode, setFocusedNode] = useState<CustomNodeType | undefined>(
     undefined,
@@ -37,27 +39,39 @@ export const ExtractedGraphViewer = () => {
   const searchParams = useSearchParams();
   const hasGraphData = searchParams.get("has-graph-data");
 
-  const submit = (
-    graphDocument: GraphDocumentForFrontend,
-    fileName: string,
-    documentUrl: string,
-  ) => {
-    submitSourceDocumentWithGraph.mutate(
-      {
-        name: fileName,
-        url: documentUrl,
-        dataJson: graphDocument,
-      },
-      {
-        onSuccess: (res) => {
-          router.push(`/documents/${res?.sourceDocument.id}`);
+  const submit = useCallback(
+    (
+      graphDocument: GraphDocumentForFrontend,
+      fileName: string,
+      documentUrl: string,
+    ) => {
+      // 既に処理中の場合は何もしない
+      if (submitSourceDocumentWithGraph.isPending) {
+        return;
+      }
+
+      setIsSubmitting(true);
+
+      submitSourceDocumentWithGraph.mutate(
+        {
+          name: fileName,
+          url: documentUrl,
+          dataJson: graphDocument,
         },
-        onError: (e) => {
-          console.log(e);
+        {
+          onSuccess: (res) => {
+            router.push(`/documents/${res?.sourceDocument.id}`);
+            setIsSubmitting(false);
+          },
+          onError: (e) => {
+            console.log(e);
+            setIsSubmitting(false);
+          },
         },
-      },
-    );
-  };
+      );
+    },
+    [submitSourceDocumentWithGraph, router],
+  );
 
   useEffect(() => {
     if (hasGraphData === "true") {
@@ -74,7 +88,7 @@ export const ExtractedGraphViewer = () => {
       localStorage.removeItem("fileName");
       localStorage.removeItem("fileUrl");
     }
-  }, []);
+  }, [hasGraphData, submit]);
 
   const [innerWidth, innerHeight] = useWindowSize();
   const graphAreaWidth = (innerWidth ?? 100) - 18;
@@ -111,6 +125,8 @@ export const ExtractedGraphViewer = () => {
                           });
                         }
                       }}
+                      isLoading={isSubmitting}
+                      disabled={isSubmitting}
                     >
                       グラフを保存
                     </Button>

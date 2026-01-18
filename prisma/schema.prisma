@@ -360,6 +360,9 @@ model Workspace {
   
   // 執筆中の文章内容
   content     Json?
+
+  // キュレトリアルコンテキスト（立場、抽出ルール、Negative Archive等）
+  curatorialContext Json?
   
   // 参照しているトピックスペース
   referencedTopicSpaces TopicSpace[] @relation("WorkspaceReferencedTopicSpaces")
@@ -376,6 +379,9 @@ model Workspace {
   
   // 執筆履歴
   writingHistory WritingHistory[]
+
+  // グラフスナップショット（仮説バージョン）
+  graphSnapshots GraphSnapshot[]
   
   // 作成・更新日時
   createdAt   DateTime @default(now())
@@ -670,4 +676,25 @@ model TranslationCache {
 
   @@unique([sourceText, sourceLang, targetLang])
   @@index([sourceText])
+}
+
+// グラフスナップショット（仮説バージョン）
+model GraphSnapshot {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  
+  // スナップショットのデータ（ノード、エッジ、位置情報など）
+  graphData   Json
+  
+  // 関連するワークスペース
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  isDeleted   Boolean  @default(false)
+  
+  @@index([workspaceId])
+  @@index([createdAt])
 }
