@@ -21,7 +21,9 @@ interface CopilotChatProps {
   curatorialContext?: CuratorialContext;
   currentLayoutInstruction?: LayoutInstruction | null;
   onLayoutInstruction?: (instruction: LayoutInstruction) => void;
-  onFilteredGraphData?: (filteredGraph: GraphDocumentForFrontend | null) => void;
+  onFilteredGraphData?: (
+    filteredGraph: GraphDocumentForFrontend | null,
+  ) => void;
   className?: string;
 }
 
@@ -162,11 +164,11 @@ export const CopilotChat = ({
       // 分析中フラグを設定
       hasAnalyzedRef.current = graphHash;
 
-      // analyzeInsights.mutate({
-      //   workspaceId,
-      //   currentGraphData,
-      //   curatorialContext,
-      // });
+      analyzeInsights.mutate({
+        workspaceId,
+        currentGraphData,
+        curatorialContext,
+      });
     } else {
       hasAnalyzedRef.current = null;
       setMessages([
@@ -205,7 +207,7 @@ export const CopilotChat = ({
             <div
               className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
                 msg.role === "user"
-                  ? "bg-blue-600 text-white whitespace-pre-wrap"
+                  ? "whitespace-pre-wrap bg-blue-600 text-white"
                   : "bg-slate-700 text-slate-200"
               }`}
             >
