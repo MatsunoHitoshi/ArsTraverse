@@ -17,6 +17,7 @@ import {
 import { filterGraphByLayoutInstruction } from "../../utils/filter-graph-by-layout-instruction";
 import Graph from "graphology";
 import louvain from "graphology-communities-louvain";
+import { getTextReference } from "./source-document";
 
 export const copilotProcedures = {
   askCopilot: protectedProcedure
@@ -805,6 +806,7 @@ You MUST output a valid JSON object with this structure:
 4. Use edge types and connection counts to determine importance and flow direction
 5. Create a story that flows naturally based on actual graph connections
 6. The order should tell a coherent narrative, not just list communities
+7. **IMPORTANT**: Select at most 10 communities for the narrative flow. If there are more than 10 communities, choose the most important ones that create the best coherent story based on external connections and thematic relevance
 
 [External Connections Analysis]
 For each community, analyze:
@@ -879,7 +881,8 @@ Community ${idx + 1} (ID: ${c.communityId}):
           .filter((n) =>
             communities.some((c) => c.communityId === n.communityId),
           )
-          .sort((a, b) => a.order - b.order);
+          .sort((a, b) => a.order - b.order)
+          .slice(0, 10); // 最大10個までに制限
 
         // ストーリーに選ばれなかったコミュニティのタイトルを生成
         const narrativeFlowCommunityIds = new Set(
@@ -983,11 +986,13 @@ Community ${idx + 1} (ID: ${c.communityId}):
             title: `コミュニティ ${c.communityId}`,
             summary: `${c.memberNodeNames.length}個のノードを含むコミュニティです。`,
           })),
-          narrativeFlow: communities.map((c, idx) => ({
-            communityId: c.communityId,
-            order: idx + 1,
-            transitionText: `次のコミュニティへ移ります。`,
-          })),
+          narrativeFlow: communities
+            .slice(0, 10) // 最大10個までに制限
+            .map((c, idx) => ({
+              communityId: c.communityId,
+              order: idx + 1,
+              transitionText: `次のコミュニティへ移ります。`,
+            })),
         };
       }
     }),
@@ -1337,9 +1342,10 @@ Community ${idx + 1} (ID: ${c.communityId}):
           )
           .optional(),
         curatorialContext: CuratorialContextSchema.optional().nullable(),
+        workspaceId: z.string().optional(),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const {
         communityId,
         memberNodeNames,
@@ -1349,12 +1355,190 @@ Community ${idx + 1} (ID: ${c.communityId}):
         memberNodes,
         internalEdgesDetailed,
         curatorialContext,
+        workspaceId,
       } = input;
 
       const llm = new ChatOpenAI({
         temperature: 0.3,
         model: "gpt-4o-mini",
       });
+
+      const wordCount = 300;
+
+      // キーワード抽出関数
+      const extractKeywords = (
+        nodes: typeof memberNodes,
+        edges: typeof internalEdgesDetailed,
+      ): string[] => {
+        const keywords = new Set<string>();
+
+        // ノード名を追加
+        if (nodes) {
+          nodes.forEach((node) => {
+            if (node.name && node.name.length > 1) {
+              keywords.add(node.name);
+            }
+            // ノードのプロパティから値も抽出
+            if (node.properties) {
+              Object.values(node.properties).forEach((value) => {
+                if (
+                  typeof value === "string" &&
+                  value.length > 1 &&
+                  value.length < 50
+                ) {
+                  // 日本語の助詞や接続詞を除去
+                  const cleaned = value
+                    .replace(/[のをにへとがでからよりまで]/g, "")
+                    .trim();
+                  if (cleaned.length > 1) {
+                    keywords.add(cleaned);
+                  }
+                }
+              });
+            }
+          });
+        }
+
+        // エッジタイプを追加
+        if (edges) {
+          edges.forEach((edge) => {
+            if (edge.type && edge.type.length > 1) {
+              keywords.add(edge.type);
+            }
+            // エッジのプロパティから値も抽出
+            if (edge.properties) {
+              Object.values(edge.properties).forEach((value) => {
+                if (
+                  typeof value === "string" &&
+                  value.length > 1 &&
+                  value.length < 50
+                ) {
+                  const cleaned = value
+                    .replace(/[のをにへとがでからよりまで]/g, "")
+                    .trim();
+                  if (cleaned.length > 1) {
+                    keywords.add(cleaned);
+                  }
+                }
+              });
+            }
+          });
+        }
+
+        // 最大20個に制限
+        return Array.from(keywords).slice(0, 20);
+      };
+
+      // SourceDocumentから関連セクションを取得
+      let sourceDocumentSections: string[] = [];
+      if (workspaceId) {
+        try {
+          const workspace = await ctx.db.workspace.findFirst({
+            where: {
+              id: workspaceId,
+              isDeleted: false,
+              OR: [
+                { userId: ctx.session.user.id },
+                { collaborators: { some: { id: ctx.session.user.id } } },
+              ],
+            },
+            include: {
+              referencedTopicSpaces: {
+                where: { isDeleted: false },
+                include: {
+                  sourceDocuments: {
+                    where: { isDeleted: false },
+                  },
+                },
+              },
+            },
+          });
+
+          if (workspace && workspace.referencedTopicSpaces.length > 0) {
+            // キーワードを抽出
+            const keywords = extractKeywords(memberNodes, internalEdgesDetailed);
+
+            if (keywords.length > 0) {
+              // すべてのSourceDocumentを収集
+              const allSourceDocuments: Array<{
+                id: string;
+                topicSpaceName: string;
+              }> = [];
+              workspace.referencedTopicSpaces.forEach((topicSpace) => {
+                topicSpace.sourceDocuments.forEach((doc) => {
+                  allSourceDocuments.push({
+                    id: doc.id,
+                    topicSpaceName: topicSpace.name,
+                  });
+                });
+              });
+
+              // 各SourceDocumentからセクションを取得（並列処理、タイムアウト付き）
+              const sectionPromises = allSourceDocuments.map(async (doc) => {
+                try {
+                  const timeoutPromise = new Promise<string[]>((_, reject) =>
+                    setTimeout(() => reject(new Error("Timeout")), 10000),
+                  );
+                  const referencePromise = getTextReference(
+                    ctx,
+                    doc.id,
+                    keywords,
+                    300, // contextLength: 300文字（前後150文字）
+                  );
+                  const sections = await Promise.race([
+                    referencePromise,
+                    timeoutPromise,
+                  ]);
+                  return sections.map((section) => ({
+                    section,
+                    topicSpaceName: doc.topicSpaceName,
+                  }));
+                } catch (error) {
+                  console.warn(
+                    `Failed to get text reference for document ${doc.id}:`,
+                    error,
+                  );
+                  return [];
+                }
+              });
+
+              const allSections = await Promise.all(sectionPromises);
+              const flattenedSections = allSections.flat();
+
+              // 重複除去（最初の50文字が同じセクションは重複とみなす）
+              const seen = new Set<string>();
+              const uniqueSections = flattenedSections.filter((item) => {
+                const prefix = item.section.substring(0, 50);
+                if (seen.has(prefix)) {
+                  return false;
+                }
+                seen.add(prefix);
+                return true;
+              });
+
+              // キーワードマッチ数を計算してソート
+              const sectionsWithScore = uniqueSections.map((item) => {
+                const matchCount = keywords.filter((keyword) =>
+                  item.section.includes(keyword),
+                ).length;
+                return { ...item, matchCount };
+              });
+
+              // マッチ数が多い順にソートし、最大8個に制限
+              sectionsWithScore.sort((a, b) => b.matchCount - a.matchCount);
+              sourceDocumentSections = sectionsWithScore
+                .slice(0, 8)
+                .map((item) => item.section);
+            }
+          }
+        } catch (error) {
+          console.warn(
+            `Failed to get source documents for workspace ${workspaceId}:`,
+            error,
+          );
+          // エラーが発生しても処理を継続
+        }
+      }
 
       const stance = curatorialContext?.stance
         ? `Stance: ${curatorialContext.stance}`
@@ -1375,14 +1559,20 @@ Generate a rich, detailed narrative story (3-5 paragraphs, 200-400 words) about 
 6. Avoids generic descriptions like "〇〇のコミュニティです"
 7. Incorporates specific details from node and edge properties when available
 8. Shows the richness of relationships within the community
+9. When source document references are provided, use them to add depth and context to the story
 
 [Writing Style]
-- Write in Japanese
+- Write in User's language
 - Use narrative style, not just listing facts
 - Include specific relationships and connections
 - Show cause and effect, not just description
 - Create a sense of story progression
 - Make it engaging and informative
+- When source document references are available, incorporate relevant details naturally into the narrative
+
+[Word Count]
+- The story should be ${wordCount} words long (±50 words tolerance).
+- Strictly adhere to this word count range. Do not exceed ${wordCount + 50} words or go below ${wordCount - 50} words.
 
 [Example]
 Instead of: "片野湘雲に関連するコミュニティです。"
@@ -1430,11 +1620,21 @@ Community ID: ${communityId}
 - External Connections: ${externalConnections ?? "None (isolated community)"}
 `;
 
+      // ユーザープロンプトを構築
+      let userPrompt = `以下のコミュニティについて、詳細なストーリーを${wordCount}字程度で生成してください:\n\n${communityInfo}`;
+
+      // SourceDocumentのセクションがある場合は追加
+      if (sourceDocumentSections.length > 0) {
+        userPrompt += `\n\n[Source Document References]\n以下の情報源から取得した関連セクションを参照して、より詳細で豊富なストーリーを生成してください:\n\n${sourceDocumentSections
+          .map((section, idx) => `--- Reference ${idx + 1} ---\n${section}`)
+          .join("\n\n")}`;
+      }
+
       const response = await llm.invoke([
         { role: "system", content: systemPrompt },
         {
           role: "user",
-          content: `以下のコミュニティについて、詳細なストーリーを生成してください:\n\n${communityInfo}`,
+          content: userPrompt,
         },
       ]);
 

@@ -3,18 +3,26 @@
 import { api } from "@/trpc/react";
 import { Button } from "@/app/_components/button/button";
 import {
-  FileTextIcon,
   Pencil2Icon,
   PlusIcon,
   TrashIcon,
   ResetIcon,
   TriangleDownIcon,
+  ListNumberIcon,
+  PaperRollIcon,
 } from "@/app/_components/icons";
 import { useInView } from "react-intersection-observer";
 import { useEffect, useState, useRef, useMemo } from "react";
 import type { GraphDocumentForFrontend } from "@/app/const/types";
 import type { JSONContent } from "@tiptap/react";
 import type { PreparedCommunity } from "@/server/api/schemas/knowledge-graph";
+import type { MetaGraphStoryData } from "@/app/_hooks/use-meta-graph-story";
+import { Loading } from "../../loading/loading";
+import { LinkButton } from "../../button/link-button";
+import { SortableList } from "@/app/_components/sortable";
+import { SortableItem } from "@/app/_components/sortable/sortable-item";
+import { DeleteRecordModal } from "../../modal/delete-record-modal";
+import { Textarea } from "../../textarea";
 
 export const SnapshotStoryboard = ({
   workspaceId,
@@ -28,6 +36,11 @@ export const SnapshotStoryboard = ({
   isRegeneratingTransitions,
   currentContent,
   onContentUpdate,
+  referencedTopicSpaceId,
+  metaGraphStoryData,
+  setIsStorytellingMode,
+  onEditModeChange,
+  onStoryDelete,
 }: {
   workspaceId: string;
   metaGraphSummaries?: Array<{
@@ -60,14 +73,36 @@ export const SnapshotStoryboard = ({
   isRegeneratingTransitions?: boolean;
   currentContent?: JSONContent | null;
   onContentUpdate?: (content: JSONContent) => void;
+  referencedTopicSpaceId?: string;
+  metaGraphStoryData?: MetaGraphStoryData | null;
+  setIsStorytellingMode: React.Dispatch<React.SetStateAction<boolean>>;
+  onEditModeChange?: (isEditMode: boolean) => void;
+  onStoryDelete?: () => void;
 }) => {
-  const { data: snapshots } = api.snapshot.list.useQuery({
-    workspaceId,
+  // ストーリーデータの取得（refetch用）
+  const { refetch: refetchStory } = api.story.get.useQuery(
+    { workspaceId },
+    {
+      enabled: false, // 手動でrefetchするため、自動取得は無効化
+    },
+  );
+
+  const saveStory = api.story.upsert.useMutation({
+    onSuccess: async () => {
+      console.log("ストーリーを保存しました。");
+      // 保存後にストーリーデータを再取得
+      await refetchStory();
+    },
+    onError: (error) => {
+      console.error("ストーリーの保存に失敗しました:", error);
+      alert("ストーリーの保存に失敗しました。");
+    },
   });
 
   const updateWorkspace = api.workspace.update.useMutation({
     onSuccess: () => {
-      alert("ストーリーをWorkspaceのcontentに追加しました。");
+      setIsStorytellingMode(false);
+
     },
     onError: (error) => {
       console.error("Workspaceの更新に失敗しました:", error);
@@ -77,11 +112,31 @@ export const SnapshotStoryboard = ({
 
   const [isAddingStories, setIsAddingStories] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [isDeleteStoryModalOpen, setIsDeleteStoryModalOpen] = useState(false);
 
-  const handleExport = () => {
-    alert(
-      "この機能は現在開発中です。\nSVG/PDFエクスポート機能が実装される予定です。",
-    );
+  // セクション編集用の状態管理
+  const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState<Record<string, string>>({});
+  const [editingDescription, setEditingDescription] = useState<Record<string, string>>({});
+
+  // 編集モードの変更を親に通知
+  useEffect(() => {
+    onEditModeChange?.(isEditMode);
+  }, [isEditMode, onEditModeChange]);
+
+  // ドラッグ終了時のハンドラー
+  const handleDragEnd = ({
+    oldIndex,
+    newIndex,
+  }: {
+    activeId: string;
+    overId: string;
+    oldIndex: number;
+    newIndex: number;
+  }) => {
+    if (narrativeActions) {
+      narrativeActions.moveNarrativeItem(oldIndex, newIndex);
+    }
   };
 
   const handleAddStoriesToContent = () => {
@@ -147,19 +202,11 @@ export const SnapshotStoryboard = ({
           });
         }
 
-        // 遷移テキストがある場合は追加
-        if (flow.transitionText) {
-          storyContent.push({
-            type: "paragraph",
-            attrs: { class: "italic text-slate-400" },
-            content: [
-              {
-                type: "text",
-                text: flow.transitionText,
-              },
-            ],
-          });
-        }
+
+        storyContent.push({
+          type: "paragraph",
+          content: [],
+        });
       });
 
       // 既存のcontentにストーリーを追加
@@ -170,20 +217,20 @@ export const SnapshotStoryboard = ({
           // 区切り線を追加（既存のcontentがある場合）
           ...(existingContent.content && existingContent.content.length > 0
             ? [
-                {
-                  type: "horizontalRule" as const,
-                },
-                {
-                  type: "heading" as const,
-                  attrs: { level: 1 },
-                  content: [
-                    {
-                      type: "text" as const,
-                      text: "コミュニティストーリー",
-                    },
-                  ],
-                },
-              ]
+              {
+                type: "horizontalRule" as const,
+              },
+              {
+                type: "heading" as const,
+                attrs: { level: 1 },
+                content: [
+                  {
+                    type: "text" as const,
+                    text: "追加されたストーリー",
+                  },
+                ],
+              },
+            ]
             : []),
           ...storyContent,
         ],
@@ -207,36 +254,146 @@ export const SnapshotStoryboard = ({
     }
   };
 
-  // ナラティブフローがある場合はそれを使用、なければスナップショットを使用
+  // ナラティブフローがある場合はそれを使用
   const storyItems = useMemo(
     () =>
       narrativeFlow && narrativeFlow.length > 0
         ? narrativeFlow
-            .map((flow) => {
-              const summary = metaGraphSummaries?.find(
-                (s) => s.communityId === flow.communityId,
-              );
-              // 詳細ストーリーがあればそれを使用、なければ要約を使用
-              const detailedStory = detailedStories?.[flow.communityId];
-              return {
-                id: flow.communityId,
-                title: summary?.title ?? `コミュニティ ${flow.communityId}`,
-                description: detailedStory ?? summary?.summary ?? "",
-                summary: summary?.summary ?? "", // 要約も保持（将来の拡張用）
-                transitionText: flow.transitionText,
-                order: flow.order,
-              };
-            })
-            .sort((a, b) => a.order - b.order)
-        : (snapshots?.map((snapshot, index) => ({
-            id: snapshot.id,
-            title: snapshot.name,
-            description: snapshot.description ?? "No description",
-            transitionText: undefined,
-            order: index + 1,
-          })) ?? []),
-    [narrativeFlow, metaGraphSummaries, detailedStories, snapshots],
+          .map((flow) => {
+            const summary = metaGraphSummaries?.find(
+              (s) => s.communityId === flow.communityId,
+            );
+            // 詳細ストーリーがあればそれを使用、なければ要約を使用
+            const detailedStory = detailedStories?.[flow.communityId];
+            return {
+              id: flow.communityId,
+              title: summary?.title ?? `コミュニティ ${flow.communityId}`,
+              description: detailedStory ?? summary?.summary ?? "",
+              summary: summary?.summary ?? "", // 要約も保持（将来の拡張用）
+              transitionText: flow.transitionText,
+              order: flow.order,
+            };
+          })
+          .sort((a, b) => a.order - b.order)
+        : [],
+    [narrativeFlow, metaGraphSummaries, detailedStories],
   );
+
+  // ストーリーを保存
+  const handleSaveStory = () => {
+    if (!metaGraphStoryData || !referencedTopicSpaceId) {
+      alert("ストーリーのデータがないか、リポジトリが設定されていません。");
+      return;
+    }
+
+    saveStory.mutate({
+      workspaceId,
+      referencedTopicSpaceId,
+      data: metaGraphStoryData,
+    });
+  };
+
+  // セクションをクリックした時のハンドラー
+  const handleSectionClick = (sectionId: string) => {
+    // 並べ替えモードの時は無効
+    if (isEditMode) {
+      return;
+    }
+
+    // 既に編集中のセクションがある場合は保存
+    if (editingSectionId && editingSectionId !== sectionId) {
+      handleSaveSection(editingSectionId);
+    }
+
+    // 新しいセクションを編集モードにする
+    const item = storyItems.find((i) => i.id === sectionId);
+    if (item) {
+      setEditingSectionId(sectionId);
+      setEditingTitle((prev) => ({
+        ...prev,
+        [sectionId]: item.title,
+      }));
+      setEditingDescription((prev) => ({
+        ...prev,
+        [sectionId]: item.description,
+      }));
+    }
+  };
+
+  // セクションを保存するハンドラー
+  const handleSaveSection = (sectionId: string) => {
+    if (!metaGraphStoryData || !referencedTopicSpaceId) {
+      alert("ストーリーのデータがないか、リポジトリが設定されていません。");
+      return;
+    }
+
+    const title = editingTitle[sectionId];
+    const description = editingDescription[sectionId];
+
+    if (!title) {
+      alert("タイトルを入力してください。");
+      return;
+    }
+
+    // metaGraphStoryDataを更新
+    const updatedData = {
+      ...metaGraphStoryData,
+      summaries: metaGraphStoryData.summaries.map((summary) =>
+        summary.communityId === sectionId
+          ? { ...summary, title }
+          : summary,
+      ),
+      detailedStories: {
+        ...metaGraphStoryData.detailedStories,
+        [sectionId]: description,
+      },
+    };
+
+    // 保存
+    saveStory.mutate(
+      {
+        workspaceId,
+        referencedTopicSpaceId,
+        data: updatedData,
+      },
+      {
+        onSuccess: () => {
+          // 編集状態を解除
+          setEditingSectionId(null);
+          setEditingTitle((prev) => {
+            const newState = { ...prev };
+            delete newState[sectionId];
+            return newState;
+          });
+          setEditingDescription((prev) => {
+            const newState = { ...prev };
+            delete newState[sectionId];
+            return newState;
+          });
+          // 親コンポーネントに更新を通知する必要がある場合はここで処理
+          // 現在はuseMetaGraphStoryフックが自動的に再取得するため、特に必要なし
+        },
+      },
+    );
+  };
+
+  // 編集をキャンセルするハンドラー
+  const handleCancelEdit = () => {
+    const currentSectionId = editingSectionId;
+    if (currentSectionId) {
+      setEditingSectionId(null);
+      setEditingTitle((prev) => {
+        const newState = { ...prev };
+        delete newState[currentSectionId];
+        return newState;
+      });
+      setEditingDescription((prev) => {
+        const newState = { ...prev };
+        delete newState[currentSectionId];
+        return newState;
+      });
+    }
+  };
 
   // 利用可能なコミュニティ（ストーリーに含まれていないもの）
   const availableCommunities = useMemo(() => {
@@ -275,8 +432,8 @@ export const SnapshotStoryboard = ({
                 onClick={() => setIsEditMode(!isEditMode)}
                 className={`flex items-center gap-2 ${isEditMode ? "bg-blue-600 hover:bg-blue-700" : "bg-slate-700 hover:bg-slate-600"}`}
               >
-                <Pencil2Icon width={14} height={14} />
-                <span>{isEditMode ? "編集終了" : "編集"}</span>
+                <ListNumberIcon width={14} height={14} />
+                <span>{isEditMode ? "並べ替え終了" : "並べ替え"}</span>
               </Button>
               {isEditMode && (
                 <Button
@@ -297,8 +454,28 @@ export const SnapshotStoryboard = ({
           )}
         </div>
 
-        {/* 右側：エクスポートと追加ボタン */}
+        {/* 右側：保存、エクスポートと追加ボタン */}
         <div className="flex flex-wrap items-center gap-2">
+          {metaGraphStoryData && referencedTopicSpaceId && (
+            <Button
+              size="small"
+              onClick={handleSaveStory}
+              disabled={saveStory.isPending}
+              className="flex items-center gap-2"
+            >
+              {saveStory.isPending ? (
+                <>
+                  <Loading size={14} color="white" />
+                  <span>保存中...</span>
+                </>
+              ) : (
+                <>
+                  <Pencil2Icon width={14} height={14} color="white" />
+                  <span>保存</span>
+                </>
+              )}
+            </Button>
+          )}
           <Button
             size="small"
             onClick={handleAddStoriesToContent}
@@ -309,112 +486,157 @@ export const SnapshotStoryboard = ({
           >
             {isAddingStories ? (
               <>
-                <span className="animate-spin">⏳</span>
+                <Loading size={14} color="white" />
                 <span>追加中...</span>
               </>
             ) : (
               <>
-                <span>📝</span>
+                <Pencil2Icon width={14} height={14} color="white" />
                 <span>エディタに追加</span>
               </>
             )}
           </Button>
-          <Button
-            size="small"
-            onClick={handleExport}
+          <LinkButton
+            target="_blank"
+            href={`/workspaces/${workspaceId}/print-preview`}
             className="flex items-center gap-2"
           >
-            <FileTextIcon width={14} height={14} />
-            <span>PDF</span>
-          </Button>
+            <PaperRollIcon width={14} height={14} />
+            <span>印刷</span>
+          </LinkButton>
+          {metaGraphStoryData && (
+            <Button
+              size="small"
+              onClick={() => setIsDeleteStoryModalOpen(true)}
+              className="flex items-center gap-2 !text-error-red"
+            >
+              <TrashIcon width={14} height={14} color="#ea1c0c" />
+              <span>ストーリーを削除</span>
+            </Button>
+          )}
         </div>
       </div>
 
+      <DeleteRecordModal
+        isOpen={isDeleteStoryModalOpen}
+        setIsOpen={setIsDeleteStoryModalOpen}
+        type="story"
+        id={workspaceId}
+        refetch={() => {
+          onStoryDelete?.();
+        }}
+      />
+
       <div className="flex-1 overflow-y-auto pr-2">
-        <div className="space-y-8 pb-20 pt-2">
-          {storyItems.map((item, index) => (
-            <StorySection
-              key={item.id}
-              item={item}
-              onInView={() => {
-                if (onCommunityFocus) {
-                  // narrativeFlowが存在する場合はcommunityIdを、そうでない場合はnullを渡す
-                  if (narrativeFlow && narrativeFlow.length > 0) {
-                    onCommunityFocus(item.id);
-                  } else {
-                    onCommunityFocus(null);
-                  }
-                }
-              }}
-              metaGraphData={metaGraphData}
-              hasDetailedStory={!!detailedStories?.[item.id]}
-              isEditMode={isEditMode}
-              onMoveUp={() =>
-                narrativeActions?.moveNarrativeItem(index, index - 1)
-              }
-              onMoveDown={() =>
-                narrativeActions?.moveNarrativeItem(index, index + 1)
-              }
-              onRemove={() => narrativeActions?.removeFromNarrative(item.id)}
-              isFirst={index === 0}
-              isLast={index === storyItems.length - 1}
-            />
-          ))}
-          {storyItems.length === 0 && (
+        <SortableList
+          items={storyItems}
+          onDragEnd={handleDragEnd}
+          disabled={!isEditMode}
+          className="space-y-8 pb-20 pt-2"
+          emptyMessage={
             <div className="py-12 text-center text-slate-500">
               {metaGraphSummaries && metaGraphSummaries.length === 0
                 ? "メタグラフを生成中..."
                 : "ストーリーがありません。メタグラフを生成してください。"}
             </div>
+          }
+        >
+          {(item, index) => (
+            <SortableItem
+              id={item.id}
+              disabled={!isEditMode}
+              className={isEditMode ? "cursor-grab active:cursor-grabbing" : ""}
+            >
+              <StorySection
+                item={item}
+                onInView={() => {
+                  if (onCommunityFocus) {
+                    // narrativeFlowが存在する場合はcommunityIdを、そうでない場合はnullを渡す
+                    if (narrativeFlow && narrativeFlow.length > 0) {
+                      onCommunityFocus(item.id);
+                    } else {
+                      onCommunityFocus(null);
+                    }
+                  }
+                }}
+                metaGraphData={metaGraphData}
+                hasDetailedStory={!!detailedStories?.[item.id]}
+                isEditMode={isEditMode}
+                onMoveUp={() =>
+                  narrativeActions?.moveNarrativeItem(index, index - 1)
+                }
+                onMoveDown={() =>
+                  narrativeActions?.moveNarrativeItem(index, index + 1)
+                }
+                onRemove={() => narrativeActions?.removeFromNarrative(item.id)}
+                isFirst={index === 0}
+                isLast={index === storyItems.length - 1}
+                isEditing={editingSectionId === item.id}
+                onSectionClick={() => handleSectionClick(item.id)}
+                onSave={() => handleSaveSection(item.id)}
+                onCancel={handleCancelEdit}
+                editingTitle={editingTitle[item.id] ?? item.title}
+                editingDescription={editingDescription[item.id] ?? item.description}
+                onTitleChange={(title) =>
+                  setEditingTitle((prev) => ({ ...prev, [item.id]: title }))
+                }
+                onDescriptionChange={(description) =>
+                  setEditingDescription((prev) => ({
+                    ...prev,
+                    [item.id]: description,
+                  }))
+                }
+              />
+            </SortableItem>
           )}
+        </SortableList>
 
-          {/* 編集モード時の利用可能なコミュニティ一覧 */}
-          {isEditMode && availableCommunities.length > 0 && (
-            <div className="mt-8 border-t border-slate-700 pt-8">
-              <h3 className="mb-4 text-lg font-bold text-white">
-                利用可能なコミュニティ
-              </h3>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {availableCommunities.map((community) => {
-                  const summary = metaGraphSummaries?.find(
-                    (s) => s.communityId === community.communityId,
-                  );
-                  const title =
-                    summary?.title ?? `コミュニティ ${community.communityId}`;
+        {/* 編集モード時の利用可能なコミュニティ一覧 */}
+        {isEditMode && availableCommunities.length > 0 && (
+          <div className="mt-8 border-t border-slate-700 pt-8">
+            <h3 className="mb-4 text-lg font-bold text-white">
+              利用可能なコミュニティ
+            </h3>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {availableCommunities.map((community) => {
+                const summary = metaGraphSummaries?.find(
+                  (s) => s.communityId === community.communityId,
+                );
+                const title =
+                  summary?.title ?? `コミュニティ ${community.communityId}`;
 
-                  return (
-                    <div
-                      key={community.communityId}
-                      className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-800 p-4 transition-colors hover:border-slate-600"
-                    >
-                      <div>
-                        <div className="font-semibold text-white">{title}</div>
-                        <div className="text-xs text-slate-400">
-                          {community.memberNodeNames.length} nodes
-                        </div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          {community.memberNodeNames.slice(0, 3).join(", ")}...
-                        </div>
+                return (
+                  <div
+                    key={community.communityId}
+                    className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-800 p-4 transition-colors hover:border-slate-600"
+                  >
+                    <div>
+                      <div className="font-semibold text-white">{title}</div>
+                      <div className="text-xs text-slate-400">
+                        {community.memberNodeNames.length} nodes
                       </div>
-                      <Button
-                        size="small"
-                        onClick={() =>
-                          narrativeActions?.addToNarrative(
-                            community.communityId,
-                          )
-                        }
-                        className="flex items-center gap-1 bg-blue-600/20 text-blue-400 hover:bg-blue-600/40"
-                      >
-                        <PlusIcon width={14} height={14} />
-                        追加
-                      </Button>
+                      <div className="mt-1 text-xs text-slate-500">
+                        {community.memberNodeNames.slice(0, 3).join(", ")}...
+                      </div>
                     </div>
-                  );
-                })}
-              </div>
+                    <Button
+                      size="small"
+                      onClick={() =>
+                        narrativeActions?.addToNarrative(
+                          community.communityId,
+                        )
+                      }
+                      className="flex items-center gap-1 bg-blue-600/20 text-blue-400 hover:bg-blue-600/40"
+                    >
+                      <PlusIcon width={14} height={14} />
+                      追加
+                    </Button>
+                  </div>
+                );
+              })}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -432,6 +654,14 @@ const StorySection = ({
   onRemove,
   isFirst,
   isLast,
+  isEditing,
+  onSectionClick,
+  onSave,
+  onCancel,
+  editingTitle,
+  editingDescription,
+  onTitleChange,
+  onDescriptionChange,
 }: {
   item: {
     id: string;
@@ -457,7 +687,16 @@ const StorySection = ({
   onRemove?: () => void;
   isFirst?: boolean;
   isLast?: boolean;
+  isEditing?: boolean;
+  onSectionClick?: () => void;
+  onSave?: () => void;
+  onCancel?: () => void;
+  editingTitle?: string;
+  editingDescription?: string;
+  onTitleChange?: (title: string) => void;
+  onDescriptionChange?: (description: string) => void;
 }) => {
+  // useInViewでスクロール検知
   const { ref, inView } = useInView({
     rootMargin: "-10% 0px -10% 0px", // 画面中央10%の範囲に入ったら検知（より敏感に）
     threshold: 0.3, // より低い閾値で検知
@@ -479,44 +718,120 @@ const StorySection = ({
       ref={ref}
       className={`group relative flex gap-4 rounded-lg border border-slate-700 bg-slate-800 p-4 transition-all duration-300 ${isEditMode ? "border-dashed" : ""}`}
       style={{
-        opacity: inView || isEditMode ? 1 : 0.6,
-        transform: inView || isEditMode ? "scale(1)" : "scale(0.98)",
+        opacity: inView ?? isEditMode ?? isEditing ? 1 : 0.6,
+        transform: inView ?? isEditMode ?? isEditing ? "scale(1)" : "scale(0.98)",
       }}
     >
-      {/* 編集コントロール */}
+      {/* 編集コントロール（並べ替えモード時） */}
       {isEditMode && (
-        <div className="absolute -right-1 -top-1 z-10 flex gap-1 rounded-lg bg-slate-900 p-1 shadow-lg ring-1 ring-slate-700">
-          <Button
-            size="small"
-            onClick={() => {
-              onMoveUp?.();
-            }}
-            disabled={isFirst}
-            className="flex !h-6 !w-6 items-center justify-center !p-0 disabled:opacity-30"
+        <div
+          className="absolute -right-1 -top-1 z-10 flex gap-1 rounded-lg bg-slate-900 p-1 shadow-lg ring-1 ring-slate-700"
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div
+            onMouseDown={(e: React.MouseEvent) => e.stopPropagation()}
+            onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
           >
-            <div className="rotate-180 transform">
+            <Button
+              size="small"
+              onClick={() => {
+                onMoveUp?.();
+              }}
+              disabled={isFirst}
+              className="flex !h-6 !w-6 items-center justify-center !p-0 disabled:opacity-30"
+            >
+              <div className="rotate-180 transform">
+                <TriangleDownIcon width={12} height={12} />
+              </div>
+            </Button>
+          </div>
+          <div
+            onMouseDown={(e: React.MouseEvent) => e.stopPropagation()}
+            onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
+          >
+            <Button
+              size="small"
+              onClick={() => {
+                onMoveDown?.();
+              }}
+              disabled={isLast}
+              className="flex !h-6 !w-6 items-center justify-center !p-0 disabled:opacity-30"
+            >
               <TriangleDownIcon width={12} height={12} />
-            </div>
-          </Button>
+            </Button>
+          </div>
+          <div
+            onMouseDown={(e: React.MouseEvent) => e.stopPropagation()}
+            onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
+          >
+            <Button
+              size="small"
+              onClick={() => {
+                onRemove?.();
+              }}
+              className="flex !h-6 !w-6 items-center justify-center bg-red-500/20 !p-0 text-red-400 hover:bg-red-500/40"
+            >
+              <TrashIcon width={12} height={12} />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* 編集ボタン（並べ替えモードでない時、かつ編集モードでない時） */}
+      {!isEditMode && !isEditing && (
+        <div
+          className="absolute right-1 top-1 z-10"
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           <Button
             size="small"
             onClick={() => {
-              onMoveDown?.();
+              onSectionClick?.();
             }}
-            disabled={isLast}
-            className="flex !h-6 !w-6 items-center justify-center !p-0 disabled:opacity-30"
+            className="flex !h-8 !w-8 items-center justify-center !p-0 bg-slate-700 hover:bg-slate-600"
           >
-            <TriangleDownIcon width={12} height={12} />
+            <Pencil2Icon width={14} height={14} />
           </Button>
-          <Button
-            size="small"
-            onClick={() => {
-              onRemove?.();
-            }}
-            className="flex !h-6 !w-6 items-center justify-center bg-red-500/20 !p-0 text-red-400 hover:bg-red-500/40"
+        </div>
+      )}
+
+      {/* 保存・キャンセルボタン（編集モード時） */}
+      {isEditing && !isEditMode && (
+        <div
+          className="absolute -right-1 -top-1 z-10 flex gap-1 rounded-lg bg-slate-900 p-1 shadow-lg ring-1 ring-slate-700"
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div
+            onMouseDown={(e: React.MouseEvent) => e.stopPropagation()}
+            onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
           >
-            <TrashIcon width={12} height={12} />
-          </Button>
+            <Button
+              size="small"
+              onClick={() => {
+                onCancel?.();
+              }}
+              className="flex items-center gap-1 bg-slate-700 hover:bg-slate-600"
+            >
+              <span>キャンセル</span>
+            </Button>
+          </div>
+          <div
+            onMouseDown={(e: React.MouseEvent) => e.stopPropagation()}
+            onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
+          >
+            <Button
+              size="small"
+              onClick={() => {
+                onSave?.();
+              }}
+              className="flex items-center gap-1"
+            >
+              <span>保存</span>
+            </Button>
+          </div>
         </div>
       )}
 
@@ -526,18 +841,46 @@ const StorySection = ({
         </div>
       </div>
       <div className="flex-1">
-        <h3 className="mb-2 text-lg font-semibold text-white">{item.title}</h3>
-        {hasDetailedStory && (
-          <div className="mb-2 inline-block rounded-md bg-blue-900/20 px-2 py-1 text-xs text-blue-300">
-            詳細ストーリー
-          </div>
+        {isEditing && !isEditMode ? (
+          <>
+            <input
+              type="text"
+              value={editingTitle ?? item.title}
+              onChange={(e) => onTitleChange?.(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              className="mb-2 w-full rounded bg-slate-700 px-2 py-1 text-lg font-semibold text-white outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="タイトル"
+            />
+            {hasDetailedStory && (
+              <div className="mb-2 inline-block rounded-md bg-blue-900/20 px-2 py-1 text-xs text-blue-300">
+                詳細ストーリー
+              </div>
+            )}
+            <Textarea
+              value={editingDescription ?? item.description}
+              onChange={(e) => onDescriptionChange?.(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              className="mb-2 w-full rounded bg-slate-700 px-2 py-2 text-slate-300 outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="詳細ストーリー"
+            // rows={8}
+            />
+          </>
+        ) : (
+          <>
+            <h3 className="mb-2 text-lg font-semibold text-white">{item.title}</h3>
+            {hasDetailedStory && (
+              <div className="mb-2 inline-block rounded-md bg-blue-900/20 px-2 py-1 text-xs text-blue-300">
+                詳細ストーリー
+              </div>
+            )}
+            <div
+              className={`mb-2 whitespace-pre-line text-slate-300 ${isEditMode ? "line-clamp-1 overflow-hidden text-ellipsis" : ""}`}
+              title={isEditMode ? item.description : undefined}
+            >
+              {item.description}
+            </div>
+          </>
         )}
-        <div
-          className={`mb-2 whitespace-pre-line text-slate-300 ${isEditMode ? "line-clamp-1 overflow-hidden text-ellipsis" : ""}`}
-          title={isEditMode ? item.description : undefined}
-        >
-          {item.description}
-        </div>
         {item.transitionText && (
           <p className="mb-4 text-sm italic text-slate-400">
             {item.transitionText}

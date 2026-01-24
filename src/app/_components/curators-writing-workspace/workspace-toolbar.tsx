@@ -4,6 +4,7 @@ import { Button } from "@/app/_components/button/button";
 import { LinkButton } from "@/app/_components/button/link-button";
 import {
   ChevronLeftIcon,
+  CrossLargeIcon,
   PinLeftIcon,
   PinRightIcon,
   ShareIcon,
@@ -13,6 +14,7 @@ import { EditableTitle } from "./editable-title";
 import type { Workspace } from "@prisma/client";
 import { WorkspaceStatus } from "@prisma/client";
 import type { GraphDocumentForFrontend } from "@/app/const/types";
+import { Loading } from "../loading/loading";
 
 interface WorkspaceToolbarProps {
   workspace: Workspace;
@@ -83,22 +85,29 @@ export const WorkspaceToolbar = ({
           size="small"
           onClick={onStorytellingModeToggle}
           className={`flex items-center gap-1 ${
-            isStorytellingMode ? "bg-purple-600" : ""
+            isStorytellingMode ? "!text-purple-600" : ""
           }`}
         >
-          <StackIcon height={16} width={16} color="white" />
-          ストーリーテリングモード
+          <StackIcon height={14} width={14} color={isStorytellingMode ? "#9333ea" : "white"} />
+          {isMetaGraphMode ? "ビュー切替":"ストーリーテリングモード"}
         </Button>
         {graphDocument && isMetaGraphMode && (
           <Button
             size="small"
             onClick={onMetaGraphModeToggle}
             className={`flex items-center gap-2 ${
-              isMetaGraphMode ? "bg-indigo-600" : ""
+              isMetaGraphMode ? "!text-red-600" : ""
             }`}
             disabled={isMetaGraphGenerating}
           >
-            {isMetaGraphGenerating ? "生成中..." : "モードを終了"}
+            {isMetaGraphGenerating ? <Loading size={14} color="white" /> : (
+              <CrossLargeIcon
+                height={14}
+                width={14}
+                color="red"
+              />
+            )}
+            {isMetaGraphGenerating ? "生成中..." : "モード終了"}
           </Button>
         )}
         <Button

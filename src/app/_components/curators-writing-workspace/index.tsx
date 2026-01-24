@@ -142,6 +142,9 @@ const CuratorsWritingWorkspace = ({
   // ストーリーテリングモード
   const [isStorytellingMode, setIsStorytellingMode] = useState<boolean>(false);
 
+  // ストーリー編集モード（並び替えモード）
+  const [isStoryEditMode, setIsStoryEditMode] = useState<boolean>(false);
+
   // メタグラフ関連の状態
   const [isMetaGraphMode, setIsMetaGraphMode] = useState<boolean>(false);
 
@@ -149,6 +152,9 @@ const CuratorsWritingWorkspace = ({
   const [focusedCommunityId, setFocusedCommunityId] = useState<string | null>(
     null,
   );
+
+  // レイアウト方向
+  const [layoutOrientation, setLayoutOrientation] = useState<"vertical" | "horizontal">("vertical");
 
   // workspace.nameが更新されたらdisplayTitleも更新
   useEffect(() => {
@@ -455,13 +461,12 @@ const CuratorsWritingWorkspace = ({
     <div className="flex h-screen w-full gap-2 bg-slate-900 p-4 font-sans">
       {/* Left Column: Text Editor */}
       <div
-        className={`flex h-[calc(100svh-80px)] flex-col transition-all duration-300 ${
-          isRightPanelOpen
-            ? isGraphEditor || isGraphSelectionMode
-              ? "w-1/2"
-              : "w-2/3"
-            : "w-full"
-        }`}
+        className={`flex h-[calc(100svh-80px)] flex-col transition-all duration-300 ${isRightPanelOpen
+          ? isGraphEditor || isGraphSelectionMode
+            ? "w-1/2"
+            : "w-2/3"
+          : "w-full"
+          }`}
       >
         <div className="flex h-full flex-col bg-slate-900">
           <WorkspaceToolbar
@@ -478,6 +483,9 @@ const CuratorsWritingWorkspace = ({
             }}
             isMetaGraphMode={isMetaGraphMode}
             onMetaGraphModeToggle={() => {
+              if (isMetaGraphMode) {
+                setIsStorytellingMode(false);
+              }
               setIsMetaGraphMode(!isMetaGraphMode);
             }}
             isRightPanelOpen={isRightPanelOpen}
@@ -510,15 +518,23 @@ const CuratorsWritingWorkspace = ({
                 metaGraphData={
                   metaGraphStory.metaGraphData
                     ? {
-                        metaNodes: [],
-                        metaGraph: metaGraphStory.metaGraphData.metaGraph,
-                      }
+                      metaNodes: [],
+                      metaGraph: metaGraphStory.metaGraphData.metaGraph,
+                    }
                     : undefined
                 }
                 currentContent={editorContent}
                 onContentUpdate={(content) => {
                   setEditorContent(content);
                   void refetch();
+                }}
+                referencedTopicSpaceId={topicSpaceId ?? undefined}
+                metaGraphStoryData={metaGraphStory.metaGraphData}
+                setIsStorytellingMode={setIsStorytellingMode}
+                onEditModeChange={setIsStoryEditMode}
+                onStoryDelete={() => {
+                  setIsStorytellingMode(false);
+                  setIsMetaGraphMode(false);
                 }}
               />
             ) : (
@@ -549,17 +565,15 @@ const CuratorsWritingWorkspace = ({
       {/* Right Column: Knowledge Graph Viewer & Detail Panel */}
       {isRightPanelOpen && (
         <div
-          className={`flex h-[calc(100svh-80px)] flex-col transition-all duration-300 ${
-            isGraphEditor || isGraphSelectionMode || isStorytellingMode
-              ? "w-1/2"
-              : "w-1/3"
-          }`}
+          className={`flex h-[calc(100svh-80px)] flex-col transition-all duration-300 ${isGraphEditor || isGraphSelectionMode || isStorytellingMode
+            ? "w-1/2"
+            : "w-1/3"
+            }`}
         >
           {/* Knowledge Graph Viewer */}
           <div
-            className={`min-h-0 flex-shrink-0 overflow-y-hidden ${
-              isGraphEditor ? "flex-[3]" : "flex-1"
-            }`}
+            className={`min-h-0 flex-shrink-0 overflow-y-hidden ${isGraphEditor ? "flex-[3]" : "flex-1"
+              }`}
           >
             <div
               ref={graphContainerRef}
@@ -578,10 +592,10 @@ const CuratorsWritingWorkspace = ({
                       metaGraphData={
                         metaGraphStory.metaGraphData
                           ? {
-                              metaGraph: metaGraphStory.metaGraphData.metaGraph,
-                              communityMap:
-                                metaGraphStory.metaGraphData.communityMap,
-                            }
+                            metaGraph: metaGraphStory.metaGraphData.metaGraph,
+                            communityMap:
+                              metaGraphStory.metaGraphData.communityMap,
+                          }
                           : null
                       }
                       metaGraphSummaries={
@@ -662,13 +676,12 @@ const CuratorsWritingWorkspace = ({
                                 onClick={() =>
                                   setMagnifierMode((prev) => (prev + 1) % 3)
                                 }
-                                className={`flex items-center gap-1 ${
-                                  magnifierMode === 1
-                                    ? "bg-orange-500/40"
-                                    : magnifierMode === 2
-                                      ? "bg-orange-700/40"
-                                      : ""
-                                }`}
+                                className={`flex items-center gap-1 ${magnifierMode === 1
+                                  ? "bg-orange-500/40"
+                                  : magnifierMode === 2
+                                    ? "bg-orange-700/40"
+                                    : ""
+                                  }`}
                               >
                                 <ZoomInIcon
                                   height={16}
@@ -744,11 +757,10 @@ const CuratorsWritingWorkspace = ({
                                       : "copilot",
                                   );
                                 }}
-                                className={`flex items-center gap-1 ${
-                                  rightPanelMode === "copilot"
-                                    ? "bg-blue-600"
-                                    : ""
-                                }`}
+                                className={`flex items-center gap-1 ${rightPanelMode === "copilot"
+                                  ? "bg-blue-600"
+                                  : ""
+                                  }`}
                               >
                                 <ChatBubbleIcon
                                   height={16}
@@ -829,6 +841,8 @@ const CuratorsWritingWorkspace = ({
                           )}
                         </div>
                       }
+                      layoutOrientation={layoutOrientation}
+                      isEditMode={isStoryEditMode}
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center">
@@ -853,9 +867,8 @@ const CuratorsWritingWorkspace = ({
 
           {/* Detail/Evidence Panel or Copilot */}
           <div
-            className={`relative flex-shrink-0 overflow-y-hidden ${
-              isGraphEditor ? "flex-[1]" : "flex-1"
-            }`}
+            className={`relative flex-shrink-0 overflow-y-hidden ${isGraphEditor ? "flex-[1]" : "flex-1"
+              }`}
           >
             <RightPanelContainer
               rightPanelMode={rightPanelMode}

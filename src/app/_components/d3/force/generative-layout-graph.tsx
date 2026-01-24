@@ -39,6 +39,8 @@ const GenerativeGraphNode = memo(function GenerativeGraphNode({
   queryFiltered,
   isMetaNode = false,
   metaNodeSize,
+  storyOrder,
+  isEditMode = false,
 }: {
   node: CustomNodeType;
   currentScale: number;
@@ -47,6 +49,8 @@ const GenerativeGraphNode = memo(function GenerativeGraphNode({
   queryFiltered?: boolean;
   isMetaNode?: boolean;
   metaNodeSize?: number;
+  storyOrder?: number;
+  isEditMode?: boolean;
 }) {
   // 座標が未定義またはNaNの場合は描画しない
   if (
@@ -60,7 +64,7 @@ const GenerativeGraphNode = memo(function GenerativeGraphNode({
 
   // Metaノードの場合はサイズを大きく、色を変える
   const baseRadius = isMetaNode
-    ? Math.max(35, Math.min(200, (metaNodeSize ?? 10) * 10))
+    ? Math.max(35, Math.min(250, (metaNodeSize ?? 10) * 18))
     : 1.6 * ((node.neighborLinkCount ?? 0) * 0.1 + 3.6) * (nodeColor ? 1.2 : 1);
 
   const fillColor = isMetaNode
@@ -68,6 +72,9 @@ const GenerativeGraphNode = memo(function GenerativeGraphNode({
     : (nodeColor ?? "whitesmoke");
 
   const strokeColor = isMetaNode ? "#818cf8" : "#eae80c";
+
+  // MetaNode用のグラデーションID（各ノードで一意）
+  const gradientId = isMetaNode ? `metaNodeGradient-${node.id}` : undefined;
 
   return (
     <g
@@ -81,10 +88,10 @@ const GenerativeGraphNode = memo(function GenerativeGraphNode({
     >
       <circle
         r={baseRadius}
-        fill={fillColor}
-        opacity={isMetaNode ? 0.8 : 0.9}
-        stroke={strokeColor}
-        strokeWidth={isMetaNode ? 3 : queryFiltered ? 2.5 : 0}
+        fill={isMetaNode && gradientId ? `url(#${gradientId})` : fillColor}
+        opacity={isMetaNode ? 1 : 0.9} // グラデーションを使う場合はopacityは1にする
+        stroke={isMetaNode ? undefined : strokeColor} // グラデーションの場合はストロークなし
+        strokeWidth={isMetaNode ? 0 : queryFiltered ? 2.5 : 0} // グラデーションの場合はストロークなし
       />
       {currentScale > 0.7 && (
         <text
@@ -120,6 +127,22 @@ const GenerativeGraphNode = memo(function GenerativeGraphNode({
           >
             {metaNodeSize} nodes
           </text>
+          {/* 編集モード時、ストーリーに含まれている場合は順番の番号を中央に表示 */}
+          {isEditMode && storyOrder !== undefined && (
+            <text
+              y={0}
+              textAnchor="middle"
+              fill="white"
+              fontSize={Math.max(48, baseRadius * 0.8)}
+              // fontWeight="bold"
+              className="pointer-events-none select-none"
+              style={{
+                textShadow: "2px 2px 4px rgba(0, 0, 0, 0.8)",
+              }}
+            >
+              {storyOrder}
+            </text>
+          )}
         </>
       )}
     </g>
@@ -140,8 +163,11 @@ export const GenerativeLayoutGraph = ({
   focusedCommunityId,
   communityMap,
   originalGraphDocument,
-  expandZoomThreshold = 0.6,
-  collapseZoomThreshold = 0.3,
+  expandZoomThreshold = 0.35,
+  collapseZoomThreshold = 0.1,
+  onCommunityPositionsCalculated,
+  layoutOrientation = "vertical",
+  isEditMode = false,
 }: {
   width: number;
   height: number;
@@ -163,6 +189,9 @@ export const GenerativeLayoutGraph = ({
   originalGraphDocument?: GraphDocumentForFrontend; // 元のグラフデータ
   expandZoomThreshold?: number; // 展開するズームレベル
   collapseZoomThreshold?: number; // 折りたたむズームレベル
+  onCommunityPositionsCalculated?: (positions: Map<string, { x: number; y: number }>) => void; // コミュニティの位置情報を外部に公開
+  layoutOrientation?: "vertical" | "horizontal"; // レイアウト方向
+  isEditMode?: boolean; // ストーリー編集モード
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [currentScale, setCurrentScale] = useState<number>(1);
@@ -180,6 +209,8 @@ export const GenerativeLayoutGraph = ({
   // 詳細グラフを常に表示するモード
   const [alwaysShowDetailedGraph, setAlwaysShowDetailedGraph] =
     useState<boolean>(false);
+  // 前回のmetaNodeDataのorder情報を保存（変更検知用）
+  const prevMetaNodeDataOrderRef = useRef<string>("");
 
   // フィルタリング済みグラフがあればそれを使用、なければ元のグラフを使用
   // Metaモードの場合はメタグラフを使用
@@ -308,65 +339,75 @@ export const GenerativeLayoutGraph = ({
           .filter((o): o is number => o !== undefined) ?? [1]),
       );
 
-      // Y軸: 順序に基づいて上から下に配置
-      simulation.force(
-        "y",
-        forceY<CustomNodeType>((d) => {
-          const metaData = metaNodeData?.find((m) => m.communityId === d.id);
-          if (metaData?.order) {
-            // 画面の上部10%から下部90%の間に配置
-            const normalizedOrder = (metaData.order - 1) / (maxOrder || 1);
+      const isHorizontal = layoutOrientation === "horizontal";
 
-            // console.log("--- Y軸 ---");
+      // メイン軸: 順序に基づいて配置（縦向き: Y軸、横向き: X軸）
+      if (isHorizontal) {
+        // 横向き: X軸方向に進み、Y軸方向に交互に配置
+        simulation.force(
+          "x",
+          forceX<CustomNodeType>((d) => {
+            const metaData = metaNodeData?.find((m) => m.communityId === d.id);
+            if (metaData?.order) {
+              const normalizedOrder = (metaData.order - 1) / (maxOrder || 1);
+              return normalizedOrder * width * 3;
+            }
+            return width * 1.5;
+          }).strength((d) => {
+            const metaData = metaNodeData?.find((m) => m.communityId === d.id);
+            return metaData?.order ? 0.3 : 0.05;
+          }),
+        );
 
-            // console.log("order", metaData.order, normalizedOrder);
-            // console.log("communityId", metaData.communityId);
-            // console.log("title", metaData.title);
+        // サブ軸: Y軸方向に交互に配置
+        simulation.force(
+          "y",
+          forceY<CustomNodeType>((d) => {
+            const metaData = metaNodeData?.find((m) => m.communityId === d.id);
+            if (metaData?.order) {
+              const normalizedOrder = (metaData.order - 1) / (maxOrder || 1);
+              // 上下交互に配置
+              const isTop = metaData.order % 2 === 1;
+              return isTop ? height * 0.3 : height * 0.7;
+            }
+            return height * 0.5;
+          }).strength((d) => {
+            const metaData = metaNodeData?.find((m) => m.communityId === d.id);
+            return metaData?.order ? 0.1 : 0.05;
+          }),
+        );
+      } else {
+        // 縦向き: Y軸方向に進み、X軸方向に交互に配置（元の実装）
+        simulation.force(
+          "y",
+          forceY<CustomNodeType>((d) => {
+            const metaData = metaNodeData?.find((m) => m.communityId === d.id);
+            if (metaData?.order) {
+              const normalizedOrder = (metaData.order - 1) / (maxOrder || 1);
+              return normalizedOrder * height * 3;
+            }
+            return height * 1.5;
+          }).strength((d) => {
+            const metaData = metaNodeData?.find((m) => m.communityId === d.id);
+            return metaData?.order ? 0.3 : 0.05;
+          }),
+        );
 
-            // console.log("height", height);
-            // console.log("normalizedOrder * height", normalizedOrder * height);
-
-            // console.log("--------------------------------");
-
-            return normalizedOrder * height * 3;
-          }
-          // ストーリーに含まれないノードは中央付近に
-          return height * 1.5;
-        }).strength((d) => {
-          const metaData = metaNodeData?.find((m) => m.communityId === d.id);
-          // ストーリーノードは強く固定、その他は弱く
-          return metaData?.order ? 0.3 : 0.05;
-        }),
-      );
-
-      // X軸: 左から右に少しずつずらす
-      simulation.force(
-        "x",
-        forceX<CustomNodeType>((d) => {
-          const metaData = metaNodeData?.find((m) => m.communityId === d.id);
-          if (metaData?.order) {
-            // 画面の左30%から70%の間に配置（少しずつ右にずれる）
-            const normalizedOrder = (metaData.order - 1) / (maxOrder || 1);
-
-            // console.log("--- X軸 ---");
-
-            // console.log("order", metaData.order, normalizedOrder);
-            // console.log("communityId", metaData.communityId);
-            // console.log("title", metaData.title);
-
-            // console.log("width", width);
-            // console.log("normalizedOrder * width", normalizedOrder * width);
-
-            // console.log("--------------------------------");
-            return (width * 0.2 + normalizedOrder * (width * 0.8)) * 1.5;
-          }
-          // ストーリーに含まれないノードは右側のエリア（75%付近）に
-          return width * 0.75;
-        }).strength((d) => {
-          const metaData = metaNodeData?.find((m) => m.communityId === d.id);
-          return metaData?.order ? 0.1 : 0.05;
-        }),
-      );
+        simulation.force(
+          "x",
+          forceX<CustomNodeType>((d) => {
+            const metaData = metaNodeData?.find((m) => m.communityId === d.id);
+            if (metaData?.order) {
+              const normalizedOrder = (metaData.order - 1) / (maxOrder || 1);
+              return (width * 0.2 + normalizedOrder * (width * 0.8)) * 1.5;
+            }
+            return width * 0.75;
+          }).strength((d) => {
+            const metaData = metaNodeData?.find((m) => m.communityId === d.id);
+            return metaData?.order ? 0.1 : 0.05;
+          }),
+        );
+      }
 
       // 衝突判定を維持
       simulation.alpha(1).restart();
@@ -624,8 +665,7 @@ export const GenerativeLayoutGraph = ({
     >();
 
     if (hasStoryOrder && metaNodeData) {
-      // ストーリーのコミュニティのY軸位置を取得（左右配置の基準にする）
-      const storyCommunityYPositions: number[] = [];
+      const isHorizontal = layoutOrientation === "horizontal";
 
       // ストーリーのコミュニティをorder順にソート
       const sortedStoryCommunities = Array.from(communityGroups.entries())
@@ -643,94 +683,168 @@ export const GenerativeLayoutGraph = ({
         .filter((item) => item.order !== undefined)
         .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-      // コミュニティのサイズに基づいて動的に間隔を計算
-      const baseSpacing = height; // ベース間隔
-      const sizeMultiplier = 0.3; // サイズによる間隔の倍率
-      const minSpacing = height; // 最小間隔
-      const maxSpacing = height * 5; // 最大間隔
+      if (isHorizontal) {
+        // 横向き: X軸方向に進み、Y軸方向に交互に配置
+        const baseSpacing = width; // ベース間隔
+        const sizeMultiplier = 0.3;
+        const minSpacing = width;
+        const maxSpacing = width * 5;
 
-      let currentY = height * 0.5; // 初期Y位置
+        let currentX = width * 0.5; // 初期X位置
+        const storyCommunityXPositions: number[] = [];
 
-      // 各コミュニティの目標位置をorder順に基づいて計算（サイズに応じた間隔）
-      sortedStoryCommunities.forEach((item, index) => {
-        const { communityId, nodes, order } = item;
-        if (order === undefined) return;
+        sortedStoryCommunities.forEach((item, index) => {
+          const { communityId, nodes, order } = item;
+          if (order === undefined) return;
 
-        // コミュニティのサイズに基づいて間隔を計算
-        const communitySize = nodes.length;
-        const currentRadius = Math.sqrt(communitySize); // コミュニティの推定半径
+          const communitySize = nodes.length;
+          const currentRadius = Math.sqrt(communitySize);
 
-        // 最初のコミュニティ以外は、前のコミュニティの位置 + 間隔
-        if (index > 0) {
-          const prevItem = sortedStoryCommunities[index - 1];
-          if (prevItem) {
-            const prevSize = prevItem.size;
-            const prevNormalizedSize = Math.sqrt(prevSize / 10);
-            const prevSpacing = Math.min(
-              maxSpacing,
-              Math.max(
-                minSpacing,
-                baseSpacing + prevNormalizedSize * sizeMultiplier * height,
-              ),
-            );
-            // 前のコミュニティの中心位置 + 前のコミュニティの半径 + 間隔 + 現在のコミュニティの半径
-            const prevRadius = Math.sqrt(prevSize); // コミュニティの推定半径
-            const prevY =
-              communityTargetPositions.get(prevItem.communityId)?.y ?? currentY;
-            currentY = prevY + prevRadius + prevSpacing / 4 + currentRadius;
+          if (index > 0) {
+            const prevItem = sortedStoryCommunities[index - 1];
+            if (prevItem) {
+              const prevSize = prevItem.size;
+              const prevNormalizedSize = Math.sqrt(prevSize / 10);
+              const prevSpacing = Math.min(
+                maxSpacing,
+                Math.max(
+                  minSpacing,
+                  baseSpacing + prevNormalizedSize * sizeMultiplier * width,
+                ),
+              );
+              const prevRadius = Math.sqrt(prevSize);
+              const prevX =
+                communityTargetPositions.get(prevItem.communityId)?.x ?? currentX;
+              currentX = prevX + prevRadius + prevSpacing / 4 + currentRadius;
+            }
           }
-        }
 
-        const targetY = currentY;
-        storyCommunityYPositions.push(targetY);
+          const targetX = currentX;
+          storyCommunityXPositions.push(targetX);
 
-        // X軸: 左右交互に配置
-        // orderが奇数の場合は左側、偶数の場合は右側に配置
-        const isLeft = order % 2 === 1;
-        const leftX = width * 0.2; // 左側のX位置
-        const rightX = width * 0.8; // 右側のX位置
-        const targetX = isLeft ? leftX : rightX;
+          // Y軸: 上下交互に配置
+          const isTop = order % 2 === 1;
+          const topY = height * 0.2;
+          const bottomY = height * 0.8;
+          const targetY = isTop ? topY : bottomY;
 
-        communityTargetPositions.set(communityId, { x: targetX, y: targetY });
-      });
+          communityTargetPositions.set(communityId, { x: targetX, y: targetY });
+        });
 
-      // ストーリーに入っていないコミュニティを左右に配置
-      const nonStoryCommunities = Array.from(communityGroups.entries()).filter(
-        ([communityId]) => {
-          const metaData = metaNodeData.find(
-            (m) => m.communityId === communityId,
-          );
-          return !metaData?.order;
-        },
-      );
+        // ストーリーに入っていないコミュニティを上下に配置
+        const nonStoryCommunities = Array.from(communityGroups.entries()).filter(
+          ([communityId]) => {
+            const metaData = metaNodeData.find(
+              (m) => m.communityId === communityId,
+            );
+            return !metaData?.order;
+          },
+        );
 
-      // ストーリーのコミュニティのY軸範囲を取得
-      const minStoryY =
-        storyCommunityYPositions.length > 0
-          ? Math.min(...storyCommunityYPositions)
-          : height * 0.5;
-      const maxStoryY =
-        storyCommunityYPositions.length > 0
-          ? Math.max(...storyCommunityYPositions)
-          : height * 2.5;
-      const storyYRange = maxStoryY - minStoryY || height * 2;
+        const minStoryX =
+          storyCommunityXPositions.length > 0
+            ? Math.min(...storyCommunityXPositions)
+            : width * 0.5;
+        const maxStoryX =
+          storyCommunityXPositions.length > 0
+            ? Math.max(...storyCommunityXPositions)
+            : width * 2.5;
+        const storyXRange = maxStoryX - minStoryX || width * 2;
 
-      // ストーリーに入っていないコミュニティを左右に分散配置
-      nonStoryCommunities.forEach(([communityId], index) => {
-        // Y軸位置: ストーリーのコミュニティのY軸範囲内に均等に配置
-        const normalizedIndex =
-          nonStoryCommunities.length > 1
-            ? index / (nonStoryCommunities.length - 1)
-            : 0.5;
-        const targetY = minStoryY + normalizedIndex * storyYRange;
+        nonStoryCommunities.forEach(([communityId], index) => {
+          const normalizedIndex =
+            nonStoryCommunities.length > 1
+              ? index / (nonStoryCommunities.length - 1)
+              : 0.5;
+          const targetX = minStoryX + normalizedIndex * storyXRange;
 
-        // X軸位置: 左右に交互に配置（またはランダムに配置）
-        // 左側（width * 0.1）と右側（width * 1.4）に配置
-        const isLeft = index % 2 === 0;
-        const targetX = isLeft ? width * 0.1 : width * 1.4;
+          const isTop = index % 2 === 0;
+          const targetY = isTop ? height * 0.1 : height * 1.4;
 
-        communityTargetPositions.set(communityId, { x: targetX, y: targetY });
-      });
+          communityTargetPositions.set(communityId, { x: targetX, y: targetY });
+        });
+      } else {
+        // 縦向き: Y軸方向に進み、X軸方向に交互に配置（元の実装）
+        const storyCommunityYPositions: number[] = [];
+
+        const baseSpacing = height;
+        const sizeMultiplier = 0.3;
+        const minSpacing = height;
+        const maxSpacing = height * 5;
+
+        let currentY = height * 0.5;
+
+        sortedStoryCommunities.forEach((item, index) => {
+          const { communityId, nodes, order } = item;
+          if (order === undefined) return;
+
+          const communitySize = nodes.length;
+          const currentRadius = Math.sqrt(communitySize);
+
+          if (index > 0) {
+            const prevItem = sortedStoryCommunities[index - 1];
+            if (prevItem) {
+              const prevSize = prevItem.size;
+              const prevNormalizedSize = Math.sqrt(prevSize / 10);
+              const prevSpacing = Math.min(
+                maxSpacing,
+                Math.max(
+                  minSpacing,
+                  baseSpacing + prevNormalizedSize * sizeMultiplier * height,
+                ),
+              );
+              const prevRadius = Math.sqrt(prevSize);
+              const prevY =
+                communityTargetPositions.get(prevItem.communityId)?.y ?? currentY;
+              currentY = prevY + prevRadius + prevSpacing / 4 + currentRadius;
+            }
+          }
+
+          const targetY = currentY;
+          storyCommunityYPositions.push(targetY);
+
+          // X軸: 左右交互に配置
+          const isLeft = order % 2 === 1;
+          const leftX = width * 0.2;
+          const rightX = width * 0.8;
+          const targetX = isLeft ? leftX : rightX;
+
+          communityTargetPositions.set(communityId, { x: targetX, y: targetY });
+        });
+
+        // ストーリーに入っていないコミュニティを左右に配置
+        const nonStoryCommunities = Array.from(communityGroups.entries()).filter(
+          ([communityId]) => {
+            const metaData = metaNodeData.find(
+              (m) => m.communityId === communityId,
+            );
+            return !metaData?.order;
+          },
+        );
+
+        const minStoryY =
+          storyCommunityYPositions.length > 0
+            ? Math.min(...storyCommunityYPositions)
+            : height * 0.5;
+        const maxStoryY =
+          storyCommunityYPositions.length > 0
+            ? Math.max(...storyCommunityYPositions)
+            : height * 2.5;
+        const storyYRange = maxStoryY - minStoryY || height * 2;
+
+        nonStoryCommunities.forEach(([communityId], index) => {
+          const normalizedIndex =
+            nonStoryCommunities.length > 1
+              ? index / (nonStoryCommunities.length - 1)
+              : 0.5;
+          const targetY = minStoryY + normalizedIndex * storyYRange;
+
+          const isLeft = index % 2 === 0;
+          const targetX = isLeft ? width * 0.1 : width * 1.4;
+
+          communityTargetPositions.set(communityId, { x: targetX, y: targetY });
+        });
+      }
     } else {
       // orderがない場合は、コミュニティの初期位置を使用
       communityGroups.forEach((nodes, communityId) => {
@@ -751,7 +865,21 @@ export const GenerativeLayoutGraph = ({
         forceLink<CustomNodeType, CustomLinkType>(allLinks)
           .id((d) => d.id)
           .distance(30) // コミュニティ内のノードは近くに配置
-          .strength(0.2),
+          .strength((link) => {
+            // エッジのsourceとtargetのコミュニティIDを取得
+            const source = link.source as CustomNodeType;
+            const target = link.target as CustomNodeType;
+            const sourceCommunityId = communityMap?.[source.id];
+            const targetCommunityId = communityMap?.[target.id];
+
+            // コミュニティ間のエッジ（異なるコミュニティに属するノード間）の強度を下げる
+            if (sourceCommunityId && targetCommunityId && sourceCommunityId !== targetCommunityId) {
+              return 0.01; // コミュニティ間のエッジは弱い強度
+            }
+
+            // 同じコミュニティ内のエッジは通常の強度
+            return 0.2;
+          }),
       )
       .force("charge", forceManyBody().strength(-200)) // 弱い反発力
       .force("collide", forceCollide(20)) // 小さい衝突半径
@@ -821,6 +949,7 @@ export const GenerativeLayoutGraph = ({
     height,
     detailedGraphLayout,
     metaNodeData, // order順の整列に必要
+    layoutOrientation, // レイアウト方向
   ]);
 
   // コミュニティ中心座標の計算
@@ -858,7 +987,11 @@ export const GenerativeLayoutGraph = ({
     });
 
     setCommunityCenters(centers);
-  }, [detailedGraphLayout, communityMap]);
+    // コールバックで位置情報を外部に公開
+    if (onCommunityPositionsCalculated) {
+      onCommunityPositionsCalculated(centers);
+    }
+  }, [detailedGraphLayout, communityMap, onCommunityPositionsCalculated]);
 
   // メタグラフノードの生成（コミュニティ中心に固定）
   useEffect(() => {
@@ -925,6 +1058,31 @@ export const GenerativeLayoutGraph = ({
     setCommunityCenters(new Map());
   };
 
+  // ストーリー編集モード時、metaNodeDataの変更を検知してシミュレーションを再実行
+  useEffect(() => {
+    if (!isEditMode || viewMode !== "meta" || !metaNodeData) {
+      return;
+    }
+
+    // metaNodeDataのorder情報を文字列化して比較（変更検知用）
+    // コミュニティIDとorderの組み合わせをソートして比較
+    const orderKey = metaNodeData
+      .map((m) => `${m.communityId}:${m.order ?? "undefined"}`)
+      .sort()
+      .join(",");
+
+    // 長さも含めて比較（追加・削除も検知）
+    const fullKey = `${metaNodeData.length}:${orderKey}`;
+
+    if (prevMetaNodeDataOrderRef.current !== fullKey && prevMetaNodeDataOrderRef.current !== "") {
+      // orderKeyが変更された場合、シミュレーションを再実行
+      setDetailedGraphLayout(null);
+      setCommunityCenters(new Map());
+    }
+
+    prevMetaNodeDataOrderRef.current = fullKey;
+  }, [isEditMode, viewMode, metaNodeData]);
+
   return (
     <div className="relative h-full w-full bg-slate-900">
       {/* シミュレーション再実行ボタン（メタグラフモードの時のみ表示） */}
@@ -932,11 +1090,10 @@ export const GenerativeLayoutGraph = ({
         <>
           <Button
             onClick={() => setAlwaysShowDetailedGraph(!alwaysShowDetailedGraph)}
-            className={`absolute right-14 top-4 z-10 !h-8 !w-8 !p-2 text-sm transition-colors ${
-              alwaysShowDetailedGraph
-                ? "bg-blue-600/50 hover:bg-blue-600/70"
-                : "bg-transparent hover:bg-slate-50/10"
-            }`}
+            className={`absolute right-14 top-4 z-10 !h-8 !w-8 !p-2 text-sm transition-colors ${alwaysShowDetailedGraph
+              ? "bg-blue-600/50 hover:bg-blue-600/70"
+              : "bg-transparent hover:bg-slate-50/10"
+              }`}
           >
             <GraphIcon width={16} height={16} color="white" />
           </Button>
@@ -949,6 +1106,49 @@ export const GenerativeLayoutGraph = ({
         </>
       )}
       <svg ref={svgRef} width={width} height={height} className="block">
+        {/* グラデーション定義（MetaNode用） */}
+        <defs>
+          {viewMode === "meta" && (metaGraphNodes.length > 0 ? metaGraphNodes : filteredGraphDocument?.nodes ?? []).map((node) => {
+            // highlight_nodesの設定に基づいてノードの色を決定
+            let nodeColor: string | undefined = undefined;
+            if (layoutInstruction?.forces?.highlight_nodes) {
+              const { targetNodeIds, color } =
+                layoutInstruction.forces.highlight_nodes;
+              if (targetNodeIds.includes(node.id)) {
+                nodeColor = color;
+              }
+            }
+
+            if (
+              viewMode === "meta" &&
+              metaNodeData?.some(
+                (m) => m.communityId === node.id && m.order !== undefined,
+              )
+            ) {
+              nodeColor = "#2563eb";
+            } else {
+              nodeColor = "whitesmoke";
+            }
+
+            // フォーカス中のコミュニティをハイライト
+            if (
+              viewMode === "meta" &&
+              focusedCommunityId &&
+              node.id === focusedCommunityId
+            ) {
+              nodeColor = "#fbbf24"; // 黄色でハイライト
+            }
+
+            const gradientId = `metaNodeGradient-${node.id}`;
+            return (
+              <radialGradient key={gradientId} id={gradientId} cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor={nodeColor} stopOpacity="0.3" />
+                <stop offset="50%" stopColor={nodeColor} stopOpacity="0.2" />
+                <stop offset="100%" stopColor={nodeColor} stopOpacity="0" />
+              </radialGradient>
+            );
+          })}
+        </defs>
         <D3ZoomProvider
           svgRef={svgRef}
           currentScale={currentScale}
@@ -969,17 +1169,17 @@ export const GenerativeLayoutGraph = ({
                 const linksToRender =
                   isLinkFiltered && originalGraphDocument
                     ? detailedGraphLayout.links.filter((link) => {
-                        const source = link.source as CustomNodeType;
-                        const target = link.target as CustomNodeType;
-                        // originalGraphDocumentのrelationshipsに含まれるリンクのみを表示
-                        return originalGraphDocument.relationships.some(
-                          (rel) =>
-                            (rel.sourceId === source.id &&
-                              rel.targetId === target.id) ||
-                            (rel.sourceId === target.id &&
-                              rel.targetId === source.id),
-                        );
-                      })
+                      const source = link.source as CustomNodeType;
+                      const target = link.target as CustomNodeType;
+                      // originalGraphDocumentのrelationshipsに含まれるリンクのみを表示
+                      return originalGraphDocument.relationships.some(
+                        (rel) =>
+                          (rel.sourceId === source.id &&
+                            rel.targetId === target.id) ||
+                          (rel.sourceId === target.id &&
+                            rel.targetId === source.id),
+                      );
+                    })
                     : detailedGraphLayout.links;
 
                 // リンクの距離を計算して、最小・最大を取得
@@ -1206,23 +1406,23 @@ export const GenerativeLayoutGraph = ({
                   const nodesToRender =
                     isLinkFiltered && originalGraphDocument
                       ? (() => {
-                          // originalGraphDocumentのノードIDセットを作成
-                          const filteredNodeIds = new Set(
-                            originalGraphDocument.nodes.map((n) => n.id),
-                          );
-                          // originalGraphDocumentのリレーションシップからリンクを持つノードIDセットを作成
-                          const linkedNodeIds = new Set<string>();
-                          originalGraphDocument.relationships.forEach((rel) => {
-                            linkedNodeIds.add(rel.sourceId);
-                            linkedNodeIds.add(rel.targetId);
-                          });
-                          // フィルタリングされたノードで、かつリンクを持つノードのみを表示
-                          return detailedGraphLayout.nodes.filter(
-                            (node) =>
-                              filteredNodeIds.has(node.id) &&
-                              linkedNodeIds.has(node.id),
-                          );
-                        })()
+                        // originalGraphDocumentのノードIDセットを作成
+                        const filteredNodeIds = new Set(
+                          originalGraphDocument.nodes.map((n) => n.id),
+                        );
+                        // originalGraphDocumentのリレーションシップからリンクを持つノードIDセットを作成
+                        const linkedNodeIds = new Set<string>();
+                        originalGraphDocument.relationships.forEach((rel) => {
+                          linkedNodeIds.add(rel.sourceId);
+                          linkedNodeIds.add(rel.targetId);
+                        });
+                        // フィルタリングされたノードで、かつリンクを持つノードのみを表示
+                        return detailedGraphLayout.nodes.filter(
+                          (node) =>
+                            filteredNodeIds.has(node.id) &&
+                            linkedNodeIds.has(node.id),
+                        );
+                      })()
                       : detailedGraphLayout.nodes;
 
                   return nodesToRender.map((node) => {
@@ -1326,6 +1526,11 @@ export const GenerativeLayoutGraph = ({
                     node.properties?.size ?? node.properties?.memberCount ?? 0,
                   );
 
+                  // ストーリーの順番を取得
+                  const storyOrder = metaNodeData?.find(
+                    (m) => m.communityId === node.id,
+                  )?.order;
+
                   return (
                     <GenerativeGraphNode
                       key={`meta-${node.id}`}
@@ -1336,6 +1541,8 @@ export const GenerativeLayoutGraph = ({
                       nodeColor={nodeColor}
                       isMetaNode={true}
                       metaNodeSize={metaNodeSize}
+                      storyOrder={storyOrder}
+                      isEditMode={isEditMode}
                     />
                   );
                 })}

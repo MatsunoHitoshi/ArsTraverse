@@ -194,7 +194,7 @@ export const CopilotChat = ({
     >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-700 bg-slate-800 px-4 py-2">
-        <h2 className="text-sm font-semibold text-slate-200">Copilot</h2>
+        <h2 className="text-sm font-semibold text-slate-200">アシスタント</h2>
       </div>
 
       {/* Messages */}

@@ -156,6 +156,9 @@ model GraphNode {
   // 注釈関連
   annotations       Annotation[]
 
+  // メタグラフコミュニティとの多対多リレーション（Story経由）
+  communities MetaGraphNode[] @relation("CommunityMembers")
+
   createdAt DateTime? @default(now())
   updatedAt DateTime? @updatedAt
   deletedAt DateTime?
@@ -215,6 +218,9 @@ model TopicSpace {
   
   // ワークスペースから参照される
   referencedByWorkspaces Workspace[] @relation("WorkspaceReferencedTopicSpaces")
+  
+  // ストーリーから参照される（複数、1つのTopicSpaceは複数のStoryから参照され得る）
+  referencedByStories Story[] @relation("StoryReferencedTopicSpace")
 }
 
 enum GraphDataStatus {
@@ -380,9 +386,9 @@ model Workspace {
   // 執筆履歴
   writingHistory WritingHistory[]
 
-  // グラフスナップショット（仮説バージョン）
-  graphSnapshots GraphSnapshot[]
-  
+  // ストーリー（1対1）
+  story     Story?
+
   // 作成・更新日時
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -678,23 +684,133 @@ model TranslationCache {
   @@index([sourceText])
 }
 
-// グラフスナップショット（仮説バージョン）
-model GraphSnapshot {
+// ストーリーテリングモードの状態を管理するモデル
+model Story {
   id          String   @id @default(cuid())
-  name        String
-  description String?
   
-  // スナップショットのデータ（ノード、エッジ、位置情報など）
-  graphData   Json
-  
-  // 関連するワークスペース
+  // Workspaceとの1対1関係
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workspaceId String
+  workspaceId String   @unique
+  
+  // 参照しているトピックスペース（Story作成時点のTopicSpaceを保持、1対1）
+  referencedTopicSpace   TopicSpace @relation("StoryReferencedTopicSpace", fields: [referencedTopicSpaceId], references: [id])
+  referencedTopicSpaceId String
+  
+  // メタグラフ関連テーブルへのリレーション
+  metaNodes   MetaGraphNode[] @relation("StoryMetaNodes")
+  metaEdges   MetaGraphRelationship[] @relation("StoryMetaEdges")
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   isDeleted   Boolean  @default(false)
+  deletedAt   DateTime?
   
   @@index([workspaceId])
+  @@index([referencedTopicSpaceId])
   @@index([createdAt])
+}
+
+// メタグラフノード（コミュニティを表す）
+model MetaGraphNode {
+  id            String   @id @default(cuid())
+  name          String
+  label         String
+  properties    Json     @default("{}")
+  
+  // Storyとの関連（GraphNodeのdocumentGraphId/topicSpaceIdと同様）
+  story         Story @relation("StoryMetaNodes", fields: [storyId], references: [id], onDelete: Cascade)
+  storyId       String
+  
+  // コミュニティID（メタノードの識別子）
+  communityId   String   // ストーリー内で一意
+  
+  // メタノードの属性
+  size          Int      // コミュニティのサイズ（ノード数）
+  hasExternalConnections Boolean @default(false)
+  
+  // リレーションシップ
+  relationshipsFrom MetaGraphRelationship[] @relation("fromMetaNode")
+  relationshipsTo   MetaGraphRelationship[] @relation("toMetaNode")
+  
+  // メンバーノード（多対多リレーション）
+  memberNodes GraphNode[] @relation("CommunityMembers")
+  
+  // 関連データ
+  summary       CommunitySummary?
+  storyContent CommunityStory?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+  
+  @@unique([storyId, communityId])
+  @@index([storyId])
+  @@index([communityId])
+}
+
+// メタグラフエッジ（コミュニティ間の関係）
+model MetaGraphRelationship {
+  id         String @id @default(cuid())
+  type       String
+  properties Json   @default("{}")
+  
+  // Storyとの関連
+  story      Story @relation("StoryMetaEdges", fields: [storyId], references: [id], onDelete: Cascade)
+  storyId    String
+  
+  // メタノード間の関係
+  fromMetaNode   MetaGraphNode @relation("fromMetaNode", fields: [fromMetaNodeId], references: [id], onDelete: Cascade)
+  fromMetaNodeId String
+  toMetaNode     MetaGraphNode @relation("toMetaNode", fields: [toMetaNodeId], references: [id], onDelete: Cascade)
+  toMetaNodeId   String
+  
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  deletedAt  DateTime?
+  
+  @@index([storyId])
+  @@index([fromMetaNodeId])
+  @@index([toMetaNodeId])
+}
+
+// コミュニティ要約とストーリー順序
+model CommunitySummary {
+  id          String   @id @default(cuid())
+  
+  // MetaGraphNodeとの1対1関係
+  metaNode    MetaGraphNode @relation(fields: [metaNodeId], references: [id], onDelete: Cascade)
+  metaNodeId  String   @unique
+  
+  // コミュニティ要約
+  title       String
+  summary     String   @db.Text
+  
+  // ストーリー順序（ストーリーに含まれる場合のみ）
+  order       Int?
+  
+  // トランジションテキスト（ストーリーに含まれる場合のみ）
+  transitionText String? @db.Text
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([metaNodeId])
+  @@index([order])
+}
+
+// 詳細ストーリー
+model CommunityStory {
+  id          String   @id @default(cuid())
+  
+  // MetaGraphNodeとの1対1関係
+  metaNode    MetaGraphNode @relation(fields: [metaNodeId], references: [id], onDelete: Cascade)
+  metaNodeId  String   @unique
+  
+  // 詳細ストーリーの内容（TiptapのJSON形式）
+  story       Json
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([metaNodeId])
 }
