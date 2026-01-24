@@ -7,7 +7,8 @@ export type DeleteRecordType =
   | "sourceDocument"
   | "topicSpace"
   | "workspace"
-  | "annotation";
+  | "annotation"
+  | "story";
 type DeleteModalProps = {
   isOpen: boolean;
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -36,6 +37,7 @@ export const DeleteRecordModal = ({
   const deleteTopicSpace = api.topicSpaces.delete.useMutation();
   const deleteWorkspace = api.workspace.delete.useMutation();
   const deleteAnnotation = api.annotation.deleteAnnotation.useMutation();
+  const deleteStory = api.story.delete.useMutation();
 
   const title = () => {
     switch (type) {
@@ -47,6 +49,8 @@ export const DeleteRecordModal = ({
         return "ワークスペース";
       case "annotation":
         return "注釈";
+      case "story":
+        return "ストーリー";
     }
   };
 
@@ -103,6 +107,20 @@ export const DeleteRecordModal = ({
               refetch();
               setIsOpen(false);
               window.history.back();
+            },
+            onError: (e) => {
+              console.log(e);
+              setErrorMessage(e.message || "削除に失敗しました");
+            },
+          },
+        );
+      case "story":
+        return deleteStory.mutate(
+          { workspaceId: id },
+          {
+            onSuccess: (_res) => {
+              refetch();
+              setIsOpen(false);
             },
             onError: (e) => {
               console.log(e);

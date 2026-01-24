@@ -64,6 +64,8 @@ interface GraphViewContainerProps {
   onNodeSelectionToggle?: (node: CustomNodeType) => void;
   selectedGraphData?: GraphDocumentForFrontend;
   toolComponent?: React.ReactNode;
+  layoutOrientation?: "vertical" | "horizontal";
+  isEditMode?: boolean;
 }
 
 export const GraphViewContainer = ({
@@ -100,6 +102,8 @@ export const GraphViewContainer = ({
   onNodeSelectionToggle,
   selectedGraphData,
   toolComponent,
+  layoutOrientation = "vertical",
+  isEditMode = false,
 }: GraphViewContainerProps) => {
   if (!graphDocument) {
     return (
@@ -154,6 +158,8 @@ export const GraphViewContainer = ({
         focusedCommunityId={focusedCommunityId}
         communityMap={isMetaGraphMode ? metaGraphData?.communityMap : undefined}
         originalGraphDocument={isMetaGraphMode ? graphDocument : undefined}
+        layoutOrientation={layoutOrientation}
+        isEditMode={isEditMode}
       />
     );
   }

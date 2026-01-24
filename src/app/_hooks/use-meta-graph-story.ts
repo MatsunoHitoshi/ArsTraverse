@@ -48,8 +48,55 @@ export function useMetaGraphStory(
   const generateCommunityStory = api.kg.generateCommunityStory.useMutation();
   const regenerateNarrativeFlow = api.kg.regenerateNarrativeFlow.useMutation();
 
+  // 保存済みStoryデータを取得
+  const { data: savedStoryData, isLoading: isLoadingStory } =
+    api.story.get.useQuery(
+      { workspaceId: workspace?.id ?? "" },
+      {
+        enabled: !!(workspace?.id) && isMetaGraphMode,
+      },
+    );
+
+  // 保存済みStoryデータを読み込む
+  useEffect(() => {
+    if (
+      !isMetaGraphMode ||
+      !workspace ||
+      isLoadingStory ||
+      !savedStoryData?.metaGraphData
+    ) {
+      return;
+    }
+
+    // 保存済みデータが存在し、現在のmetaGraphDataと異なる場合に更新
+    // JSON.stringifyで比較して、実際に変更があった場合のみ更新
+    const currentDataString = JSON.stringify(metaGraphData);
+    const savedDataString = JSON.stringify(savedStoryData.metaGraphData);
+    
+    if (currentDataString !== savedDataString) {
+      setMetaGraphData(savedStoryData.metaGraphData);
+    }
+  }, [
+    isMetaGraphMode,
+    workspace,
+    isLoadingStory,
+    savedStoryData?.metaGraphData,
+    metaGraphData,
+  ]);
+
   // メタグラフ生成と要約生成
   useEffect(() => {
+    // まず、保存済みデータの読み込みが完了するまで待つ
+    if (isLoadingStory) {
+      return;
+    }
+
+    // 保存済みデータがある場合は生成をスキップ
+    if (savedStoryData?.metaGraphData) {
+      return;
+    }
+
+    // その他の条件チェック
     if (
       !isMetaGraphMode ||
       !graphDocument ||
@@ -178,6 +225,7 @@ export function useMetaGraphStory(
                       internalEdgesDetailed:
                         communityWithDetails.internalEdgesDetailed,
                       curatorialContext: parsedCuratorialContext,
+                      workspaceId: workspace?.id,
                     })
                     .then((storyResult) => {
                       // 成功時に即座に状態を更新（関数型更新で安全にマージ）
@@ -256,6 +304,8 @@ export function useMetaGraphStory(
     generateMetaGraph,
     summarizeCommunities,
     generateCommunityStory,
+    isLoadingStory,
+    savedStoryData?.metaGraphData,
   ]);
 
   // メタグラフモードが無効化されたらデータをクリア
@@ -449,11 +499,13 @@ export function useMetaGraphStory(
     isLoading:
       isGenerating ||
       generateMetaGraph.isPending ||
-      summarizeCommunities.isPending,
+      summarizeCommunities.isPending ||
+      isLoadingStory,
     isGeneratingStories:
       Object.keys(metaGraphData?.detailedStories ?? {}).length <
       (metaGraphData?.narrativeFlow.length ?? 0),
     isRegeneratingTransitions,
+    consistency: savedStoryData?.consistency,
     actions: {
       addToNarrative,
       removeFromNarrative,
