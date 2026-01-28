@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LayoutInstructionFilterSchema } from "./knowledge-graph";
 
 // GraphDocumentForFrontendのスキーマ（メタグラフ用）
 const MetaGraphFrontendSchema = z.object({
@@ -87,6 +88,8 @@ export const MetaGraphStoryDataSchema = z.object({
         .optional(),
     }),
   ),
+  // グラフフィルタリング設定（LayoutInstruction["filter"]）
+  filter: LayoutInstructionFilterSchema.optional(),
 });
 
 export type MetaGraphStoryDataInput = z.infer<typeof MetaGraphStoryDataSchema>;

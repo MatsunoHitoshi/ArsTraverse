@@ -175,6 +175,16 @@ export const LayoutInstructionSchema: z.ZodType<LayoutInstruction> = z.object({
     .optional(),
 });
 
+// LayoutInstruction["filter"]のスキーマをエクスポート
+export const LayoutInstructionFilterSchema = z
+  .object({
+    centerNodeIds: z.array(z.string()).optional(),
+    maxHops: z.number().optional(),
+    condition: FilterConditionSchema.optional(),
+    includeNeighbors: z.boolean().optional(),
+  })
+  .optional();
+
 export const AskCopilotInputSchema = z.object({
   workspaceId: z.string(),
   query: z.string(),

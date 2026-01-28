@@ -700,6 +700,9 @@ model Story {
   metaNodes   MetaGraphNode[] @relation("StoryMetaNodes")
   metaEdges   MetaGraphRelationship[] @relation("StoryMetaEdges")
   
+  // グラフフィルタリング設定（LayoutInstruction["filter"]）
+  filter      Json?
+  
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   isDeleted   Boolean  @default(false)

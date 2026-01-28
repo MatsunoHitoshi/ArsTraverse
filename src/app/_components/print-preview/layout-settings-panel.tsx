@@ -5,9 +5,7 @@ import type { PrintLayoutSettings, PageSizeTemplate, SizeUnit, PageOrientation, 
 import { PAGE_SIZE_TEMPLATES, convertUnit } from "./types";
 import { Button } from "@/app/_components/button/button";
 import { Switch } from "@headlessui/react";
-import { ChevronLeftIcon, DownArrowIcon, RightArrowIcon } from "../icons";
-import { LinkButton } from "../button/link-button";
-
+import { DownArrowIcon, RightArrowIcon } from "../icons";
 interface LayoutSettingsPanelProps {
   settings: PrintLayoutSettings;
   onSettingsChange: (settings: PrintLayoutSettings) => void;
