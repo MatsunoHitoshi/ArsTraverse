@@ -42,6 +42,7 @@ import { Modal } from "../modal/modal";
 import { useGraphEditor } from "@/app/_hooks/use-graph-editor";
 import { createSubgraphFromSelectedNodes } from "@/app/_utils/kg/create-subgraph-from-selected-nodes";
 import { filterGraphByEntityNames } from "@/app/_utils/kg/filter-graph-by-entity-names";
+import { filterGraphByLayoutInstruction } from "@/app/_utils/kg/filter-graph-by-layout-instruction";
 import {
   LinkPropertyEditModal,
   NodePropertyEditModal,
@@ -138,6 +139,10 @@ const CuratorsWritingWorkspace = ({
     useState<LayoutInstruction | null>(null);
   const [filteredGraphData, setFilteredGraphData] =
     useState<GraphDocumentForFrontend | null>(null);
+  /** ストーリーボードの「反映」で適用したフィルタ（グラフ表示用） */
+  const [storyFilter, setStoryFilter] = useState<
+    LayoutInstruction["filter"] | null
+  >(null);
 
   // ストーリーテリングモード
   const [isStorytellingMode, setIsStorytellingMode] = useState<boolean>(false);
@@ -281,6 +286,13 @@ const CuratorsWritingWorkspace = ({
     isMetaGraphMode,
   );
 
+  // ストーリーモード初期表示時など、保存済みフィルタがあれば一度だけ storyFilter に反映する
+  useEffect(() => {
+    const savedFilter = metaGraphStory.metaGraphData?.filter;
+    if (!savedFilter) return;
+    setStoryFilter((current) => current ?? savedFilter);
+  }, [metaGraphStory.metaGraphData?.filter]);
+
   // PDF処理用のカスタムフック
   const { isProcessingPDF, processingStep, processingError, handlePDFUpload } =
     usePDFProcessing(
@@ -317,6 +329,12 @@ const CuratorsWritingWorkspace = ({
       tiptapGraphFilterOption.entities,
     );
   }, [graphDocument, tiptapGraphFilterOption]);
+
+  /** ストーリーボード「反映」で絞り込んだグラフ（右パネル表示用） */
+  const storyFilteredGraph = useMemo(() => {
+    if (!graphDocument || !storyFilter) return null;
+    return filterGraphByLayoutInstruction(graphDocument, storyFilter);
+  }, [graphDocument, storyFilter]);
 
   const tiptapSelectedGraphDocument = useMemo(() => {
     if (!graphDocument) return null;
@@ -462,7 +480,7 @@ const CuratorsWritingWorkspace = ({
       {/* Left Column: Text Editor */}
       <div
         className={`flex h-[calc(100svh-80px)] flex-col transition-all duration-300 ${isRightPanelOpen
-          ? isGraphEditor || isGraphSelectionMode
+          ? isGraphEditor || isGraphSelectionMode || isStorytellingMode
             ? "w-1/2"
             : "w-2/3"
           : "w-full"
@@ -536,6 +554,7 @@ const CuratorsWritingWorkspace = ({
                   setIsStorytellingMode(false);
                   setIsMetaGraphMode(false);
                 }}
+                onApplyStoryFilter={(filter) => setStoryFilter(filter ?? null)}
               />
             ) : (
               <TiptapGraphFilterContext.Provider
@@ -572,7 +591,7 @@ const CuratorsWritingWorkspace = ({
         >
           {/* Knowledge Graph Viewer */}
           <div
-            className={`min-h-0 flex-shrink-0 overflow-y-hidden ${isGraphEditor ? "flex-[3]" : "flex-1"
+            className={`min-h-0 flex-shrink-0 overflow-y-hidden ${isGraphEditor || isStorytellingMode ? "flex-[3]" : "flex-1"
               }`}
           >
             <div
@@ -588,6 +607,8 @@ const CuratorsWritingWorkspace = ({
                       activeEntity={activeEntity}
                       layoutInstruction={layoutInstruction}
                       filteredGraphData={filteredGraphData}
+                      storyFilteredGraph={storyFilteredGraph}
+                      isStorytellingMode={isStorytellingMode}
                       isMetaGraphMode={isMetaGraphMode}
                       metaGraphData={
                         metaGraphStory.metaGraphData

@@ -13,6 +13,7 @@ import type {
   RelationshipTypeForFrontend,
 } from "@/app/const/types";
 import type { MetaGraphStoryDataInput } from "@/server/api/schemas/meta-graph-story";
+import type { LayoutInstruction } from "@/app/const/types";
 
 // DBから読み込んだStory関連データの型
 export type StoryWithRelations = Story & {
@@ -192,14 +193,15 @@ export function convertFromDatabase(
     properties: convertPropertiesToFrontend(metaNode.properties),
   }));
 
-  const relationships: RelationshipTypeForFrontend[] =
-    storyData.metaEdges.map((edge) => ({
+  const relationships: RelationshipTypeForFrontend[] = storyData.metaEdges.map(
+    (edge) => ({
       id: edge.id,
       type: edge.type,
       properties: convertPropertiesToFrontend(edge.properties),
       sourceId: edge.fromMetaNode.communityId,
       targetId: edge.toMetaNode.communityId,
-    }));
+    }),
+  );
 
   // metaNodes配列を構築
   const metaNodes = storyData.metaNodes.map((metaNode) => ({
@@ -228,10 +230,7 @@ export function convertFromDatabase(
 
   // narrativeFlow配列を構築（orderがnullでないもの）
   const narrativeFlow = storyData.metaNodes
-    .filter(
-      (metaNode) =>
-        metaNode.summary?.order !== null,
-    )
+    .filter((metaNode) => metaNode.summary?.order !== null)
     .map((metaNode) => ({
       communityId: metaNode.communityId,
       order: metaNode.summary!.order!,
@@ -282,5 +281,8 @@ export function convertFromDatabase(
     narrativeFlow,
     detailedStories,
     preparedCommunities,
+    filter: storyData.filter
+      ? (storyData.filter as LayoutInstruction["filter"])
+      : undefined,
   };
 }

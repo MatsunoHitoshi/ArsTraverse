@@ -211,6 +211,15 @@ export const GenerativeLayoutGraph = ({
     useState<boolean>(false);
   // 前回のmetaNodeDataのorder情報を保存（変更検知用）
   const prevMetaNodeDataOrderRef = useRef<string>("");
+  // originalGraphDocument が変わったら詳細レイアウトを再計算するためリセット
+  const prevOriginalGraphDocumentRef = useRef<GraphDocumentForFrontend | undefined>(originalGraphDocument);
+  useEffect(() => {
+    if (prevOriginalGraphDocumentRef.current !== originalGraphDocument) {
+      prevOriginalGraphDocumentRef.current = originalGraphDocument;
+      setDetailedGraphLayout(null);
+      setCommunityCenters(new Map());
+    }
+  }, [originalGraphDocument]);
 
   // フィルタリング済みグラフがあればそれを使用、なければ元のグラフを使用
   // Metaモードの場合はメタグラフを使用
@@ -864,7 +873,7 @@ export const GenerativeLayoutGraph = ({
         "link",
         forceLink<CustomNodeType, CustomLinkType>(allLinks)
           .id((d) => d.id)
-          .distance(30) // コミュニティ内のノードは近くに配置
+          .distance(50) // コミュニティ内のノードは近くに配置
           .strength((link) => {
             // エッジのsourceとtargetのコミュニティIDを取得
             const source = link.source as CustomNodeType;
@@ -878,11 +887,11 @@ export const GenerativeLayoutGraph = ({
             }
 
             // 同じコミュニティ内のエッジは通常の強度
-            return 0.2;
+            return 0.1;
           }),
       )
-      .force("charge", forceManyBody().strength(-200)) // 弱い反発力
-      .force("collide", forceCollide(20)) // 小さい衝突半径
+      .force("charge", forceManyBody().strength(-300)) // 弱い反発力
+      .force("collide", forceCollide(30)) // 小さい衝突半径
       .force("center", forceCenter(width / 2, height / 2).strength(0.05)); // 中心への引力を弱める
 
     // コミュニティごとに目標位置への引力を追加（forceX/forceYを使用）
@@ -1084,7 +1093,7 @@ export const GenerativeLayoutGraph = ({
   }, [isEditMode, viewMode, metaNodeData]);
 
   return (
-    <div className="relative h-full w-full bg-slate-900">
+    <div className="relative h-full w-full">
       {/* シミュレーション再実行ボタン（メタグラフモードの時のみ表示） */}
       {viewMode === "meta" && (
         <>
@@ -1237,6 +1246,12 @@ export const GenerativeLayoutGraph = ({
                       const dy = target.y - source.y;
                       const distance = Math.sqrt(dx * dx + dy * dy);
 
+                      // エッジの角度（テキスト配置用）
+                      const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+                      // ラベルをエッジ中点に配置
+                      const labelX = (source.x + target.x) / 2;
+                      const labelY = (source.y + target.y) / 2;
+
                       // 距離に応じて透明度を計算（距離が長いほど透明に）
                       // 最小距離: opacity 0.6, 最大距離: opacity 0.01
                       const normalizedDistance =
@@ -1246,16 +1261,31 @@ export const GenerativeLayoutGraph = ({
                       const opacity = 0.6 - normalizedDistance * 0.59; // 0.6から0.01まで
 
                       return (
-                        <line
-                          key={`detailed-${i}`}
-                          x1={source.x}
-                          y1={source.y}
-                          x2={target.x}
-                          y2={target.y}
-                          stroke="#60a5fa"
-                          strokeOpacity={opacity}
-                          strokeWidth={1.5}
-                        />
+                        <g key={`detailed-${i}`}>
+                          <line
+                            x1={source.x}
+                            y1={source.y}
+                            x2={target.x}
+                            y2={target.y}
+                            stroke="#60a5fa"
+                            strokeOpacity={opacity}
+                            strokeWidth={1.5}
+                          />
+                          {/* エッジタイプのラベル（印刷ビューと同様に表示） */}
+                          {link.type && (
+                            <text
+                              x={labelX}
+                              y={labelY}
+                              textAnchor="middle"
+                              fill="#93b0c7"
+                              fontSize={5}
+                              className="pointer-events-none select-none"
+                              transform={`rotate(${angle}, ${labelX}, ${labelY})`}
+                            >
+                              {link.type}
+                            </text>
+                          )}
+                        </g>
                       );
                     })}
                   </g>

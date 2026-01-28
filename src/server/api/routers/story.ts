@@ -91,12 +91,18 @@ export const storyRouter = createTRPCRouter({
                 referencedTopicSpaceId,
                 updatedAt: new Date(),
                 deletedAt: null, // 復元する場合に備えてnullに設定
+                filter: data.filter
+                  ? (data.filter as Prisma.InputJsonValue)
+                  : undefined,
               },
             })
           : await tx.story.create({
               data: {
                 workspaceId,
                 referencedTopicSpaceId,
+                filter: data.filter
+                  ? (data.filter as Prisma.InputJsonValue)
+                  : undefined,
               },
             });
 

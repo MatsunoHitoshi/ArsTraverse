@@ -29,41 +29,16 @@ export const LayoutInstructionEditor = ({
     layoutInstruction ?? { forces: {} },
   );
 
-  // フィルタ条件をローカル状態で管理（反映ボタンを押すまで適用しない）
-  const [localFilterConditions, setLocalFilterConditions] = useState<
-    Extract<FilterCondition, { type: "condition" }>[]
-  >(() => {
-    const condition = layoutInstruction?.filter?.condition;
-    if (condition?.type === "condition") {
-      return [condition];
-    } else if (condition?.type === "group") {
-      // グループ条件の場合は、条件を展開（簡易版：最初のレベルのみ）
-      return condition.conditions.filter(
-        (c): c is Extract<FilterCondition, { type: "condition" }> =>
-          c.type === "condition",
-      );
-    }
-    return [];
-  });
+  // フィルタ条件をルート条件として管理（AND/ORグループ対応）
+  const [rootFilterCondition, setRootFilterCondition] = useState<
+    FilterCondition | undefined
+  >(() => layoutInstruction?.filter?.condition);
 
   // layoutInstructionが変更されたらローカル状態を更新
   useEffect(() => {
     if (layoutInstruction) {
       setLocalInstruction(layoutInstruction);
-      // フィルタ条件も更新
-      const condition = layoutInstruction.filter?.condition;
-      if (condition?.type === "condition") {
-        setLocalFilterConditions([condition]);
-      } else if (condition?.type === "group") {
-        setLocalFilterConditions(
-          condition.conditions.filter(
-            (c): c is Extract<FilterCondition, { type: "condition" }> =>
-              c.type === "condition",
-          ),
-        );
-      } else {
-        setLocalFilterConditions([]);
-      }
+      setRootFilterCondition(layoutInstruction.filter?.condition);
     }
   }, [layoutInstruction]);
 
@@ -135,52 +110,7 @@ export const LayoutInstructionEditor = ({
 
   // フィルタ条件を反映する（反映ボタンが押された時）
   const applyFilterConditions = () => {
-    let condition: FilterCondition | undefined;
-    if (localFilterConditions.length === 0) {
-      condition = undefined;
-    } else if (localFilterConditions.length === 1) {
-      condition = localFilterConditions[0];
-    } else {
-      // 複数条件の場合はグループ条件として結合
-      condition = {
-        type: "group",
-        logic: "AND",
-        conditions: localFilterConditions,
-      };
-    }
-    updateFilter({ condition });
-  };
-
-  // 条件を追加
-  const addFilterCondition = () => {
-    setLocalFilterConditions([
-      ...localFilterConditions,
-      {
-        type: "condition",
-        field: "label",
-        operator: "equals",
-        value: "",
-      },
-    ]);
-  };
-
-  // 条件を削除
-  const removeFilterCondition = (index: number) => {
-    setLocalFilterConditions(
-      localFilterConditions.filter((_, i) => i !== index),
-    );
-  };
-
-  // 条件を更新
-  const updateFilterCondition = (
-    index: number,
-    updates: Partial<Extract<FilterCondition, { type: "condition" }>>,
-  ) => {
-    setLocalFilterConditions(
-      localFilterConditions.map((cond, i) =>
-        i === index ? { ...cond, ...updates } : cond,
-      ),
-    );
+    updateFilter({ condition: rootFilterCondition });
   };
 
   // JSON文字列をRecord<string, string | number>に安全に変換するヘルパー関数
@@ -288,11 +218,9 @@ export const LayoutInstructionEditor = ({
 
             <FilterSection
               filter={displayInstruction.filter}
-              localFilterConditions={localFilterConditions}
+              rootCondition={rootFilterCondition}
+              onRootConditionChange={setRootFilterCondition}
               onUpdateFilter={updateFilter}
-              onAddCondition={addFilterCondition}
-              onRemoveCondition={removeFilterCondition}
-              onUpdateCondition={updateFilterCondition}
               onApplyConditions={applyFilterConditions}
             />
           </div>

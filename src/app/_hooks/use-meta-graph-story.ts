@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/trpc/react";
-import type { GraphDocumentForFrontend } from "@/app/const/types";
+import type {
+  GraphDocumentForFrontend,
+  LayoutInstruction,
+} from "@/app/const/types";
 import type { Workspace } from "@prisma/client";
 import {
   CuratorialContextSchema,
@@ -28,6 +31,7 @@ export interface MetaGraphStoryData {
   }>;
   detailedStories: Record<string, string>; // communityId -> story
   preparedCommunities: PreparedCommunity[];
+  filter?: LayoutInstruction["filter"]; // グラフフィルタリング設定
 }
 
 export function useMetaGraphStory(

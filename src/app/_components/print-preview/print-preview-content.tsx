@@ -7,6 +7,7 @@ import type { PrintLayoutSettings } from "./types";
 import { PrintUnifiedGraphView } from "./print-unified-graph-view";
 import { PdfExportButton } from "./pdf-export-button";
 import { convertUnit, PAGE_SIZE_TEMPLATES } from "./types";
+import { filterGraphByLayoutInstruction } from "@/app/_utils/kg/filter-graph-by-layout-instruction";
 import "./print-styles.css";
 
 interface PrintPreviewContentProps {
@@ -29,6 +30,13 @@ export function PrintPreviewContent({
   const contentRef = useRef<HTMLDivElement>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 2000 });
   const [previewSize, setPreviewSize] = useState<{ width: number; height: number } | null>(null);
+
+  // 保存されたフィルタがある場合はグラフを絞り込む
+  const graphDataForView = useMemo(() => {
+    const filter = metaGraphData.filter;
+    if (!filter || !originalGraphData) return originalGraphData;
+    return filterGraphByLayoutInstruction(originalGraphData, filter);
+  }, [originalGraphData, metaGraphData.filter]);
 
   // ナラティブフローに従ってストーリーアイテムをソート
   const storyItems = useMemo(() => {
@@ -165,7 +173,7 @@ export function PrintPreviewContent({
           <div className="print-unified-graph-container" ref={graphViewRef} style={{ width: "100%", height: "100%", overflow: "hidden" }}>
             <PrintUnifiedGraphView
               metaGraphData={metaGraphData}
-              originalGraphData={originalGraphData}
+              originalGraphData={graphDataForView}
               layoutSettings={layoutSettings}
               storyItems={storyItems}
               previewSize={previewSize}

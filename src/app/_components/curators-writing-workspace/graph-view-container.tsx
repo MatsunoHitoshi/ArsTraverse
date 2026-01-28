@@ -17,6 +17,9 @@ interface GraphViewContainerProps {
   activeEntity: CustomNodeType | undefined;
   layoutInstruction: LayoutInstruction | null;
   filteredGraphData: GraphDocumentForFrontend | null;
+  /** ストーリーボード「反映」で絞り込んだグラフ */
+  storyFilteredGraph?: GraphDocumentForFrontend | null;
+  isStorytellingMode?: boolean;
   isMetaGraphMode: boolean;
   metaGraphData: {
     metaGraph: GraphDocumentForFrontend;
@@ -74,6 +77,8 @@ export const GraphViewContainer = ({
   activeEntity,
   layoutInstruction,
   filteredGraphData,
+  storyFilteredGraph = null,
+  isStorytellingMode = false,
   isMetaGraphMode,
   metaGraphData,
   metaGraphSummaries,
@@ -135,6 +140,9 @@ export const GraphViewContainer = ({
         width={graphSize.width}
         height={graphSize.height}
         graphDocument={graphDocument}
+        // Metaモードのときのメタグラフ表示用グラフ
+        // - コミュニティ（MetaNode）は常に metaGraphData.metaGraph を使う
+        // - Copilot など他用途の filteredGraphData は非Metaモード用に温存
         filteredGraphDocument={
           isMetaGraphMode && metaGraphData
             ? metaGraphData.metaGraph
@@ -157,7 +165,14 @@ export const GraphViewContainer = ({
         })}
         focusedCommunityId={focusedCommunityId}
         communityMap={isMetaGraphMode ? metaGraphData?.communityMap : undefined}
-        originalGraphDocument={isMetaGraphMode ? graphDocument : undefined}
+        // 詳細グラフ（ノードレベル）のレイアウト計算用グラフ
+        // - ストーリーモードでフィルタが適用されていれば storyFilteredGraph
+        // - それ以外のMetaモードでは元の graphDocument
+        originalGraphDocument={
+          isMetaGraphMode
+            ? (storyFilteredGraph ?? graphDocument)
+            : undefined
+        }
         layoutOrientation={layoutOrientation}
         isEditMode={isEditMode}
       />

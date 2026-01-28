@@ -1363,7 +1363,7 @@ Community ${idx + 1} (ID: ${c.communityId}):
         model: "gpt-4o-mini",
       });
 
-      const wordCount = 300;
+      const wordCount = 200;
 
       // キーワード抽出関数
       const extractKeywords = (
@@ -1456,7 +1456,10 @@ Community ${idx + 1} (ID: ${c.communityId}):
 
           if (workspace && workspace.referencedTopicSpaces.length > 0) {
             // キーワードを抽出
-            const keywords = extractKeywords(memberNodes, internalEdgesDetailed);
+            const keywords = extractKeywords(
+              memberNodes,
+              internalEdgesDetailed,
+            );
 
             if (keywords.length > 0) {
               // すべてのSourceDocumentを収集
