@@ -407,7 +407,6 @@ export const SnapshotStoryboard = ({
       condition: rootFilterCondition,
     };
     setLocalFilter(nextFilter);
-    console.log("[SnapshotStoryboard] 反映ボタン: フィルタを適用", nextFilter);
     onApplyStoryFilter?.(nextFilter);
   };
 

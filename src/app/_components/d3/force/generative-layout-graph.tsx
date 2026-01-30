@@ -83,6 +83,11 @@ const GenerativeGraphNode = memo(function GenerativeGraphNode({
       transform={`translate(${node.x}, ${node.y})`}
       onClick={(e) => {
         e.stopPropagation();
+
+        if (isMetaNode) {
+          return;
+        }
+
         onClick?.(node);
       }}
     >
@@ -1271,8 +1276,7 @@ export const GenerativeLayoutGraph = ({
                             strokeOpacity={opacity}
                             strokeWidth={1.5}
                           />
-                          {/* エッジタイプのラベル（印刷ビューと同様に表示） */}
-                          {link.type && (
+                          {link.type && currentScale > 1.4 && (
                             <text
                               x={labelX}
                               y={labelY}
@@ -1292,7 +1296,7 @@ export const GenerativeLayoutGraph = ({
                 );
               })()}
             {/* メタグラフのリンク（詳細グラフが見える時は透明に） */}
-            {viewMode === "meta" && (
+            {viewMode === "meta" && metaGraphOpacity > 0 && (
               <g className="meta-graph-links" opacity={metaGraphOpacity}>
                 {metaGraphLinks.map((link, i) => {
                   const source = link.source as CustomNodeType;
@@ -1512,7 +1516,7 @@ export const GenerativeLayoutGraph = ({
               </g>
             )}
             {/* メタグラフのノード（詳細グラフが見える時は透明に） */}
-            {viewMode === "meta" && (
+            {viewMode === "meta" && metaGraphOpacity > 0 && (
               <g className="meta-graph-nodes" opacity={metaGraphOpacity}>
                 {metaGraphNodes.map((node) => {
                   const queryFiltered =
