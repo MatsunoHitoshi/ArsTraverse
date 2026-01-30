@@ -58,12 +58,9 @@ export const storyRouter = createTRPCRouter({
         referencedTopicSpaceId,
       );
 
-      // 既存のStoryを取得（deletedAtがnullのもののみ）
-      const existingStory = await ctx.db.story.findFirst({
-        where: {
-          workspaceId,
-          deletedAt: null,
-        },
+      // 既存のStoryを取得（同一workspaceIdのもの。削除済みも含む）
+      const existingStory = await ctx.db.story.findUnique({
+        where: { workspaceId },
         include: {
           metaNodes: {
             include: {
@@ -83,7 +80,7 @@ export const storyRouter = createTRPCRouter({
 
       // トランザクションで一括保存
       const result = await ctx.db.$transaction(async (tx) => {
-        // Storyをupsert（削除されたStoryがある場合は新規作成）
+        // Storyをupsert（同一workspaceIdの既存があればupdateで復元、なければcreate）
         const story = existingStory
           ? await tx.story.update({
               where: { id: existingStory.id },
