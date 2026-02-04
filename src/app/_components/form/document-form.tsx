@@ -325,7 +325,7 @@ export const DocumentForm = ({
             <>
               {inspectResult.length > 0 ? (
                 <div className="flex flex-col items-center gap-2">
-                  <div className="font-semibold">テキスト情報</div>
+                  <div className="font-semibold">ファイルから抽出されたテキスト</div>
                   <div className="flex h-96 flex-col items-center gap-2 overflow-y-scroll rounded-xl border border-slate-300">
                     <div className="flex flex-col items-center gap-2 p-8">
                       {inspectResult.map((result, index) => (
