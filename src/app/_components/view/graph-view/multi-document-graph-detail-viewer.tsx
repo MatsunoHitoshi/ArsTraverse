@@ -26,6 +26,7 @@ export const MultiDocumentGraphDetailViewer = ({
   selectedGraphData,
   nodeSearchQuery,
   sourceDocuments,
+  isLinkFiltered = false,
 }: {
   graphDocument: GraphDocumentForFrontend;
   topicSpaceId: string;
@@ -39,6 +40,7 @@ export const MultiDocumentGraphDetailViewer = ({
     id: string;
     graph?: { id: string; dataJson: GraphDocumentForFrontend } | null;
   }>;
+  isLinkFiltered?: boolean;
 }) => {
   const [innerWidth, innerHeight] = useWindowSize();
   const { data: session } = useSession();
@@ -179,6 +181,7 @@ export const MultiDocumentGraphDetailViewer = ({
                 selectedGraphData={selectedGraphData}
                 nodeSearchQuery={nodeSearchQuery}
                 isDirectedLinks={isDirectedLinks}
+                isLinkFiltered={isLinkFiltered}
                 magnifierMode={magnifierMode}
                 toolComponent={
                   <>
@@ -229,6 +232,7 @@ export const MultiDocumentGraphDetailViewer = ({
                   selectedGraphData={selectedGraphData}
                   nodeSearchQuery={nodeSearchQuery}
                   tagFilterOption={tagFilterOption}
+                  isLinkFiltered={isLinkFiltered}
                   onNodeContextMenu={(_node) => {
                     // 必要に応じてコンテキストメニューの処理を追加
                   }}
@@ -307,6 +311,7 @@ export const MultiDocumentGraphDetailViewer = ({
                     selectedGraphData={selectedGraphData}
                     nodeSearchQuery={nodeSearchQuery}
                     tagFilterOption={tagFilterOption}
+                    isLinkFiltered={isLinkFiltered}
                     showLabels={showLabels}
                     setShowLabels={setShowLabels}
                     sourceDocuments={sourceDocuments?.map((doc) => ({

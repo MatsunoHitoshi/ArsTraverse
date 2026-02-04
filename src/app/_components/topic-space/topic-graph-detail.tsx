@@ -246,6 +246,7 @@ export const TopicGraphDetail = ({
               isClustered={isClustered}
               selectedPathData={pathData}
               selectedGraphData={selectedGraphData ?? undefined}
+              isLinkFiltered={isLinkFiltered}
               nodeSearchQuery={nodeSearchQuery}
               sourceDocuments={topicSpace.sourceDocuments?.map((doc) => ({
                 id: doc.id,
