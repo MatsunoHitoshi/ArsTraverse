@@ -153,6 +153,7 @@ export const MultiDocumentGraphEditor = ({
                 focusedNode={focusedNode}
                 refetch={refetch}
                 isClustered={isClustered}
+                nodeSearchQuery={nodeSearchQuery}
               />
             )}
           </div>

@@ -140,7 +140,7 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
                 <LinkButton href={`/topic-spaces/${id}/edit`} className="">
                   <div className="flex flex-col items-center gap-2">
                     <div className="flex flex-row items-center gap-2">
-                      <GraphIcon height={20} width={20} color="white" />
+                      <Pencil2Icon height={20} width={20} color="white" />
                     </div>
                     <div className="text-sm">編集する</div>
                   </div>
@@ -163,9 +163,8 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
               <Tab as={Fragment}>
                 {({ hover, selected }) => (
                   <div
-                    className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${
-                      selected ? "border-b-2 border-white outline-none" : ""
-                    } ${hover ? "bg-white/10" : ""}`}
+                    className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${selected ? "border-b-2 border-white outline-none" : ""
+                      } ${hover ? "bg-white/10" : ""}`}
                   >
                     <div className="h-4 w-4">
                       <FileTextIcon width={16} height={16} color="white" />
@@ -177,9 +176,8 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
               <Tab as={Fragment}>
                 {({ hover, selected }) => (
                   <div
-                    className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${
-                      selected ? "border-b-2 border-white outline-none" : ""
-                    } ${hover ? "bg-white/10" : ""}`}
+                    className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${selected ? "border-b-2 border-white outline-none" : ""
+                      } ${hover ? "bg-white/10" : ""}`}
                   >
                     <div className="h-4 w-4">
                       <FileTextIcon width={16} height={16} color="white" />
@@ -191,9 +189,8 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
               <Tab as={Fragment}>
                 {({ hover, selected }) => (
                   <div
-                    className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${
-                      selected ? "border-b-2 border-white outline-none" : ""
-                    } ${hover ? "bg-white/10" : ""}`}
+                    className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${selected ? "border-b-2 border-white outline-none" : ""
+                      } ${hover ? "bg-white/10" : ""}`}
                   >
                     <div className="h-4 w-4">
                       <LayersIcon width={16} height={16} color="white" />

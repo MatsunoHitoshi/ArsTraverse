@@ -96,9 +96,8 @@ export const MultiDocumentGraphViewer = ({
             <Tab as={Fragment}>
               {({ selected }) => (
                 <button
-                  className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${
-                    selected ? "border-b-2 border-white outline-none" : ""
-                  } hover:bg-white/10`}
+                  className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${selected ? "border-b-2 border-white outline-none" : ""
+                    } hover:bg-white/10`}
                 >
                   2Dグラフ
                 </button>
@@ -108,9 +107,8 @@ export const MultiDocumentGraphViewer = ({
               <Tab as={Fragment}>
                 {({ selected }) => (
                   <button
-                    className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${
-                      selected ? "border-b-2 border-white outline-none" : ""
-                    } hover:bg-white/10`}
+                    className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${selected ? "border-b-2 border-white outline-none" : ""
+                      } hover:bg-white/10`}
                   >
                     3D球面グラフ
                   </button>

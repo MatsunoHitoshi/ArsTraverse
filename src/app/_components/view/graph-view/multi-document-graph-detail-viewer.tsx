@@ -88,6 +88,7 @@ export const MultiDocumentGraphDetailViewer = ({
               graphDocument={graphDocument}
               contextId={topicSpaceId ?? ""}
               contextType="topicSpace"
+              nodeSearchQuery={nodeSearchQuery}
               focusedNode={focusedNode}
             />
           </div>
@@ -126,9 +127,8 @@ export const MultiDocumentGraphDetailViewer = ({
             <Tab as={Fragment}>
               {({ selected }) => (
                 <button
-                  className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${
-                    selected ? "border-b-2 border-white outline-none" : ""
-                  } hover:bg-white/10`}
+                  className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${selected ? "border-b-2 border-white outline-none" : ""
+                    } hover:bg-white/10`}
                 >
                   2Dグラフ
                 </button>
@@ -138,9 +138,8 @@ export const MultiDocumentGraphDetailViewer = ({
               <Tab as={Fragment}>
                 {({ selected }) => (
                   <button
-                    className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${
-                      selected ? "border-b-2 border-white outline-none" : ""
-                    } hover:bg-white/10`}
+                    className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${selected ? "border-b-2 border-white outline-none" : ""
+                      } hover:bg-white/10`}
                   >
                     3D球面グラフ
                   </button>
@@ -151,9 +150,8 @@ export const MultiDocumentGraphDetailViewer = ({
               <Tab as={Fragment}>
                 {({ selected }) => (
                   <button
-                    className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${
-                      selected ? "border-b-2 border-white outline-none" : ""
-                    } hover:bg-white/10`}
+                    className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${selected ? "border-b-2 border-white outline-none" : ""
+                      } hover:bg-white/10`}
                   >
                     多層グラフ
                   </button>
@@ -257,9 +255,8 @@ export const MultiDocumentGraphDetailViewer = ({
                   <div className="absolute left-2 top-2 z-10 flex flex-row gap-2">
                     <button
                       onClick={() => setShowLabels(!showLabels)}
-                      className={`rounded-lg p-2 backdrop-blur-sm ${
-                        showLabels ? "bg-orange-500/40" : "bg-black/20"
-                      }`}
+                      className={`rounded-lg p-2 backdrop-blur-sm ${showLabels ? "bg-orange-500/40" : "bg-black/20"
+                        }`}
                       title={showLabels ? "ラベルを非表示" : "ラベルを表示"}
                     >
                       <svg
@@ -282,11 +279,10 @@ export const MultiDocumentGraphDetailViewer = ({
                           layoutMode === "unified" ? "layered" : "unified",
                         )
                       }
-                      className={`rounded-lg px-3 py-2 text-xs backdrop-blur-sm ${
-                        layoutMode === "layered"
+                      className={`rounded-lg px-3 py-2 text-xs backdrop-blur-sm ${layoutMode === "layered"
                           ? "bg-blue-500/40 text-white"
                           : "bg-black/20 text-white"
-                      }`}
+                        }`}
                       title={
                         layoutMode === "unified"
                           ? "層ごとに独立したレイアウトに切り替え"
@@ -317,9 +313,9 @@ export const MultiDocumentGraphDetailViewer = ({
                       id: doc.id,
                       graph: doc.graph
                         ? {
-                            id: (doc.graph as { id?: string }).id ?? doc.id,
-                            dataJson: doc.graph.dataJson,
-                          }
+                          id: (doc.graph as { id?: string }).id ?? doc.id,
+                          dataJson: doc.graph.dataJson,
+                        }
                         : null,
                     }))}
                     layoutMode={layoutMode}
