@@ -505,11 +505,15 @@ export function useMetaGraphStory(
               .then((storyResult) => {
                 setMetaGraphData((prev) => {
                   if (!prev) return prev;
+                  const value =
+                    storyResult.segments?.length > 0
+                      ? buildStoryDocFromSegments(storyResult.segments)
+                      : storyResult.story;
                   return {
                     ...prev,
                     detailedStories: {
                       ...prev.detailedStories,
-                      [storyResult.communityId]: storyResult.story,
+                      [storyResult.communityId]: value,
                     },
                   };
                 });
