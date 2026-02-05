@@ -121,6 +121,13 @@ export function ScrollStorytellingViewerUnified({
     };
   }, []);
 
+  // トップを離れたときだけ useNormalHeightForScroll を false に戻す（scrollToTop でトップに来た場合は true のままにしてレイアウト変化を防ぐ）
+  useEffect(() => {
+    if (!topSentinelInView) {
+      setUseNormalHeightForScroll(false);
+    }
+  }, [topSentinelInView]);
+
   useEffect(() => {
     const el = graphContainerRef.current;
     if (!el) return;
@@ -247,7 +254,7 @@ export function ScrollStorytellingViewerUnified({
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         topSentinelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-        window.setTimeout(() => setUseNormalHeightForScroll(false), 500);
+        // トップにいる間は高さを変えず、ユーザーが下にスクロールしてトップを離れたときだけ false に戻す（useEffect で実施）
       });
     });
   }, []);
@@ -364,8 +371,8 @@ export function ScrollStorytellingViewerUnified({
       <div className="relative w-full max-w-7xl">
         <div
           ref={topSentinelRef}
-          className="snap-start"
-          style={{ height: 1, minHeight: 1 }}
+          className="snap-start [scroll-snap-stop:always]"
+          style={{ height: 4, minHeight: 4 }}
           aria-hidden="true"
         />
         <div
