@@ -72,6 +72,8 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   communityMap,
   narrativeFlow,
   showFullGraph = false,
+  communityTitles,
+  onCommunityTitleClick,
 }: {
   graphDocument: GraphDocumentForFrontend;
   focusNodeIds: string[];
@@ -89,6 +91,10 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   narrativeFlow?: Array<{ communityId: string; order: number }>;
   /** オーバービュー時など、グラフ全体を表示。内部の baseGraph の全ノード・全エッジでフォーカスする */
   showFullGraph?: boolean;
+  /** コミュニティID → タイトル。showFullGraph 時にコミュニティ円とタイトル表示に使用（print-generative-layout-graph に倣う） */
+  communityTitles?: Record<string, string>;
+  /** コミュニティタイトルクリック時。そのコミュニティの先頭セグメントへ遷移するために使用 */
+  onCommunityTitleClick?: (communityId: string) => void;
 }) {
   const showBottomFadeGradient = !isPc;
   const edgeFadePx = isPc ? 64 : undefined;
@@ -670,27 +676,34 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     ? lastLayoutTransformRef.current.centerY
     : interpolatedCenterY;
 
-  /** ノード半径（generative-layout-graph と同様: neighborLinkCount で変化させ、displayScale で画面サイズに合わせる） */
+  /** ラベル・線・ノードの表示用の実効スケール。自由探索時はズーム倍率を掛けて scale に応じて表示（print-generative-layout-graph に倣う） */
+  const effectiveScaleForLabels =
+    freeExploreMode ? displayScale * zoomScale : displayScale;
+  /** ノード半径・エッジ太さ・ストロークに使うスケール（自由探索時は effectiveScale でズームに応じて変化） */
+  const scaleForSize =
+    freeExploreMode ? effectiveScaleForLabels : displayScale;
+
+  /** ノード半径（generative-layout-graph と同様。自由探索時は scaleForSize でズームに応じて変化） */
   const getNodeRadius = useCallback(
     (node: CustomNodeType) => {
       const baseRadiusLayout =
         1.6 * ((node.neighborLinkCount ?? 0) * 0.1 + 3.6);
-      return Math.max(1.5, Math.min(22, baseRadiusLayout * displayScale));
+      return Math.max(1.5, Math.min(22, baseRadiusLayout * scaleForSize));
     },
-    [displayScale],
+    [scaleForSize],
   );
-  /** ノードラベルを表示する閾値（generative-layout-graph と同様、引きで表示する時は非表示） */
-  const showNodeLabels = displayScale > 0.7;
+  /** ノードラベルを表示する閾値（generative-layout-graph と同様、引きで表示する時は非表示。自由探索時はズームに応じて表示） */
+  const showNodeLabels = effectiveScaleForLabels > 0.7;
   /** スケールに応じたノードラベルフォントサイズ（引きで小さく、寄りで読みやすく） */
   const nodeLabelFontSize = showNodeLabels
-    ? (displayScale > 4 ? 3 : 6) * 1.5
+    ? (effectiveScaleForLabels > 4 ? 3 : 6) * 1.5
     : 0;
   /** エッジラベルを表示する閾値（generative では currentScale > 1.4） */
-  const showEdgeLabels = displayScale > 1.4;
-  /** スケールに応じたエッジ・ノードの線の太さ（引きで細く、寄りで見やすく） */
-  const edgeStrokeWidthFocus = Math.max(0.4, Math.min(2.5, 2 * displayScale));
-  const edgeStrokeWidthNormal = Math.max(0.3, Math.min(1.5, 1.5 * displayScale));
-  const nodeStrokeWidth = Math.max(0.25, Math.min(1.5, 1.5 * displayScale));
+  const showEdgeLabels = effectiveScaleForLabels > 1.4;
+  /** スケールに応じたエッジ・ノードの線の太さ（引きで細く、寄りで見やすく。自由探索時は scaleForSize でズームに応じて変化） */
+  const edgeStrokeWidthFocus = Math.max(0.4, Math.min(2.5, 2 * scaleForSize));
+  const edgeStrokeWidthNormal = Math.max(0.3, Math.min(1.5, 1.5 * scaleForSize));
+  const nodeStrokeWidth = Math.max(0.25, Math.min(1.5, 1.5 * scaleForSize));
   const toView = useCallback(
     (x: number, y: number) =>
       [
@@ -718,6 +731,65 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         : links,
     [links, communityMap],
   );
+
+  /** ストーリーに含まれるコミュニティID（order が付いているもの） */
+  const storyCommunityIdSet = useMemo(
+    () =>
+      new Set(
+        (narrativeFlow ?? []).filter((n) => n.order != null).map((n) => n.communityId),
+      ),
+    [narrativeFlow],
+  );
+
+  /** showFullGraph 時: コミュニティごとの中心・半径・タイトル（print-generative-layout-graph に倣い円とタイトル表示用） */
+  const communityDisplayData = useMemo(() => {
+    if (!showFullGraph || !communityMap || !nodes.length) return [];
+    const groups = new Map<string, CustomNodeType[]>();
+    nodes.forEach((n) => {
+      const cid = communityMap[n.id];
+      if (cid) {
+        if (!groups.has(cid)) groups.set(cid, []);
+        groups.get(cid)!.push(n);
+      }
+    });
+    const result: Array<{
+      communityId: string;
+      centerX: number;
+      centerY: number;
+      radius: number;
+      title: string | undefined;
+    }> = [];
+    groups.forEach((memberNodes, communityId) => {
+      const valid = memberNodes.filter(
+        (n) => n.x != null && n.y != null && !Number.isNaN(n.x) && !Number.isNaN(n.y),
+      );
+      if (valid.length === 0) return;
+      const centerX =
+        valid.reduce((s, n) => s + (n.x ?? 0), 0) / valid.length;
+      const centerY =
+        valid.reduce((s, n) => s + (n.y ?? 0), 0) / valid.length;
+      const maxDist = Math.max(
+        ...valid.map((n) => {
+          const dx = (n.x ?? 0) - centerX;
+          const dy = (n.y ?? 0) - centerY;
+          return Math.sqrt(dx * dx + dy * dy);
+        }),
+      );
+      const padding = 24;
+      const minRadius = 40;
+      const radius = Math.max(minRadius, maxDist + padding);
+      const title =
+        storyCommunityIdSet.has(communityId) ? communityTitles?.[communityId] : undefined;
+      result.push({
+        communityId,
+        centerX,
+        centerY,
+        radius,
+        title,
+      });
+    });
+    return result;
+  }, [showFullGraph, communityMap, nodes, communityTitles, storyCommunityIdSet]);
 
   /** グラフ全体表示時用: エッジ長（レイアウト座標）の min/max/range（generative と同様の距離ベース透明度に使用） */
   const linkDistanceRange = useMemo(() => {
@@ -761,6 +833,67 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
 
   const graphContent = (
     <g>
+      {/* ストーリー冒頭の全体グラフ時: コミュニティの円とタイトル（print-generative-layout-graph に倣う） */}
+      {showFullGraph && communityDisplayData.length > 0 && (
+        <>
+          <defs>
+            {communityDisplayData.map((comm) => {
+              const gradientId = `storytelling-community-gradient-${comm.communityId}`;
+              return (
+                <radialGradient
+                  key={gradientId}
+                  id={gradientId}
+                  cx="50%"
+                  cy="50%"
+                  r="50%"
+                >
+                  <stop offset="0%" stopColor="#004df7" stopOpacity="0.25" />
+                  <stop offset="50%" stopColor="#004df7" stopOpacity="0.12" />
+                  <stop offset="100%" stopColor="#004df7" stopOpacity="0" />
+                </radialGradient>
+              );
+            })}
+          </defs>
+          {communityDisplayData.map((comm) => {
+            const [vx, vy] = toView(comm.centerX, comm.centerY);
+            const viewRadius = comm.radius * displayScale;
+            const gradientId = `storytelling-community-gradient-${comm.communityId}`;
+            return (
+              <g key={comm.communityId}>
+                <circle
+                  cx={vx}
+                  cy={vy}
+                  r={viewRadius}
+                  fill={`url(#${gradientId})`}
+                  stroke="#334155"
+                  strokeWidth={1}
+                  strokeOpacity={0.4}
+                  className="pointer-events-none"
+                />
+                {comm.title != null && comm.title !== "" && (
+                  <text
+                    x={vx}
+                    y={vy}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fill="#e2e8f0"
+                    fontSize={Math.max(10, Math.min(14, viewRadius / 4))}
+                    fontWeight="600"
+                    className="cursor-pointer select-none hover:fill-slate-100"
+                    style={{ pointerEvents: "all" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCommunityTitleClick?.(comm.communityId);
+                    }}
+                  >
+                    {comm.title}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </>
+      )}
       {linksToRender.map((link, i) => {
         const source = link.source as CustomNodeType;
         const target = link.target as CustomNodeType;
@@ -890,7 +1023,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         if (node.x == null || node.y == null) return null;
         const [vx, vy] = toView(node.x, node.y);
         const opacity = getNodeOpacity(node);
-        const r = getNodeRadius(node) * (0.8 / Math.max(1, displayScale));
+        const r = getNodeRadius(node) * (0.8 / Math.max(1, scaleForSize));
         return (
           <g
             key={node.id}

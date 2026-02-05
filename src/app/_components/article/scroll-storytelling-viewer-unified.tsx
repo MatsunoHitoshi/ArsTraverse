@@ -9,7 +9,7 @@ import type { ScrollamaStepCallbackArg, ScrollamaProgressCallbackArg } from "rea
 import { StorytellingGraphUnified } from "../d3/force/storytelling-graph-unified";
 import { buildScrollStepsFromMetaGraphStoryData } from "@/app/_utils/story-scroll-utils";
 import { useWindowSize } from "@/app/_hooks/use-window-size";
-import { Crosshair1Icon, ResetIcon } from "../icons/icons";
+import { DownArrowIcon, ResetIcon, UpArrowIcon, ZoomInIcon } from "../icons/icons";
 import { getEdgeCompositeKeyFromLink } from "@/app/const/story-segment";
 
 /** セグメントがビューポートに入ったときにフェードインするラッパー */
@@ -43,6 +43,8 @@ const GRAPH_MIN_HEIGHT = 400;
 /** グラフエリアの高さ（PC / SP） */
 const GRAPH_SECTION_HEIGHT_PC = "95dvh";
 const GRAPH_SECTION_HEIGHT_SP = "min(72vh, 600px)";
+/** SP版の冒頭（オーバービュー）のみグラフを大きく */
+const GRAPH_SECTION_HEIGHT_SP_OVERVIEW = "min(88vh, 720px)";
 /** 1画面に1セグメントのみ表示するため、各ステップをビューポート高に揃える（SP: 65vh / PC: 100vh で1セグメントに制限） */
 const STEP_VIEWPORT_HEIGHT_SP = "65vh";
 const STEP_VIEWPORT_HEIGHT_PC = "100vh";
@@ -72,6 +74,8 @@ export function ScrollStorytellingViewerUnified({
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const [isFreeExploreMode, setIsFreeExploreMode] = useState(false);
   const frozenGraphIndexRef = useRef(0);
+  /** ボタンで次へ送る際、スクロール計算前に通常高さでレイアウトさせるためのフラグ */
+  const [useNormalHeightForScroll, setUseNormalHeightForScroll] = useState(false);
 
   const steps = useMemo(() => {
     const storySteps = buildScrollStepsFromMetaGraphStoryData(metaGraphData);
@@ -215,6 +219,46 @@ export function ScrollStorytellingViewerUnified({
     setIsFreeExploreMode((prev) => !prev);
   }, [isFreeExploreMode, graphIndex]);
 
+  const goToFirstSegmentOfCommunity = useCallback(
+    (communityId: string) => {
+      const index = steps.findIndex(
+        (s) => s.communityId === communityId && s.id !== "__overview__",
+      );
+      if (index < 0) return;
+      // 1つ手前の要素にスクロールすると scroll-snap で先頭セグメントに収まる
+      const targetIndex = Math.max(0, index - 1);
+      const selector = `[data-story-step-index="${targetIndex}"]`;
+      setUseNormalHeightForScroll(true);
+      // 高さを通常にしたうえでレイアウトが更新されてからスクロールする（スナップ目標が正しく計算される）
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const el = document.querySelector(selector);
+          el?.scrollIntoView({ behavior: "smooth", block: "start" });
+          window.setTimeout(() => setUseNormalHeightForScroll(false), 500);
+        });
+      });
+    },
+    [steps],
+  );
+
+  const scrollToTop = useCallback(() => {
+    topSentinelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  const scrollToNextSegment = useCallback(() => {
+    if (steps.length < 2) return;
+    setUseNormalHeightForScroll(true);
+    const selector = `[data-story-step-index="0"]`;
+    // 高さを通常にしたうえでレイアウトが更新されてからスクロールする（スナップ目標が正しく計算される）
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const el = document.querySelector(selector);
+        el?.scrollIntoView({ behavior: "smooth", block: "start" });
+        window.setTimeout(() => setUseNormalHeightForScroll(false), 500);
+      });
+    });
+  }, [steps.length]);
+
   if (steps.length === 0) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center text-slate-400">
@@ -229,7 +273,12 @@ export function ScrollStorytellingViewerUnified({
       className={`flex shrink-0 items-center justify-center overflow-hidden ${!isPc ? "relative from-slate-900 bg-gradient-to-b from-75% to-transparent" : ""}`}
       style={{
         minHeight: GRAPH_MIN_HEIGHT,
-        height: isPc ? GRAPH_SECTION_HEIGHT_PC : GRAPH_SECTION_HEIGHT_SP,
+        height:
+          isPc
+            ? GRAPH_SECTION_HEIGHT_PC
+            : displayStep?.id === "__overview__" && !useNormalHeightForScroll
+              ? GRAPH_SECTION_HEIGHT_SP_OVERVIEW
+              : GRAPH_SECTION_HEIGHT_SP,
         width: "100%",
       }}
     >
@@ -247,20 +296,39 @@ export function ScrollStorytellingViewerUnified({
         communityMap={metaGraphData.communityMap}
         narrativeFlow={metaGraphData.narrativeFlow}
         showFullGraph={displayStep?.id === "__overview__"}
-      />
-      <button
-        type="button"
-        onClick={toggleFreeExplore}
-        className="fixed bottom-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-md bg-slate-700/90 text-slate-200 shadow hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-400"
-        aria-label={isFreeExploreMode ? "自由探索を終了" : "自由探索モード"}
-        title={isFreeExploreMode ? "自由探索を終了" : "グラフを自由にズーム・移動"}
-      >
-        {isFreeExploreMode ? (
-          <ResetIcon width={16} height={16} color="currentColor" />
-        ) : (
-          <Crosshair1Icon width={16} height={16} color="currentColor" />
+        communityTitles={Object.fromEntries(
+          (metaGraphData.summaries ?? []).map((s) => [s.communityId, s.title]),
         )}
-      </button>
+        onCommunityTitleClick={goToFirstSegmentOfCommunity}
+      />
+
+      <div className="fixed bottom-4 right-4 z-10 flex items-center gap-2">
+        {displayStep?.id !== "__overview__" && (
+          <button
+            type="button"
+            onClick={scrollToTop}
+            className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-700/90 text-slate-200 shadow hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-400"
+            aria-label="ページトップ（タイトル）へ戻る"
+            title="ページトップ（タイトル）へ戻る"
+          >
+            <UpArrowIcon width={18} height={18} color="currentColor" />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={toggleFreeExplore}
+          className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-700/90 text-slate-200 shadow hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-400"
+          aria-label={isFreeExploreMode ? "自由探索を終了" : "自由探索モード"}
+          title={isFreeExploreMode ? "自由探索を終了" : "グラフを自由にズーム・移動"}
+        >
+          {isFreeExploreMode ? (
+            <ResetIcon width={18} height={18} color="currentColor" />
+          ) : (
+            <ZoomInIcon width={18} height={18} color="currentColor" />
+          )}
+        </button>
+      </div>
+
     </div>
   );
 
@@ -284,7 +352,7 @@ export function ScrollStorytellingViewerUnified({
   return (
     <>
       {segmentIndicator}
-      <div className="relative w-full max-w-6xl">
+      <div className="relative w-full max-w-7xl">
         <div
           ref={topSentinelRef}
           className="snap-start"
@@ -305,7 +373,9 @@ export function ScrollStorytellingViewerUnified({
               </div>
               <div className="min-w-0 flex-1 w-1/3">
                 {progressStep?.communityTitle != null && progressStep.communityTitle !== "" && (
-                  <div className="sticky top-72 z-10 w-full pb-2 pt-0 text-xl font-semibold text-white">
+                  <div
+                    className={`sticky top-72 z-10 w-full pb-2 pt-0 font-semibold text-white ${progressStep?.id === "__overview__" ? "text-4xl" : "text-xl"}`}
+                  >
                     {progressStep.communityTitle}
                   </div>
                 )}
@@ -318,6 +388,7 @@ export function ScrollStorytellingViewerUnified({
                   {steps.map((step, index) => (
                     <Step data={index} key={step.id}>
                       <div
+                        data-story-step-index={index}
                         className="flex snap-start flex-col justify-center pr-4 [scroll-snap-stop:always]"
                         style={{
                           height: STEP_VIEWPORT_HEIGHT_PC,
@@ -348,9 +419,28 @@ export function ScrollStorytellingViewerUnified({
                 style={{ marginTop: -SP_FADE_OVERLAP_PX }}
               >
                 {progressStep?.communityTitle != null && progressStep.communityTitle !== "" && (
-                  <div className="fixed -mt-20 z-10 pb-2 pt-0 text-lg font-semibold text-white">
+                  <div
+                    className={
+                      progressStep?.id === "__overview__"
+                        ? "fixed bottom-24 left-4 right-4 z-10 font-semibold text-white text-3xl text-center"
+                        : "fixed -mt-20 z-10 pb-2 pt-0 font-semibold text-white text-lg"
+                    }
+                  >
                     {progressStep.communityTitle}
                   </div>
+                )}
+                {progressStep?.id === "__overview__" && (
+                  <button
+                    type="button"
+                    onClick={scrollToNextSegment}
+                    className="fixed bottom-6 left-4 right-4 z-10 flex flex-col items-center gap-1.5 text-slate-300/75 transition-opacity hover:opacity-100 hover:text-slate-200 cursor-pointer"
+                    aria-label="次のセグメントへスクロール"
+                  >
+                    <span className="text-xs font-medium">スクロールして続きを見る</span>
+                    <span className="animate-bounce">
+                      <DownArrowIcon width={24} height={24} color="currentColor" />
+                    </span>
+                  </button>
                 )}
                 <Scrollama
                   offset={SCROLLAMA_OFFSET}
@@ -361,6 +451,7 @@ export function ScrollStorytellingViewerUnified({
                   {steps.map((step, index) => (
                     <Step data={index} key={step.id}>
                       <div
+                        data-story-step-index={index}
                         className="snap-start py-6 [scroll-snap-stop:always]"
                         style={{
                           height: STEP_VIEWPORT_HEIGHT_SP,
