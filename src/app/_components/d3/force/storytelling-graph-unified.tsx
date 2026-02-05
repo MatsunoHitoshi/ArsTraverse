@@ -27,6 +27,9 @@ const NODE_RADIUS = 3;
 const LINK_DISTANCE = 80;
 /** フォーカスが1点のとき scale が暴れないよう cap する */
 const MAX_VIEW_SCALE = 3;
+/** レイアウト計算用の固定サイズ。冒頭・セグメントで同一シミュレーション結果を使い回すため、実ビューサイズに依存しない */
+const REF_LAYOUT_WIDTH = 800;
+const REF_LAYOUT_HEIGHT = 600;
 const FOCUS_NODE_OPACITY = 1;
 const NEIGHBOR_NODE_OPACITY = 0.15;
 /** フォーカス・隣接以外のノードをほんのり表示する不透明度 */
@@ -147,18 +150,39 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     }) as CustomLinkType[];
   }, [baseGraph?.relationships, initNodes]);
 
-  const effectiveFocusNodeIds = useMemo(
-    () =>
-      showFullGraph ? initNodes.map((n) => n.id) : focusNodeIds,
-    [showFullGraph, focusNodeIds, initNodes],
-  );
-  const effectiveFocusEdgeIds = useMemo(
-    () =>
-      showFullGraph
-        ? initLinks.map((l) => getEdgeCompositeKeyFromLink(l))
-        : focusEdgeIds,
-    [showFullGraph, focusEdgeIds, initLinks],
-  );
+  /** フォーカスノード＋フォーカスエッジの両端ノード（エッジのみ指定時も端点をハイライト） */
+  const effectiveFocusNodeIds = useMemo(() => {
+    if (showFullGraph) return initNodes.map((n) => n.id);
+    const set = new Set<string>(focusNodeIds);
+    const focusEdgeSet = new Set(focusEdgeIds);
+    initLinks.forEach((link) => {
+      const key = getEdgeCompositeKeyFromLink(link);
+      if (focusEdgeSet.has(key)) {
+        const src = link.source as CustomNodeType;
+        const tgt = link.target as CustomNodeType;
+        set.add(src.id);
+        set.add(tgt.id);
+      }
+    });
+    return Array.from(set);
+  }, [showFullGraph, focusNodeIds, focusEdgeIds, initNodes, initLinks]);
+
+  /** フォーカスエッジ＋effectiveFocusNodeIds のノード間を結ぶエッジ（ノードのみ指定時もその間のエッジをハイライト） */
+  const effectiveFocusEdgeIds = useMemo(() => {
+    if (showFullGraph) {
+      return initLinks.map((l) => getEdgeCompositeKeyFromLink(l));
+    }
+    const edgeSet = new Set<string>(focusEdgeIds);
+    const focusNodeSet = new Set(effectiveFocusNodeIds);
+    initLinks.forEach((link) => {
+      const src = (link.source as CustomNodeType).id;
+      const tgt = (link.target as CustomNodeType).id;
+      if (focusNodeSet.has(src) && focusNodeSet.has(tgt)) {
+        edgeSet.add(getEdgeCompositeKeyFromLink(link));
+      }
+    });
+    return Array.from(edgeSet);
+  }, [showFullGraph, focusEdgeIds, initLinks, effectiveFocusNodeIds]);
 
   const focusNodeIdSet = useMemo(
     () => new Set(effectiveFocusNodeIds),
@@ -177,6 +201,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   // フォーカス遷移: 経過時間でビュー用・フェード用の進捗を導出（ビュー先行・フェード遅延）
   const lastFocusNodeIdsRef = useRef<string[]>(focusNodeIds);
   const lastFocusEdgeIdsRef = useRef<string[]>(focusEdgeIds);
+  const lastShowFullGraphRef = useRef(showFullGraph);
   const [transitionFromNodeIds, setTransitionFromNodeIds] = useState<string[]>(focusNodeIds);
   /** 遷移開始からの経過 ms。遷移中でないときは FOCUS_TRANSITION_MS 以上にして viewProgress/fadeProgress を 1 にする */
   const [transitionElapsedMs, setTransitionElapsedMs] = useState(FOCUS_TRANSITION_MS);
@@ -186,14 +211,16 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   useEffect(() => {
     const prevNodeIds = lastFocusNodeIdsRef.current;
     const prevEdgeIds = lastFocusEdgeIdsRef.current;
+    const prevShowFullGraph = lastShowFullGraphRef.current;
     const nodeIdsEqual =
       prevNodeIds.length === focusNodeIds.length &&
       prevNodeIds.every((id, i) => id === focusNodeIds[i]);
     const edgeIdsEqual =
       prevEdgeIds.length === focusEdgeIds.length &&
       prevEdgeIds.every((id, i) => id === focusEdgeIds[i]);
+    const showFullGraphUnchanged = prevShowFullGraph === showFullGraph;
 
-    if (nodeIdsEqual && edgeIdsEqual) {
+    if (nodeIdsEqual && edgeIdsEqual && showFullGraphUnchanged) {
       return;
     }
 
@@ -201,6 +228,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     setTransitionFromNodeIds(prevNodeIds);
     lastFocusNodeIdsRef.current = focusNodeIds;
     lastFocusEdgeIdsRef.current = focusEdgeIds;
+    lastShowFullGraphRef.current = showFullGraph;
     setTransitionElapsedMs(0);
     startTimeRef.current = performance.now();
 
@@ -217,7 +245,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [focusNodeIds, focusEdgeIds]);
+  }, [focusNodeIds, focusEdgeIds, showFullGraph]);
 
   const isTransitionComplete = transitionElapsedMs >= FOCUS_TRANSITION_MS;
 
@@ -255,7 +283,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   );
 
   useEffect(() => {
-    if (width <= 0 || height <= 0 || !initNodes.length) {
+    if (!initNodes.length) {
       setNodes([]);
       setLinks([]);
       return;
@@ -263,8 +291,8 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
 
     const allNodes = initNodes.map((n) => ({
       ...n,
-      x: n.x ?? width / 2 + (Math.random() - 0.5) * 100,
-      y: n.y ?? height / 2 + (Math.random() - 0.5) * 100,
+      x: n.x ?? REF_LAYOUT_WIDTH / 2 + (Math.random() - 0.5) * 100,
+      y: n.y ?? REF_LAYOUT_HEIGHT / 2 + (Math.random() - 0.5) * 100,
     })) as CustomNodeType[];
 
     // リンクの source/target を allNodes の参照に揃える（描画時に x,y が一致するように）
@@ -319,7 +347,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
           const prevNormalizedSize = Math.sqrt(prevSize / 10);
           const prevSpacing = Math.min(
             maxSpacing,
-            Math.max(minSpacing, baseSpacing + prevNormalizedSize * 0.3 * height),
+            Math.max(minSpacing, baseSpacing + prevNormalizedSize * 0.3 * REF_LAYOUT_HEIGHT),
           );
           const prevRadius = Math.sqrt(prevSize);
           const prevPrimary =
@@ -330,8 +358,8 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         const targetPrimary = currentPrimary;
         storyCommunityYPositions.push(targetPrimary);
         const isLeft = order % 2 === 1;
-        const leftX = width * 0.2;
-        const rightX = width * 0.8;
+        const leftX = REF_LAYOUT_WIDTH * 0.2;
+        const rightX = REF_LAYOUT_WIDTH * 0.8;
         const targetX = isLeft ? leftX : rightX;
         communityTargetPositions.set(communityId, { x: targetX, y: targetPrimary });
       });
@@ -342,28 +370,28 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
       const minStoryPrimary =
         storyCommunityYPositions.length > 0
           ? Math.min(...storyCommunityYPositions)
-          : height * 0.5;
+          : REF_LAYOUT_HEIGHT * 0.5;
       const maxStoryPrimary =
         storyCommunityYPositions.length > 0
           ? Math.max(...storyCommunityYPositions)
-          : height * 2.5;
+          : REF_LAYOUT_HEIGHT * 2.5;
       const storyPrimaryRange =
-        maxStoryPrimary - minStoryPrimary || height * 2;
+        maxStoryPrimary - minStoryPrimary || REF_LAYOUT_HEIGHT * 2;
       nonStoryCommunities.forEach(([communityId], index) => {
         const normalizedIndex =
           nonStoryCommunities.length > 1 ? index / (nonStoryCommunities.length - 1) : 0.5;
         const targetPrimary = minStoryPrimary + normalizedIndex * storyPrimaryRange;
         const isLeft = index % 2 === 0;
-        const targetX = isLeft ? width * 0.1 : width * 1.4;
+        const targetX = isLeft ? REF_LAYOUT_WIDTH * 0.1 : REF_LAYOUT_WIDTH * 1.4;
         communityTargetPositions.set(communityId, { x: targetX, y: targetPrimary });
       });
 
       communityGroups.forEach((nodes, communityId) => {
         if (!communityTargetPositions.has(communityId)) {
           const centerX =
-            nodes.reduce((s, n) => s + (n.x ?? width / 2), 0) / nodes.length;
+            nodes.reduce((s, n) => s + (n.x ?? REF_LAYOUT_WIDTH / 2), 0) / nodes.length;
           const centerY =
-            nodes.reduce((s, n) => s + (n.y ?? height / 2), 0) / nodes.length;
+            nodes.reduce((s, n) => s + (n.y ?? REF_LAYOUT_HEIGHT / 2), 0) / nodes.length;
           communityTargetPositions.set(communityId, { x: centerX, y: centerY });
         }
       });
@@ -385,23 +413,23 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         )
         .force("charge", forceManyBody().strength(-200))
         .force("collide", forceCollide(20))
-        .force("center", forceCenter(width / 2, height / 2).strength(0.05))
+        .force("center", forceCenter(REF_LAYOUT_WIDTH / 2, REF_LAYOUT_HEIGHT / 2).strength(0.05))
         .force(
           "y",
           forceY<CustomNodeType>((d) => {
             const cid = communityMap[d.id];
-            if (!cid) return height / 2;
+            if (!cid) return REF_LAYOUT_HEIGHT / 2;
             const pos = communityTargetPositions.get(cid);
-            return pos ? pos.y : height / 2;
+            return pos ? pos.y : REF_LAYOUT_HEIGHT / 2;
           }).strength((d) => (communityMap[d.id] ? 0.15 : 0.0001)),
         )
         .force(
           "x",
           forceX<CustomNodeType>((d) => {
             const cid = communityMap[d.id];
-            if (!cid) return width / 2;
+            if (!cid) return REF_LAYOUT_WIDTH / 2;
             const pos = communityTargetPositions.get(cid);
-            return pos ? pos.x : width / 2;
+            return pos ? pos.x : REF_LAYOUT_WIDTH / 2;
           }).strength((d) => (communityMap[d.id] ? 0.15 : 0.0001)),
         );
 
@@ -431,7 +459,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
           .strength(0.3),
       )
       .force("charge", forceManyBody().strength(-120))
-      .force("center", forceCenter(width / 2, height / 2))
+      .force("center", forceCenter(REF_LAYOUT_WIDTH / 2, REF_LAYOUT_HEIGHT / 2))
       .force("collide", forceCollide(NODE_RADIUS + 4));
 
     simulation.stop();
@@ -447,8 +475,6 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   }, [
     initNodes,
     initLinks,
-    width,
-    height,
     useCommunityLayout,
     communityMap,
     narrativeFlow,

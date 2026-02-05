@@ -282,6 +282,7 @@ export function ScrollStorytellingViewerUnified({
         width: "100%",
       }}
     >
+
       <StorytellingGraphUnified
         key="storytelling-graph-unified"
         graphDocument={graphDocument}
@@ -301,6 +302,7 @@ export function ScrollStorytellingViewerUnified({
         )}
         onCommunityTitleClick={goToFirstSegmentOfCommunity}
       />
+
 
       <div className="fixed bottom-4 right-4 z-10 flex items-center gap-2">
         {displayStep?.id !== "__overview__" && (
