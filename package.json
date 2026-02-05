@@ -72,6 +72,7 @@
     "react-input-slider": "^6.0.1",
     "react-intersection-observer": "^9.16.0",
     "react-markdown": "^9.1.0",
+    "react-scrollama": "^2.4.2",
     "react-spinners": "^0.14.1",
     "react-textarea-autosize": "^8.5.5",
     "server-only": "^0.0.1",

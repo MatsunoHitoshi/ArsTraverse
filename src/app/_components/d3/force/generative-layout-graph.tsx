@@ -5,6 +5,10 @@ import type {
   LayoutInstruction,
 } from "@/app/const/types";
 import {
+  getEdgeCompositeKeyFromLink,
+  type FocusedSegmentRef,
+} from "@/app/const/story-segment";
+import {
   forceSimulation,
   forceLink,
   forceManyBody,
@@ -166,6 +170,7 @@ export const GenerativeLayoutGraph = ({
   viewMode = "detailed",
   metaNodeData,
   focusedCommunityId,
+  focusedSegmentRef = null,
   communityMap,
   originalGraphDocument,
   expandZoomThreshold = 0.35,
@@ -190,6 +195,7 @@ export const GenerativeLayoutGraph = ({
     order?: number;
   }>;
   focusedCommunityId?: string | null;
+  focusedSegmentRef?: FocusedSegmentRef | null; // 段落クリック時の局所ハイライト
   communityMap?: Record<string, string>; // nodeId -> communityId
   originalGraphDocument?: GraphDocumentForFrontend; // 元のグラフデータ
   expandZoomThreshold?: number; // 展開するズームレベル
@@ -1057,14 +1063,35 @@ export const GenerativeLayoutGraph = ({
     setMetaGraphLinks(metaLinks);
   }, [viewMode, filteredGraphDocument, communityCenters, width, height]);
 
-  // 透明度を計算
-  const detailedGraphOpacity = alwaysShowDetailedGraph
+  // 透明度を計算（セグメントフォーカス時は詳細グラフを最低でも見えるようにする）
+  const rawDetailedOpacity = alwaysShowDetailedGraph
     ? 1.0
     : calculateOpacity(currentScale);
+  const detailedGraphOpacity =
+    focusedSegmentRef != null
+      ? Math.max(rawDetailedOpacity, 0.85)
+      : rawDetailedOpacity;
   // メタグラフの透明度は詳細グラフと逆相関（詳細が見える時はメタグラフを透明に）
   const metaGraphOpacity = alwaysShowDetailedGraph
     ? 0.3 // 常に表示モードの時はメタグラフも少し見えるようにする
     : 1 - detailedGraphOpacity;
+
+  // メタグラフON時: セグメントフォーカス時に該当コミュニティへズームして詳細を見せる
+  const segmentFocusZoomScale = 0.55;
+  useEffect(() => {
+    if (
+      viewMode !== "meta" ||
+      !focusedSegmentRef?.communityId ||
+      !communityCenters.size
+    ) {
+      return;
+    }
+    const center = communityCenters.get(focusedSegmentRef.communityId);
+    if (!center) return;
+    setCurrentScale(segmentFocusZoomScale);
+    setCurrentTransformX(width / 2 - center.x * segmentFocusZoomScale);
+    setCurrentTransformY(height / 2 - center.y * segmentFocusZoomScale);
+  }, [viewMode, focusedSegmentRef?.communityId, communityCenters, width, height]);
 
   // シミュレーション再実行ハンドラー
   const handleRerunSimulation = () => {
@@ -1265,6 +1292,17 @@ export const GenerativeLayoutGraph = ({
                           : 0;
                       const opacity = 0.6 - normalizedDistance * 0.59; // 0.6から0.01まで
 
+                      // セグメントフォーカス時: 該当エッジを黄色でハイライト、それ以外は暗くする
+                      const edgeKey = getEdgeCompositeKeyFromLink(link);
+                      const isSegmentEdge =
+                        focusedSegmentRef?.edgeIds?.includes(edgeKey) ?? false;
+                      const linkStroke = isSegmentEdge ? "#fbbf24" : "#60a5fa";
+                      const linkStrokeWidth = isSegmentEdge ? 2.5 : 1.5;
+                      const effectiveOpacity =
+                        focusedSegmentRef && !isSegmentEdge
+                          ? opacity * 0.35
+                          : opacity;
+
                       return (
                         <g key={`detailed-${i}`}>
                           <line
@@ -1272,10 +1310,36 @@ export const GenerativeLayoutGraph = ({
                             y1={source.y}
                             x2={target.x}
                             y2={target.y}
-                            stroke="#60a5fa"
-                            strokeOpacity={opacity}
-                            strokeWidth={1.5}
+                            stroke={linkStroke}
+                            strokeOpacity={effectiveOpacity}
+                            strokeWidth={linkStrokeWidth}
                           />
+                          {/* セグメントフォーカス時: ハイライトエッジに有向アニメーション（graph.tsx と同じ表現） */}
+                          {isSegmentEdge && (
+                            <line
+                              x1={source.x}
+                              y1={source.y}
+                              x2={target.x}
+                              y2={target.y}
+                              stroke={linkStroke}
+                              strokeWidth={linkStrokeWidth}
+                              strokeOpacity={0.1}
+                            >
+                              <animate
+                                attributeName="stroke-dasharray"
+                                values="0,100;100,0;100,100"
+                                dur="1.5s"
+                                repeatCount="indefinite"
+                              />
+                              <animate
+                                attributeName="stroke-opacity"
+                                values="0;0.6;0.6;0"
+                                dur="1.5s"
+                                repeatCount="indefinite"
+                                keyTimes="0;0.01;0.1;1"
+                              />
+                            </line>
+                          )}
                           {link.type && currentScale > 1.4 && (
                             <text
                               x={labelX}
@@ -1410,17 +1474,51 @@ export const GenerativeLayoutGraph = ({
                       : 0;
                   const opacity = 0.6 - normalizedDistance * 0.59; // 0.6から0.01まで
 
+                  // 詳細ビューでもセグメントフォーカス時は該当エッジをハイライト
+                  const edgeKey = getEdgeCompositeKeyFromLink(link);
+                  const isSegmentEdge =
+                    focusedSegmentRef?.edgeIds?.includes(edgeKey) ?? false;
+                  const stroke = isSegmentEdge ? "#fbbf24" : "#999";
+                  const strokeWidth = isSegmentEdge ? 2.5 : 1;
+
                   return (
-                    <line
-                      key={`normal-${i}`}
-                      x1={source.x}
-                      y1={source.y}
-                      x2={target.x}
-                      y2={target.y}
-                      stroke="#999"
-                      opacity={opacity}
-                      strokeWidth={1}
-                    />
+                    <g key={`normal-${i}`}>
+                      <line
+                        x1={source.x}
+                        y1={source.y}
+                        x2={target.x}
+                        y2={target.y}
+                        stroke={stroke}
+                        opacity={opacity}
+                        strokeWidth={strokeWidth}
+                      />
+                      {/* セグメントフォーカス時: ハイライトエッジに有向アニメーション（graph.tsx と同じ表現） */}
+                      {isSegmentEdge && (
+                        <line
+                          x1={source.x}
+                          y1={source.y}
+                          x2={target.x}
+                          y2={target.y}
+                          stroke={stroke}
+                          strokeWidth={strokeWidth}
+                          strokeOpacity={0.1}
+                        >
+                          <animate
+                            attributeName="stroke-dasharray"
+                            values="0,100;100,0;100,100"
+                            dur="1.5s"
+                            repeatCount="indefinite"
+                          />
+                          <animate
+                            attributeName="stroke-opacity"
+                            values="0;0.6;0.6;0"
+                            dur="1.5s"
+                            repeatCount="indefinite"
+                            keyTimes="0;0.01;0.1;1"
+                          />
+                        </line>
+                      )}
+                    </g>
                   );
                 });
               })()}
@@ -1472,9 +1570,11 @@ export const GenerativeLayoutGraph = ({
 
                     // ノードの色をコミュニティの状態に基づいて決定
                     let nodeColor: string | undefined = undefined;
-
-                    if (nodeCommunityId) {
-                      // フォーカス中のコミュニティに属するノードは黄色
+                    // セグメントフォーカス時: 該当ノード（nodeIds）を黄色（communityMap に無くてもハイライト）
+                    if (focusedSegmentRef?.nodeIds?.includes(node.id)) {
+                      nodeColor = "#fbbf24";
+                    } else if (nodeCommunityId) {
+                      // コミュニティ全体フォーカス時: フォーカス中のコミュニティに属するノードは黄色
                       if (
                         focusedCommunityId &&
                         nodeCommunityId === focusedCommunityId
@@ -1500,16 +1600,28 @@ export const GenerativeLayoutGraph = ({
                       nodeColor = "gray";
                     }
 
+                    // セグメントフォーカス時: 該当ノード以外は暗くしてハイライトを強調
+                    const isSegmentFocusedNode =
+                      focusedSegmentRef?.nodeIds?.includes(node.id) ?? false;
+
+                    const nodeWrapperOpacity =
+                      focusedSegmentRef && !isSegmentFocusedNode ? 0.4 : 1;
+
                     return (
-                      <GenerativeGraphNode
+                      <g
                         key={`detailed-${node.id}`}
-                        node={node}
-                        currentScale={currentScale}
-                        onClick={onNodeClick}
-                        queryFiltered={queryFiltered}
-                        nodeColor={nodeColor}
-                        isMetaNode={false}
-                      />
+                        opacity={nodeWrapperOpacity}
+                        className="detailed-graph-node-wrapper"
+                      >
+                        <GenerativeGraphNode
+                          node={node}
+                          currentScale={currentScale}
+                          onClick={onNodeClick}
+                          queryFiltered={queryFiltered}
+                          nodeColor={nodeColor}
+                          isMetaNode={false}
+                        />
+                      </g>
                     );
                   });
                 })()}
@@ -1600,6 +1712,13 @@ export const GenerativeLayoutGraph = ({
                   if (targetNodeIds.includes(node.id)) {
                     nodeColor = color;
                   }
+                }
+                // メタグラフ OFF 時のみここが使われる。ON のときは「詳細グラフのノード」側でハイライト
+                if (
+                  !nodeColor &&
+                  focusedSegmentRef?.nodeIds?.includes(node.id)
+                ) {
+                  nodeColor = "#fbbf24";
                 }
 
                 return (

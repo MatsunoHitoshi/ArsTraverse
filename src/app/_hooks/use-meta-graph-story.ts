@@ -9,6 +9,8 @@ import {
   CuratorialContextSchema,
   type PreparedCommunity,
 } from "@/server/api/schemas/knowledge-graph";
+import type { JSONContent } from "@tiptap/react";
+import type { StorySegment } from "@/app/const/story-segment";
 
 export interface MetaGraphStoryData {
   metaGraph: GraphDocumentForFrontend;
@@ -29,9 +31,44 @@ export interface MetaGraphStoryData {
     order: number;
     transitionText: string;
   }>;
-  detailedStories: Record<string, string>; // communityId -> story
+  detailedStories: Record<string, string | JSONContent>; // communityId -> story (string or Tiptap doc with segment attrs)
   preparedCommunities: PreparedCommunity[];
   filter?: LayoutInstruction["filter"]; // グラフフィルタリング設定
+}
+
+/** segments から Tiptap doc（段落に segmentNodeIds/segmentEdgeIds/segmentSource 付き）を組み立てる */
+export function buildStoryDocFromSegments(
+  segments: StorySegment[],
+): JSONContent {
+  const content = segments.map((seg) => ({
+    type: "paragraph" as const,
+    attrs: {
+      ...(seg.nodeIds?.length ? { segmentNodeIds: seg.nodeIds } : {}),
+      ...(seg.edgeIds?.length ? { segmentEdgeIds: seg.edgeIds } : {}),
+      ...(seg.source ? { segmentSource: seg.source } : {}),
+    },
+    content: [{ type: "text" as const, text: seg.text }],
+  }));
+  return { type: "doc", content };
+}
+
+/** detailedStories[communityId]（string | JSONContent）からプレーンテキストを取得 */
+export function getStoryText(value: string | JSONContent | undefined): string {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  const content = value.content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((node) => {
+      if (node.type === "paragraph" && node.content) {
+        return (node.content as Array<{ type?: string; text?: string }>)
+          .map((c) => (c.type === "text" ? (c.text ?? "") : ""))
+          .join("");
+      }
+      return "";
+    })
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 export function useMetaGraphStory(
@@ -57,7 +94,7 @@ export function useMetaGraphStory(
     api.story.get.useQuery(
       { workspaceId: workspace?.id ?? "" },
       {
-        enabled: !!(workspace?.id) && isMetaGraphMode,
+        enabled: !!workspace?.id && isMetaGraphMode,
       },
     );
 
@@ -76,7 +113,7 @@ export function useMetaGraphStory(
     // JSON.stringifyで比較して、実際に変更があった場合のみ更新
     const currentDataString = JSON.stringify(metaGraphData);
     const savedDataString = JSON.stringify(savedStoryData.metaGraphData);
-    
+
     if (currentDataString !== savedDataString) {
       setMetaGraphData(savedStoryData.metaGraphData);
     }
@@ -232,14 +269,18 @@ export function useMetaGraphStory(
                       workspaceId: workspace?.id,
                     })
                     .then((storyResult) => {
-                      // 成功時に即座に状態を更新（関数型更新で安全にマージ）
+                      // 成功時に即座に状態を更新（segments があれば Tiptap doc、なければ story 文字列）
                       setMetaGraphData((prev) => {
                         if (!prev) return prev;
+                        const value =
+                          storyResult.segments?.length > 0
+                            ? buildStoryDocFromSegments(storyResult.segments)
+                            : storyResult.story;
                         return {
                           ...prev,
                           detailedStories: {
                             ...prev.detailedStories,
-                            [storyResult.communityId]: storyResult.story,
+                            [storyResult.communityId]: value,
                           },
                         };
                       });

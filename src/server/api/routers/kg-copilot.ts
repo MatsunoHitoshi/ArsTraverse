@@ -18,6 +18,10 @@ import { filterGraphByLayoutInstruction } from "../../utils/filter-graph-by-layo
 import Graph from "graphology";
 import louvain from "graphology-communities-louvain";
 import { getTextReference } from "./source-document";
+import {
+  toEdgeCompositeKey,
+  type StorySegment,
+} from "@/app/const/story-segment";
 
 export const copilotProcedures = {
   askCopilot: protectedProcedure
@@ -786,15 +790,15 @@ You MUST output a valid JSON object with this structure:
   "summaries": [
     {
       "communityId": "community_id",
-      "title": "Meaningful Title in Japanese",
-      "summary": "1-2 sentence explanation in Japanese"
+      "title": "Meaningful Title (same language as Members)",
+      "summary": "1-2 sentence explanation (same language as Members)"
     }
   ],
   "narrativeFlow": [
     {
       "communityId": "community_id",
       "order": 1,
-      "transitionText": "Explanation of how this connects to the previous community (in Japanese)"
+      "transitionText": "Explanation of how this connects to the previous community (same language as Members)"
     }
   ]
 }
@@ -817,7 +821,7 @@ For each community, analyze:
 Use this data to create a meaningful narrative progression that follows the graph structure.
 
 [Guidelines]
-- All text should be in Japanese
+- Write all text (titles, summaries, transitionText) in the SAME language as the source data (Members, labels). If they are mainly in Japanese, write in Japanese; if mainly in English, write in English. Do not default to English when the resource is in another language.
 - Titles should be concise (3-10 words) and meaningful
 - Summaries should explain the theme or concept represented by the community (not just "〇〇のコミュニティです")
 - Summaries should hint at the story within the community - what relationships, events, or themes connect the nodes
@@ -904,7 +908,7 @@ Community ${idx + 1} (ID: ${c.communityId}):
             `Missing titles for ${missingTitleCommunities.length} communities, generating titles...`,
           );
           try {
-            const titleGenerationPrompt = `以下のコミュニティに対して、それぞれ意味のある日本語のタイトルを生成してください。各コミュニティのメンバーや関係性を分析して、適切なタイトルを付けてください。
+            const titleGenerationPrompt = `以下のコミュニティに対して、それぞれ意味のあるタイトルを生成してください。各コミュニティのメンバーや関係性を分析して、適切なタイトルを付けてください。タイトルはメンバー名・ラベルの言語に合わせてください（主に日本語なら日本語、主に英語なら英語）。
 
 ${missingTitleCommunities
   .map(
@@ -920,7 +924,7 @@ Community ${idx + 1} (ID: ${c.communityId}):
 出力形式（JSON）:
 {
   "titles": [
-    { "communityId": "community_id", "title": "Meaningful Title in Japanese" }
+    { "communityId": "community_id", "title": "Meaningful Title (same language as Members)" }
   ]
 }`;
 
@@ -928,7 +932,7 @@ Community ${idx + 1} (ID: ${c.communityId}):
               {
                 role: "system",
                 content:
-                  "You are a helpful assistant that generates meaningful titles for knowledge graph communities in Japanese.",
+                  "You are a helpful assistant that generates meaningful titles for knowledge graph communities. Write each title in the SAME language as the Members and Labels (e.g. Japanese if they are mainly in Japanese, English if mainly in English).",
               },
               { role: "user", content: titleGenerationPrompt },
             ]);
@@ -1547,7 +1551,47 @@ Community ${idx + 1} (ID: ${c.communityId}):
         ? `Stance: ${curatorialContext.stance}`
         : "Stance: Neutral/Undefined";
 
-      const systemPrompt = `You are "ArsTraverse Story Writer", an AI assistant specialized in writing rich, narrative stories about knowledge graph communities in art and cultural contexts.
+      // 詳細情報がある場合はそれを使用、なければ簡易版を使用
+      const hasDetailedInfo = memberNodes && internalEdgesDetailed;
+      const validNodeIds = new Set(memberNodes?.map((n) => n.id) ?? []);
+      const validEdgeIds = new Set(
+        internalEdgesDetailed?.map((e) =>
+          toEdgeCompositeKey(e.sourceId, e.targetId, e.type),
+        ) ?? [],
+      );
+
+      const systemPrompt = hasDetailedInfo
+        ? `You are "ArsTraverse Story Writer", an AI assistant specialized in writing rich, narrative stories about knowledge graph communities in art and cultural contexts.
+
+[Curatorial Context]
+${stance}
+
+[Task]
+Generate a rich, detailed narrative story (3-5 short paragraphs, 200-400 words) about this community. Split the story into SHORT PARAGRAPHS (one or two sentences each). For EACH paragraph you MUST output:
+1. "text": the paragraph text
+2. "nodeIds": array of node IDs from the [Members] list that this paragraph mentions (use ONLY the "id" values shown)
+3. "edgeIds": array of edge composite keys "sourceId|targetId|type" from the [Internal Relationships] list that this paragraph mentions (use EXACTLY the format shown in [Edge IDs for output])
+
+Guidelines:
+- Describe WHO the key figures are and WHAT they did (use node properties for context)
+- Explain HOW they are connected (use internal edge information)
+- Use chronological or thematic progression
+- Avoid generic descriptions like "〇〇のコミュニティです"
+- When source document references are provided, use them for depth
+
+[Language]
+- Write the story in the SAME language as the source data (Members, labels, properties, and source references). If they are mainly in Japanese, write in Japanese; if mainly in English, write in English. Do not default to English when the resource is in another language.
+
+[Word Count]
+- Total story: ${wordCount} words (±50). Each paragraph: one or two sentences.
+
+[Output Format]
+You MUST output a valid JSON object only, no markdown or extra text:
+{"segments":[{"text":"...","nodeIds":["id1","id2"],"edgeIds":["sourceId|targetId|type"]},{"text":"...","nodeIds":[],"edgeIds":[]},...]}
+
+- "nodeIds" must contain ONLY ids from the [Members] list below.
+- "edgeIds" must contain ONLY keys from the [Edge IDs for output] list below.`
+        : `You are "ArsTraverse Story Writer", an AI assistant specialized in writing rich, narrative stories about knowledge graph communities in art and cultural contexts.
 
 [Curatorial Context]
 ${stance}
@@ -1565,7 +1609,7 @@ Generate a rich, detailed narrative story (3-5 paragraphs, 200-400 words) about 
 9. When source document references are provided, use them to add depth and context to the story
 
 [Writing Style]
-- Write in User's language
+- Write the story in the SAME language as the source data (Members, labels, properties, and any source references). If they are mainly in Japanese, write in Japanese; if mainly in English, write in English. Do not default to English when the resource is in another language.
 - Use narrative style, not just listing facts
 - Include specific relationships and connections
 - Show cause and effect, not just description
@@ -1581,20 +1625,17 @@ Generate a rich, detailed narrative story (3-5 paragraphs, 200-400 words) about 
 Instead of: "片野湘雲に関連するコミュニティです。"
 Write: "片野湘雲は上溝村で生まれ、父・片野儀右衛門から絵の手ほどきを受けました。儀右衛門は十二天神社に大絵馬を奉納し、後に愛松斎儀亭と名乗るなど、地域の文化人として活動しました。湘雲は元湯玉川館や荒木十畝と交流を持ち、後に画塾を設立して多くの弟子を育てました。これは相模原地域における日本画の伝統と、師弟関係を通じた文化継承の物語を語っています。"`;
 
-      // 詳細情報がある場合はそれを使用、なければ簡易版を使用
-      const hasDetailedInfo = memberNodes && internalEdgesDetailed;
-
       const communityInfo = hasDetailedInfo
         ? `
 Community ID: ${communityId}
 
-[Members (${memberNodes.length} nodes)]
+[Members (${memberNodes.length} nodes)] - use "id" in nodeIds
 ${memberNodes
   .map(
     (node, idx) =>
-      `${idx + 1}. ${node.name} (${node.label})${
+      `${idx + 1}. id: "${node.id}" | ${node.name} (${node.label})${
         node.properties && Object.keys(node.properties).length > 0
-          ? `\n   Properties: ${JSON.stringify(node.properties, null, 2)}`
+          ? ` | Properties: ${JSON.stringify(node.properties)}`
           : ""
       }`,
   )
@@ -1606,10 +1647,15 @@ ${internalEdgesDetailed
     (edge, idx) =>
       `${idx + 1}. ${edge.sourceName} --[${edge.type}]--> ${edge.targetName}${
         edge.properties && Object.keys(edge.properties).length > 0
-          ? `\n   Properties: ${JSON.stringify(edge.properties, null, 2)}`
+          ? ` | Properties: ${JSON.stringify(edge.properties)}`
           : ""
       }`,
   )
+  .join("\n")}
+
+[Edge IDs for output] - use EXACTLY these strings in edgeIds
+${internalEdgesDetailed
+  .map((e) => toEdgeCompositeKey(e.sourceId, e.targetId, e.type))
   .join("\n")}
 
 [External Connections]
@@ -1624,13 +1670,19 @@ Community ID: ${communityId}
 `;
 
       // ユーザープロンプトを構築
-      let userPrompt = `以下のコミュニティについて、詳細なストーリーを${wordCount}字程度で生成してください:\n\n${communityInfo}`;
+      let userPrompt = hasDetailedInfo
+        ? `以下のコミュニティについて、詳細なストーリーを短い段落に分け、各段落に対応するノードID・エッジIDを付けてJSONで出力してください:\n\n${communityInfo}`
+        : `以下のコミュニティについて、詳細なストーリーを${wordCount}字程度で生成してください:\n\n${communityInfo}`;
 
       // SourceDocumentのセクションがある場合は追加
       if (sourceDocumentSections.length > 0) {
         userPrompt += `\n\n[Source Document References]\n以下の情報源から取得した関連セクションを参照して、より詳細で豊富なストーリーを生成してください:\n\n${sourceDocumentSections
           .map((section, idx) => `--- Reference ${idx + 1} ---\n${section}`)
           .join("\n\n")}`;
+      }
+
+      if (hasDetailedInfo) {
+        userPrompt += "\n\nOutput valid JSON only (no markdown code fence).";
       }
 
       const response = await llm.invoke([
@@ -1641,10 +1693,231 @@ Community ID: ${communityId}
         },
       ]);
 
+      const responseText = (response.content as string).trim();
+
+      if (hasDetailedInfo) {
+        let jsonText = responseText;
+        if (jsonText.includes("```json")) {
+          jsonText =
+            jsonText.split("```json")[1]?.split("```")[0]?.trim() ?? jsonText;
+        } else if (jsonText.includes("```")) {
+          jsonText =
+            jsonText.split("```")[1]?.split("```")[0]?.trim() ?? jsonText;
+        }
+        try {
+          const parsed = JSON.parse(jsonText) as {
+            segments?: Array<{
+              text?: string;
+              nodeIds?: string[];
+              edgeIds?: string[];
+            }>;
+          };
+          const rawSegments = Array.isArray(parsed.segments)
+            ? parsed.segments
+            : [];
+          const segments: StorySegment[] = rawSegments
+            .filter((s) => s && typeof s.text === "string" && s.text.trim())
+            .map((s) => ({
+              text: (s.text ?? "").trim(),
+              nodeIds: Array.isArray(s.nodeIds)
+                ? s.nodeIds.filter((id) => validNodeIds.has(id))
+                : [],
+              edgeIds: Array.isArray(s.edgeIds)
+                ? s.edgeIds.filter((id) => validEdgeIds.has(id))
+                : [],
+              source: "generated",
+            }));
+          const story =
+            segments.length > 0
+              ? segments.map((s) => s.text).join("\n\n")
+              : responseText;
+          return {
+            communityId,
+            segments,
+            story,
+          };
+        } catch (e) {
+          console.warn(
+            "generateCommunityStory: JSON parse failed, falling back to plain text",
+            e,
+          );
+        }
+      }
+
       return {
         communityId,
-        story: response.content as string,
+        story: responseText,
+        segments: [],
       };
+    }),
+
+  annotateStorySegments: protectedProcedure
+    .input(
+      z.object({
+        communityId: z.string(),
+        segments: z.array(z.object({ text: z.string() })).optional(),
+        fullText: z.string().optional(),
+        memberNodes: z
+          .array(
+            z.object({
+              id: z.string(),
+              name: z.string(),
+              label: z.string(),
+              properties: z.record(z.any()).optional(),
+            }),
+          )
+          .optional(),
+        internalEdgesDetailed: z
+          .array(
+            z.object({
+              sourceId: z.string(),
+              sourceName: z.string(),
+              targetId: z.string(),
+              targetName: z.string(),
+              type: z.string(),
+              properties: z.record(z.any()).optional(),
+            }),
+          )
+          .optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const {
+        communityId,
+        segments: inputSegments,
+        fullText,
+        memberNodes,
+        internalEdgesDetailed,
+      } = input;
+
+      const validNodeIds = new Set(memberNodes?.map((n) => n.id) ?? []);
+      const validEdgeIds = new Set(
+        internalEdgesDetailed?.map((e) =>
+          toEdgeCompositeKey(e.sourceId, e.targetId, e.type),
+        ) ?? [],
+      );
+
+      let segmentsToAnnotate: Array<{ text: string }>;
+      if (inputSegments?.length) {
+        segmentsToAnnotate = inputSegments;
+      } else if (fullText?.trim()) {
+        segmentsToAnnotate = fullText
+          .split(/\n\n+/)
+          .map((t) => t.trim())
+          .filter(Boolean)
+          .map((text) => ({ text }));
+      } else {
+        return { communityId, segments: [] };
+      }
+
+      if (validNodeIds.size === 0) {
+        return {
+          communityId,
+          segments: segmentsToAnnotate.map((s) => ({
+            text: s.text,
+            nodeIds: [],
+            edgeIds: [],
+            source: "auto_annotated" as const,
+          })),
+        };
+      }
+
+      const llm = new ChatOpenAI({
+        temperature: 0.2,
+        model: "gpt-4o-mini",
+      });
+
+      const edgeIdsList = internalEdgesDetailed
+        ? internalEdgesDetailed
+            .map((e) => toEdgeCompositeKey(e.sourceId, e.targetId, e.type))
+            .join("\n")
+        : "";
+      const membersList = memberNodes
+        ? memberNodes
+            .map((n) => `id: "${n.id}" | ${n.name} (${n.label})`)
+            .join("\n")
+        : "";
+      const systemPrompt = `You are an annotator. Given story segments and a list of node IDs and edge composite keys, output which node IDs and edge keys each segment mentions.
+
+[Output Format]
+Valid JSON only, no markdown:
+{"segments":[{"text":"...","nodeIds":["id1"],"edgeIds":["sourceId|targetId|type"]},...]}
+
+- "nodeIds" must only contain ids from the [Members] list.
+- "edgeIds" must only contain keys from the [Edge IDs] list.
+- Preserve each "text" exactly as given.`;
+
+      const userPrompt = `[Members]
+${membersList}
+
+[Edge IDs]
+${edgeIdsList}
+
+[Segments to annotate]
+${segmentsToAnnotate.map((s, i) => `${i + 1}. ${s.text}`).join("\n\n")}
+
+Output JSON with segments array (same order, same text, add nodeIds and edgeIds for each).`;
+
+      const response = await llm.invoke([
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ]);
+
+      let jsonText = (response.content as string).trim();
+      if (jsonText.includes("```json")) {
+        jsonText =
+          jsonText.split("```json")[1]?.split("```")[0]?.trim() ?? jsonText;
+      } else if (jsonText.includes("```")) {
+        jsonText =
+          jsonText.split("```")[1]?.split("```")[0]?.trim() ?? jsonText;
+      }
+
+      try {
+        const parsed = JSON.parse(jsonText) as {
+          segments?: Array<{
+            text?: string;
+            nodeIds?: string[];
+            edgeIds?: string[];
+          }>;
+        };
+        const raw = Array.isArray(parsed.segments) ? parsed.segments : [];
+        const segments: StorySegment[] = segmentsToAnnotate.map(
+          (inputSeg, idx) => {
+            const r = raw[idx];
+            const text = inputSeg.text;
+            if (!r) {
+              return {
+                text,
+                nodeIds: [],
+                edgeIds: [],
+                source: "auto_annotated" as const,
+              };
+            }
+            return {
+              text,
+              nodeIds: Array.isArray(r.nodeIds)
+                ? r.nodeIds.filter((id) => validNodeIds.has(id))
+                : [],
+              edgeIds: Array.isArray(r.edgeIds)
+                ? r.edgeIds.filter((id) => validEdgeIds.has(id))
+                : [],
+              source: "auto_annotated" as const,
+            };
+          },
+        );
+        return { communityId, segments };
+      } catch (e) {
+        console.warn("annotateStorySegments: JSON parse failed", e);
+        return {
+          communityId,
+          segments: segmentsToAnnotate.map((s) => ({
+            text: s.text,
+            nodeIds: [],
+            edgeIds: [],
+            source: "auto_annotated" as const,
+          })),
+        };
+      }
     }),
 
   regenerateNarrativeFlow: protectedProcedure

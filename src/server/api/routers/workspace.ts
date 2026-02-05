@@ -15,6 +15,10 @@ import OpenAI from "openai";
 import { env } from "@/env";
 import { formGraphDataForFrontend } from "@/app/_utils/kg/frontend-properties";
 import { PUBLIC_USER_SELECT } from "@/server/lib/user-select";
+import {
+  convertFromDatabase,
+  type StoryWithRelations,
+} from "@/server/lib/meta-graph-converter";
 
 export const TiptapContentSchema = z.object({
   type: z.string(),
@@ -1055,6 +1059,88 @@ export const workspaceRouter = createTRPCRouter({
       return {
         ...workspace,
         graphDocument,
+      };
+    }),
+
+  getPublishedWithStory: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const { id } = input;
+
+      const workspace = await ctx.db.workspace.findFirst({
+        where: {
+          id,
+          status: WorkspaceStatus.PUBLISHED,
+          isDeleted: false,
+        },
+        include: {
+          referencedTopicSpaces: {
+            include: {
+              graphNodes: {
+                where: { deletedAt: null },
+              },
+              graphRelationships: {
+                where: { deletedAt: null },
+              },
+            },
+          },
+          tags: true,
+          user: {
+            select: PUBLIC_USER_SELECT,
+          },
+          story: {
+            include: {
+              referencedTopicSpace: true,
+              metaNodes: {
+                include: {
+                  memberNodes: true,
+                  summary: true,
+                  storyContent: true,
+                },
+              },
+              metaEdges: {
+                include: {
+                  fromMetaNode: true,
+                  toMetaNode: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!workspace) {
+        throw new Error("Published workspace not found");
+      }
+
+      const allNodes: GraphNode[] = workspace.referencedTopicSpaces.flatMap(
+        (topicSpace: TopicSpace & { graphNodes: GraphNode[] }) =>
+          topicSpace.graphNodes,
+      );
+      const allRelationships: GraphRelationship[] =
+        workspace.referencedTopicSpaces.flatMap(
+          (
+            topicSpace: TopicSpace & {
+              graphRelationships: GraphRelationship[];
+            },
+          ) => topicSpace.graphRelationships,
+        );
+
+      const graphDocument = formGraphDataForFrontend({
+        nodes: allNodes,
+        relationships: allRelationships,
+      });
+
+      let metaGraphData = null;
+      const story = workspace.story;
+      if (story && !story.deletedAt) {
+        metaGraphData = convertFromDatabase(story as StoryWithRelations);
+      }
+
+      return {
+        ...workspace,
+        graphDocument,
+        metaGraphData,
       };
     }),
 });

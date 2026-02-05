@@ -6,6 +6,7 @@ import type {
   GraphDocumentForFrontend,
   LayoutInstruction,
 } from "@/app/const/types";
+import type { FocusedSegmentRef } from "@/app/const/story-segment";
 import { D3ForceGraph } from "@/app/_components/d3/force/graph";
 import { GenerativeLayoutGraph } from "@/app/_components/d3/force/generative-layout-graph";
 import { RelatedNodesAndLinksViewer } from "@/app/_components/view/graph-view/related-nodes-viewer";
@@ -37,6 +38,7 @@ interface GraphViewContainerProps {
     transitionText: string;
   }>;
   focusedCommunityId?: string | null;
+  focusedSegmentRef?: FocusedSegmentRef | null;
   graphSize: { width: number; height: number };
   svgRef: React.RefObject<SVGSVGElement>;
   currentScale: number;
@@ -84,6 +86,7 @@ export const GraphViewContainer = ({
   metaGraphSummaries,
   narrativeFlow,
   focusedCommunityId,
+  focusedSegmentRef = null,
   graphSize,
   svgRef,
   currentScale,
@@ -164,6 +167,7 @@ export const GraphViewContainer = ({
           };
         })}
         focusedCommunityId={focusedCommunityId}
+        focusedSegmentRef={focusedSegmentRef}
         communityMap={isMetaGraphMode ? metaGraphData?.communityMap : undefined}
         // 詳細グラフ（ノードレベル）のレイアウト計算用グラフ
         // - ストーリーモードでフィルタが適用されていれば storyFilteredGraph

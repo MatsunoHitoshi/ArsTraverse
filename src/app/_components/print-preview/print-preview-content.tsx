@@ -1,7 +1,11 @@
 "use client";
 
 import { useMemo, useState, useRef, useEffect } from "react";
-import type { MetaGraphStoryData } from "@/app/_hooks/use-meta-graph-story";
+import {
+  type MetaGraphStoryData,
+  getStoryText,
+} from "@/app/_hooks/use-meta-graph-story";
+import type { JSONContent } from "@tiptap/react";
 import type { GraphDocumentForFrontend } from "@/app/const/types";
 import type { PrintLayoutSettings } from "./types";
 import { PrintUnifiedGraphView } from "./print-unified-graph-view";
@@ -9,6 +13,18 @@ import { PdfExportButton } from "./pdf-export-button";
 import { convertUnit, PAGE_SIZE_TEMPLATES } from "./types";
 import { filterGraphByLayoutInstruction } from "@/app/_utils/kg/filter-graph-by-layout-instruction";
 import "./print-styles.css";
+
+/** detailedStories の1件から表示用テキストを取得（string | JSONContent を string に正規化） */
+function getStoryContent(
+  value: string | JSONContent | undefined,
+  fallback: string,
+): string {
+  if (value == null) return fallback;
+  if (typeof value === "string") return value;
+  // value は string | JSONContent に絞り込まれた状態（API の detailedStories の要素型）
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return
+  return getStoryText(value) || fallback;
+}
 
 interface PrintPreviewContentProps {
   metaGraphData: MetaGraphStoryData;
@@ -50,11 +66,16 @@ export function PrintPreviewContent({
         const summary = metaGraphData.summaries.find(
           (s) => s.communityId === flow.communityId,
         );
-        const detailedStory = metaGraphData.detailedStories?.[flow.communityId];
+        const storyValue =
+          metaGraphData.detailedStories[flow.communityId] as
+          | string
+          | JSONContent
+          | undefined;
+        const content = getStoryContent(storyValue, summary?.summary ?? "");
         return {
           communityId: flow.communityId,
           title: summary?.title ?? `コミュニティ ${flow.communityId}`,
-          content: detailedStory ?? summary?.summary ?? "",
+          content: content || (summary?.summary ?? ""),
           order: flow.order,
         };
       });
@@ -153,10 +174,10 @@ export function PrintPreviewContent({
       )}
 
       {/* プレビューコンテンツ（用紙の枠） */}
-      <div 
+      <div
         ref={contentRef}
-        className="print-content" 
-        style={{ 
+        className="print-content"
+        style={{
           width: previewSize ? `${previewSize.width}px` : undefined,
           aspectRatio: aspectRatio.toString(),
           maxWidth: "100%",

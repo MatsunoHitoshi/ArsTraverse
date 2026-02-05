@@ -238,17 +238,15 @@ export function convertFromDatabase(
     }))
     .sort((a, b) => a.order - b.order);
 
-  // detailedStoriesを構築
-  const detailedStories: Record<string, string> = {};
+  // detailedStoriesを構築（string または Tiptap JSONContent）
+  const detailedStories: Record<string, string | JSONContent> = {};
   storyData.metaNodes.forEach((metaNode) => {
     if (metaNode.storyContent) {
-      // JSONContentの場合は文字列に変換、文字列の場合はそのまま
       const storyValue = metaNode.storyContent.story;
       if (typeof storyValue === "string") {
         detailedStories[metaNode.communityId] = storyValue;
       } else {
-        // JSONContentの場合は文字列化（将来的にJSONContentとして扱う場合は変更）
-        detailedStories[metaNode.communityId] = JSON.stringify(storyValue);
+        detailedStories[metaNode.communityId] = storyValue as JSONContent;
       }
     }
   });

@@ -21,7 +21,12 @@ import type {
 } from "@/app/const/types";
 import type { JSONContent } from "@tiptap/react";
 import type { PreparedCommunity } from "@/server/api/schemas/knowledge-graph";
-import type { MetaGraphStoryData } from "@/app/_hooks/use-meta-graph-story";
+import {
+  type MetaGraphStoryData,
+  getStoryText,
+  buildStoryDocFromSegments,
+} from "@/app/_hooks/use-meta-graph-story";
+import type { FocusedSegmentRef } from "@/app/const/story-segment";
 import { Loading } from "../../loading/loading";
 import { LinkButton } from "../../button/link-button";
 import { SortableList } from "@/app/_components/sortable";
@@ -35,6 +40,8 @@ export const SnapshotStoryboard = ({
   metaGraphSummaries,
   narrativeFlow,
   onCommunityFocus,
+  onSegmentFocus,
+  focusedSegmentRef,
   metaGraphData,
   detailedStories,
   preparedCommunities,
@@ -61,6 +68,8 @@ export const SnapshotStoryboard = ({
     transitionText: string;
   }>;
   onCommunityFocus?: (communityId: string | null) => void;
+  /** 現在フォーカス中のセグメント（同じセグメントを再クリックで解除するため） */
+  focusedSegmentRef?: FocusedSegmentRef | null;
   metaGraphData?: {
     metaNodes: Array<{
       communityId: string;
@@ -69,7 +78,7 @@ export const SnapshotStoryboard = ({
     }>;
     metaGraph: GraphDocumentForFrontend;
   } | null;
-  detailedStories?: Record<string, string>; // communityId -> story
+  detailedStories?: Record<string, string | JSONContent>; // communityId -> story (string or Tiptap JSONContent)
   preparedCommunities?: PreparedCommunity[];
   narrativeActions?: {
     addToNarrative: (communityId: string) => void;
@@ -87,6 +96,8 @@ export const SnapshotStoryboard = ({
   onStoryDelete?: () => void;
   /** フィルタ「反映」時にグラフ表示用に親へ渡す */
   onApplyStoryFilter?: (filter: LayoutInstruction["filter"]) => void;
+  /** 段落クリックで局所グラフをハイライト（対応する nodeIds/edgeIds を渡す） */
+  onSegmentFocus?: (ref: FocusedSegmentRef | null) => void;
 }) => {
   // ストーリーデータの取得（refetch用）
   const { refetch: refetchStory } = api.story.get.useQuery(
@@ -99,7 +110,6 @@ export const SnapshotStoryboard = ({
   const saveStory = api.story.upsert.useMutation({
     onSuccess: async () => {
       console.log("ストーリーを保存しました。");
-      // 保存後にストーリーデータを再取得
       await refetchStory();
     },
     onError: (error) => {
@@ -107,6 +117,8 @@ export const SnapshotStoryboard = ({
       alert("ストーリーの保存に失敗しました。");
     },
   });
+
+  const annotateStorySegments = api.kg.annotateStorySegments.useMutation();
 
   const updateWorkspace = api.workspace.update.useMutation({
     onSuccess: () => {
@@ -255,9 +267,17 @@ export const SnapshotStoryboard = ({
         const summary = metaGraphSummaries?.find(
           (s) => s.communityId === flow.communityId,
         );
-        const detailedStory = detailedStories?.[flow.communityId];
+        const rawStory = detailedStories?.[flow.communityId];
         const title = summary?.title ?? `コミュニティ ${flow.communityId}`;
-        const storyText = detailedStory ?? summary?.summary ?? "";
+        // detailedStories の要素は string | JSONContent（API 型）。ESLint が index アクセスを error 型と誤検知するため無効化
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const storyText: string =
+          rawStory != null
+            ? typeof rawStory === "string"
+              ? rawStory
+              : // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+              getStoryText(rawStory)
+            : summary?.summary ?? "";
 
         // 見出し2を追加
         storyContent.push({
@@ -364,15 +384,25 @@ export const SnapshotStoryboard = ({
             const summary = metaGraphSummaries?.find(
               (s) => s.communityId === flow.communityId,
             );
-            // 詳細ストーリーがあればそれを使用、なければ要約を使用
-            const detailedStory = detailedStories?.[flow.communityId];
+            // 詳細ストーリーがあればそれを使用、なければ要約を使用（string | JSONContent の場合は getStoryText で文字列化）
+            const rawStory = detailedStories?.[flow.communityId];
+            // detailedStories の要素は string | JSONContent。ESLint が index アクセスを error 型と誤検知するため無効化
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            const description: string =
+              rawStory != null
+                ? typeof rawStory === "string"
+                  ? rawStory
+                  : // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+                  getStoryText(rawStory)
+                : summary?.summary ?? "";
             return {
               id: flow.communityId,
               title: summary?.title ?? `コミュニティ ${flow.communityId}`,
-              description: detailedStory ?? summary?.summary ?? "",
-              summary: summary?.summary ?? "", // 要約も保持（将来の拡張用）
+              description: description || (summary?.summary ?? ""),
+              summary: summary?.summary ?? "",
               transitionText: flow.transitionText,
               order: flow.order,
+              storyContent: rawStory ?? undefined, // JSONContent のとき段落クリックでハイライトに利用
             };
           })
           .sort((a, b) => a.order - b.order)
@@ -419,7 +449,7 @@ export const SnapshotStoryboard = ({
 
     // 既に編集中のセクションがある場合は保存
     if (editingSectionId && editingSectionId !== sectionId) {
-      handleSaveSection(editingSectionId);
+      void handleSaveSection(editingSectionId);
     }
 
     // 新しいセクションを編集モードにする
@@ -437,22 +467,46 @@ export const SnapshotStoryboard = ({
     }
   };
 
-  // セクションを保存するハンドラー
-  const handleSaveSection = (sectionId: string) => {
+  // セクションを保存するハンドラー（編集後は再アノテーションで対応付けを更新）
+  const handleSaveSection = async (sectionId: string) => {
     if (!metaGraphStoryData || !referencedTopicSpaceId) {
       alert("ストーリーのデータがないか、リポジトリが設定されていません。");
       return;
     }
 
     const title = editingTitle[sectionId];
-    const description = editingDescription[sectionId];
+    const description = editingDescription[sectionId] ?? "";
 
     if (!title) {
       alert("タイトルを入力してください。");
       return;
     }
 
-    // metaGraphStoryDataを更新
+    let storyValue: string | JSONContent = description;
+    const preparedCommunity = preparedCommunities?.find(
+      (c) => c.communityId === sectionId,
+    );
+    if (
+      preparedCommunity?.memberNodes?.length &&
+      preparedCommunity?.internalEdgesDetailed?.length
+    ) {
+      try {
+        const result = await annotateStorySegments.mutateAsync({
+          communityId: sectionId,
+          fullText: description,
+          memberNodes: preparedCommunity.memberNodes,
+          internalEdgesDetailed: preparedCommunity.internalEdgesDetailed,
+        });
+        if (result.segments.length > 0) {
+          // tRPC の mutateAsync 戻り値が error 型と誤検知されるため無効化
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+          storyValue = buildStoryDocFromSegments(result.segments);
+        }
+      } catch {
+        // 再アノテーション失敗時はプレーンテキストのまま保存
+      }
+    }
+
     const updatedData = {
       ...metaGraphStoryData,
       summaries: metaGraphStoryData.summaries.map((summary) =>
@@ -462,11 +516,10 @@ export const SnapshotStoryboard = ({
       ),
       detailedStories: {
         ...metaGraphStoryData.detailedStories,
-        [sectionId]: description,
+        [sectionId]: storyValue,
       },
     };
 
-    // 保存
     saveStory.mutate(
       {
         workspaceId,
@@ -686,6 +739,9 @@ export const SnapshotStoryboard = ({
                 >
                   <StorySection
                     item={item}
+                    storyContent={"storyContent" in item ? item.storyContent : undefined}
+                    onSegmentFocus={onSegmentFocus}
+                    focusedSegmentRef={focusedSegmentRef}
                     onInView={() => {
                       if (onCommunityFocus) {
                         if (narrativeFlow && narrativeFlow.length > 0) {
@@ -781,9 +837,25 @@ export const SnapshotStoryboard = ({
 };
 
 // ストーリーセクションコンポーネント（スクロール検知用）
+/** 2つの FocusedSegmentRef が同じセグメントを指すか */
+function isSameSegmentRef(
+  a: FocusedSegmentRef | null | undefined,
+  b: { communityId: string; nodeIds: string[]; edgeIds?: string[] },
+): boolean {
+  if (!a) return false;
+  if (a.communityId !== b.communityId) return false;
+  const sortJoin = (arr: string[]) => [...arr].sort().join(",");
+  if (sortJoin(a.nodeIds ?? []) !== sortJoin(b.nodeIds ?? [])) return false;
+  if (sortJoin(a.edgeIds ?? []) !== sortJoin(b.edgeIds ?? [])) return false;
+  return true;
+}
+
 const StorySection = ({
   item,
   onInView,
+  storyContent,
+  onSegmentFocus,
+  focusedSegmentRef,
   metaGraphData,
   hasDetailedStory,
   isEditMode,
@@ -809,6 +881,9 @@ const StorySection = ({
     transitionText?: string;
     order: number;
   };
+  storyContent?: string | JSONContent;
+  onSegmentFocus?: (ref: FocusedSegmentRef | null) => void;
+  focusedSegmentRef?: FocusedSegmentRef | null;
   onInView: () => void;
   metaGraphData?: {
     metaNodes: Array<{
@@ -1011,12 +1086,75 @@ const StorySection = ({
                 詳細ストーリー
               </div>
             )}
-            <div
-              className={`mb-2 whitespace-pre-line text-slate-300 ${isEditMode ? "line-clamp-1 overflow-hidden text-ellipsis" : ""}`}
-              title={isEditMode ? item.description : undefined}
-            >
-              {item.description}
-            </div>
+            {typeof storyContent === "object" &&
+              storyContent?.content &&
+              Array.isArray(storyContent.content) ? (
+              <div className={`mb-2 space-y-2 text-slate-300 ${isEditMode ? "line-clamp-3 overflow-hidden text-ellipsis" : ""}`}>
+                {storyContent.content.map((node, idx) => {
+                  if (node.type !== "paragraph" || !node.content) return null;
+                  const text = (node.content as Array<{ type?: string; text?: string }>)
+                    .map((c) => (c.type === "text" ? c.text ?? "" : ""))
+                    .join("");
+                  const attrs = (node.attrs ?? {}) as {
+                    segmentNodeIds?: string[];
+                    segmentEdgeIds?: string[];
+                  };
+                  const hasRef = (attrs.segmentNodeIds?.length ?? 0) > 0;
+                  const segmentRef = {
+                    communityId: item.id,
+                    nodeIds: attrs.segmentNodeIds ?? [],
+                    edgeIds: attrs.segmentEdgeIds ?? [],
+                  };
+                  const isFocused = hasRef && isSameSegmentRef(focusedSegmentRef, segmentRef);
+                  return (
+                    <div
+                      key={idx}
+                      role={hasRef ? "button" : undefined}
+                      tabIndex={hasRef ? 0 : undefined}
+                      onClick={
+                        hasRef && onSegmentFocus
+                          ? () => {
+                            if (isFocused) {
+                              onSegmentFocus(null);
+                            } else {
+                              onSegmentFocus(segmentRef);
+                            }
+                          }
+                          : undefined
+                      }
+                      onKeyDown={
+                        hasRef && onSegmentFocus
+                          ? (e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              if (isFocused) {
+                                onSegmentFocus(null);
+                              } else {
+                                onSegmentFocus(segmentRef);
+                              }
+                            }
+                          }
+                          : undefined
+                      }
+                      className={
+                        hasRef
+                          ? `cursor-pointer rounded px-1 py-0.5 hover:bg-slate-700/50 focus:bg-slate-700/50 focus:outline-none ${isFocused ? "bg-slate-700/50" : ""}`
+                          : ""
+                      }
+                    >
+                      {text}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div
+                className={`mb-2 whitespace-pre-line text-slate-300 ${isEditMode ? "line-clamp-1 overflow-hidden text-ellipsis" : ""}`}
+                title={isEditMode ? item.description : undefined}
+              >
+                {item.description}
+              </div>
+            )}
           </>
         )}
         {item.transitionText && (

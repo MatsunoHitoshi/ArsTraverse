@@ -7,6 +7,7 @@ import type {
   LayoutInstruction,
   CuratorialContext,
 } from "@/app/const/types";
+import type { FocusedSegmentRef } from "@/app/const/story-segment";
 import React, {
   useState,
   useEffect,
@@ -157,6 +158,8 @@ const CuratorsWritingWorkspace = ({
   const [focusedCommunityId, setFocusedCommunityId] = useState<string | null>(
     null,
   );
+  // セグメント単位のフォーカス（段落クリックで局所グラフをハイライト）
+  const [focusedSegmentRef, setFocusedSegmentRef] = useState<FocusedSegmentRef | null>(null);
 
   // レイアウト方向
   const [layoutOrientation, setLayoutOrientation] = useState<"vertical" | "horizontal">("vertical");
@@ -530,8 +533,16 @@ const CuratorsWritingWorkspace = ({
                   metaGraphStory.isRegeneratingTransitions
                 }
                 onCommunityFocus={(communityId) => {
-                  // コミュニティにフォーカスしたときにグラフビューを更新
                   setFocusedCommunityId(communityId);
+                  // スクロールで同じセクションが inView になっただけのときはセグメントフォーカスを維持する
+                  setFocusedSegmentRef((prev) =>
+                    prev && communityId === prev.communityId ? prev : null,
+                  );
+                }}
+                focusedSegmentRef={focusedSegmentRef}
+                onSegmentFocus={(ref: FocusedSegmentRef | null) => {
+                  setFocusedSegmentRef(ref);
+                  if (ref) setFocusedCommunityId(ref.communityId);
                 }}
                 metaGraphData={
                   metaGraphStory.metaGraphData
@@ -626,6 +637,7 @@ const CuratorsWritingWorkspace = ({
                         metaGraphStory.metaGraphData?.narrativeFlow
                       }
                       focusedCommunityId={focusedCommunityId}
+                      focusedSegmentRef={focusedSegmentRef}
                       graphSize={graphSize}
                       svgRef={svgRef}
                       currentScale={currentScale}
