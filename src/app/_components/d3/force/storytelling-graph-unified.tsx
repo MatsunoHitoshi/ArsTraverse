@@ -526,6 +526,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
 
   const getTargetNodeOpacity = useCallback(
     (node: CustomNodeType): number => {
+      if (freeExploreMode) return FOCUS_NODE_OPACITY;
       const isFocus = focusNodeIdSet.has(node.id);
       const isNeighbor = neighborNodeIdSet.has(node.id);
       const isSource = sourceNodeIdsOfFocusEdges.has(node.id);
@@ -556,6 +557,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
       return maxOpacity;
     },
     [
+      freeExploreMode,
       focusNodeIdSet,
       hasExplicitEdges,
       neighborNodeIdSet,
@@ -567,6 +569,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
 
   const getPrevNodeOpacity = useCallback(
     (node: CustomNodeType): number => {
+      if (freeExploreMode) return FOCUS_NODE_OPACITY;
       const isFocus = transitionFromNodeIdSet.has(node.id);
       const isNeighbor = neighborNodeIdSet.has(node.id);
       return isFocus
@@ -575,7 +578,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
           ? NEIGHBOR_NODE_OPACITY
           : DIM_NODE_OPACITY;
     },
-    [transitionFromNodeIdSet, neighborNodeIdSet],
+    [freeExploreMode, transitionFromNodeIdSet, neighborNodeIdSet],
   );
 
   const getNodeOpacity = useCallback(
@@ -708,6 +711,9 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   /** ノード半径・エッジ太さ・ストロークに使うスケール（自由探索時は effectiveScale でズームに応じて変化） */
   const scaleForSize =
     freeExploreMode ? effectiveScaleForLabels : displayScale;
+  /** 探索モード時はスケールが小さくてもストローク・線の太さを下げない（薄く見えないように下限 1 を設ける） */
+  const scaleForStroke =
+    freeExploreMode ? Math.max(1, scaleForSize) : scaleForSize;
 
   /** ノード半径（generative-layout-graph と同様。自由探索時は scaleForSize でズームに応じて変化） */
   const getNodeRadius = useCallback(
@@ -726,10 +732,10 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     : 0;
   /** エッジラベルを表示する閾値（generative では currentScale > 1.4） */
   const showEdgeLabels = effectiveScaleForLabels > 1.4;
-  /** スケールに応じたエッジ・ノードの線の太さ（引きで細く、寄りで見やすく。自由探索時は scaleForSize でズームに応じて変化） */
-  const edgeStrokeWidthFocus = Math.max(0.4, Math.min(2.5, 2 * scaleForSize));
-  const edgeStrokeWidthNormal = Math.max(0.3, Math.min(1.5, 1.5 * scaleForSize));
-  const nodeStrokeWidth = Math.max(0.25, Math.min(1.5, 1.5 * scaleForSize));
+  /** スケールに応じたエッジ・ノードの線の太さ（探索モード時は scaleForStroke で引きでも薄くならない） */
+  const edgeStrokeWidthFocus = Math.max(0.4, Math.min(2.5, 2 * scaleForStroke));
+  const edgeStrokeWidthNormal = Math.max(0.3, Math.min(1.5, 1.5 * scaleForStroke));
+  const nodeStrokeWidth = Math.max(0.25, Math.min(1.5, 1.5 * scaleForStroke));
   const toView = useCallback(
     (x: number, y: number) =>
       [
@@ -942,28 +948,32 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         if (angle > 90) angle -= 180;
         else if (angle < -90) angle += 180;
         const labelX = (sx + tx) / 2;
-        const labelY = (sy + ty) / 2;
+        const labelY = ((sy + ty) / 2) - 2;
         const labelTransform = `rotate(${angle}, ${labelX}, ${labelY})`;
 
         const edgeProgress = fadeProgress < 1 ? fadeProgress : effectiveProgress;
+        /** 探索モード時はスケールやアニメーションに依存せず常に完全表示 */
+        const effectiveEdgeProgress = freeExploreMode ? 1 : edgeProgress;
 
         if (hasExplicitEdges && isFocusEdge) {
           const focusStrokeOpacity =
-            showFullGraph
-              ? (() => {
-                const layoutDx = target.x - source.x;
-                const layoutDy = target.y - source.y;
-                const distance = Math.sqrt(
-                  layoutDx * layoutDx + layoutDy * layoutDy,
-                );
-                const normalizedDistance =
-                  linkDistanceRange.distanceRange > 0
-                    ? (distance - linkDistanceRange.minDistance) /
-                    linkDistanceRange.distanceRange
-                    : 0;
-                return 0.6 - normalizedDistance * 0.59;
-              })()
-              : FOCUS_EDGE_OPACITY;
+            freeExploreMode
+              ? FOCUS_EDGE_OPACITY
+              : showFullGraph
+                ? (() => {
+                  const layoutDx = target.x - source.x;
+                  const layoutDy = target.y - source.y;
+                  const distance = Math.sqrt(
+                    layoutDx * layoutDx + layoutDy * layoutDy,
+                  );
+                  const normalizedDistance =
+                    linkDistanceRange.distanceRange > 0
+                      ? (distance - linkDistanceRange.minDistance) /
+                      linkDistanceRange.distanceRange
+                      : 0;
+                  return 0.6 - normalizedDistance * 0.59;
+                })()
+                : FOCUS_EDGE_OPACITY;
           return (
             <g key={`${key}-${i}`}>
               <path
@@ -972,7 +982,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
                 stroke="#94a3b8"
                 pathLength={1}
                 strokeDasharray={1}
-                strokeDashoffset={1 - edgeProgress}
+                strokeDashoffset={1 - effectiveEdgeProgress}
                 strokeLinecap="round"
                 strokeOpacity={focusStrokeOpacity}
                 strokeWidth={edgeStrokeWidthFocus}
@@ -986,7 +996,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
                   fontSize={5}
                   className="pointer-events-none"
                   transform={labelTransform}
-                  opacity={Math.max(0, Math.min(1, edgeProgress * 2 - 0.5))}
+                  opacity={Math.max(0, Math.min(1, effectiveEdgeProgress * 2 - 0.5))}
                 >
                   {link.type}
                 </text>
@@ -1003,21 +1013,23 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
           ? NEIGHBOR_EDGE_OPACITY
           : DIM_EDGE_OPACITY;
         const edgeOpacity =
-          showFullGraph
-            ? (() => {
-              const layoutDx = target.x - source.x;
-              const layoutDy = target.y - source.y;
-              const distance = Math.sqrt(
-                layoutDx * layoutDx + layoutDy * layoutDy,
-              );
-              const normalizedDistance =
-                linkDistanceRange.distanceRange > 0
-                  ? (distance - linkDistanceRange.minDistance) /
-                  linkDistanceRange.distanceRange
-                  : 0;
-              return 0.6 - normalizedDistance * 0.59;
-            })()
-            : baseEdgeOpacity;
+          freeExploreMode
+            ? FOCUS_EDGE_OPACITY
+            : showFullGraph
+              ? (() => {
+                const layoutDx = target.x - source.x;
+                const layoutDy = target.y - source.y;
+                const distance = Math.sqrt(
+                  layoutDx * layoutDx + layoutDy * layoutDy,
+                );
+                const normalizedDistance =
+                  linkDistanceRange.distanceRange > 0
+                    ? (distance - linkDistanceRange.minDistance) /
+                    linkDistanceRange.distanceRange
+                    : 0;
+                return 0.6 - normalizedDistance * 0.59;
+              })()
+              : baseEdgeOpacity;
         return (
           <g key={`${key}-${i}`}>
             <path
@@ -1037,7 +1049,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
                 className="pointer-events-none"
                 transform={labelTransform}
                 style={{ opacity: edgeOpacity }}
-                opacity={edgeProgress}
+                opacity={effectiveEdgeProgress}
               >
                 {link.type}
               </text>
@@ -1212,9 +1224,9 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
           )}
         </defs>
       )}
-      {edgeFadePx != null ? (
+      {!freeExploreMode && edgeFadePx != null ? (
         <g mask="url(#storytelling-edge-fade-mask)">{graphInner}</g>
-      ) : showBottomFadeGradient ? (
+      ) : !freeExploreMode && showBottomFadeGradient ? (
         <g mask="url(#storytelling-bottom-fade-mask)">{graphInner}</g>
       ) : (
         graphInner
