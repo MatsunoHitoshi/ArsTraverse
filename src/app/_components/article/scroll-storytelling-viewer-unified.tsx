@@ -242,7 +242,14 @@ export function ScrollStorytellingViewerUnified({
   );
 
   const scrollToTop = useCallback(() => {
-    topSentinelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setUseNormalHeightForScroll(true);
+    // 高さを通常にしたうえでレイアウトが更新されてからスクロールする（スナップ目標が正しく計算され、iOS実機で戻り抜けしない）
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        topSentinelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        window.setTimeout(() => setUseNormalHeightForScroll(false), 500);
+      });
+    });
   }, []);
 
   const scrollToNextSegment = useCallback(() => {
