@@ -51,7 +51,6 @@ export const useHighlight = ({
 
   // エディタの参照を更新
   useEffect(() => {
-    console.log("editorRef.current: ", editorRef.current);
     editorRef.current = editor;
   }, [editor]);
 

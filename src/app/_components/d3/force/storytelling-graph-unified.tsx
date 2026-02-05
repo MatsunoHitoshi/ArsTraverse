@@ -12,10 +12,12 @@ import {
   forceLink,
   forceManyBody,
   forceCenter,
+  forceX,
+  forceY,
   forceCollide,
 } from "d3";
 import { select } from "d3";
-import type { Simulation, ForceLink } from "d3";
+import type { Simulation } from "d3";
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 import { filterGraphByLayoutInstruction } from "@/app/_utils/kg/filter-graph-by-layout-instruction";
 import { getNodeByIdForFrontend } from "@/app/_utils/kg/filter";
@@ -26,13 +28,13 @@ const LINK_DISTANCE = 80;
 /** フォーカスが1点のとき scale が暴れないよう cap する */
 const MAX_VIEW_SCALE = 3;
 const FOCUS_NODE_OPACITY = 1;
-const NEIGHBOR_NODE_OPACITY = 0.12;
+const NEIGHBOR_NODE_OPACITY = 0.15;
 /** フォーカス・隣接以外のノードをほんのり表示する不透明度 */
-const DIM_NODE_OPACITY = 0.06;
+const DIM_NODE_OPACITY = 0.05;
 const FOCUS_EDGE_OPACITY = 1;
-const NEIGHBOR_EDGE_OPACITY = 0.12;
+const NEIGHBOR_EDGE_OPACITY = 0.15;
 /** フォーカス・隣接以外のエッジをほんのり表示する不透明度 */
-const DIM_EDGE_OPACITY = 0.06;
+const DIM_EDGE_OPACITY = 0.05;
 
 /** フォーカス遷移アニメーションの所要時間（ms） */
 const FOCUS_TRANSITION_MS = 800;
@@ -66,7 +68,10 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   height,
   filter,
   freeExploreMode = false,
-  showBottomFadeGradient = false,
+  isPc = false,
+  communityMap,
+  narrativeFlow,
+  showFullGraph = false,
 }: {
   graphDocument: GraphDocumentForFrontend;
   focusNodeIds: string[];
@@ -76,9 +81,21 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   height: number;
   filter?: LayoutInstruction["filter"];
   freeExploreMode?: boolean;
-  /** SP時など、下端96pxを透明化グラデーションで隠すか */
-  showBottomFadeGradient?: boolean;
+  /** 親で判定したPC/SP。padding・端グラデーションなどに使用 */
+  isPc?: boolean;
+  /** ノードID→コミュニティID。指定時はコミュニティごとY軸ジグザク配置 */
+  communityMap?: Record<string, string>;
+  /** ストーリー順（order 順にY軸配置、X軸は左右ジグザク） */
+  narrativeFlow?: Array<{ communityId: string; order: number }>;
+  /** オーバービュー時など、グラフ全体を表示。内部の baseGraph の全ノード・全エッジでフォーカスする */
+  showFullGraph?: boolean;
 }) {
+  const showBottomFadeGradient = !isPc;
+  const edgeFadePx = isPc ? 64 : undefined;
+  const useCommunityLayout =
+    communityMap != null &&
+    narrativeFlow != null &&
+    (narrativeFlow?.some((n) => n.order != null) ?? false);
   const svgRef = useRef<SVGSVGElement>(null);
   const [zoomScale, setZoomScale] = useState(1);
   const [zoomX, setZoomX] = useState(0);
@@ -102,17 +119,6 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     return graphDocument;
   }, [graphDocument, filter]);
 
-  // レイアウト・描画は baseGraph 全体を使う（絞り込まない）
-  const focusNodeIdSet = useMemo(
-    () => new Set(focusNodeIds),
-    [focusNodeIds],
-  );
-  const focusEdgeIdSet = useMemo(
-    () => new Set(focusEdgeIds),
-    [focusEdgeIds],
-  );
-  const hasExplicitEdges = focusEdgeIds.length > 0;
-
   const initNodes = useMemo((): CustomNodeType[] => {
     if (!baseGraph?.nodes?.length) return [];
     return baseGraph.nodes.map((n) => ({
@@ -134,6 +140,29 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
       };
     }) as CustomLinkType[];
   }, [baseGraph?.relationships, initNodes]);
+
+  const effectiveFocusNodeIds = useMemo(
+    () =>
+      showFullGraph ? initNodes.map((n) => n.id) : focusNodeIds,
+    [showFullGraph, focusNodeIds, initNodes],
+  );
+  const effectiveFocusEdgeIds = useMemo(
+    () =>
+      showFullGraph
+        ? initLinks.map((l) => getEdgeCompositeKeyFromLink(l))
+        : focusEdgeIds,
+    [showFullGraph, focusEdgeIds, initLinks],
+  );
+
+  const focusNodeIdSet = useMemo(
+    () => new Set(effectiveFocusNodeIds),
+    [effectiveFocusNodeIds],
+  );
+  const focusEdgeIdSet = useMemo(
+    () => new Set(effectiveFocusEdgeIds),
+    [effectiveFocusEdgeIds],
+  );
+  const hasExplicitEdges = effectiveFocusEdgeIds.length > 0;
 
   const [nodes, setNodes] = useState<CustomNodeType[]>(initNodes);
   const [links, setLinks] = useState<CustomLinkType[]>(initLinks);
@@ -226,10 +255,171 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
       return;
     }
 
-    const simulation = forceSimulation<CustomNodeType, CustomLinkType>(initNodes)
+    const allNodes = initNodes.map((n) => ({
+      ...n,
+      x: n.x ?? width / 2 + (Math.random() - 0.5) * 100,
+      y: n.y ?? height / 2 + (Math.random() - 0.5) * 100,
+    })) as CustomNodeType[];
+
+    // リンクの source/target を allNodes の参照に揃える（描画時に x,y が一致するように）
+    const allLinks = initLinks.map((link) => {
+      const src = link.source as CustomNodeType;
+      const tgt = link.target as CustomNodeType;
+      const sourceNode = allNodes.find((n) => n.id === src.id) ?? allNodes[0];
+      const targetNode = allNodes.find((n) => n.id === tgt.id) ?? allNodes[0];
+      return { ...link, source: sourceNode, target: targetNode } as CustomLinkType;
+    });
+
+    if (useCommunityLayout && communityMap && narrativeFlow) {
+      // コミュニティごとにY軸順・X軸ジグザク配置（print-generative-layout-graph の horizontal 相当）
+      const communityGroups = new Map<string, CustomNodeType[]>();
+      allNodes.forEach((node) => {
+        const cid = communityMap[node.id];
+        if (cid) {
+          if (!communityGroups.has(cid)) communityGroups.set(cid, []);
+          communityGroups.get(cid)!.push(node);
+        }
+      });
+
+      const communityTargetPositions = new Map<string, { x: number; y: number }>();
+      const sortedStoryCommunities = Array.from(communityGroups.entries())
+        .map(([communityId, nodes]) => {
+          const flow = narrativeFlow.find((n) => n.communityId === communityId);
+          return {
+            communityId,
+            nodes,
+            order: flow?.order,
+            size: nodes.length,
+          };
+        })
+        .filter((item) => item.order !== undefined)
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+      const baseSpacing = height;
+      const minSpacing = height;
+      const maxSpacing = height * 5;
+      let currentPrimary = height * 0.5;
+      const storyCommunityYPositions: number[] = [];
+
+      sortedStoryCommunities.forEach((item, index) => {
+        const { communityId, nodes, order } = item;
+        if (order === undefined) return;
+        const communitySize = nodes.length;
+        const currentRadius = Math.sqrt(communitySize);
+
+        if (index > 0) {
+          const prevItem = sortedStoryCommunities[index - 1]!;
+          const prevSize = prevItem.size;
+          const prevNormalizedSize = Math.sqrt(prevSize / 10);
+          const prevSpacing = Math.min(
+            maxSpacing,
+            Math.max(minSpacing, baseSpacing + prevNormalizedSize * 0.3 * height),
+          );
+          const prevRadius = Math.sqrt(prevSize);
+          const prevPrimary =
+            communityTargetPositions.get(prevItem.communityId)?.y ?? currentPrimary;
+          currentPrimary = prevPrimary + prevRadius + prevSpacing / 4 + currentRadius;
+        }
+
+        const targetPrimary = currentPrimary;
+        storyCommunityYPositions.push(targetPrimary);
+        const isLeft = order % 2 === 1;
+        const leftX = width * 0.2;
+        const rightX = width * 0.8;
+        const targetX = isLeft ? leftX : rightX;
+        communityTargetPositions.set(communityId, { x: targetX, y: targetPrimary });
+      });
+
+      const nonStoryCommunities = Array.from(communityGroups.entries()).filter(
+        ([cid]) => !narrativeFlow.some((n) => n.communityId === cid && n.order != null),
+      );
+      const minStoryPrimary =
+        storyCommunityYPositions.length > 0
+          ? Math.min(...storyCommunityYPositions)
+          : height * 0.5;
+      const maxStoryPrimary =
+        storyCommunityYPositions.length > 0
+          ? Math.max(...storyCommunityYPositions)
+          : height * 2.5;
+      const storyPrimaryRange =
+        maxStoryPrimary - minStoryPrimary || height * 2;
+      nonStoryCommunities.forEach(([communityId], index) => {
+        const normalizedIndex =
+          nonStoryCommunities.length > 1 ? index / (nonStoryCommunities.length - 1) : 0.5;
+        const targetPrimary = minStoryPrimary + normalizedIndex * storyPrimaryRange;
+        const isLeft = index % 2 === 0;
+        const targetX = isLeft ? width * 0.1 : width * 1.4;
+        communityTargetPositions.set(communityId, { x: targetX, y: targetPrimary });
+      });
+
+      communityGroups.forEach((nodes, communityId) => {
+        if (!communityTargetPositions.has(communityId)) {
+          const centerX =
+            nodes.reduce((s, n) => s + (n.x ?? width / 2), 0) / nodes.length;
+          const centerY =
+            nodes.reduce((s, n) => s + (n.y ?? height / 2), 0) / nodes.length;
+          communityTargetPositions.set(communityId, { x: centerX, y: centerY });
+        }
+      });
+
+      const simulation = forceSimulation<CustomNodeType, CustomLinkType>(allNodes)
+        .force(
+          "link",
+          forceLink<CustomNodeType, CustomLinkType>(allLinks)
+            .id((d) => d.id)
+            .distance(30)
+            .strength((link) => {
+              const source = link.source as CustomNodeType;
+              const target = link.target as CustomNodeType;
+              const srcC = communityMap[source.id];
+              const tgtC = communityMap[target.id];
+              if (srcC && tgtC && srcC !== tgtC) return 0.01;
+              return 0.2;
+            }),
+        )
+        .force("charge", forceManyBody().strength(-200))
+        .force("collide", forceCollide(20))
+        .force("center", forceCenter(width / 2, height / 2).strength(0.05))
+        .force(
+          "y",
+          forceY<CustomNodeType>((d) => {
+            const cid = communityMap[d.id];
+            if (!cid) return height / 2;
+            const pos = communityTargetPositions.get(cid);
+            return pos ? pos.y : height / 2;
+          }).strength((d) => (communityMap[d.id] ? 0.15 : 0.0001)),
+        )
+        .force(
+          "x",
+          forceX<CustomNodeType>((d) => {
+            const cid = communityMap[d.id];
+            if (!cid) return width / 2;
+            const pos = communityTargetPositions.get(cid);
+            return pos ? pos.x : width / 2;
+          }).strength((d) => (communityMap[d.id] ? 0.15 : 0.0001)),
+        );
+
+      simulation.alpha(1).restart();
+      let iterations = 0;
+      const maxIterations = 2000;
+      while (simulation.alpha() > 0.001 && iterations < maxIterations) {
+        simulation.tick();
+        iterations++;
+      }
+      simulation.stop();
+
+      setNodes([...simulation.nodes()]);
+      setLinks(allLinks);
+      simulationRef.current = simulation;
+      return () => {
+        simulation.stop();
+      };
+    }
+
+    const simulation = forceSimulation<CustomNodeType, CustomLinkType>(allNodes)
       .force(
         "link",
-        forceLink<CustomNodeType, CustomLinkType>(initLinks)
+        forceLink<CustomNodeType, CustomLinkType>(allLinks)
           .id((d) => d.id)
           .distance(LINK_DISTANCE)
           .strength(0.3),
@@ -242,16 +432,21 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     simulation.tick(200);
 
     setNodes([...simulation.nodes()]);
-    const linkForce = simulation.force<ForceLink<CustomNodeType, CustomLinkType>>("link");
-    if (linkForce?.links) {
-      setLinks([...linkForce.links()]);
-    }
+    setLinks(allLinks);
     simulationRef.current = simulation;
 
     return () => {
       simulation.stop();
     };
-  }, [initNodes, initLinks, width, height]);
+  }, [
+    initNodes,
+    initLinks,
+    width,
+    height,
+    useCommunityLayout,
+    communityMap,
+    narrativeFlow,
+  ]);
 
   const progress = Math.max(0, Math.min(1, animationProgress * 2));
   /** 遷移完了後は親の progress が 0 から来ても二重アニメにしないため、常に max(progress, 1) を使う */
@@ -283,7 +478,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   /** フォーカス＋その1ホップ隣のノードID（それ以外は「ほんのり」表示） */
   const neighborNodeIdSet = useMemo(() => {
     const set = new Set<string>();
-    focusNodeIds.forEach((id) => set.add(id));
+    effectiveFocusNodeIds.forEach((id) => set.add(id));
     sourceNodeIdsOfFocusEdges.forEach((id) => set.add(id));
     targetNodeIdsOfFocusEdges.forEach((id) => set.add(id));
     links.forEach((link) => {
@@ -295,7 +490,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
       }
     });
     return set;
-  }, [focusNodeIds, sourceNodeIdsOfFocusEdges, targetNodeIdsOfFocusEdges, links]);
+  }, [effectiveFocusNodeIds, sourceNodeIdsOfFocusEdges, targetNodeIdsOfFocusEdges, links]);
 
   const getTargetNodeOpacity = useCallback(
     (node: CustomNodeType): number => {
@@ -362,10 +557,11 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     [fadeProgress, getTargetNodeOpacity, getPrevNodeOpacity],
   );
 
-  // ビューはフォーカス部分グラフを中心とした局所範囲だけを viewBox に表示。フォーカス範囲の中心が viewBox の中央に来るようにする。
+  // ビューはフォーカス部分グラフを中心とした局所範囲だけを viewBox に表示。
+  // communityMap がある場合は、viewBox の範囲をコミュニティに属するノード・エッジに限定する（非コミュニティが描画領域を広げないように）。
   const layoutTransform = useMemo(() => {
     if (!nodes.length) return { scale: 1, centerX: 0, centerY: 0 };
-    const focusIds = new Set(focusNodeIds);
+    const focusIds = new Set(effectiveFocusNodeIds);
     links.forEach((link) => {
       const key = getEdgeCompositeKeyFromLink(link);
       if (focusEdgeIdSet.has(key)) {
@@ -375,6 +571,14 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         focusIds.add(tgt.id);
       }
     });
+    if (communityMap != null) {
+      const communityOnly = new Set<string>();
+      focusIds.forEach((id) => {
+        if (communityMap[id] != null) communityOnly.add(id);
+      });
+      focusIds.clear();
+      communityOnly.forEach((id) => focusIds.add(id));
+    }
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
@@ -396,8 +600,8 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         }
       }
     }
-    if (minX === Infinity) return { scale: 0.8, centerX: 0, centerY: 0 };
-    const paddingX = 32;
+    if (minX === Infinity) return { scale: 0.75, centerX: 0, centerY: 0 };
+    const paddingX = isPc ? 64 : 32;
     const paddingY = 128; // 上下のみ 128
     const rangeX = maxX - minX || 1;
     const rangeY = maxY - minY || 1;
@@ -409,7 +613,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
     return { scale, centerX, centerY };
-  }, [nodes, width, height, focusNodeIds, focusEdgeIdSet, links]);
+  }, [nodes, width, height, effectiveFocusNodeIds, focusEdgeIdSet, links, isPc, communityMap]);
 
   // 遷移が完了し、かつこのレンダーでフォーカスが変わっていないときだけ ref を更新する。
   // （フォーカス変更直後のレンダーで ref を更新すると、effect が「from」として新しい layout を
@@ -466,8 +670,27 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     ? lastLayoutTransformRef.current.centerY
     : interpolatedCenterY;
 
-  /** スケールに比例したノード半径（最小2で clamp） */
-  const nodeRadius = Math.max(2, NODE_RADIUS * displayScale);
+  /** ノード半径（generative-layout-graph と同様: neighborLinkCount で変化させ、displayScale で画面サイズに合わせる） */
+  const getNodeRadius = useCallback(
+    (node: CustomNodeType) => {
+      const baseRadiusLayout =
+        1.6 * ((node.neighborLinkCount ?? 0) * 0.1 + 3.6);
+      return Math.max(1.5, Math.min(22, baseRadiusLayout * displayScale));
+    },
+    [displayScale],
+  );
+  /** ノードラベルを表示する閾値（generative-layout-graph と同様、引きで表示する時は非表示） */
+  const showNodeLabels = displayScale > 0.7;
+  /** スケールに応じたノードラベルフォントサイズ（引きで小さく、寄りで読みやすく） */
+  const nodeLabelFontSize = showNodeLabels
+    ? (displayScale > 4 ? 3 : 6) * 1.5
+    : 0;
+  /** エッジラベルを表示する閾値（generative では currentScale > 1.4） */
+  const showEdgeLabels = displayScale > 1.4;
+  /** スケールに応じたエッジ・ノードの線の太さ（引きで細く、寄りで見やすく） */
+  const edgeStrokeWidthFocus = Math.max(0.4, Math.min(2.5, 2 * displayScale));
+  const edgeStrokeWidthNormal = Math.max(0.3, Math.min(1.5, 1.5 * displayScale));
+  const nodeStrokeWidth = Math.max(0.25, Math.min(1.5, 1.5 * displayScale));
   const toView = useCallback(
     (x: number, y: number) =>
       [
@@ -476,6 +699,54 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
       ] as const,
     [width, height, displayCenterX, displayCenterY, displayScale],
   );
+
+  const nodesToRender = useMemo(
+    () =>
+      communityMap != null
+        ? nodes.filter((n) => communityMap[n.id] != null)
+        : nodes,
+    [nodes, communityMap],
+  );
+  const linksToRender = useMemo(
+    () =>
+      communityMap != null
+        ? links.filter((link) => {
+          const src = link.source as CustomNodeType;
+          const tgt = link.target as CustomNodeType;
+          return communityMap[src.id] != null && communityMap[tgt.id] != null;
+        })
+        : links,
+    [links, communityMap],
+  );
+
+  /** グラフ全体表示時用: エッジ長（レイアウト座標）の min/max/range（generative と同様の距離ベース透明度に使用） */
+  const linkDistanceRange = useMemo(() => {
+    const distances = linksToRender
+      .map((link) => {
+        const src = link.source as CustomNodeType;
+        const tgt = link.target as CustomNodeType;
+        if (
+          src.x == null ||
+          src.y == null ||
+          tgt.x == null ||
+          tgt.y == null
+        )
+          return null;
+        const dx = tgt.x - src.x;
+        const dy = tgt.y - src.y;
+        return Math.sqrt(dx * dx + dy * dy);
+      })
+      .filter((d): d is number => d !== null);
+    if (distances.length === 0)
+      return { minDistance: 0, maxDistance: 1, distanceRange: 1 };
+    const minDistance = Math.min(...distances);
+    const maxDistance = Math.max(...distances);
+    return {
+      minDistance,
+      maxDistance,
+      distanceRange: maxDistance - minDistance || 1,
+    };
+  }, [linksToRender]);
 
   if (!baseGraph || baseGraph.nodes.length === 0) {
     return (
@@ -490,7 +761,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
 
   const graphContent = (
     <g>
-      {links.map((link, i) => {
+      {linksToRender.map((link, i) => {
         const source = link.source as CustomNodeType;
         const target = link.target as CustomNodeType;
         if (
@@ -518,26 +789,42 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         const edgeProgress = fadeProgress < 1 ? fadeProgress : effectiveProgress;
 
         if (hasExplicitEdges && isFocusEdge) {
+          const focusStrokeOpacity =
+            showFullGraph
+              ? (() => {
+                const layoutDx = target.x - source.x;
+                const layoutDy = target.y - source.y;
+                const distance = Math.sqrt(
+                  layoutDx * layoutDx + layoutDy * layoutDy,
+                );
+                const normalizedDistance =
+                  linkDistanceRange.distanceRange > 0
+                    ? (distance - linkDistanceRange.minDistance) /
+                    linkDistanceRange.distanceRange
+                    : 0;
+                return 0.6 - normalizedDistance * 0.59;
+              })()
+              : FOCUS_EDGE_OPACITY;
           return (
             <g key={`${key}-${i}`}>
               <path
                 d={pathD}
                 fill="none"
                 stroke="#94a3b8"
-                strokeWidth={2}
                 pathLength={1}
                 strokeDasharray={1}
                 strokeDashoffset={1 - edgeProgress}
                 strokeLinecap="round"
-                strokeOpacity={FOCUS_EDGE_OPACITY}
+                strokeOpacity={focusStrokeOpacity}
+                strokeWidth={edgeStrokeWidthFocus}
               />
-              {link.type && (
+              {link.type && showEdgeLabels && (
                 <text
                   x={labelX}
                   y={labelY}
                   textAnchor="middle"
                   fill="#94a3b8"
-                  fontSize={8}
+                  fontSize={5}
                   className="pointer-events-none"
                   transform={labelTransform}
                   opacity={Math.max(0, Math.min(1, edgeProgress * 2 - 0.5))}
@@ -553,25 +840,41 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         const isNeighborEdge =
           neighborNodeIdSet.has(sourceNode.id) ||
           neighborNodeIdSet.has(targetNode.id);
-        const edgeOpacity = isNeighborEdge
+        const baseEdgeOpacity = isNeighborEdge
           ? NEIGHBOR_EDGE_OPACITY
           : DIM_EDGE_OPACITY;
+        const edgeOpacity =
+          showFullGraph
+            ? (() => {
+              const layoutDx = target.x - source.x;
+              const layoutDy = target.y - source.y;
+              const distance = Math.sqrt(
+                layoutDx * layoutDx + layoutDy * layoutDy,
+              );
+              const normalizedDistance =
+                linkDistanceRange.distanceRange > 0
+                  ? (distance - linkDistanceRange.minDistance) /
+                  linkDistanceRange.distanceRange
+                  : 0;
+              return 0.6 - normalizedDistance * 0.59;
+            })()
+            : baseEdgeOpacity;
         return (
           <g key={`${key}-${i}`}>
             <path
               d={pathD}
               fill="none"
               stroke="#94a3b8"
-              strokeWidth={1.5}
+              strokeWidth={edgeStrokeWidthNormal}
               strokeOpacity={edgeOpacity}
             />
-            {link.type && (
+            {link.type && showEdgeLabels && (
               <text
                 x={labelX}
                 y={labelY}
                 textAnchor="middle"
                 fill="#94a3b8"
-                fontSize={8}
+                fontSize={5}
                 className="pointer-events-none"
                 transform={labelTransform}
                 style={{ opacity: edgeOpacity }}
@@ -583,10 +886,11 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
           </g>
         );
       })}
-      {nodes.map((node) => {
+      {nodesToRender.map((node) => {
         if (node.x == null || node.y == null) return null;
         const [vx, vy] = toView(node.x, node.y);
         const opacity = getNodeOpacity(node);
+        const r = getNodeRadius(node) * (0.8 / Math.max(1, displayScale));
         return (
           <g
             key={node.id}
@@ -594,20 +898,23 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
             style={{ opacity }}
           >
             <circle
-              r={nodeRadius}
+              r={r}
               fill="#e2e8f0"
               stroke="#94a3b8"
-              strokeWidth={1.5}
+              strokeWidth={nodeStrokeWidth}
             />
-            <text
-              y={nodeRadius + 14}
-              textAnchor="middle"
-              fill="#e2e8f0"
-              fontSize={11}
-              className="pointer-events-none select-none"
-            >
-              {node.name}
-            </text>
+            {showNodeLabels && nodeLabelFontSize > 0 && (
+              <text
+                y={-10}
+                textAnchor="middle"
+                fill="#e2e8f0"
+                fontSize={nodeLabelFontSize}
+                fontWeight="normal"
+                className="pointer-events-none select-none"
+              >
+                {node.name}
+              </text>
+            )}
           </g>
         );
       })}
@@ -639,32 +946,116 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
       className="overflow-hidden"
       style={{ maxWidth: "100%", height: "auto" }}
     >
-      {showBottomFadeGradient && (
+      {(showBottomFadeGradient || edgeFadePx != null) && (
         <defs>
-          <linearGradient
-            id="storytelling-bottom-fade-mask-gradient"
-            x1={0}
-            y1={height - 96}
-            x2={0}
-            y2={height}
-            gradientUnits="userSpaceOnUse"
-          >
-            <stop offset={0} stopColor="white" />
-            <stop offset={1} stopColor="black" />
-          </linearGradient>
-          <mask id="storytelling-bottom-fade-mask">
-            <rect x={0} y={0} width={width} height={height} fill="white" />
-            <rect
-              x={0}
-              y={height - 96}
-              width={width}
-              height={96}
-              fill="url(#storytelling-bottom-fade-mask-gradient)"
-            />
-          </mask>
+          {edgeFadePx != null ? (
+            <>
+              <linearGradient
+                id="storytelling-edge-fade-top"
+                x1={0}
+                y1={0}
+                x2={0}
+                y2={edgeFadePx}
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop offset={0} stopColor="black" />
+                <stop offset={1} stopColor="white" />
+              </linearGradient>
+              <linearGradient
+                id="storytelling-edge-fade-bottom"
+                x1={0}
+                y1={height}
+                x2={0}
+                y2={height - edgeFadePx}
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop offset={0} stopColor="black" />
+                <stop offset={1} stopColor="white" />
+              </linearGradient>
+              <linearGradient
+                id="storytelling-edge-fade-left"
+                x1={0}
+                y1={0}
+                x2={edgeFadePx}
+                y2={0}
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop offset={0} stopColor="black" />
+                <stop offset={1} stopColor="white" />
+              </linearGradient>
+              <linearGradient
+                id="storytelling-edge-fade-right"
+                x1={width}
+                y1={0}
+                x2={width - edgeFadePx}
+                y2={0}
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop offset={0} stopColor="black" />
+                <stop offset={1} stopColor="white" />
+              </linearGradient>
+              <mask id="storytelling-edge-fade-mask">
+                <rect x={0} y={0} width={width} height={height} fill="white" />
+                <rect
+                  x={0}
+                  y={0}
+                  width={width}
+                  height={edgeFadePx}
+                  fill="url(#storytelling-edge-fade-top)"
+                />
+                <rect
+                  x={0}
+                  y={height - edgeFadePx}
+                  width={width}
+                  height={edgeFadePx}
+                  fill="url(#storytelling-edge-fade-bottom)"
+                />
+                <rect
+                  x={0}
+                  y={0}
+                  width={edgeFadePx}
+                  height={height}
+                  fill="url(#storytelling-edge-fade-left)"
+                />
+                <rect
+                  x={width - edgeFadePx}
+                  y={0}
+                  width={edgeFadePx}
+                  height={height}
+                  fill="url(#storytelling-edge-fade-right)"
+                />
+              </mask>
+            </>
+          ) : (
+            <>
+              <linearGradient
+                id="storytelling-bottom-fade-mask-gradient"
+                x1={0}
+                y1={height - 96}
+                x2={0}
+                y2={height}
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop offset={0} stopColor="white" />
+                <stop offset={1} stopColor="black" />
+              </linearGradient>
+              <mask id="storytelling-bottom-fade-mask">
+                <rect x={0} y={0} width={width} height={height} fill="white" />
+                <rect
+                  x={0}
+                  y={height - 96}
+                  width={width}
+                  height={96}
+                  fill="url(#storytelling-bottom-fade-mask-gradient)"
+                />
+              </mask>
+            </>
+          )}
         </defs>
       )}
-      {showBottomFadeGradient ? (
+      {edgeFadePx != null ? (
+        <g mask="url(#storytelling-edge-fade-mask)">{graphInner}</g>
+      ) : showBottomFadeGradient ? (
         <g mask="url(#storytelling-bottom-fade-mask)">{graphInner}</g>
       ) : (
         graphInner

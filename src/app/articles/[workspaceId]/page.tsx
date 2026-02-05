@@ -101,14 +101,13 @@ export default function ArticlePage() {
     <main className="z-0 flex min-h-screen flex-col items-center justify-center bg-slate-900 pb-16 xl:pb-0">
       <div className="flex w-full flex-col items-center justify-center pt-12">
         <div className="flex flex-col gap-1 xl:flex-row">
-          <div className="fixed left-0 top-24 hidden flex-col gap-1 px-2 xl:flex">
-            <ProfileCard userId={workspaceData.userId} />
-          </div>
+
           {useScrollStorytelling && metaGraphData ? (
             useUnifiedGraph ? (
               <ScrollStorytellingViewerUnified
                 graphDocument={workspaceData.graphDocument}
                 metaGraphData={metaGraphData}
+                workspaceTitle={workspaceData.name}
               />
             ) : (
               <ScrollStorytellingViewer

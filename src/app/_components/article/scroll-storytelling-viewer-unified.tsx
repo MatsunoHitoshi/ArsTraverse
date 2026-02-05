@@ -10,6 +10,7 @@ import { StorytellingGraphUnified } from "../d3/force/storytelling-graph-unified
 import { buildScrollStepsFromMetaGraphStoryData } from "@/app/_utils/story-scroll-utils";
 import { useWindowSize } from "@/app/_hooks/use-window-size";
 import { Crosshair1Icon, ResetIcon } from "../icons/icons";
+import { getEdgeCompositeKeyFromLink } from "@/app/const/story-segment";
 
 /** セグメントがビューポートに入ったときにフェードインするラッパー */
 function SegmentFadeIn({ children }: { children: React.ReactNode }) {
@@ -40,10 +41,11 @@ function SegmentFadeIn({ children }: { children: React.ReactNode }) {
 const XL_BREAKPOINT = 1280;
 const GRAPH_MIN_HEIGHT = 400;
 /** グラフエリアの高さ（PC / SP） */
-const GRAPH_SECTION_HEIGHT_PC = "min(70vh, 560px)";
+const GRAPH_SECTION_HEIGHT_PC = "95dvh";
 const GRAPH_SECTION_HEIGHT_SP = "min(72vh, 600px)";
-/** 1画面に1セグメントのみ表示するため、各ステップをビューポート高に揃える */
-const STEP_VIEWPORT_HEIGHT = "65vh";
+/** 1画面に1セグメントのみ表示するため、各ステップをビューポート高に揃える（SP: 65vh / PC: 100vh で1セグメントに制限） */
+const STEP_VIEWPORT_HEIGHT_SP = "65vh";
+const STEP_VIEWPORT_HEIGHT_PC = "100vh";
 /** SP版でテキストをグラフ下端に重ねる量（フェード帯の高さ） */
 const SP_FADE_OVERLAP_PX = 96;
 /** Scrollama: ステップが「入った」とみなすビューポート上の位置 (0–1)。0.99 で段落が画面下端付近に入った時点でグラフが切り替わり、見ている段落と一致する */
@@ -52,11 +54,14 @@ const SCROLLAMA_OFFSET = 0.99;
 export interface ScrollStorytellingViewerUnifiedProps {
   graphDocument: GraphDocumentForFrontend;
   metaGraphData: MetaGraphStoryData;
+  /** 最初の「グラフ全体」セクションのタイトル（ワークスペース名を渡す） */
+  workspaceTitle?: string;
 }
 
 export function ScrollStorytellingViewerUnified({
   graphDocument,
   metaGraphData,
+  workspaceTitle,
 }: ScrollStorytellingViewerUnifiedProps) {
   const [innerWidth] = useWindowSize();
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -68,26 +73,26 @@ export function ScrollStorytellingViewerUnified({
   const [isFreeExploreMode, setIsFreeExploreMode] = useState(false);
   const frozenGraphIndexRef = useRef(0);
 
-  const steps = useMemo(
-    () => buildScrollStepsFromMetaGraphStoryData(metaGraphData),
-    [metaGraphData],
-  );
-
-  const { nodeIds: allStoryNodeIds, edgeIds: allStoryEdgeIds } = useMemo(
-    (): { nodeIds: string[]; edgeIds: string[] } => {
-      const nodeIdSet = new Set<string>();
-      const edgeIdSet = new Set<string>();
-      for (const step of steps) {
-        for (const id of step.nodeIds) nodeIdSet.add(id);
-        for (const id of step.edgeIds) edgeIdSet.add(id);
-      }
-      return {
-        nodeIds: Array.from(nodeIdSet),
-        edgeIds: Array.from(edgeIdSet),
-      };
-    },
-    [steps],
-  );
+  const steps = useMemo(() => {
+    const storySteps = buildScrollStepsFromMetaGraphStoryData(metaGraphData);
+    // オーバービューは nodeIds/edgeIds を空にし、グラフ側で showFullGraph 時に baseGraph の全ノード・全エッジを参照させる（コミュニティフォーカスと同じ情報源）
+    const overviewStep: {
+      id: string;
+      communityId: string;
+      communityTitle?: string;
+      text: string;
+      nodeIds: string[];
+      edgeIds: string[];
+    } = {
+      id: "__overview__",
+      communityId: "",
+      communityTitle: workspaceTitle ?? "グラフ全体",
+      text: " ",
+      nodeIds: [],
+      edgeIds: [],
+    };
+    return [overviewStep, ...storySteps];
+  }, [metaGraphData, workspaceTitle]);
 
   const isPc = (innerWidth ?? 0) >= XL_BREAKPOINT;
 
@@ -153,8 +158,45 @@ export function ScrollStorytellingViewerUnified({
   const displayGraphIndex = isFreeExploreMode ? frozenGraphIndexRef.current : graphIndex;
   const displayStep = steps[displayGraphIndex];
 
-  const graphNodeIds = displayStep?.nodeIds ?? [];
-  const graphEdgeIds = displayStep?.edgeIds ?? [];
+  const segmentNodeIds = useMemo(
+    () => displayStep?.nodeIds ?? [],
+    [displayStep?.nodeIds],
+  );
+  const segmentEdgeIds = useMemo(
+    () => displayStep?.edgeIds ?? [],
+    [displayStep?.edgeIds],
+  );
+  const segmentHasNoFocus =
+    segmentNodeIds.length === 0 && segmentEdgeIds.length === 0;
+
+  const { graphNodeIds, graphEdgeIds } = useMemo(() => {
+    if (!segmentHasNoFocus || !displayStep?.communityId || !metaGraphData.communityMap) {
+      return { graphNodeIds: segmentNodeIds, graphEdgeIds: segmentEdgeIds };
+    }
+    const communityId = displayStep.communityId;
+    const communityNodeIds = Object.entries(metaGraphData.communityMap)
+      .filter(([, cid]) => cid === communityId)
+      .map(([nodeId]) => nodeId);
+    const communityNodeIdSet = new Set(communityNodeIds);
+    const communityEdgeIds = (graphDocument?.relationships ?? [])
+      .filter(
+        (rel) =>
+          communityNodeIdSet.has(rel.sourceId) && communityNodeIdSet.has(rel.targetId),
+      )
+      .map((rel) => getEdgeCompositeKeyFromLink(rel));
+    return {
+      graphNodeIds: communityNodeIds,
+      graphEdgeIds: communityEdgeIds,
+    };
+  }, [
+    segmentHasNoFocus,
+    displayStep?.communityId,
+    metaGraphData.communityMap,
+    graphDocument?.relationships,
+    segmentNodeIds,
+    segmentEdgeIds,
+  ]);
+
   const animationProgress =
     isFreeExploreMode
       ? 1
@@ -188,7 +230,7 @@ export function ScrollStorytellingViewerUnified({
       style={{
         minHeight: GRAPH_MIN_HEIGHT,
         height: isPc ? GRAPH_SECTION_HEIGHT_PC : GRAPH_SECTION_HEIGHT_SP,
-        width: isPc ? "min(100%, 520px)" : "100%",
+        width: "100%",
       }}
     >
       <StorytellingGraphUnified
@@ -201,7 +243,10 @@ export function ScrollStorytellingViewerUnified({
         height={graphSize.height}
         filter={metaGraphData.filter}
         freeExploreMode={isFreeExploreMode}
-        showBottomFadeGradient={!isPc}
+        isPc={isPc}
+        communityMap={metaGraphData.communityMap}
+        narrativeFlow={metaGraphData.narrativeFlow}
+        showFullGraph={displayStep?.id === "__overview__"}
       />
       <button
         type="button"
@@ -223,7 +268,7 @@ export function ScrollStorytellingViewerUnified({
     typeof document !== "undefined" &&
     createPortal(
       <div
-        className="fixed right-1.5 top-1/2 z-[100] flex -translate-y-1/2 flex-col items-center gap-1.5"
+        className={`fixed top-1/2 z-[100] flex -translate-y-1/2 flex-col items-center gap-1.5 ${!isPc ? "right-1.5" : "right-4"}`}
         aria-hidden="true"
       >
         {steps.map((step, index) => (
@@ -249,18 +294,18 @@ export function ScrollStorytellingViewerUnified({
         <div
           className={
             isPc
-              ? "flex flex-row gap-8"
+              ? "flex flex-row mt-14"
               : "flex flex-col gap-6"
           }
         >
           {isPc ? (
             <>
-              <div className="sticky top-24 flex w-[420px] shrink-0 flex-col self-start">
+              <div className="sticky flex w-2/3 top-0 shrink-0 flex-col self-start h-screen justify-center">
                 {graphSection}
               </div>
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 w-1/3">
                 {progressStep?.communityTitle != null && progressStep.communityTitle !== "" && (
-                  <div className="sticky top-0 z-10 bg-slate-900 pb-2 pt-0 text-sm font-medium text-slate-400">
+                  <div className="sticky top-72 z-10 w-full pb-2 pt-0 text-xl font-semibold text-white">
                     {progressStep.communityTitle}
                   </div>
                 )}
@@ -273,10 +318,10 @@ export function ScrollStorytellingViewerUnified({
                   {steps.map((step, index) => (
                     <Step data={index} key={step.id}>
                       <div
-                        className="snap-start py-8 pr-4 [scroll-snap-stop:always]"
+                        className="flex snap-start flex-col justify-center pr-4 [scroll-snap-stop:always]"
                         style={{
-                          height: STEP_VIEWPORT_HEIGHT,
-                          minHeight: STEP_VIEWPORT_HEIGHT,
+                          height: STEP_VIEWPORT_HEIGHT_PC,
+                          minHeight: STEP_VIEWPORT_HEIGHT_PC,
                         }}
                       >
                         <SegmentFadeIn>
@@ -288,6 +333,9 @@ export function ScrollStorytellingViewerUnified({
                     </Step>
                   ))}
                 </Scrollama>
+
+
+
               </div>
             </>
           ) : (
@@ -315,8 +363,8 @@ export function ScrollStorytellingViewerUnified({
                       <div
                         className="snap-start py-6 [scroll-snap-stop:always]"
                         style={{
-                          height: STEP_VIEWPORT_HEIGHT,
-                          minHeight: STEP_VIEWPORT_HEIGHT,
+                          height: STEP_VIEWPORT_HEIGHT_SP,
+                          minHeight: STEP_VIEWPORT_HEIGHT_SP,
                         }}
                       >
                         <SegmentFadeIn>
