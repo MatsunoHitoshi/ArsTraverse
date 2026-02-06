@@ -7,6 +7,8 @@ export interface ScrollStep {
   text: string;
   nodeIds: string[];
   edgeIds: string[];
+  /** コミュニティ間の繋がり文（transitionText）のステップなら true */
+  isTransition?: boolean;
 }
 
 /**
@@ -28,6 +30,20 @@ export function buildScrollStepsFromMetaGraphStoryData(
   for (const flowItem of ordered) {
     const communityId = flowItem.communityId;
     const communityTitle = communityTitleById.get(communityId);
+
+    // このコミュニティへの導入・繋がり文（transitionText）を 1 ステップとして先に挿入
+    if (flowItem.transitionText?.trim()) {
+      steps.push({
+        id: `transition-${communityId}`,
+        communityId,
+        communityTitle,
+        text: flowItem.transitionText.trim(),
+        nodeIds: [],
+        edgeIds: [],
+        isTransition: true,
+      });
+    }
+
     const storyContent = metaGraphData.detailedStories[communityId];
 
     if (storyContent == null) {

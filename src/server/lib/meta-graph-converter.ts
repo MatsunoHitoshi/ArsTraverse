@@ -251,12 +251,9 @@ export function convertFromDatabase(
     }
   });
 
-  // preparedCommunitiesを構築（orderがnullのCommunitySummary）
+  // preparedCommunitiesを構築（ストーリー再生成・追加可能リストで参照するため全コミュニティを返す）
   const preparedCommunities = storyData.metaNodes
-    .filter(
-      (metaNode) =>
-        metaNode.summary !== null && metaNode.summary.order === null,
-    )
+    .filter((metaNode) => metaNode.summary !== null)
     .map((metaNode) => ({
       communityId: metaNode.communityId,
       memberNodeNames: metaNode.memberNodes.map((node) => node.name),

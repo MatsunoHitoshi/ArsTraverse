@@ -1347,6 +1347,17 @@ Community ${idx + 1} (ID: ${c.communityId}):
           .optional(),
         curatorialContext: CuratorialContextSchema.optional().nullable(),
         workspaceId: z.string().optional(),
+        /** ナラティブ内の前後のコミュニティ情報。繋がりを意識した本文生成に使う */
+        narrativeContext: z
+          .object({
+            previousSummary: z.string().optional(),
+            previousTitle: z.string().optional(),
+            nextSummary: z.string().optional(),
+            nextTitle: z.string().optional(),
+            transitionTextBefore: z.string().optional(),
+            transitionTextAfter: z.string().optional(),
+          })
+          .optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -1360,6 +1371,7 @@ Community ${idx + 1} (ID: ${c.communityId}):
         internalEdgesDetailed,
         curatorialContext,
         workspaceId,
+        narrativeContext,
       } = input;
 
       const llm = new ChatOpenAI({
@@ -1551,6 +1563,21 @@ Community ${idx + 1} (ID: ${c.communityId}):
         ? `Stance: ${curatorialContext.stance}`
         : "Stance: Neutral/Undefined";
 
+      const narrativeContextBlock =
+        narrativeContext &&
+        (narrativeContext.previousTitle ??
+          narrativeContext.nextTitle ??
+          narrativeContext.transitionTextBefore ??
+          narrativeContext.transitionTextAfter)
+          ? `
+[Narrative Context - write so this community connects naturally in the story]
+${(narrativeContext.previousTitle ?? narrativeContext.previousSummary) ? `- Previous theme: ${narrativeContext.previousTitle ?? ""} ${(narrativeContext.previousSummary ?? "").slice(0, 150)}${(narrativeContext.previousSummary ?? "").length > 150 ? "..." : ""}` : ""}
+${narrativeContext.transitionTextBefore?.trim() ? `- Transition into this community: ${narrativeContext.transitionTextBefore.trim()}` : ""}
+${(narrativeContext.nextTitle ?? narrativeContext.nextSummary) ? `- Next theme: ${narrativeContext.nextTitle ?? ""} ${(narrativeContext.nextSummary ?? "").slice(0, 150)}${(narrativeContext.nextSummary ?? "").length > 150 ? "..." : ""}` : ""}
+${narrativeContext.transitionTextAfter?.trim() ? `- Transition after this community: ${narrativeContext.transitionTextAfter.trim()}` : ""}
+- Keep the same language and tone so the overall narrative flows smoothly.`
+          : "";
+
       // 詳細情報がある場合はそれを使用、なければ簡易版を使用
       const hasDetailedInfo = memberNodes && internalEdgesDetailed;
       const validNodeIds = new Set(memberNodes?.map((n) => n.id) ?? []);
@@ -1565,6 +1592,7 @@ Community ${idx + 1} (ID: ${c.communityId}):
 
 [Curatorial Context]
 ${stance}
+${narrativeContextBlock ?? ""}
 
 [Task]
 Generate a rich, detailed narrative story (3-5 short paragraphs, 200-400 words) about this community. Split the story into SHORT PARAGRAPHS (one or two sentences each). For EACH paragraph you MUST output:
@@ -1595,6 +1623,7 @@ You MUST output a valid JSON object only, no markdown or extra text:
 
 [Curatorial Context]
 ${stance}
+${narrativeContextBlock ?? ""}
 
 [Task]
 Generate a rich, detailed narrative story (3-5 paragraphs, 200-400 words) about this community that:
@@ -1944,9 +1973,14 @@ Output JSON with segments array (same order, same text, add nodeIds and edgeIds 
           (c): c is z.infer<typeof PreparedCommunitySchema> => c !== undefined,
         );
 
+      // マッチするコミュニティがなくても順序は維持する（空で返すとクライアントでストーリーが消える）
       if (orderedCommunities.length === 0) {
         return {
-          narrativeFlow: [],
+          narrativeFlow: orderedCommunityIds.map((id, index) => ({
+            communityId: id,
+            order: index + 1,
+            transitionText: "",
+          })),
         };
       }
 
