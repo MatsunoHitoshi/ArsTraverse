@@ -20,6 +20,7 @@ import {
   GraphChangeType,
 } from "@prisma/client";
 import { KnowledgeGraphInputSchema } from "../schemas/knowledge-graph";
+import { sanitizeNodeImageProperties } from "@/server/lib/sanitize-node-image-properties";
 
 // const CreateDocumentGraphSchema = z.object({
 //   dataJson: z.object({
@@ -176,7 +177,12 @@ export const documentGraphRouter = createTRPCRouter({
 
       await ctx.db.graphNode.createMany({
         data: nodeCreateData.map((node) => ({
-          ...node,
+          id: node.id,
+          name: node.name,
+          label: node.label,
+          properties: sanitizeNodeImageProperties(
+            node.properties as Record<string, unknown>,
+          ),
           documentGraphId: documentGraph.id,
         })),
       });
@@ -192,10 +198,13 @@ export const documentGraphRouter = createTRPCRouter({
       });
 
       for (const node of nodeUpdateData) {
+        const sanitized = sanitizeNodeImageProperties(
+          node.properties as Record<string, unknown>,
+        );
         await ctx.db.graphNode.update({
           where: { id: node.id },
           data: {
-            properties: node.properties,
+            properties: sanitized,
             name: node.name,
             label: node.label,
             documentGraphId: documentGraph.id,

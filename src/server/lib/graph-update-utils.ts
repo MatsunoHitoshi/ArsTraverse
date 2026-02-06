@@ -11,6 +11,7 @@ import type {
   RelationshipTypeForFrontend,
 } from "@/app/const/types";
 import { diffNodes, diffRelationships } from "@/app/_utils/kg/diff";
+import { sanitizeNodeImageProperties } from "@/server/lib/sanitize-node-image-properties";
 import { formGraphDataForFrontend } from "@/app/_utils/kg/frontend-properties";
 import type {
   NodeDiffType,
@@ -40,7 +41,9 @@ export async function applyGraphChanges(
         id: node.id,
         name: node.name,
         label: node.label,
-        properties: node.properties,
+        properties: sanitizeNodeImageProperties(
+          node.properties as Record<string, unknown>,
+        ),
         topicSpaceId: topicSpaceId,
       })),
     });
@@ -62,11 +65,14 @@ export async function applyGraphChanges(
 
   // ノードの更新
   for (const node of changeData.nodeUpdateData) {
+    const sanitized = sanitizeNodeImageProperties(
+      node.properties as Record<string, unknown>,
+    );
     await db.graphNode.update({
       where: { id: node.id },
       data: {
         name: node.name,
-        properties: node.properties,
+        properties: sanitized,
         label: node.label,
         topicSpaceId: topicSpaceId,
       },

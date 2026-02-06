@@ -401,24 +401,53 @@ export function ScrollStorytellingViewerUnified({
                   onStepProgress={onStepProgress}
                   threshold={8}
                 >
-                  {steps.map((step, index) => (
-                    <Step data={index} key={step.id}>
-                      <div
-                        data-story-step-index={index}
-                        className="flex snap-start flex-col justify-center pr-4 [scroll-snap-stop:always]"
-                        style={{
-                          height: STEP_VIEWPORT_HEIGHT_PC,
-                          minHeight: STEP_VIEWPORT_HEIGHT_PC,
-                        }}
-                      >
-                        <SegmentFadeIn>
-                          <p className="whitespace-pre-wrap text-left text-slate-200 leading-relaxed">
-                            {step.text || " "}
-                          </p>
-                        </SegmentFadeIn>
-                      </div>
-                    </Step>
-                  ))}
+                  {steps.map((step, index) => {
+                    const focusNodeWithImage = graphDocument?.nodes?.find(
+                      (n) =>
+                        step.nodeIds.includes(n.id) &&
+                        (n.properties as { imageUrl?: string })?.imageUrl,
+                    );
+                    const nodeImageUrl = focusNodeWithImage?.properties
+                      ? (focusNodeWithImage.properties as { imageUrl?: string }).imageUrl
+                      : undefined;
+                    return (
+                      <Step data={index} key={step.id}>
+                        <div
+                          data-story-step-index={index}
+                          className="flex snap-start flex-col justify-center pr-4 [scroll-snap-stop:always]"
+                          style={{
+                            height: STEP_VIEWPORT_HEIGHT_PC,
+                            minHeight: STEP_VIEWPORT_HEIGHT_PC,
+                          }}
+                        >
+                          <SegmentFadeIn>
+                            {nodeImageUrl && (
+                              <div className="mb-4 max-w-sm">
+                                {/* eslint-disable-next-line @next/next/no-img-element -- node image URL is dynamic (Supabase storage) */}
+                                <img
+                                  src={nodeImageUrl}
+                                  alt={
+                                    (focusNodeWithImage?.properties as { imageAlt?: string })?.imageAlt ??
+                                    focusNodeWithImage?.name ??
+                                    ""
+                                  }
+                                  className="rounded object-cover shadow-md"
+                                />
+                                {(focusNodeWithImage?.properties as { imageCaption?: string })?.imageCaption && (
+                                  <p className="mt-1 text-sm text-slate-400">
+                                    {(focusNodeWithImage?.properties as { imageCaption?: string }).imageCaption}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            <p className="whitespace-pre-wrap text-left text-slate-200 leading-relaxed">
+                              {step.text || " "}
+                            </p>
+                          </SegmentFadeIn>
+                        </div>
+                      </Step>
+                    );
+                  })}
                 </Scrollama>
 
 
@@ -464,24 +493,53 @@ export function ScrollStorytellingViewerUnified({
                   onStepProgress={onStepProgress}
                   threshold={8}
                 >
-                  {steps.map((step, index) => (
-                    <Step data={index} key={step.id}>
-                      <div
-                        data-story-step-index={index}
-                        className="snap-start py-6 [scroll-snap-stop:always]"
-                        style={{
-                          height: STEP_VIEWPORT_HEIGHT_SP,
-                          minHeight: STEP_VIEWPORT_HEIGHT_SP,
-                        }}
-                      >
-                        <SegmentFadeIn>
-                          <p className="whitespace-pre-wrap text-left text-slate-200 leading-relaxed">
-                            {step.text || " "}
-                          </p>
-                        </SegmentFadeIn>
-                      </div>
-                    </Step>
-                  ))}
+                  {steps.map((step, index) => {
+                    const focusNodeWithImage = graphDocument?.nodes?.find(
+                      (n) =>
+                        step.nodeIds.includes(n.id) &&
+                        (n.properties as { imageUrl?: string })?.imageUrl,
+                    );
+                    const nodeImageUrl = focusNodeWithImage?.properties
+                      ? (focusNodeWithImage.properties as { imageUrl?: string }).imageUrl
+                      : undefined;
+                    return (
+                      <Step data={index} key={step.id}>
+                        <div
+                          data-story-step-index={index}
+                          className="snap-start py-6 [scroll-snap-stop:always]"
+                          style={{
+                            height: STEP_VIEWPORT_HEIGHT_SP,
+                            minHeight: STEP_VIEWPORT_HEIGHT_SP,
+                          }}
+                        >
+                          <SegmentFadeIn>
+                            {nodeImageUrl && (
+                              <div className="mb-4 max-w-sm">
+                                {/* eslint-disable-next-line @next/next/no-img-element -- node image URL is dynamic (Supabase storage) */}
+                                <img
+                                  src={nodeImageUrl}
+                                  alt={
+                                    (focusNodeWithImage?.properties as { imageAlt?: string })?.imageAlt ??
+                                    focusNodeWithImage?.name ??
+                                    ""
+                                  }
+                                  className="rounded object-cover shadow-md"
+                                />
+                                {(focusNodeWithImage?.properties as { imageCaption?: string })?.imageCaption && (
+                                  <p className="mt-1 text-sm text-slate-400">
+                                    {(focusNodeWithImage?.properties as { imageCaption?: string }).imageCaption}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            <p className="whitespace-pre-wrap text-left text-slate-200 leading-relaxed">
+                              {step.text || " "}
+                            </p>
+                          </SegmentFadeIn>
+                        </div>
+                      </Step>
+                    );
+                  })}
                 </Scrollama>
               </div>
             </>

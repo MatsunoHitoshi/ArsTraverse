@@ -49,6 +49,10 @@ import {
 } from "@/server/lib/graph-update-utils";
 import { getTextReference } from "./source-document";
 import { KnowledgeGraphInputSchema } from "../schemas/knowledge-graph";
+import { BUCKETS } from "@/app/_utils/supabase/const";
+import { storageUtils } from "@/app/_utils/supabase/supabase";
+import { sanitizeNodeImageProperties } from "@/server/lib/sanitize-node-image-properties";
+import { TRPCError } from "@trpc/server";
 import OpenAI from "openai";
 
 const TopicSpaceCreateSchema = z.object({
@@ -89,6 +93,25 @@ const MergeGraphNodesSchema = z.object({
   nodes: z.array(z.any()),
   id: z.string(),
 });
+
+const NODE_IMAGE_MAX_BYTES = 10 * 1024 * 1024; // 10MB
+const ALLOWED_IMAGE_MIMES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+] as const;
+
+const UploadNodeImageSchema = z.object({
+  dataUrl: z
+    .string()
+    .refine(
+      (s) => s.startsWith("data:image/") && s.includes(";base64,"),
+      "dataUrl must be a data URL with image/* and base64",
+    ),
+  topicSpaceId: z.string(),
+});
+
 const attachTopicSpaceGraphData = async (
   topicSpace: TopicSpace & {
     graphNodes: GraphNode[];
@@ -882,9 +905,12 @@ export const topicSpaceRouter = createTRPCRouter({
 
       for (const node of nodeUpdateData) {
         if (node.id) {
+          const sanitized = sanitizeNodeImageProperties(
+            node.properties as Record<string, unknown>,
+          );
           await ctx.db.graphNode.update({
             where: { id: node.id },
-            data: { properties: node.properties },
+            data: { properties: sanitized },
           });
         }
       }
@@ -929,6 +955,61 @@ export const topicSpaceRouter = createTRPCRouter({
       });
 
       return updatedTopicSpace;
+    }),
+
+  uploadNodeImage: protectedProcedure
+    .input(UploadNodeImageSchema)
+    .mutation(async ({ ctx, input }) => {
+      const topicSpace = await ctx.db.topicSpace.findFirst({
+        where: { id: input.topicSpaceId, isDeleted: false },
+        include: { admins: true },
+      });
+      if (
+        !topicSpace?.admins.some((a) => a.id === ctx.session.user.id)
+      ) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "TopicSpace not found",
+        });
+      }
+
+      const [header, base64Data] = input.dataUrl.split(",", 2);
+      if (!base64Data) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Invalid data URL",
+        });
+      }
+      const mimeMatch = header?.match(/^data:(image\/[a-zA-Z+.-]+);base64$/);
+      const mime = mimeMatch?.[1];
+      if (!mime || !ALLOWED_IMAGE_MIMES.includes(mime as (typeof ALLOWED_IMAGE_MIMES)[number])) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Only image/jpeg, image/png, image/webp, image/gif are allowed",
+        });
+      }
+
+      let buffer: Buffer;
+      try {
+        buffer = Buffer.from(base64Data, "base64");
+      } catch {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Invalid base64 in data URL",
+        });
+      }
+      if (buffer.length > NODE_IMAGE_MAX_BYTES) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Image size must be at most ${NODE_IMAGE_MAX_BYTES / (1024 * 1024)}MB`,
+        });
+      }
+
+      const url = await storageUtils.uploadFromDataURL(
+        input.dataUrl,
+        BUCKETS.PATH_TO_NODE_IMAGES,
+      );
+      return { url };
     }),
 
   mergeGraphNodes: protectedProcedure
@@ -1027,9 +1108,12 @@ export const topicSpaceRouter = createTRPCRouter({
       // レコードの更新と削除（論理）
       for (const node of nodeUpdateData) {
         if (node.id) {
+          const sanitized = sanitizeNodeImageProperties(
+            node.properties as Record<string, unknown>,
+          );
           await ctx.db.graphNode.update({
             where: { id: node.id },
-            data: { properties: node.properties },
+            data: { properties: sanitized },
           });
         }
       }
