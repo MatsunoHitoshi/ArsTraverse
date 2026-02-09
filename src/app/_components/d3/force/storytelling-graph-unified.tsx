@@ -100,7 +100,8 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   onCommunityTitleClick?: (communityId: string) => void;
 }) {
   const showBottomFadeGradient = !isPc;
-  const edgeFadePx = isPc ? 64 : undefined;
+  // PC版のフェードは親コンテナ（CSS Overlay）で行うため、ここでは SVG Mask を生成しない（描画負荷軽減）
+  const edgeFadePx = undefined;
   const useCommunityLayout =
     communityMap != null &&
     narrativeFlow != null &&
@@ -491,6 +492,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     useCommunityLayout,
     communityMap,
     narrativeFlow,
+    height,
   ]);
 
   const progress = Math.max(0, Math.min(1, animationProgress * 2));
@@ -804,12 +806,6 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
       if (node?.x == null || node?.y == null) return;
       const layout = clientToLayoutRef.current?.(e.clientX, e.clientY);
       if (!layout) return;
-      console.log("[DnD] mousedown", {
-        nodeId: node.id,
-        nodeName: node.name,
-        layout,
-        nodeXY: { x: node.x, y: node.y },
-      });
       dragStartRef.current = {
         nodeId: node.id,
         startNodeX: node.x,
