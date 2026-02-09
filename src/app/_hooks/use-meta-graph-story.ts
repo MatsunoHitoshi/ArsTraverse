@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "@/trpc/react";
 import type {
   GraphDocumentForFrontend,
@@ -89,6 +89,91 @@ export function useMetaGraphStory(
   const generateCommunityStory = api.kg.generateCommunityStory.useMutation();
   const regenerateNarrativeFlow = api.kg.regenerateNarrativeFlow.useMutation();
 
+  // 構造変更時の自動トランジション再生成用: debounce と重複防止
+  const autoRegenerateDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const pendingSnapshotRef = useRef<MetaGraphStoryData | null>(null);
+  const isRegeneratingTransitionsRef = useRef(false);
+
+  const AUTO_REGENERATE_DEBOUNCE_MS = 400;
+
+  // トランジションのみ再生成（本文は触らない）。snapshot の order で API を呼び、narrativeFlow だけ更新する。
+  const runAutoRegenerateTransitionsOnly = useCallback(
+    (snapshot: MetaGraphStoryData) => {
+      if (!workspace) return;
+
+      const validIds = new Set(
+        snapshot.preparedCommunities.map((c) => c.communityId),
+      );
+      const orderedCommunityIds = [...snapshot.narrativeFlow]
+        .sort((a, b) => a.order - b.order)
+        .map((n) => n.communityId)
+        .filter((id) => validIds.has(id));
+
+      if (orderedCommunityIds.length === 0) return;
+      if (isRegeneratingTransitionsRef.current) return;
+
+      isRegeneratingTransitionsRef.current = true;
+      setIsRegeneratingTransitions(true);
+
+      const parseResult =
+        workspace.curatorialContext &&
+        typeof workspace.curatorialContext === "object" &&
+        !Array.isArray(workspace.curatorialContext)
+          ? CuratorialContextSchema.safeParse(workspace.curatorialContext)
+          : null;
+      const parsedCuratorialContext =
+        parseResult?.success ? parseResult.data : null;
+
+      regenerateNarrativeFlow.mutate(
+        {
+          orderedCommunityIds,
+          communities: snapshot.preparedCommunities,
+          curatorialContext: parsedCuratorialContext ?? undefined,
+        },
+        {
+          onSuccess: (result) => {
+            setMetaGraphData((prev) =>
+              prev ? { ...prev, narrativeFlow: result.narrativeFlow } : prev,
+            );
+          },
+          onSettled: () => {
+            isRegeneratingTransitionsRef.current = false;
+            setIsRegeneratingTransitions(false);
+          },
+        },
+      );
+    },
+    [workspace, regenerateNarrativeFlow],
+  );
+
+  // 構造変更後に呼ぶ。debounce してからトランジションのみ再生成する。
+  const scheduleAutoRegenerateTransitions = useCallback(
+    (snapshot: MetaGraphStoryData) => {
+      pendingSnapshotRef.current = snapshot;
+
+      if (autoRegenerateDebounceRef.current != null) {
+        clearTimeout(autoRegenerateDebounceRef.current);
+      }
+
+      autoRegenerateDebounceRef.current = setTimeout(() => {
+        autoRegenerateDebounceRef.current = null;
+        const target = pendingSnapshotRef.current;
+        if (target) runAutoRegenerateTransitionsOnly(target);
+      }, AUTO_REGENERATE_DEBOUNCE_MS);
+    },
+    [runAutoRegenerateTransitionsOnly],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (autoRegenerateDebounceRef.current != null) {
+        clearTimeout(autoRegenerateDebounceRef.current);
+      }
+    };
+  }, []);
+
   // 保存済みStoryデータを取得
   const { data: savedStoryData, isLoading: isLoadingStory } =
     api.story.get.useQuery(
@@ -98,7 +183,9 @@ export function useMetaGraphStory(
       },
     );
 
-  // 保存済みStoryデータを読み込む
+  // 保存済みStoryデータを読み込む（初回ロード時や savedStoryData の更新時のみ同期）
+  // 注意: metaGraphData を依存に含めないこと。含めるとローカルで並び替えするたびに
+  // エフェクトが走り「current !== saved」でサーバー側の古い順序で上書きされてしまう。
   useEffect(() => {
     if (
       !isMetaGraphMode ||
@@ -109,20 +196,17 @@ export function useMetaGraphStory(
       return;
     }
 
-    // 保存済みデータが存在し、現在のmetaGraphDataと異なる場合に更新
-    // JSON.stringifyで比較して、実際に変更があった場合のみ更新
-    const currentDataString = JSON.stringify(metaGraphData);
-    const savedDataString = JSON.stringify(savedStoryData.metaGraphData);
-
-    if (currentDataString !== savedDataString) {
-      setMetaGraphData(savedStoryData.metaGraphData);
-    }
+    setMetaGraphData((prev) => {
+      const savedDataString = JSON.stringify(savedStoryData.metaGraphData);
+      const currentDataString = JSON.stringify(prev);
+      if (currentDataString === savedDataString) return prev;
+      return savedStoryData.metaGraphData;
+    });
   }, [
     isMetaGraphMode,
     workspace,
     isLoadingStory,
     savedStoryData?.metaGraphData,
-    metaGraphData,
   ]);
 
   // メタグラフ生成と要約生成
@@ -362,40 +446,47 @@ export function useMetaGraphStory(
   }, [isMetaGraphMode]);
 
   // ストーリーにコミュニティを追加
-  const addToNarrative = useCallback((communityId: string) => {
-    setMetaGraphData((prev) => {
-      if (!prev) return prev;
-      const currentMaxOrder = Math.max(
-        0,
-        ...prev.narrativeFlow.map((n) => n.order),
-      );
-      return {
-        ...prev,
-        narrativeFlow: [
-          ...prev.narrativeFlow,
-          {
-            communityId,
-            order: currentMaxOrder + 1,
-            transitionText: "(トランジションを再生成してください)",
-          },
-        ],
-      };
-    });
-  }, []);
+  const addToNarrative = useCallback(
+    (communityId: string) => {
+      setMetaGraphData((prev) => {
+        if (!prev) return prev;
+        const currentMaxOrder = Math.max(
+          0,
+          ...prev.narrativeFlow.map((n) => n.order),
+        );
+        const next = {
+          ...prev,
+          narrativeFlow: [
+            ...prev.narrativeFlow,
+            {
+              communityId,
+              order: currentMaxOrder + 1,
+              transitionText: "(トランジションを再生成してください)",
+            },
+          ],
+        };
+        scheduleAutoRegenerateTransitions(next);
+        return next;
+      });
+    },
+    [scheduleAutoRegenerateTransitions],
+  );
 
   // ストーリーからコミュニティを削除
-  const removeFromNarrative = useCallback((communityId: string) => {
-    setMetaGraphData((prev) => {
-      if (!prev) return prev;
-      const newFlow = prev.narrativeFlow
-        .filter((n) => n.communityId !== communityId)
-        .map((n, idx) => ({ ...n, order: idx + 1 })); // 順序を再割り当て
-      return {
-        ...prev,
-        narrativeFlow: newFlow,
-      };
-    });
-  }, []);
+  const removeFromNarrative = useCallback(
+    (communityId: string) => {
+      setMetaGraphData((prev) => {
+        if (!prev) return prev;
+        const newFlow = prev.narrativeFlow
+          .filter((n) => n.communityId !== communityId)
+          .map((n, idx) => ({ ...n, order: idx + 1 })); // 順序を再割り当て
+        const next = { ...prev, narrativeFlow: newFlow };
+        scheduleAutoRegenerateTransitions(next);
+        return next;
+      });
+    },
+    [scheduleAutoRegenerateTransitions],
+  );
 
   // ストーリーの順序を入れ替え
   const moveNarrativeItem = useCallback(
@@ -415,24 +506,37 @@ export function useMetaGraphStory(
           order: idx + 1,
         }));
 
-        return {
-          ...prev,
-          narrativeFlow: reorderedFlow,
-        };
+        const next = { ...prev, narrativeFlow: reorderedFlow };
+        scheduleAutoRegenerateTransitions(next);
+        return next;
       });
     },
-    [],
+    [scheduleAutoRegenerateTransitions],
   );
 
   // トランジションテキストを再生成
   const regenerateTransitions = useCallback(() => {
     if (!metaGraphData || !workspace) return;
 
-    setIsRegeneratingTransitions(true);
+    const validCommunityIds = new Set(
+      metaGraphData.preparedCommunities.map((c) => c.communityId),
+    );
 
-    const orderedCommunityIds = metaGraphData.narrativeFlow
+    // narrativeFlow のうち preparedCommunities に存在する ID だけを使う
+    // （保存データと現在のメタグラフがずれていると ID が一致しないため）
+    const orderedCommunityIds = [...metaGraphData.narrativeFlow]
       .sort((a, b) => a.order - b.order)
-      .map((n) => n.communityId);
+      .map((n) => n.communityId)
+      .filter((id) => validCommunityIds.has(id));
+
+    if (orderedCommunityIds.length === 0) {
+      console.warn(
+        "regenerateTransitions: narrativeFlow に preparedCommunities と一致する ID がありません。ストーリーを追加し直すか、メタグラフを再生成してください。",
+      );
+      return;
+    }
+
+    setIsRegeneratingTransitions(true);
 
     // curatorialContextを安全にパース
     const parseResult =
@@ -462,15 +566,44 @@ export function useMetaGraphStory(
             };
           });
 
-          // 2. 続いて各コミュニティの詳細ストーリーを再生成
+          // 2. 続いて各コミュニティの詳細ストーリーを再生成（前後のコミュニティ情報を渡して繋がりを意識）
           // isRegeneratingTransitions は true のまま維持（UIでローディング表示するため）
 
-          const storyPromises = result.narrativeFlow.map((flow) => {
+          const sortedFlow = [...result.narrativeFlow].sort(
+            (a, b) => a.order - b.order,
+          );
+
+          const storyPromises = sortedFlow.map((flow, index) => {
             const community = metaGraphData.preparedCommunities.find(
               (c) => c.communityId === flow.communityId,
             );
 
             if (!community) return Promise.resolve(null);
+
+            const prevFlow = sortedFlow[index - 1];
+            const nextFlow = sortedFlow[index + 1];
+            const prevSummary = prevFlow
+              ? metaGraphData.summaries.find(
+                  (s) => s.communityId === prevFlow.communityId,
+                )
+              : undefined;
+            const nextSummary = nextFlow
+              ? metaGraphData.summaries.find(
+                  (s) => s.communityId === nextFlow.communityId,
+                )
+              : undefined;
+
+            const narrativeContext =
+              prevFlow ?? nextFlow
+                ? {
+                    previousTitle: prevSummary?.title,
+                    previousSummary: prevSummary?.summary,
+                    nextTitle: nextSummary?.title,
+                    nextSummary: nextSummary?.summary,
+                    transitionTextBefore: flow.transitionText?.trim() ?? undefined,
+                    transitionTextAfter: nextFlow?.transitionText?.trim() ?? undefined,
+                  }
+                : undefined;
 
             // 型安全に詳細情報を取得
             const communityWithDetails = community as typeof community & {
@@ -501,6 +634,7 @@ export function useMetaGraphStory(
                 internalEdgesDetailed:
                   communityWithDetails.internalEdgesDetailed,
                 curatorialContext: parsedCuratorialContext,
+                narrativeContext,
               })
               .then((storyResult) => {
                 setMetaGraphData((prev) => {
