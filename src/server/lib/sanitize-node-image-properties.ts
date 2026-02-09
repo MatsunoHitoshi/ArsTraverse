@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 
 const IMAGE_URL_MAX_LENGTH = 2048;
 const IMAGE_CAPTION_MAX_LENGTH = 1000;
@@ -12,21 +13,21 @@ const urlSchema = z.string().url().max(IMAGE_URL_MAX_LENGTH);
  * Used before persisting GraphNode.properties in updateGraphProperties and documentGraph.updateGraph.
  * - imageUrl: must be valid URL, max 2048 chars; empty string removes the key
  * - imageCaption / imageAlt: string, truncated to max length
+ * - other properties: preserved as-is (not stringified)
  * @throws TRPCError when imageUrl is non-empty and invalid
  */
 export function sanitizeNodeImageProperties(
   properties: Record<string, unknown>,
-): Record<string, string> {
-  const result: Record<string, string> = {};
+): Record<string, Prisma.InputJsonValue> {
+  const result: Record<string, Prisma.InputJsonValue> = {};
 
   for (const [key, value] of Object.entries(properties)) {
     if (value === null || value === undefined) {
       continue;
     }
-    const str = typeof value === "string" ? value : String(value);
 
     if (key === "imageUrl") {
-      const trimmed = str.trim();
+      const trimmed = String(value).trim();
       if (trimmed === "") {
         continue;
       }
@@ -42,16 +43,18 @@ export function sanitizeNodeImageProperties(
     }
 
     if (key === "imageCaption") {
-      result[key] = str.slice(0, IMAGE_CAPTION_MAX_LENGTH);
+      result[key] = String(value).slice(0, IMAGE_CAPTION_MAX_LENGTH);
       continue;
     }
 
     if (key === "imageAlt") {
-      result[key] = str.slice(0, IMAGE_ALT_MAX_LENGTH);
+      result[key] = String(value).slice(0, IMAGE_ALT_MAX_LENGTH);
       continue;
     }
 
-    result[key] = str;
+    // Since input properties are unknown, we assume they are valid JSON values
+    // if they came from the database or valid JSON input.
+    result[key] = value as Prisma.InputJsonValue;
   }
 
   return result;
