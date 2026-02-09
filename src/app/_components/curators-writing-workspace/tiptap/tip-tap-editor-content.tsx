@@ -63,7 +63,7 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
   const debounceTimeoutRef = useRef<NodeJS.Timeout>();
   const updateTimeoutRef = useRef<NodeJS.Timeout>();
   const DEBOUNCE_TIME = 1000;
-  const {} = useContext(TiptapGraphFilterContext);
+  const { } = useContext(TiptapGraphFilterContext);
   const [isImageInsert, setIsImageInsert] = useState<boolean>(false);
   const [isAIAssistEnabled, setIsAIAssistEnabled] = useState<boolean>(false);
 
@@ -367,7 +367,7 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
           <EditorContent
             ref={editorRef}
             editor={editor}
-            className="h-full min-h-[200px] overflow-y-scroll rounded-md bg-slate-800 p-3 text-white focus-within:outline-none"
+            className="h-full min-h-[200px] overflow-y-scroll rounded-md bg-black/20 p-3 text-white focus-within:outline-none"
             onClick={handleClick}
           />
           <CustomBubbleMenu
