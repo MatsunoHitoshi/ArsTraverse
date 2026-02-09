@@ -11,7 +11,10 @@ import type { MetaGraphStoryData } from "@/app/_hooks/use-meta-graph-story";
 import { StorytellingGraphUnified } from "./storytelling-graph-unified";
 import { buildScrollStepsFromMetaGraphStoryData } from "@/app/_utils/story-scroll-utils";
 import { getEdgeCompositeKeyFromLink } from "@/app/const/story-segment";
-import { createSvgToCanvasRenderer } from "@/app/_utils/video/svg-to-canvas";
+import {
+  createSvgToCanvasRenderer,
+  type SvgToCanvasRenderer,
+} from "@/app/_utils/video/svg-to-canvas";
 import { VideoRecorder, downloadBlob, downloadBlobsSequentially } from "@/app/_utils/video/video-recorder";
 import {
   runRecording,
@@ -52,10 +55,20 @@ export function StorytellingGraphRecorder({
   const [focusEdgeIds, setFocusEdgeIds] = useState<string[]>([]);
   const [showFullGraph, setShowFullGraph] = useState(true);
 
+  // 録画設定（モーダルから受け取り、SVG準備完了後に使用する）
+  const [recordingConfig, setRecordingConfig] = useState<RecordingConfig | null>(
+    null,
+  );
+  // 録画処理が実行中かどうかのフラグ（二重実行防止）
+  const isProcessingRef = useRef(false);
+
   // SVG ref（StorytellingGraphUnified から取得）
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const handleSvgRef = useCallback((el: SVGSVGElement | null) => {
+  // svgRef.current の変更を検知するためのステート（ref は変更通知がないため）
+  const [svgElement, setSvgElement] = useState<SVGSVGElement | null>(null);
+  const onSvgRef = useCallback((el: SVGSVGElement | null) => {
     svgRef.current = el;
+    setSvgElement(el);
   }, []);
 
   // 遷移完了通知のための Promise ベースコールバック
@@ -125,33 +138,39 @@ export function StorytellingGraphRecorder({
     [metaGraphData.summaries],
   );
 
-  // 録画開始
-  const handleStartRecording = useCallback(
+  // 実際の録画処理（SVGがマウントされた後に呼ばれる）
+  const executeRecording = useCallback(
     async (config: RecordingConfig) => {
       if (!svgRef.current) {
         console.error("SVG 要素が見つかりません");
+        setRecordingProgress({
+          phase: "error",
+          currentTransitionIndex: 0,
+          totalTransitions: steps.length - 1,
+          overallProgress: 0,
+          errorMessage: "SVG要素の取得に失敗しました",
+        });
         return;
       }
+
+      if (isProcessingRef.current) return;
+      isProcessingRef.current = true;
 
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
 
-      setRecordingProgress({
-        phase: "recording",
-        currentTransitionIndex: 0,
-        totalTransitions: steps.length - 1,
-        overallProgress: 0,
-      });
+      let renderer: SvgToCanvasRenderer | null = null;
+      let recorder: VideoRecorder | null = null;
 
       try {
-        const renderer = createSvgToCanvasRenderer(
+        renderer = createSvgToCanvasRenderer(
           svgRef.current,
           RECORDING_WIDTH,
           RECORDING_HEIGHT,
           RECORDING_BACKGROUND,
         );
         const canvas = renderer.getCanvas();
-        const recorder = new VideoRecorder({
+        recorder = new VideoRecorder({
           canvas,
           fps: config.fps,
         });
@@ -178,8 +197,6 @@ export function StorytellingGraphRecorder({
           },
           abortController.signal,
         );
-
-        renderer.dispose();
 
         if (abortController.signal.aborted) {
           setRecordingProgress(null);
@@ -209,15 +226,53 @@ export function StorytellingGraphRecorder({
           errorMessage:
             error instanceof Error ? error.message : "不明なエラー",
         });
+      } finally {
+        // 正常終了・エラー・中断にかかわらずリソースを解放
+        renderer?.dispose();
+        recorder?.dispose();
+        isProcessingRef.current = false;
+        // 完了後は設定をクリア（再実行可能にするため）
+        setRecordingConfig(null);
       }
     },
     [steps, waitForTransitionComplete],
   );
 
+  // 録画開始トリガー（モーダルから呼ばれる）
+  const handleStartRecording = useCallback(
+    async (config: RecordingConfig) => {
+      // 1. 設定を保存
+      setRecordingConfig(config);
+      // 2. プログレスを初期化（これにより isRecording が true になり、グラフがマウントされる）
+      setRecordingProgress({
+        phase: "recording",
+        currentTransitionIndex: 0,
+        totalTransitions: steps.length - 1,
+        overallProgress: 0,
+      });
+      // 3. 実際の処理は useEffect で svgRef が有効になったら開始する
+    },
+    [steps],
+  );
+
+  // SVG 要素と設定が揃ったら録画を開始する Effect
+  React.useEffect(() => {
+    if (
+      recordingConfig &&
+      svgElement &&
+      recordingProgress?.phase === "recording" &&
+      !isProcessingRef.current
+    ) {
+      void executeRecording(recordingConfig);
+    }
+  }, [recordingConfig, svgElement, recordingProgress?.phase, executeRecording]);
+
   const handleAbortRecording = useCallback(() => {
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     setRecordingProgress(null);
+    setRecordingConfig(null);
+    isProcessingRef.current = false;
   }, []);
 
   const isRecording =
@@ -255,7 +310,8 @@ export function StorytellingGraphRecorder({
             showFullGraph={showFullGraph}
             communityTitles={communityTitles}
             onTransitionComplete={handleTransitionComplete}
-            onSvgRef={handleSvgRef}
+            onSvgRef={onSvgRef}
+            forRecording
           />
         </div>
       )}

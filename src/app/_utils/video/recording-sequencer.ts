@@ -76,6 +76,64 @@ export interface SequencerCallbacks {
 }
 
 /**
+ * バックグラウンドタブでも安定してフレーム進行させるためのタイマー。
+ * Web Worker 内の setInterval を使用して、メインスレッドの requestAnimationFrame のスロットリングを回避する。
+ */
+class FramePacer {
+  private worker: Worker | null = null;
+  private nextFrameResolvers: (() => void)[] = [];
+
+  constructor(fps: number) {
+    if (typeof Worker !== "undefined") {
+      const blob = new Blob(
+        [
+          `
+        let intervalId = null;
+        self.onmessage = function(e) {
+          if (e.data.type === 'start') {
+            if (intervalId) clearInterval(intervalId);
+            intervalId = setInterval(() => self.postMessage('tick'), e.data.interval);
+          } else if (e.data.type === 'stop') {
+            if (intervalId) clearInterval(intervalId);
+          }
+        };
+      `,
+        ],
+        { type: "application/javascript" },
+      );
+      const url = URL.createObjectURL(blob);
+      this.worker = new Worker(url);
+      URL.revokeObjectURL(url);
+      
+      this.worker.onmessage = () => {
+        const resolve = this.nextFrameResolvers.shift();
+        if (resolve) resolve();
+      };
+      this.worker.postMessage({ type: "start", interval: 1000 / fps });
+    }
+  }
+
+  async waitNextFrame() {
+    if (this.worker) {
+      return new Promise<void>((resolve) => {
+        this.nextFrameResolvers.push(resolve);
+      });
+    } else {
+      // Workerが使えない環境へのフォールバック（スロットリングされる可能性あり）
+      return new Promise<void>((resolve) =>
+        requestAnimationFrame(() => resolve()),
+      );
+    }
+  }
+
+  dispose() {
+    this.worker?.terminate();
+    this.worker = null;
+    this.nextFrameResolvers = [];
+  }
+}
+
+/**
  * 指定 ms だけ待つ間、毎フレーム Canvas にレンダリングし続ける。
  * MediaRecorder は captureStream から自動でフレームを取得するため、
  * Canvas の内容が変わるたびに新しいフレームが記録される。
@@ -83,6 +141,7 @@ export interface SequencerCallbacks {
 async function holdAndRender(
   renderer: SvgToCanvasRenderer,
   durationMs: number,
+  pacer: FramePacer,
   abortSignal: AbortSignal,
 ): Promise<void> {
   const startTime = performance.now();
@@ -90,7 +149,7 @@ async function holdAndRender(
     if (abortSignal.aborted) return;
     await renderer.renderFrame();
     // 次のアニメーションフレームまで待つ
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    await pacer.waitNextFrame();
   }
 }
 
@@ -101,6 +160,7 @@ async function holdAndRender(
 async function renderDuringTransition(
   renderer: SvgToCanvasRenderer,
   waitForComplete: () => Promise<void>,
+  pacer: FramePacer,
   abortSignal: AbortSignal,
 ): Promise<void> {
   // 遷移完了を待つ Promise と、レンダリングループを並行実行
@@ -112,7 +172,7 @@ async function renderDuringTransition(
   // 遷移中は毎フレーム Canvas を更新
   while (!transitionDone && !abortSignal.aborted) {
     await renderer.renderFrame();
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    await pacer.waitNextFrame();
   }
 
   // 遷移完了後、最終フレームを確実に描画
@@ -132,86 +192,92 @@ async function runCombined(
   callbacks: SequencerCallbacks,
   abortSignal: AbortSignal,
 ): Promise<RecordingResult> {
-  const totalTransitions = steps.length - 1;
+  const pacer = new FramePacer(config.fps);
+  try {
+    const totalTransitions = steps.length - 1;
 
-  // 最初のステップをセット
-  const firstStep = steps[0]!;
-  const isOverview = firstStep.id === "__overview__";
-  if (isOverview) {
-    callbacks.setShowFullGraph(true);
-    callbacks.setFocus([], []);
-  } else {
-    callbacks.setShowFullGraph(false);
-    callbacks.setFocus(firstStep.nodeIds, firstStep.edgeIds);
-  }
-
-  // レイアウト安定待ち
-  await new Promise((r) => setTimeout(r, 300));
-
-  recorder.start();
-
-  // 最初のセグメントの静止（初期状態を見せる）
-  callbacks.onProgress({
-    phase: "recording",
-    currentTransitionIndex: 0,
-    totalTransitions,
-    overallProgress: 0,
-  });
-  await holdAndRender(renderer, config.holdFirstMs, abortSignal);
-  if (abortSignal.aborted) {
-    return { mode: "combined", blob: await recorder.stop(), filename: "" };
-  }
-
-  // 各遷移を実行
-  for (let i = 0; i < totalTransitions; i++) {
-    if (abortSignal.aborted) break;
-
-    const nextStep = steps[i + 1]!;
-    const isNextOverview = nextStep.id === "__overview__";
-
-    callbacks.onProgress({
-      phase: "recording",
-      currentTransitionIndex: i,
-      totalTransitions,
-      overallProgress: (i + 0.5) / totalTransitions,
-    });
-
-    // フォーカスを次のステップに切り替え → 遷移アニメーション開始
-    if (isNextOverview) {
+    // 最初のステップをセット
+    const firstStep = steps[0]!;
+    const isOverview = firstStep.id === "__overview__";
+    if (isOverview) {
       callbacks.setShowFullGraph(true);
       callbacks.setFocus([], []);
     } else {
       callbacks.setShowFullGraph(false);
-      callbacks.setFocus(nextStep.nodeIds, nextStep.edgeIds);
+      callbacks.setFocus(firstStep.nodeIds, firstStep.edgeIds);
     }
 
-    // 遷移アニメーション中はフレームをキャプチャし続ける
-    await renderDuringTransition(
-      renderer,
-      callbacks.waitForTransitionComplete,
-      abortSignal,
-    );
-    if (abortSignal.aborted) break;
+    // レイアウト安定待ち
+    await new Promise((r) => setTimeout(r, 300));
 
-    // 遷移後の滞留
-    const holdMs =
-      i === totalTransitions - 1 ? config.holdLastMs : config.holdBetweenMs;
-    await holdAndRender(renderer, holdMs, abortSignal);
+    recorder.start();
+
+    // 最初のセグメントの静止（初期状態を見せる）
+    callbacks.onProgress({
+      phase: "recording",
+      currentTransitionIndex: 0,
+      totalTransitions,
+      overallProgress: 0,
+    });
+    await holdAndRender(renderer, config.holdFirstMs, pacer, abortSignal);
+    if (abortSignal.aborted) {
+      return { mode: "combined", blob: await recorder.stop(), filename: "" };
+    }
+
+    // 各遷移を実行
+    for (let i = 0; i < totalTransitions; i++) {
+      if (abortSignal.aborted) break;
+
+      const nextStep = steps[i + 1]!;
+      const isNextOverview = nextStep.id === "__overview__";
+
+      callbacks.onProgress({
+        phase: "recording",
+        currentTransitionIndex: i,
+        totalTransitions,
+        overallProgress: (i + 0.5) / totalTransitions,
+      });
+
+      // フォーカスを次のステップに切り替え → 遷移アニメーション開始
+      if (isNextOverview) {
+        callbacks.setShowFullGraph(true);
+        callbacks.setFocus([], []);
+      } else {
+        callbacks.setShowFullGraph(false);
+        callbacks.setFocus(nextStep.nodeIds, nextStep.edgeIds);
+      }
+
+      // 遷移アニメーション中はフレームをキャプチャし続ける
+      await renderDuringTransition(
+        renderer,
+        callbacks.waitForTransitionComplete,
+        pacer,
+        abortSignal,
+      );
+      if (abortSignal.aborted) break;
+
+      // 遷移後の滞留
+      const holdMs =
+        i === totalTransitions - 1 ? config.holdLastMs : config.holdBetweenMs;
+      await holdAndRender(renderer, holdMs, pacer, abortSignal);
+    }
+
+    const blob = await recorder.stop();
+    callbacks.onProgress({
+      phase: "done",
+      currentTransitionIndex: totalTransitions,
+      totalTransitions,
+      overallProgress: 1,
+    });
+
+    return {
+      mode: "combined",
+      blob,
+      filename: `story-animation-${Date.now()}.webm`,
+    };
+  } finally {
+    pacer.dispose();
   }
-
-  const blob = await recorder.stop();
-  callbacks.onProgress({
-    phase: "done",
-    currentTransitionIndex: totalTransitions,
-    totalTransitions,
-    overallProgress: 1,
-  });
-
-  return {
-    mode: "combined",
-    blob,
-    filename: `story-animation-${Date.now()}.webm`,
-  };
 }
 
 /** セグメント個別モード（individual）で録画を実行する */
@@ -223,96 +289,102 @@ async function runIndividual(
   callbacks: SequencerCallbacks,
   abortSignal: AbortSignal,
 ): Promise<RecordingResult> {
-  const totalTransitions = steps.length - 1;
-  const files: Array<{ blob: Blob; filename: string; segmentIndex: number }> =
-    [];
+  const pacer = new FramePacer(config.fps);
+  try {
+    const totalTransitions = steps.length - 1;
+    const files: Array<{ blob: Blob; filename: string; segmentIndex: number }> =
+      [];
 
-  for (let i = 0; i < totalTransitions; i++) {
-    if (abortSignal.aborted) break;
+    for (let i = 0; i < totalTransitions; i++) {
+      if (abortSignal.aborted) break;
+
+      callbacks.onProgress({
+        phase: "recording",
+        currentTransitionIndex: i,
+        totalTransitions,
+        overallProgress: i / totalTransitions,
+      });
+
+      const currentStep = steps[i]!;
+      const nextStep = steps[i + 1]!;
+      const isCurrentOverview = currentStep.id === "__overview__";
+      const isNextOverview = nextStep.id === "__overview__";
+
+      // 遷移前の状態をセット
+      if (isCurrentOverview) {
+        callbacks.setShowFullGraph(true);
+        callbacks.setFocus([], []);
+      } else {
+        callbacks.setShowFullGraph(false);
+        callbacks.setFocus(currentStep.nodeIds, currentStep.edgeIds);
+      }
+
+      // レイアウト安定待ち
+      await new Promise((r) => setTimeout(r, 300));
+
+      // 録画開始（セグメントごとに新しい recorder を使う）
+      const recorder = createRecorder();
+      recorder.start();
+
+      // 遷移前の静止
+      await holdAndRender(renderer, config.holdBeforeMs, pacer, abortSignal);
+      if (abortSignal.aborted) {
+        recorder.dispose();
+        break;
+      }
+
+      // フォーカスを次のステップに切り替え → 遷移アニメーション
+      if (isNextOverview) {
+        callbacks.setShowFullGraph(true);
+        callbacks.setFocus([], []);
+      } else {
+        callbacks.setShowFullGraph(false);
+        callbacks.setFocus(nextStep.nodeIds, nextStep.edgeIds);
+      }
+
+      await renderDuringTransition(
+        renderer,
+        callbacks.waitForTransitionComplete,
+        pacer,
+        abortSignal,
+      );
+      if (abortSignal.aborted) {
+        recorder.dispose();
+        break;
+      }
+
+      // 遷移後の静止
+      await holdAndRender(renderer, config.holdAfterMs, pacer, abortSignal);
+
+      const blob = await recorder.stop();
+      recorder.dispose();
+
+      const segLabel = String(i).padStart(2, "0");
+      files.push({
+        blob,
+        filename: `segment-${segLabel}-to-${String(i + 1).padStart(2, "0")}.webm`,
+        segmentIndex: i,
+      });
+
+      callbacks.onProgress({
+        phase: "recording",
+        currentTransitionIndex: i + 1,
+        totalTransitions,
+        overallProgress: (i + 1) / totalTransitions,
+      });
+    }
 
     callbacks.onProgress({
-      phase: "recording",
-      currentTransitionIndex: i,
+      phase: "done",
+      currentTransitionIndex: totalTransitions,
       totalTransitions,
-      overallProgress: i / totalTransitions,
+      overallProgress: 1,
     });
 
-    const currentStep = steps[i]!;
-    const nextStep = steps[i + 1]!;
-    const isCurrentOverview = currentStep.id === "__overview__";
-    const isNextOverview = nextStep.id === "__overview__";
-
-    // 遷移前の状態をセット
-    if (isCurrentOverview) {
-      callbacks.setShowFullGraph(true);
-      callbacks.setFocus([], []);
-    } else {
-      callbacks.setShowFullGraph(false);
-      callbacks.setFocus(currentStep.nodeIds, currentStep.edgeIds);
-    }
-
-    // レイアウト安定待ち
-    await new Promise((r) => setTimeout(r, 300));
-
-    // 録画開始（セグメントごとに新しい recorder を使う）
-    const recorder = createRecorder();
-    recorder.start();
-
-    // 遷移前の静止
-    await holdAndRender(renderer, config.holdBeforeMs, abortSignal);
-    if (abortSignal.aborted) {
-      recorder.dispose();
-      break;
-    }
-
-    // フォーカスを次のステップに切り替え → 遷移アニメーション
-    if (isNextOverview) {
-      callbacks.setShowFullGraph(true);
-      callbacks.setFocus([], []);
-    } else {
-      callbacks.setShowFullGraph(false);
-      callbacks.setFocus(nextStep.nodeIds, nextStep.edgeIds);
-    }
-
-    await renderDuringTransition(
-      renderer,
-      callbacks.waitForTransitionComplete,
-      abortSignal,
-    );
-    if (abortSignal.aborted) {
-      recorder.dispose();
-      break;
-    }
-
-    // 遷移後の静止
-    await holdAndRender(renderer, config.holdAfterMs, abortSignal);
-
-    const blob = await recorder.stop();
-    recorder.dispose();
-
-    const segLabel = String(i).padStart(2, "0");
-    files.push({
-      blob,
-      filename: `segment-${segLabel}-to-${String(i + 1).padStart(2, "0")}.webm`,
-      segmentIndex: i,
-    });
-
-    callbacks.onProgress({
-      phase: "recording",
-      currentTransitionIndex: i + 1,
-      totalTransitions,
-      overallProgress: (i + 1) / totalTransitions,
-    });
+    return { mode: "individual", files };
+  } finally {
+    pacer.dispose();
   }
-
-  callbacks.onProgress({
-    phase: "done",
-    currentTransitionIndex: totalTransitions,
-    totalTransitions,
-    overallProgress: 1,
-  });
-
-  return { mode: "individual", files };
 }
 
 /**
