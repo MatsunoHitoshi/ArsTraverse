@@ -248,7 +248,13 @@ export function ScrollStorytellingViewer({
                         }}
                       >
                         <SegmentFadeIn>
-                          <p className="whitespace-pre-wrap text-left text-slate-200 leading-relaxed">
+                          <p
+                            className={
+                              step.isTransition
+                                ? "whitespace-pre-wrap text-center text-sm italic leading-relaxed text-slate-400"
+                                : "whitespace-pre-wrap text-left text-slate-200 leading-relaxed"
+                            }
+                          >
                             {step.text || " "}
                           </p>
                         </SegmentFadeIn>
@@ -288,7 +294,13 @@ export function ScrollStorytellingViewer({
                         }}
                       >
                         <SegmentFadeIn>
-                          <p className="whitespace-pre-wrap text-left text-slate-200 leading-relaxed">
+                          <p
+                            className={
+                              step.isTransition
+                                ? "whitespace-pre-wrap text-center text-sm italic leading-relaxed text-slate-400"
+                                : "whitespace-pre-wrap text-left text-slate-200 leading-relaxed"
+                            }
+                          >
                             {step.text || " "}
                           </p>
                         </SegmentFadeIn>
