@@ -1608,6 +1608,7 @@ ${hasEdgeInfo ? "- Explain HOW they are connected (use internal edge information
 - Use chronological or thematic progression
 - Avoid generic descriptions like "〇〇のコミュニティです"
 - When source document references are provided, use them for depth
+- **CRITICAL**: The "Narrative Context" provided above (especially transition texts) is for your understanding of the flow only. DO NOT repeat the transition text in your story output. Focus ONLY on the internal story of this community.
 
 [Language]
 - Write the story in the SAME language as the source data (Members, labels, properties, and source references). If they are mainly in Japanese, write in Japanese; if mainly in English, write in English. Do not default to English when the resource is in another language.
@@ -1637,7 +1638,7 @@ Generate a rich, detailed narrative story (3-5 paragraphs, 200-400 words) about 
 6. Avoids generic descriptions like "〇〇のコミュニティです"
 7. Incorporates specific details from node and edge properties when available
 8. Shows the richness of relationships within the community
-9. When source document references are provided, use them to add depth and context to the story
+10. **CRITICAL**: The "Narrative Context" provided above (especially transition texts) is for your understanding of the flow only. DO NOT repeat the transition text in your story output. Focus ONLY on the internal story of this community.
 
 [Writing Style]
 - Write the story in the SAME language as the source data (Members, labels, properties, and any source references). If they are mainly in Japanese, write in Japanese; if mainly in English, write in English. Do not default to English when the resource is in another language.
