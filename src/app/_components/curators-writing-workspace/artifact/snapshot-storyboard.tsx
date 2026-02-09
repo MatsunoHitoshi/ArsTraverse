@@ -34,6 +34,7 @@ import { SortableItem } from "@/app/_components/sortable/sortable-item";
 import { DeleteRecordModal } from "../../modal/delete-record-modal";
 import { Textarea } from "../../textarea";
 import { FilterSection } from "@/app/_components/layout-edit/sections/filter-section";
+import { StorytellingGraphRecorder } from "../../d3/force/storytelling-graph-recorder";
 
 export const SnapshotStoryboard = ({
   workspaceId,
@@ -55,6 +56,8 @@ export const SnapshotStoryboard = ({
   onEditModeChange,
   onStoryDelete,
   onApplyStoryFilter,
+  graphDocument,
+  workspaceTitle,
 }: {
   workspaceId: string;
   metaGraphSummaries?: Array<{
@@ -98,6 +101,10 @@ export const SnapshotStoryboard = ({
   onApplyStoryFilter?: (filter: LayoutInstruction["filter"]) => void;
   /** 段落クリックで局所グラフをハイライト（対応する nodeIds/edgeIds を渡す） */
   onSegmentFocus?: (ref: FocusedSegmentRef | null) => void;
+  /** 動画書き出し用のグラフデータ */
+  graphDocument?: GraphDocumentForFrontend | null;
+  /** 動画書き出し用のワークスペースタイトル */
+  workspaceTitle?: string;
 }) => {
   // ストーリーデータの取得（refetch用）
   const { refetch: refetchStory } = api.story.get.useQuery(
@@ -682,6 +689,13 @@ export const SnapshotStoryboard = ({
             <PaperRollIcon width={14} height={14} />
             <span>出力</span>
           </LinkButton>
+          {metaGraphStoryData && graphDocument && (
+            <StorytellingGraphRecorder
+              graphDocument={graphDocument}
+              metaGraphData={metaGraphStoryData}
+              workspaceTitle={workspaceTitle}
+            />
+          )}
           {metaGraphStoryData && (
             <Button
               size="small"

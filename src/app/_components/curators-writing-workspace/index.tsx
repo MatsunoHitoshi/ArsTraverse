@@ -566,6 +566,8 @@ const CuratorsWritingWorkspace = ({
                   setIsMetaGraphMode(false);
                 }}
                 onApplyStoryFilter={(filter) => setStoryFilter(filter ?? null)}
+                graphDocument={graphDocument}
+                workspaceTitle={workspace.name ?? undefined}
               />
             ) : (
               <TiptapGraphFilterContext.Provider

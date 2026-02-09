@@ -77,6 +77,8 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   showFullGraph = false,
   communityTitles,
   onCommunityTitleClick,
+  onTransitionComplete,
+  onSvgRef,
 }: {
   graphDocument: GraphDocumentForFrontend;
   focusNodeIds: string[];
@@ -98,6 +100,10 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   communityTitles?: Record<string, string>;
   /** コミュニティタイトルクリック時。そのコミュニティの先頭セグメントへ遷移するために使用 */
   onCommunityTitleClick?: (communityId: string) => void;
+  /** フォーカス遷移アニメーションが完了したときに呼ばれるコールバック */
+  onTransitionComplete?: () => void;
+  /** 外部から SVG 要素にアクセスするためのコールバック ref */
+  onSvgRef?: (el: SVGSVGElement | null) => void;
 }) {
   const showBottomFadeGradient = !isPc;
   const edgeFadePx = isPc ? 64 : undefined;
@@ -106,6 +112,13 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     narrativeFlow != null &&
     (narrativeFlow?.some((n) => n.order != null) ?? false);
   const svgRef = useRef<SVGSVGElement>(null);
+  // 外部から SVG 要素にアクセスできるよう ref をコールバックで通知
+  const onSvgRefStable = useRef(onSvgRef);
+  onSvgRefStable.current = onSvgRef;
+  useEffect(() => {
+    onSvgRefStable.current?.(svgRef.current);
+    return () => onSvgRefStable.current?.(null);
+  }, []);
   const [zoomScale, setZoomScale] = useState(1);
   const [zoomX, setZoomX] = useState(0);
   const [zoomY, setZoomY] = useState(0);
@@ -248,6 +261,18 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   }, [focusNodeIds, focusEdgeIds, showFullGraph]);
 
   const isTransitionComplete = transitionElapsedMs >= FOCUS_TRANSITION_MS;
+
+  // 遷移完了時に親へ通知（録画シーケンサーが遷移完了を検知するために使用）
+  const onTransitionCompleteRef = useRef(onTransitionComplete);
+  onTransitionCompleteRef.current = onTransitionComplete;
+  const prevTransitionCompleteRef = useRef(isTransitionComplete);
+  useEffect(() => {
+    // false → true に変わった瞬間のみコールバックを呼ぶ
+    if (isTransitionComplete && !prevTransitionCompleteRef.current) {
+      onTransitionCompleteRef.current?.();
+    }
+    prevTransitionCompleteRef.current = isTransitionComplete;
+  }, [isTransitionComplete]);
 
   const [transitionFromLayoutTransform, setTransitionFromLayoutTransform] = useState<{
     scale: number;
