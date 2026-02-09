@@ -31,18 +31,18 @@ export function buildScrollStepsFromMetaGraphStoryData(
     const communityId = flowItem.communityId;
     const communityTitle = communityTitleById.get(communityId);
 
-    // このコミュニティへの導入・繋がり文（transitionText）を 1 ステップとして先に挿入
-    if (flowItem.transitionText?.trim()) {
-      steps.push({
-        id: `transition-${communityId}`,
-        communityId,
-        communityTitle,
-        text: flowItem.transitionText.trim(),
-        nodeIds: [],
-        edgeIds: [],
-        isTransition: true,
-      });
-    }
+    // トランジションテキストの独立ステップとしての追加を廃止
+    // if (flowItem.transitionText?.trim()) {
+    //   steps.push({
+    //     id: `transition-${communityId}`,
+    //     communityId,
+    //     communityTitle,
+    //     text: flowItem.transitionText.trim(),
+    //     nodeIds: [],
+    //     edgeIds: [],
+    //     isTransition: true,
+    //   });
+    // }
 
     const storyContent = metaGraphData.detailedStories[communityId];
 

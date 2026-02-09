@@ -255,7 +255,21 @@ export const storyRouter = createTRPCRouter({
           referencedTopicSpace: true,
           metaNodes: {
             include: {
-              memberNodes: true,
+              memberNodes: {
+                include: {
+                  // 内部エッジ情報を再構築するためにrelationshipsFromを含める
+                  // convertFromDatabaseでコミュニティ内のエッジのみフィルタリングされる
+                  relationshipsFrom: {
+                    select: {
+                      id: true,
+                      type: true,
+                      properties: true,
+                      fromNodeId: true,
+                      toNodeId: true,
+                    },
+                  },
+                },
+              },
               summary: true,
               storyContent: true,
             },

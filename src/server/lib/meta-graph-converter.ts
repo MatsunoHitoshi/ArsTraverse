@@ -254,16 +254,84 @@ export function convertFromDatabase(
   // preparedCommunitiesを構築（ストーリー再生成・追加可能リストで参照するため全コミュニティを返す）
   const preparedCommunities = storyData.metaNodes
     .filter((metaNode) => metaNode.summary !== null)
-    .map((metaNode) => ({
-      communityId: metaNode.communityId,
-      memberNodeNames: metaNode.memberNodes.map((node) => node.name),
-      memberNodeLabels: metaNode.memberNodes.map((node) => node.label),
-      // これらの情報はDBに保存されていないため、空にする
-      internalEdges: undefined,
-      externalConnections: metaNode.hasExternalConnections
-        ? "Has external connections"
-        : undefined,
-    }));
+    .map((metaNode) => {
+      // memberNodesの詳細情報を構築（再生成時にセグメント構造化されたストーリーを生成するために必要）
+      const memberNodeIds = new Set(metaNode.memberNodes.map((n) => n.id));
+      const memberNodesDetailed = metaNode.memberNodes.map((node) => ({
+        id: node.id,
+        name: node.name,
+        label: node.label,
+        properties: (typeof node.properties === "object" && node.properties !== null
+          ? node.properties
+          : {}) as Record<string, unknown>,
+      }));
+
+      // internalEdgesDetailedを再構築（memberNodesのrelationshipsFromから）
+      // 注意: memberNodes が relationshipsFrom を含む場合のみ再構築可能
+      const internalEdgesDetailed: Array<{
+        sourceId: string;
+        sourceName: string;
+        targetId: string;
+        targetName: string;
+        type: string;
+        properties: Record<string, unknown>;
+      }> = [];
+
+      const nodeIdToName = new Map(
+        metaNode.memberNodes.map((n) => [n.id, n.name]),
+      );
+
+      // memberNodes に relationshipsFrom が含まれている場合、内部エッジを抽出
+      for (const node of metaNode.memberNodes) {
+        const rels = (node as unknown as {
+          relationshipsFrom?: Array<{
+            id: string;
+            type: string;
+            properties: unknown;
+            fromNodeId: string;
+            toNodeId: string;
+          }>;
+        }).relationshipsFrom;
+        if (rels) {
+          for (const rel of rels) {
+            // 両端が同じコミュニティ内にあるもののみ
+            if (memberNodeIds.has(rel.fromNodeId) && memberNodeIds.has(rel.toNodeId)) {
+              internalEdgesDetailed.push({
+                sourceId: rel.fromNodeId,
+                sourceName: nodeIdToName.get(rel.fromNodeId) ?? "",
+                targetId: rel.toNodeId,
+                targetName: nodeIdToName.get(rel.toNodeId) ?? "",
+                type: rel.type,
+                properties: (typeof rel.properties === "object" && rel.properties !== null
+                  ? rel.properties
+                  : {}) as Record<string, unknown>,
+              });
+            }
+          }
+        }
+      }
+
+      return {
+        communityId: metaNode.communityId,
+        memberNodeNames: metaNode.memberNodes.map((node) => node.name),
+        memberNodeLabels: metaNode.memberNodes.map((node) => node.label),
+        // 簡易版（summarizeCommunities用）
+        internalEdges: internalEdgesDetailed.length > 0
+          ? internalEdgesDetailed
+              .slice(0, 10)
+              .map((e) => `${e.sourceName} --[${e.type}]--> ${e.targetName}`)
+              .join(", ")
+          : undefined,
+        externalConnections: metaNode.hasExternalConnections
+          ? "Has external connections"
+          : undefined,
+        // 詳細版（generateCommunityStory でセグメント構造化ストーリーを生成するために必要）
+        memberNodes: memberNodesDetailed,
+        internalEdgesDetailed: internalEdgesDetailed.length > 0
+          ? internalEdgesDetailed
+          : undefined,
+      };
+    });
 
   return {
     metaGraph: {
