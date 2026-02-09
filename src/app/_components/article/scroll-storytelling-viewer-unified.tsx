@@ -7,7 +7,10 @@ import type { MetaGraphStoryData } from "@/app/_hooks/use-meta-graph-story";
 import { Scrollama, Step } from "react-scrollama";
 import type { ScrollamaStepCallbackArg, ScrollamaProgressCallbackArg } from "react-scrollama";
 import { StorytellingGraphUnified } from "../d3/force/storytelling-graph-unified";
-import { buildScrollStepsFromMetaGraphStoryData } from "@/app/_utils/story-scroll-utils";
+import {
+  buildScrollStepsFromMetaGraphStoryData,
+  type ScrollStep,
+} from "@/app/_utils/story-scroll-utils";
 import { useWindowSize } from "@/app/_hooks/use-window-size";
 import { DownArrowIcon, ResetIcon, UpArrowIcon, ZoomInIcon } from "../icons/icons";
 import { getEdgeCompositeKeyFromLink } from "@/app/const/story-segment";
@@ -80,14 +83,7 @@ export function ScrollStorytellingViewerUnified({
   const steps = useMemo(() => {
     const storySteps = buildScrollStepsFromMetaGraphStoryData(metaGraphData);
     // オーバービューは nodeIds/edgeIds を空にし、グラフ側で showFullGraph 時に baseGraph の全ノード・全エッジを参照させる（コミュニティフォーカスと同じ情報源）
-    const overviewStep: {
-      id: string;
-      communityId: string;
-      communityTitle?: string;
-      text: string;
-      nodeIds: string[];
-      edgeIds: string[];
-    } = {
+    const overviewStep: ScrollStep = {
       id: "__overview__",
       communityId: "",
       communityTitle: workspaceTitle ?? "グラフ全体",
@@ -440,7 +436,13 @@ export function ScrollStorytellingViewerUnified({
                                 )}
                               </div>
                             )}
-                            <p className="whitespace-pre-wrap text-left text-slate-200 leading-relaxed">
+                            <p
+                              className={
+                                step.isTransition
+                                  ? "whitespace-pre-wrap text-center text-sm italic leading-relaxed text-slate-400"
+                                  : "whitespace-pre-wrap text-left text-slate-200 leading-relaxed"
+                              }
+                            >
                               {step.text || " "}
                             </p>
                           </SegmentFadeIn>
@@ -532,7 +534,13 @@ export function ScrollStorytellingViewerUnified({
                                 )}
                               </div>
                             )}
-                            <p className="whitespace-pre-wrap text-left text-slate-200 leading-relaxed">
+                            <p
+                              className={
+                                step.isTransition
+                                  ? "whitespace-pre-wrap text-center text-sm italic leading-relaxed text-slate-400"
+                                  : "whitespace-pre-wrap text-left text-slate-200 leading-relaxed"
+                              }
+                            >
                               {step.text || " "}
                             </p>
                           </SegmentFadeIn>
