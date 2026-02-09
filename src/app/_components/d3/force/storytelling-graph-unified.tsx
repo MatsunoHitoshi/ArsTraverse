@@ -791,21 +791,25 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   nodesRef.current = nodes;
   clientToLayoutRef.current = clientToLayout;
 
-  // 探索モード時: SVG にキャプチャで mousedown を登録し、ノードクリックを D3 zoom より先に処理する（zoom が stopPropagation すると React に届かないため）
+  // 探索モード時: SVG にキャプチャで mousedown/touchstart を登録し、ノードクリックを D3 zoom より先に処理する
   useEffect(() => {
     if (!freeExploreMode || !svgRef.current) return;
     const svg = svgRef.current;
-    const onCapture = (e: MouseEvent) => {
+    
+    const startDrag = (e: MouseEvent | TouchEvent, clientX: number, clientY: number) => {
       const el = (e.target as Element)?.closest?.("[data-node-id]");
       if (!el) return;
-      e.preventDefault();
+      // モバイルでのスクロール防止などを兼ねて stopPropagation / preventDefault
+      if (e.cancelable) e.preventDefault();
       e.stopPropagation();
+
       const nodeId = el?.getAttribute("data-node-id");
       if (!nodeId) return;
       const node = nodesRef.current.find((n) => n.id === nodeId);
       if (node?.x == null || node?.y == null) return;
-      const layout = clientToLayoutRef.current?.(e.clientX, e.clientY);
+      const layout = clientToLayoutRef.current?.(clientX, clientY);
       if (!layout) return;
+
       dragStartRef.current = {
         nodeId: node.id,
         startNodeX: node.x,
@@ -815,25 +819,38 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
       };
       setDraggingNodeId(node.id);
     };
-    svg.addEventListener("mousedown", onCapture, true);
-    return () => svg.removeEventListener("mousedown", onCapture, true);
+
+    const onMouseDown = (e: MouseEvent) => {
+      startDrag(e, e.clientX, e.clientY);
+    };
+    
+    const onTouchStart = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      if (touch) {
+        startDrag(e, touch.clientX, touch.clientY);
+      }
+    };
+
+    svg.addEventListener("mousedown", onMouseDown, true);
+    svg.addEventListener("touchstart", onTouchStart, { capture: true, passive: false });
+    
+    return () => {
+      svg.removeEventListener("mousedown", onMouseDown, true);
+      svg.removeEventListener("touchstart", onTouchStart, { capture: true });
+    };
   }, [freeExploreMode]);
 
   useEffect(() => {
     if (!draggingNodeId) return;
-    let lastLog = 0;
-    const onMove = (e: MouseEvent) => {
+    
+    const handleMove = (clientX: number, clientY: number) => {
       const start = dragStartRef.current;
       if (!start || start.nodeId !== draggingNodeId) return;
-      const layout = clientToLayout(e.clientX, e.clientY);
+      const layout = clientToLayout(clientX, clientY);
       if (!layout) return;
       const newX = start.startNodeX + (layout.x - start.startPointerLayoutX);
       const newY = start.startNodeY + (layout.y - start.startPointerLayoutY);
-      const now = Date.now();
-      if (now - lastLog >= 100) {
-        console.log("[DnD] mousemove", { nodeId: draggingNodeId, newX, newY });
-        lastLog = now;
-      }
+      
       setNodes((prev) => {
         const next = prev.map((n) =>
           n.id === draggingNodeId ? { ...n, x: newX, y: newY } : n,
@@ -852,15 +869,37 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         return next;
       });
     };
-    const onUp = () => {
-      console.log("[DnD] mouseup", { nodeId: draggingNodeId });
+
+    const onMouseMove = (e: MouseEvent) => {
+      e.preventDefault();
+      handleMove(e.clientX, e.clientY);
+    };
+    
+    const onTouchMove = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      if (touch) {
+        // スクロールなどのデフォルト動作を防ぐ
+        if (e.cancelable) e.preventDefault();
+        handleMove(touch.clientX, touch.clientY);
+      }
+    };
+
+    const onEnd = () => {
       setDraggingNodeId(null);
     };
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
+
+    document.addEventListener("mousemove", onMouseMove, { passive: false });
+    document.addEventListener("mouseup", onEnd);
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
+    document.addEventListener("touchend", onEnd);
+    document.addEventListener("touchcancel", onEnd);
+    
     return () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onEnd);
+      document.removeEventListener("touchmove", onTouchMove);
+      document.removeEventListener("touchend", onEnd);
+      document.removeEventListener("touchcancel", onEnd);
     };
   }, [draggingNodeId, clientToLayout]);
 
