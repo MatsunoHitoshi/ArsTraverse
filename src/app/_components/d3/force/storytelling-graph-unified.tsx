@@ -122,6 +122,9 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   const [zoomScale, setZoomScale] = useState(1);
   const [zoomX, setZoomX] = useState(0);
   const [zoomY, setZoomY] = useState(0);
+  const [failedImageNodeIds, setFailedImageNodeIds] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   // 自由探索モードを抜けたときにズームをリセットし、D3のzoomリスナーを外す
   useEffect(() => {
@@ -1087,18 +1090,54 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         const [vx, vy] = toView(node.x, node.y);
         const opacity = getNodeOpacity(node);
         const r = getNodeRadius(node) * (0.8 / Math.max(1, scaleForSize));
+        const imageUrl = node.properties?.imageUrl as string | undefined;
+        const showImage =
+          imageUrl &&
+          !failedImageNodeIds.has(node.id);
+
         return (
           <g
             key={node.id}
             transform={`translate(${vx}, ${vy})`}
             style={{ opacity }}
           >
-            <circle
-              r={r}
-              fill="#e2e8f0"
-              stroke="#94a3b8"
-              strokeWidth={nodeStrokeWidth}
-            />
+            {showImage ? (
+              <>
+                <defs>
+                  <clipPath id={`node-image-clip-${node.id}`}>
+                    <circle r={r} />
+                  </clipPath>
+                </defs>
+                <g clipPath={`url(#node-image-clip-${node.id})`}>
+                  <image
+                    x={-r}
+                    y={-r}
+                    width={r * 2}
+                    height={r * 2}
+                    href={imageUrl}
+                    preserveAspectRatio="xMidYMid slice"
+                    onError={() => {
+                      setFailedImageNodeIds((prev) =>
+                        new Set(prev).add(node.id),
+                      );
+                    }}
+                  />
+                </g>
+                <circle
+                  r={r}
+                  fill="none"
+                  stroke="#94a3b8"
+                  strokeWidth={nodeStrokeWidth}
+                />
+              </>
+            ) : (
+              <circle
+                r={r}
+                fill="#e2e8f0"
+                stroke="#94a3b8"
+                strokeWidth={nodeStrokeWidth}
+              />
+            )}
             {showNodeLabels && nodeLabelFontSize > 0 && (
               <text
                 y={-10}

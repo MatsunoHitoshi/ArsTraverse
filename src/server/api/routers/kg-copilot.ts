@@ -1347,6 +1347,17 @@ Community ${idx + 1} (ID: ${c.communityId}):
           .optional(),
         curatorialContext: CuratorialContextSchema.optional().nullable(),
         workspaceId: z.string().optional(),
+        /** ナラティブ内の前後のコミュニティ情報。繋がりを意識した本文生成に使う */
+        narrativeContext: z
+          .object({
+            previousSummary: z.string().optional(),
+            previousTitle: z.string().optional(),
+            nextSummary: z.string().optional(),
+            nextTitle: z.string().optional(),
+            transitionTextBefore: z.string().optional(),
+            transitionTextAfter: z.string().optional(),
+          })
+          .optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -1360,6 +1371,7 @@ Community ${idx + 1} (ID: ${c.communityId}):
         internalEdgesDetailed,
         curatorialContext,
         workspaceId,
+        narrativeContext,
       } = input;
 
       const llm = new ChatOpenAI({
@@ -1551,8 +1563,25 @@ Community ${idx + 1} (ID: ${c.communityId}):
         ? `Stance: ${curatorialContext.stance}`
         : "Stance: Neutral/Undefined";
 
+      const narrativeContextBlock =
+        narrativeContext &&
+        (narrativeContext.previousTitle ??
+          narrativeContext.nextTitle ??
+          narrativeContext.transitionTextBefore ??
+          narrativeContext.transitionTextAfter)
+          ? `
+[Narrative Context - write so this community connects naturally in the story]
+${(narrativeContext.previousTitle ?? narrativeContext.previousSummary) ? `- Previous theme: ${narrativeContext.previousTitle ?? ""} ${(narrativeContext.previousSummary ?? "").slice(0, 150)}${(narrativeContext.previousSummary ?? "").length > 150 ? "..." : ""}` : ""}
+${narrativeContext.transitionTextBefore?.trim() ? `- Transition into this community: ${narrativeContext.transitionTextBefore.trim()}` : ""}
+${(narrativeContext.nextTitle ?? narrativeContext.nextSummary) ? `- Next theme: ${narrativeContext.nextTitle ?? ""} ${(narrativeContext.nextSummary ?? "").slice(0, 150)}${(narrativeContext.nextSummary ?? "").length > 150 ? "..." : ""}` : ""}
+${narrativeContext.transitionTextAfter?.trim() ? `- Transition after this community: ${narrativeContext.transitionTextAfter.trim()}` : ""}
+- Keep the same language and tone so the overall narrative flows smoothly.`
+          : "";
+
       // 詳細情報がある場合はそれを使用、なければ簡易版を使用
-      const hasDetailedInfo = memberNodes && internalEdgesDetailed;
+      // memberNodes があればセグメント構造化ストーリーを生成（internalEdgesDetailed はオプション）
+      const hasDetailedInfo = !!memberNodes && memberNodes.length > 0;
+      const hasEdgeInfo = !!internalEdgesDetailed && internalEdgesDetailed.length > 0;
       const validNodeIds = new Set(memberNodes?.map((n) => n.id) ?? []);
       const validEdgeIds = new Set(
         internalEdgesDetailed?.map((e) =>
@@ -1565,19 +1594,21 @@ Community ${idx + 1} (ID: ${c.communityId}):
 
 [Curatorial Context]
 ${stance}
+${narrativeContextBlock ?? ""}
 
 [Task]
 Generate a rich, detailed narrative story (3-5 short paragraphs, 200-400 words) about this community. Split the story into SHORT PARAGRAPHS (one or two sentences each). For EACH paragraph you MUST output:
 1. "text": the paragraph text
 2. "nodeIds": array of node IDs from the [Members] list that this paragraph mentions (use ONLY the "id" values shown)
-3. "edgeIds": array of edge composite keys "sourceId|targetId|type" from the [Internal Relationships] list that this paragraph mentions (use EXACTLY the format shown in [Edge IDs for output])
+${hasEdgeInfo ? '3. "edgeIds": array of edge composite keys "sourceId|targetId|type" from the [Internal Relationships] list that this paragraph mentions (use EXACTLY the format shown in [Edge IDs for output])' : '3. "edgeIds": always an empty array []'}
 
 Guidelines:
 - Describe WHO the key figures are and WHAT they did (use node properties for context)
-- Explain HOW they are connected (use internal edge information)
+${hasEdgeInfo ? "- Explain HOW they are connected (use internal edge information)" : "- Explain HOW they are connected based on the node relationships"}
 - Use chronological or thematic progression
 - Avoid generic descriptions like "〇〇のコミュニティです"
 - When source document references are provided, use them for depth
+- **CRITICAL**: The "Narrative Context" provided above (especially transition texts) is for your understanding of the flow only. DO NOT repeat the transition text in your story output. Focus ONLY on the internal story of this community.
 
 [Language]
 - Write the story in the SAME language as the source data (Members, labels, properties, and source references). If they are mainly in Japanese, write in Japanese; if mainly in English, write in English. Do not default to English when the resource is in another language.
@@ -1587,14 +1618,15 @@ Guidelines:
 
 [Output Format]
 You MUST output a valid JSON object only, no markdown or extra text:
-{"segments":[{"text":"...","nodeIds":["id1","id2"],"edgeIds":["sourceId|targetId|type"]},{"text":"...","nodeIds":[],"edgeIds":[]},...]}
+{"segments":[{"text":"...","nodeIds":["id1","id2"],"edgeIds":${hasEdgeInfo ? '["sourceId|targetId|type"]' : '[]'}},{"text":"...","nodeIds":[],"edgeIds":[]},...]}
 
 - "nodeIds" must contain ONLY ids from the [Members] list below.
-- "edgeIds" must contain ONLY keys from the [Edge IDs for output] list below.`
+${hasEdgeInfo ? '- "edgeIds" must contain ONLY keys from the [Edge IDs for output] list below.' : '- "edgeIds" must always be an empty array [] (no edge data available).'}`
         : `You are "ArsTraverse Story Writer", an AI assistant specialized in writing rich, narrative stories about knowledge graph communities in art and cultural contexts.
 
 [Curatorial Context]
 ${stance}
+${narrativeContextBlock ?? ""}
 
 [Task]
 Generate a rich, detailed narrative story (3-5 paragraphs, 200-400 words) about this community that:
@@ -1606,7 +1638,7 @@ Generate a rich, detailed narrative story (3-5 paragraphs, 200-400 words) about 
 6. Avoids generic descriptions like "〇〇のコミュニティです"
 7. Incorporates specific details from node and edge properties when available
 8. Shows the richness of relationships within the community
-9. When source document references are provided, use them to add depth and context to the story
+10. **CRITICAL**: The "Narrative Context" provided above (especially transition texts) is for your understanding of the flow only. DO NOT repeat the transition text in your story output. Focus ONLY on the internal story of this community.
 
 [Writing Style]
 - Write the story in the SAME language as the source data (Members, labels, properties, and any source references). If they are mainly in Japanese, write in Japanese; if mainly in English, write in English. Do not default to English when the resource is in another language.
@@ -1629,8 +1661,8 @@ Write: "片野湘雲は上溝村で生まれ、父・片野儀右衛門から絵
         ? `
 Community ID: ${communityId}
 
-[Members (${memberNodes.length} nodes)] - use "id" in nodeIds
-${memberNodes
+[Members (${memberNodes?.length ?? 0} nodes)] - use "id" in nodeIds
+${(memberNodes ?? [])
   .map(
     (node, idx) =>
       `${idx + 1}. id: "${node.id}" | ${node.name} (${node.label})${
@@ -1640,9 +1672,9 @@ ${memberNodes
       }`,
   )
   .join("\n")}
-
-[Internal Relationships (${internalEdgesDetailed.length} edges)]
-${internalEdgesDetailed
+${hasEdgeInfo ? `
+[Internal Relationships (${internalEdgesDetailed?.length ?? 0} edges)]
+${(internalEdgesDetailed ?? [])
   .map(
     (edge, idx) =>
       `${idx + 1}. ${edge.sourceName} --[${edge.type}]--> ${edge.targetName}${
@@ -1654,9 +1686,12 @@ ${internalEdgesDetailed
   .join("\n")}
 
 [Edge IDs for output] - use EXACTLY these strings in edgeIds
-${internalEdgesDetailed
+${(internalEdgesDetailed ?? [])
   .map((e) => toEdgeCompositeKey(e.sourceId, e.targetId, e.type))
-  .join("\n")}
+  .join("\n")}` : `
+[Internal Relationships]
+${internalEdges ?? "No detailed edge data available"}
+`}
 
 [External Connections]
 ${externalConnections ?? "None (isolated community)"}
@@ -1944,9 +1979,14 @@ Output JSON with segments array (same order, same text, add nodeIds and edgeIds 
           (c): c is z.infer<typeof PreparedCommunitySchema> => c !== undefined,
         );
 
+      // マッチするコミュニティがなくても順序は維持する（空で返すとクライアントでストーリーが消える）
       if (orderedCommunities.length === 0) {
         return {
-          narrativeFlow: [],
+          narrativeFlow: orderedCommunityIds.map((id, index) => ({
+            communityId: id,
+            order: index + 1,
+            transitionText: "",
+          })),
         };
       }
 
