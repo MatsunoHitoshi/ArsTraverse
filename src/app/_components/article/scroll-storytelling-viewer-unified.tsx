@@ -41,7 +41,7 @@ function SegmentFadeIn({ children }: { children: React.ReactNode }) {
 const XL_BREAKPOINT = 1280;
 const GRAPH_MIN_HEIGHT = 400;
 /** グラフエリアの高さ（PC / SP） */
-const GRAPH_SECTION_HEIGHT_PC = "95dvh";
+const GRAPH_SECTION_HEIGHT_PC = "min(95vh, 740px)";
 const GRAPH_SECTION_HEIGHT_SP = "min(72vh, 600px)";
 /** SP版の冒頭（オーバービュー）のみグラフを大きく */
 const GRAPH_SECTION_HEIGHT_SP_OVERVIEW = "min(88vh, 720px)";
@@ -449,9 +449,6 @@ export function ScrollStorytellingViewerUnified({
                     );
                   })}
                 </Scrollama>
-
-
-
               </div>
             </>
           ) : (

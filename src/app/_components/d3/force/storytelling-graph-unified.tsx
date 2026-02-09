@@ -112,6 +112,16 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   const [failedImageNodeIds, setFailedImageNodeIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
+  const dragStartRef = useRef<{
+    nodeId: string;
+    startNodeX: number;
+    startNodeY: number;
+    startPointerLayoutX: number;
+    startPointerLayoutY: number;
+  } | null>(null);
+  const nodesRef = useRef<CustomNodeType[]>([]);
+  const clientToLayoutRef = useRef<((cx: number, cy: number) => { x: number; y: number } | null) | null>(null);
 
   // 自由探索モードを抜けたときにズームをリセットし、D3のzoomリスナーを外す
   useEffect(() => {
@@ -748,6 +758,116 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     [width, height, displayCenterX, displayCenterY, displayScale],
   );
 
+  /** 探索モード時: クライアント座標をレイアウト座標に変換（DnD用） */
+  const clientToLayout = useCallback(
+    (clientX: number, clientY: number): { x: number; y: number } | null => {
+      if (!freeExploreMode || !svgRef.current) return null;
+      const ctm = svgRef.current.getScreenCTM();
+      if (!ctm) return null;
+      const pt = svgRef.current.createSVGPoint();
+      pt.x = clientX;
+      pt.y = clientY;
+      const svgPt = pt.matrixTransform(ctm.inverse());
+      const contentX = (svgPt.x - zoomX) / zoomScale;
+      const contentY = (svgPt.y - zoomY) / zoomScale;
+      const layoutX = displayCenterX + (contentX - width / 2) / displayScale;
+      const layoutY = displayCenterY + (contentY - height / 2) / displayScale;
+      return { x: layoutX, y: layoutY };
+    },
+    [
+      freeExploreMode,
+      zoomX,
+      zoomY,
+      zoomScale,
+      displayCenterX,
+      displayCenterY,
+      displayScale,
+      width,
+      height,
+    ],
+  );
+  nodesRef.current = nodes;
+  clientToLayoutRef.current = clientToLayout;
+
+  // 探索モード時: SVG にキャプチャで mousedown を登録し、ノードクリックを D3 zoom より先に処理する（zoom が stopPropagation すると React に届かないため）
+  useEffect(() => {
+    if (!freeExploreMode || !svgRef.current) return;
+    const svg = svgRef.current;
+    const onCapture = (e: MouseEvent) => {
+      const el = (e.target as Element)?.closest?.("[data-node-id]");
+      if (!el) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const nodeId = el?.getAttribute("data-node-id");
+      if (!nodeId) return;
+      const node = nodesRef.current.find((n) => n.id === nodeId);
+      if (node?.x == null || node?.y == null) return;
+      const layout = clientToLayoutRef.current?.(e.clientX, e.clientY);
+      if (!layout) return;
+      console.log("[DnD] mousedown", {
+        nodeId: node.id,
+        nodeName: node.name,
+        layout,
+        nodeXY: { x: node.x, y: node.y },
+      });
+      dragStartRef.current = {
+        nodeId: node.id,
+        startNodeX: node.x,
+        startNodeY: node.y,
+        startPointerLayoutX: layout.x,
+        startPointerLayoutY: layout.y,
+      };
+      setDraggingNodeId(node.id);
+    };
+    svg.addEventListener("mousedown", onCapture, true);
+    return () => svg.removeEventListener("mousedown", onCapture, true);
+  }, [freeExploreMode]);
+
+  useEffect(() => {
+    if (!draggingNodeId) return;
+    let lastLog = 0;
+    const onMove = (e: MouseEvent) => {
+      const start = dragStartRef.current;
+      if (!start || start.nodeId !== draggingNodeId) return;
+      const layout = clientToLayout(e.clientX, e.clientY);
+      if (!layout) return;
+      const newX = start.startNodeX + (layout.x - start.startPointerLayoutX);
+      const newY = start.startNodeY + (layout.y - start.startPointerLayoutY);
+      const now = Date.now();
+      if (now - lastLog >= 100) {
+        console.log("[DnD] mousemove", { nodeId: draggingNodeId, newX, newY });
+        lastLog = now;
+      }
+      setNodes((prev) => {
+        const next = prev.map((n) =>
+          n.id === draggingNodeId ? { ...n, x: newX, y: newY } : n,
+        );
+        setLinks((prevLinks) =>
+          prevLinks.map((link) => ({
+            ...link,
+            source:
+              next.find((n) => n.id === (link.source as CustomNodeType).id) ??
+              link.source,
+            target:
+              next.find((n) => n.id === (link.target as CustomNodeType).id) ??
+              link.target,
+          })),
+        );
+        return next;
+      });
+    };
+    const onUp = () => {
+      console.log("[DnD] mouseup", { nodeId: draggingNodeId });
+      setDraggingNodeId(null);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    return () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+  }, [draggingNodeId, clientToLayout]);
+
   const nodesToRender = useMemo(
     () =>
       communityMap != null
@@ -947,11 +1067,16 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         const isFocusEdge = focusEdgeIdSet.has(key);
         const dx = tx - sx;
         const dy = ty - sy;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        /** エッジの垂直上方向（画面で上＝マイナスY）に8pxずらす */
+        const labelOffsetPx = 5;
+        const perpX = (dy / len) * labelOffsetPx;
+        const perpY = (-dx / len) * labelOffsetPx;
         let angle = (Math.atan2(dy, dx) * 180) / Math.PI;
         if (angle > 90) angle -= 180;
         else if (angle < -90) angle += 180;
-        const labelX = (sx + tx) / 2;
-        const labelY = ((sy + ty) / 2) - 2;
+        const labelX = (sx + tx) / 2 + perpX;
+        const labelY = (sy + ty) / 2 + perpY;
         const labelTransform = `rotate(${angle}, ${labelX}, ${labelY})`;
 
         const edgeProgress = fadeProgress < 1 ? fadeProgress : effectiveProgress;
@@ -996,7 +1121,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
                   y={labelY}
                   textAnchor="middle"
                   fill="#94a3b8"
-                  fontSize={5}
+                  fontSize={10}
                   className="pointer-events-none"
                   transform={labelTransform}
                   opacity={Math.max(0, Math.min(1, effectiveEdgeProgress * 2 - 0.5))}
@@ -1073,8 +1198,14 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         return (
           <g
             key={node.id}
+            data-node-id={freeExploreMode ? node.id : undefined}
             transform={`translate(${vx}, ${vy})`}
-            style={{ opacity }}
+            style={{
+              opacity,
+              ...(freeExploreMode && {
+                cursor: draggingNodeId === node.id ? "grabbing" : "grab",
+              }),
+            }}
           >
             <defs>
               <clipPath id={`node-image-clip-${node.id}`}>
