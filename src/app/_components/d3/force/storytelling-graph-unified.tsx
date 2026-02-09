@@ -1076,13 +1076,13 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
             transform={`translate(${vx}, ${vy})`}
             style={{ opacity }}
           >
-            <defs>
-              <clipPath id={`node-image-clip-${node.id}`}>
-                <circle r={r} />
-              </clipPath>
-            </defs>
             {showImage ? (
               <>
+                <defs>
+                  <clipPath id={`node-image-clip-${node.id}`}>
+                    <circle r={r} />
+                  </clipPath>
+                </defs>
                 <g clipPath={`url(#node-image-clip-${node.id})`}>
                   <image
                     x={-r}
