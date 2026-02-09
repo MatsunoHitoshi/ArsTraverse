@@ -91,6 +91,21 @@ export const NodePropertiesDetail = ({
             <div className="text-sm text-gray-500">{node.label}</div>
           </div>
 
+          {node.properties?.imageUrl && (
+            <div className="flex flex-col gap-1">
+              <img
+                src={node.properties.imageUrl}
+                alt={node.properties.imageAlt ?? node.name}
+                className="max-h-64 w-full max-w-md rounded object-contain bg-slate-800"
+              />
+              {node.properties.imageCaption && (
+                <p className="text-sm text-slate-400">
+                  {node.properties.imageCaption}
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="flex w-full flex-col gap-4">
             <div className="flex w-full flex-col items-start gap-1">
               <RelatedNodesAndLinksViewer
