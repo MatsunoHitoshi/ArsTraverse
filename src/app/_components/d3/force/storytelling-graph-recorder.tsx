@@ -6,13 +6,10 @@ import React, {
   useRef,
   useMemo,
 } from "react";
-import type { GraphDocumentForFrontend, LayoutInstruction } from "@/app/const/types";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
 import type { MetaGraphStoryData } from "@/app/_hooks/use-meta-graph-story";
 import { StorytellingGraphUnified } from "./storytelling-graph-unified";
-import {
-  buildScrollStepsFromMetaGraphStoryData,
-  type ScrollStep,
-} from "@/app/_utils/story-scroll-utils";
+import { buildScrollStepsFromMetaGraphStoryData } from "@/app/_utils/story-scroll-utils";
 import { getEdgeCompositeKeyFromLink } from "@/app/const/story-segment";
 import { createSvgToCanvasRenderer } from "@/app/_utils/video/svg-to-canvas";
 import { VideoRecorder, downloadBlob, downloadBlobsSequentially } from "@/app/_utils/video/video-recorder";
