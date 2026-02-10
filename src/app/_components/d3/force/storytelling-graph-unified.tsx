@@ -46,6 +46,17 @@ const FADE_DELAY_MS = 80;
 /** フェードアニメーションの所要時間（ms）。FADE_DELAY_MS 経過後からこの時間で 0→1 */
 const FADE_DURATION_MS = FOCUS_TRANSITION_MS - FADE_DELAY_MS;
 
+/** 定常パルスアニメーションの周期（ms）。1→1.15→1 のスケール往復 */
+const STEADY_PULSE_PERIOD_MS = 4000;
+/** 定常エッジフローアニメーションの周期（ms） */
+const STEADY_EDGE_FLOW_PERIOD_MS = 4000;
+/** エッジフローの谷（最低不透明度）の広がり幅（エッジ長に対する割合 0–1） */
+const STEADY_EDGE_FLOW_VALLEY_WIDTH = 0.2;
+/** エッジフローの最低不透明度（谷の底） */
+const STEADY_EDGE_FLOW_MIN_OPACITY = 0.25;
+/** 定常アニメーション開始時のフェードイン時間（ms） */
+const STEADY_ANIM_FADE_IN_MS = 400;
+
 /** 出る側ノードのフェードイン完了までに使う progress の割合 (0–1) */
 const SOURCE_FADE_END = 0.25;
 /** 入る側ノードのフェードイン開始となる progress の閾値 */
@@ -290,6 +301,38 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     }
     prevTransitionCompleteRef.current = isTransitionComplete;
   }, [isTransitionComplete]);
+
+  // ── 定常アニメーション（セグメント遷移完了後、探索モード・全体表示以外で駆動） ──
+  const shouldRunSteadyAnim = isTransitionComplete && !freeExploreMode && !showFullGraph;
+  const steadyRafRef = useRef<number | null>(null);
+  const steadyStartRef = useRef<number | null>(null);
+  const [steadyAnimTimeMs, setSteadyAnimTimeMs] = useState(0);
+
+  useEffect(() => {
+    if (!shouldRunSteadyAnim) {
+      if (steadyRafRef.current != null) {
+        cancelAnimationFrame(steadyRafRef.current);
+        steadyRafRef.current = null;
+      }
+      steadyStartRef.current = null;
+      setSteadyAnimTimeMs(0);
+      return;
+    }
+    const tick = (now: number) => {
+      if (steadyStartRef.current == null) {
+        steadyStartRef.current = now;
+      }
+      setSteadyAnimTimeMs(now - steadyStartRef.current);
+      steadyRafRef.current = requestAnimationFrame(tick);
+    };
+    steadyRafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (steadyRafRef.current != null) {
+        cancelAnimationFrame(steadyRafRef.current);
+        steadyRafRef.current = null;
+      }
+    };
+  }, [shouldRunSteadyAnim]);
 
   const [transitionFromLayoutTransform, setTransitionFromLayoutTransform] = useState<{
     scale: number;
@@ -1084,6 +1127,45 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     };
   }, [linksToRender]);
 
+  // ── 定常アニメーション計算値 ──
+  /** フォーカスノードのパルススケール（1→1.15→1 の3秒ループ） */
+  const nodePulseScale = useMemo(() => {
+    if (!shouldRunSteadyAnim) return 1;
+    const fadeIn = Math.min(1, steadyAnimTimeMs / STEADY_ANIM_FADE_IN_MS);
+    const phase = (steadyAnimTimeMs % STEADY_PULSE_PERIOD_MS) / STEADY_PULSE_PERIOD_MS;
+    const amplitude = 0.15 * fadeIn;
+    return 1 + amplitude * 0.5 * (1 - Math.cos(2 * Math.PI * phase));
+  }, [shouldRunSteadyAnim, steadyAnimTimeMs]);
+
+  /** フォーカスエッジの流れるグラデーション停止点 */
+  const edgeFlowStops = useMemo(() => {
+    if (!shouldRunSteadyAnim) return null;
+    const fadeIn = Math.min(1, steadyAnimTimeMs / STEADY_ANIM_FADE_IN_MS);
+    const effectiveMinOpacity =
+      1 - (1 - STEADY_EDGE_FLOW_MIN_OPACITY) * fadeIn;
+    // 谷がエッジの外側から入り、反対側の外側へ出ていくことでシームレスにループさせる
+    const totalRange = 1 + 2 * STEADY_EDGE_FLOW_VALLEY_WIDTH;
+    const rawPhase =
+      (steadyAnimTimeMs % STEADY_EDGE_FLOW_PERIOD_MS) /
+      STEADY_EDGE_FLOW_PERIOD_MS;
+    const flowCenter =
+      -STEADY_EDGE_FLOW_VALLEY_WIDTH + rawPhase * totalRange;
+
+    const stops: Array<{ offset: string; opacity: number }> = [];
+    const numSteps = 10;
+    for (let i = 0; i <= numSteps; i++) {
+      const t = i / numSteps;
+      const dist = Math.abs(t - flowCenter);
+      const normalized = Math.min(1, dist / STEADY_EDGE_FLOW_VALLEY_WIDTH);
+      // smoothstep で滑らかに遷移
+      const smooth = normalized * normalized * (3 - 2 * normalized);
+      const opacity =
+        effectiveMinOpacity + (1 - effectiveMinOpacity) * smooth;
+      stops.push({ offset: `${(t * 100).toFixed(1)}%`, opacity });
+    }
+    return stops;
+  }, [shouldRunSteadyAnim, steadyAnimTimeMs]);
+
   if (!baseGraph || baseGraph.nodes.length === 0) {
     return (
       <div
@@ -1097,6 +1179,46 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
 
   const graphContent = (
     <g>
+      {/* 定常エッジフローアニメーション用グラデーション */}
+      {shouldRunSteadyAnim && edgeFlowStops && (
+        <defs>
+          {linksToRender.map((link, i) => {
+            const edgeKey = getEdgeCompositeKeyFromLink(link);
+            if (!focusEdgeIdSet.has(edgeKey)) return null;
+            const src = link.source as CustomNodeType;
+            const tgt = link.target as CustomNodeType;
+            if (
+              src.x == null ||
+              src.y == null ||
+              tgt.x == null ||
+              tgt.y == null
+            )
+              return null;
+            const [gsx, gsy] = toView(src.x, src.y);
+            const [gtx, gty] = toView(tgt.x, tgt.y);
+            return (
+              <linearGradient
+                key={`edge-flow-${i}`}
+                id={`edge-flow-${i}`}
+                gradientUnits="userSpaceOnUse"
+                x1={gsx}
+                y1={gsy}
+                x2={gtx}
+                y2={gty}
+              >
+                {edgeFlowStops.map((stop, j) => (
+                  <stop
+                    key={j}
+                    offset={stop.offset}
+                    stopColor="#94a3b8"
+                    stopOpacity={stop.opacity}
+                  />
+                ))}
+              </linearGradient>
+            );
+          })}
+        </defs>
+      )}
       {/* ストーリー冒頭の全体グラフ時: コミュニティの円とタイトル（print-generative-layout-graph に倣う） */}
       {showFullGraph && communityDisplayData.length > 0 && (
         <>
@@ -1211,19 +1333,31 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
                   return 0.6 - normalizedDistance * 0.59;
                 })()
                 : FOCUS_EDGE_OPACITY;
+          const useFlowGrad =
+            shouldRunSteadyAnim && edgeFlowStops != null;
           return (
             <g key={`${key}-${i}`}>
-              <path
-                d={pathD}
-                fill="none"
-                stroke="#94a3b8"
-                pathLength={1}
-                strokeDasharray={1}
-                strokeDashoffset={1 - effectiveEdgeProgress}
-                strokeLinecap="round"
-                strokeOpacity={focusStrokeOpacity}
-                strokeWidth={edgeStrokeWidthFocus}
-              />
+              {useFlowGrad ? (
+                <path
+                  d={pathD}
+                  fill="none"
+                  stroke={`url(#edge-flow-${i})`}
+                  strokeLinecap="round"
+                  strokeWidth={edgeStrokeWidthFocus}
+                />
+              ) : (
+                <path
+                  d={pathD}
+                  fill="none"
+                  stroke="#94a3b8"
+                  pathLength={1}
+                  strokeDasharray={1}
+                  strokeDashoffset={1 - effectiveEdgeProgress}
+                  strokeLinecap="round"
+                  strokeOpacity={focusStrokeOpacity}
+                  strokeWidth={edgeStrokeWidthFocus}
+                />
+              )}
               {link.type && (showEdgeLabels || forRecording) && (
                 <text
                   x={labelX}
@@ -1300,6 +1434,9 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         const [vx, vy] = toView(node.x, node.y);
         const opacity = getNodeOpacity(node);
         const r = getNodeRadius(node) * (0.8 / Math.max(1, scaleForSize));
+        const pulseScale = focusNodeIdSet.has(node.id)
+          ? nodePulseScale
+          : 1;
         const imageUrl = node.properties?.imageUrl as string | undefined;
         const showImage =
           imageUrl &&
@@ -1317,55 +1454,57 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
               }),
             }}
           >
-            {showImage ? (
-              <>
-                <defs>
-                  <clipPath id={`node-image-clip-${node.id}`}>
-                    <circle r={r} />
-                  </clipPath>
-                </defs>
-                <g clipPath={`url(#node-image-clip-${node.id})`}>
-                  <image
-                    x={-r}
-                    y={-r}
-                    width={r * 2}
-                    height={r * 2}
-                    href={imageUrl}
-                    preserveAspectRatio="xMidYMid slice"
-                    onError={() => {
-                      setFailedImageNodeIds((prev) =>
-                        new Set(prev).add(node.id),
-                      );
-                    }}
+            <g transform={pulseScale !== 1 ? `scale(${pulseScale})` : undefined}>
+              {showImage ? (
+                <>
+                  <defs>
+                    <clipPath id={`node-image-clip-${node.id}`}>
+                      <circle r={r} />
+                    </clipPath>
+                  </defs>
+                  <g clipPath={`url(#node-image-clip-${node.id})`}>
+                    <image
+                      x={-r}
+                      y={-r}
+                      width={r * 2}
+                      height={r * 2}
+                      href={imageUrl}
+                      preserveAspectRatio="xMidYMid slice"
+                      onError={() => {
+                        setFailedImageNodeIds((prev) =>
+                          new Set(prev).add(node.id),
+                        );
+                      }}
+                    />
+                  </g>
+                  <circle
+                    r={r}
+                    fill="none"
+                    stroke="#94a3b8"
+                    strokeWidth={nodeStrokeWidth}
                   />
-                </g>
+                </>
+              ) : (
                 <circle
                   r={r}
-                  fill="none"
+                  fill="#e2e8f0"
                   stroke="#94a3b8"
                   strokeWidth={nodeStrokeWidth}
                 />
-              </>
-            ) : (
-              <circle
-                r={r}
-                fill="#e2e8f0"
-                stroke="#94a3b8"
-                strokeWidth={nodeStrokeWidth}
-              />
-            )}
-            {getNodeLabelFontSize(isFocusNode) > 0 && (
-              <text
-                y={-10}
-                textAnchor="middle"
-                fill="#e2e8f0"
-                fontSize={getNodeLabelFontSize(isFocusNode)}
-                fontWeight="normal"
-                className="pointer-events-none select-none"
-              >
-                {node.name}
-              </text>
-            )}
+              )}
+              {getNodeLabelFontSize(isFocusNode) > 0 && (
+                <text
+                  y={-10}
+                  textAnchor="middle"
+                  fill="#e2e8f0"
+                  fontSize={getNodeLabelFontSize(isFocusNode)}
+                  fontWeight="normal"
+                  className="pointer-events-none select-none"
+                >
+                  {node.name}
+                </text>
+              )}
+            </g>
           </g>
         );
       })}
