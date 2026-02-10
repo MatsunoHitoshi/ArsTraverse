@@ -50,6 +50,10 @@ export function VideoExportModal({
     DEFAULT_RECORDING_CONFIG.holdLastMs,
   );
 
+  const [useFastMode, setUseFastMode] = useState(
+    DEFAULT_RECORDING_CONFIG.useFastMode ?? false,
+  );
+
   const totalTransitions = Math.max(0, totalSteps - 1);
   const isRecording =
     recordingProgress != null && recordingProgress.phase === "recording";
@@ -63,6 +67,7 @@ export function VideoExportModal({
       holdFirstMs,
       holdBetweenMs,
       holdLastMs,
+      useFastMode,
     };
     onStartRecording(config);
   }, [
@@ -73,6 +78,7 @@ export function VideoExportModal({
     holdFirstMs,
     holdBetweenMs,
     holdLastMs,
+    useFastMode,
     onStartRecording,
   ]);
 
@@ -146,6 +152,29 @@ export function VideoExportModal({
             <option value={60}>60 fps</option>
           </select>
         </div>
+
+        {/* 高速モード設定（一時的に無効化中） */}
+        {/* 
+        <div>
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={useFastMode}
+              onChange={(e) => setUseFastMode(e.target.checked)}
+              disabled={isRecording}
+              className="rounded border-slate-700 bg-slate-800 text-blue-500 focus:ring-blue-500"
+            />
+            <span className="text-sm font-medium text-slate-300">
+              高速書き出しモードを使用する
+            </span>
+          </label>
+          <p className="mt-1 text-xs text-slate-400">
+            プレビュー速度に関わらず、最高速度で書き出しを行います。
+            <br />
+            ※ブラウザによっては動作が不安定になる場合があります。
+          </p>
+        </div>
+        */}
 
         {/* hold 時間設定 */}
         {mode === "combined" ? (

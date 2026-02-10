@@ -11,11 +11,15 @@ import type { MetaGraphStoryData } from "@/app/_hooks/use-meta-graph-story";
 import { StorytellingGraphUnified } from "./storytelling-graph-unified";
 import { buildScrollStepsFromMetaGraphStoryData } from "@/app/_utils/story-scroll-utils";
 import { getEdgeCompositeKeyFromLink } from "@/app/const/story-segment";
+import { createSvgToCanvasRenderer } from "@/app/_utils/video/svg-to-canvas";
+import type { SvgToCanvasRenderer as SvgToCanvasRendererType } from "@/app/_utils/video/svg-to-canvas";
 import {
-  createSvgToCanvasRenderer,
-  type SvgToCanvasRenderer,
-} from "@/app/_utils/video/svg-to-canvas";
-import { VideoRecorder, downloadBlob, downloadBlobsSequentially } from "@/app/_utils/video/video-recorder";
+  VideoRecorder,
+  downloadBlob,
+  downloadBlobsSequentially,
+} from "@/app/_utils/video/video-recorder";
+import type { IVideoRecorder } from "@/app/_utils/video/types";
+import { FastVideoRecorder } from "@/app/_utils/video/fast-video-recorder";
 import {
   runRecording,
   type RecordingConfig,
@@ -23,6 +27,7 @@ import {
   type RecordingStep,
 } from "@/app/_utils/video/recording-sequencer";
 import { VideoExportModal } from "../../modal/video-export-modal";
+
 
 /** 録画用グラフのサイズ（出力解像度）。16:9 の 1280x720 */
 const RECORDING_WIDTH = 1280;
@@ -159,8 +164,8 @@ export function StorytellingGraphRecorder({
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
 
-      let renderer: SvgToCanvasRenderer | null = null;
-      let recorder: VideoRecorder | null = null;
+      let renderer: SvgToCanvasRendererType | null = null;
+      let recorder: IVideoRecorder | null = null;
 
       try {
         renderer = createSvgToCanvasRenderer(
@@ -170,13 +175,30 @@ export function StorytellingGraphRecorder({
           RECORDING_BACKGROUND,
         );
         const canvas = renderer.getCanvas();
-        recorder = new VideoRecorder({
-          canvas,
-          fps: config.fps,
-        });
+        
+        if (config.useFastMode) {
+          recorder = new FastVideoRecorder({
+            canvas,
+            fps: config.fps,
+            width: RECORDING_WIDTH,
+            height: RECORDING_HEIGHT,
+          });
+        } else {
+          recorder = new VideoRecorder({
+            canvas,
+            fps: config.fps,
+          });
+        }
 
         const createRecorder = () =>
-          new VideoRecorder({ canvas, fps: config.fps });
+          config.useFastMode
+            ? new FastVideoRecorder({
+                canvas,
+                fps: config.fps,
+                width: RECORDING_WIDTH,
+                height: RECORDING_HEIGHT,
+              })
+            : new VideoRecorder({ canvas, fps: config.fps });
 
         const result = await runRecording(
           steps,

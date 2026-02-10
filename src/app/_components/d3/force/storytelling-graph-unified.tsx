@@ -722,7 +722,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
       }
     }
     if (minX === Infinity) return { scale: 0.75, centerX: 0, centerY: 0 };
-    const paddingX = isPc ? 64 : 32;
+    const paddingX = isPc ? forRecording ? 128 : 64 : 32;
     const paddingY = 128; // 上下のみ 128
     const rangeX = maxX - minX || 1;
     const rangeY = maxY - minY || 1;
@@ -796,19 +796,10 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   const effectiveScaleForLabels = freeExploreMode
     ? displayScale * zoomScale
     : displayScale;
-  /** ノード半径・エッジ太さ・ストロークに使うスケール。録画時はビュー拡大に合わせて大きくしないため 1 に固定 */
-  const scaleForSize =
-    forRecording
-      ? 1
-      : freeExploreMode
-        ? effectiveScaleForLabels
-        : displayScale;
-  /** 探索モード時はスケールが小さくてもストローク・線の太さを下げない（薄く見えないように下限 1 を設ける）。録画時は 1 固定 */
-  const scaleForStroke = forRecording
-    ? 1
-    : freeExploreMode
-      ? Math.max(1, scaleForSize)
-      : scaleForSize;
+  /** ノード半径・エッジ太さ・ストロークに使うスケール（effectiveScaleForLabels と同じ値） */
+  const scaleForSize = effectiveScaleForLabels;
+  /** ストローク用スケール。探索モード時は薄くなりすぎないよう下限 1 */
+  const scaleForStroke = freeExploreMode ? Math.max(1, scaleForSize) : scaleForSize;
 
   /** ノード半径（generative-layout-graph と同様 */
   const getNodeRadius = useCallback(
@@ -821,9 +812,10 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   );
   /** ノードラベルを表示する閾値（generative-layout-graph と同様、引きで表示する時は非表示。自由探索時はズームに応じて表示） */
   const showNodeLabels = effectiveScaleForLabels > 0.7;
-  /** ノードラベルフォントサイズの基準値（graph.tsx の visibleByScaling に倣いスケールで小刻みに）。 */
-  const nodeLabelFontSizeBase =
-    (effectiveScaleForLabels > 4
+  /** ノードラベルフォントサイズの基準値。録画時はスケールに比例（係数と下限で引きのサイズを確保）、通常時は graph.tsx に倣い小刻みに */
+  const nodeLabelFontSizeBase = forRecording
+    ? Math.max(6, effectiveScaleForLabels) * 0.7
+    : (effectiveScaleForLabels > 4
       ? 3
       : effectiveScaleForLabels > 3
         ? 4
@@ -846,7 +838,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   );
   /** エッジラベルを表示する閾値（generative では currentScale > 1.4） */
   const showEdgeLabels = effectiveScaleForLabels > 1.4;
-  /** スケールに応じたエッジラベルのフォントサイズ（graph.tsx に倣いスケールで小刻みに） */
+  /** スケールに応じたエッジラベルのフォントサイズ基準値（graph.tsx に倣いスケールで小刻みに） */
   const edgeLabelFontSizeBase =
     effectiveScaleForLabels > 4
       ? 5
@@ -861,11 +853,15 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
               : effectiveScaleForLabels > 0.9
                 ? 10
                 : 12;
-  /** 録画時はフォーカスエッジのラベルのみ大きく、それ以外は通常サイズ（5） */
-  const edgeLabelFontSizeFocus = edgeLabelFontSizeBase * (forRecording ? 3 : 2);
-  const edgeLabelFontSizeNormal = edgeLabelFontSizeBase * (forRecording ? 2 : 1);
+  /** エッジラベルフォントサイズ（getNodeLabelFontSize と同様にフォーカス有無で倍率を切り替え） */
+  const getEdgeLabelFontSize = useCallback(
+    (isFocusEdge: boolean) =>
+      edgeLabelFontSizeBase *
+      (forRecording && isFocusEdge ? 3 : forRecording ? 2 : isFocusEdge ? 2 : 1),
+    [edgeLabelFontSizeBase, forRecording],
+  );
   /** スケールに応じたエッジ・ノードの線の太さ（探索モード時は scaleForStroke で引きでも薄くならない） */
-  const edgeStrokeWidthFocus = Math.max(0.4, Math.min(2.5, 2 * scaleForStroke));
+  const edgeStrokeWidthFocus = forRecording ? Math.max(0.8, Math.min(3.5, 2 * scaleForStroke)) : Math.max(0.4, Math.min(2.5, 2 * scaleForStroke));
   const edgeStrokeWidthNormal = Math.max(0.3, Math.min(1.5, 1.5 * scaleForStroke));
   const nodeStrokeWidth = Math.max(0.25, Math.min(1.5, 1.5 * scaleForStroke));
   const toView = useCallback(
@@ -1358,13 +1354,13 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
                   strokeWidth={edgeStrokeWidthFocus}
                 />
               )}
-              {link.type && (showEdgeLabels || forRecording) && (
+              {link.type && showEdgeLabels && (
                 <text
                   x={labelX}
                   y={labelY}
                   textAnchor="middle"
                   fill="#94a3b8"
-                  fontSize={edgeLabelFontSizeFocus}
+                  fontSize={getEdgeLabelFontSize(true)}
                   className="pointer-events-none"
                   transform={labelTransform}
                   opacity={Math.max(0, Math.min(1, effectiveEdgeProgress * 2 - 0.5))}
@@ -1416,7 +1412,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
                 y={labelY}
                 textAnchor="middle"
                 fill="#94a3b8"
-                fontSize={edgeLabelFontSizeNormal}
+                fontSize={getEdgeLabelFontSize(false)}
                 className="pointer-events-none"
                 transform={labelTransform}
                 style={{ opacity: edgeOpacity }}
@@ -1498,7 +1494,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
                   textAnchor="middle"
                   fill="#e2e8f0"
                   fontSize={getNodeLabelFontSize(isFocusNode)}
-                  fontWeight="normal"
+                  fontWeight={forRecording ? "bold" : "normal"}
                   className="pointer-events-none select-none"
                 >
                   {node.name}

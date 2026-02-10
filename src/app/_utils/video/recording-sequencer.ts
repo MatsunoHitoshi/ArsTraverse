@@ -5,7 +5,10 @@
  */
 
 import type { SvgToCanvasRenderer } from "./svg-to-canvas";
+import type { IVideoRecorder } from "./types";
 import type { VideoRecorder } from "./video-recorder";
+
+import type { FastVideoRecorder } from "./fast-video-recorder";
 
 /** 録画の設定 */
 export interface RecordingConfig {
@@ -21,6 +24,8 @@ export interface RecordingConfig {
   holdBetweenMs: number;
   /** 全体統合モード用: 最後のセグメントの表示時間 (ms) */
   holdLastMs: number;
+  /** 高速書き出しモードを使用するかどうか */
+  useFastMode?: boolean;
 }
 
 export const DEFAULT_RECORDING_CONFIG: RecordingConfig = {
@@ -31,6 +36,7 @@ export const DEFAULT_RECORDING_CONFIG: RecordingConfig = {
   holdBetweenMs: 2000,
   holdFirstMs: 2000,
   holdLastMs: 2000,
+  useFastMode: false,
 };
 
 /** 録画の進行状態 */
@@ -141,15 +147,33 @@ class FramePacer {
 async function holdAndRender(
   renderer: SvgToCanvasRenderer,
   durationMs: number,
-  pacer: FramePacer,
+  pacer: FramePacer | null, // null の場合は高速モード（手動進行）
+  fastRecorder: FastVideoRecorder | null, // 高速モード用
+  fps: number, // 高速モード用
   abortSignal: AbortSignal,
 ): Promise<void> {
-  const startTime = performance.now();
-  while (performance.now() - startTime < durationMs) {
-    if (abortSignal.aborted) return;
-    await renderer.renderFrame();
-    // 次のアニメーションフレームまで待つ
-    await pacer.waitNextFrame();
+  // 高速モード: 実時間ではなくフレーム数でループ
+  if (!pacer && fastRecorder) {
+    const totalFrames = Math.ceil((durationMs / 1000) * fps);
+    for (let i = 0; i < totalFrames; i++) {
+      if (abortSignal.aborted) return;
+      await renderer.renderFrame();
+      await fastRecorder.recordFrame();
+      // UIのレスポンス性を維持するために少しだけ待機（0ms）
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    return;
+  }
+
+  // 通常モード: 実時間でループ
+  if (pacer) {
+    const startTime = performance.now();
+    while (performance.now() - startTime < durationMs) {
+      if (abortSignal.aborted) return;
+      await renderer.renderFrame();
+      // 次のアニメーションフレームまで待つ
+      await pacer.waitNextFrame();
+    }
   }
 }
 
@@ -160,7 +184,8 @@ async function holdAndRender(
 async function renderDuringTransition(
   renderer: SvgToCanvasRenderer,
   waitForComplete: () => Promise<void>,
-  pacer: FramePacer,
+  pacer: FramePacer | null,
+  fastRecorder: FastVideoRecorder | null,
   abortSignal: AbortSignal,
 ): Promise<void> {
   // 遷移完了を待つ Promise と、レンダリングループを並行実行
@@ -172,12 +197,22 @@ async function renderDuringTransition(
   // 遷移中は毎フレーム Canvas を更新
   while (!transitionDone && !abortSignal.aborted) {
     await renderer.renderFrame();
-    await pacer.waitNextFrame();
+    
+    if (!pacer && fastRecorder) {
+      await fastRecorder.recordFrame();
+      // UIレスポンス維持
+      await new Promise((r) => setTimeout(r, 0));
+    } else if (pacer) {
+      await pacer.waitNextFrame();
+    }
   }
 
   // 遷移完了後、最終フレームを確実に描画
   if (!abortSignal.aborted) {
     await renderer.renderFrame();
+    if (!pacer && fastRecorder) {
+      await fastRecorder.recordFrame();
+    }
   }
 
   await transitionPromise;
@@ -188,11 +223,14 @@ async function runCombined(
   steps: RecordingStep[],
   config: RecordingConfig,
   renderer: SvgToCanvasRenderer,
-  recorder: VideoRecorder,
+  recorder: IVideoRecorder,
   callbacks: SequencerCallbacks,
   abortSignal: AbortSignal,
 ): Promise<RecordingResult> {
-  const pacer = new FramePacer(config.fps);
+  const isFastMode = config.useFastMode ?? false;
+  const pacer = isFastMode ? null : new FramePacer(config.fps);
+  const fastRecorder = isFastMode ? (recorder as FastVideoRecorder) : null;
+
   try {
     const totalTransitions = steps.length - 1;
 
@@ -219,7 +257,14 @@ async function runCombined(
       totalTransitions,
       overallProgress: 0,
     });
-    await holdAndRender(renderer, config.holdFirstMs, pacer, abortSignal);
+    await holdAndRender(
+      renderer,
+      config.holdFirstMs,
+      pacer,
+      fastRecorder,
+      config.fps,
+      abortSignal,
+    );
     if (abortSignal.aborted) {
       return { mode: "combined", blob: await recorder.stop(), filename: "" };
     }
@@ -252,6 +297,7 @@ async function runCombined(
         renderer,
         callbacks.waitForTransitionComplete,
         pacer,
+        fastRecorder,
         abortSignal,
       );
       if (abortSignal.aborted) break;
@@ -259,7 +305,14 @@ async function runCombined(
       // 遷移後の滞留
       const holdMs =
         i === totalTransitions - 1 ? config.holdLastMs : config.holdBetweenMs;
-      await holdAndRender(renderer, holdMs, pacer, abortSignal);
+      await holdAndRender(
+        renderer,
+        holdMs,
+        pacer,
+        fastRecorder,
+        config.fps,
+        abortSignal,
+      );
     }
 
     const blob = await recorder.stop();
@@ -276,7 +329,7 @@ async function runCombined(
       filename: `story-animation-${Date.now()}.webm`,
     };
   } finally {
-    pacer.dispose();
+    pacer?.dispose();
   }
 }
 
@@ -285,11 +338,14 @@ async function runIndividual(
   steps: RecordingStep[],
   config: RecordingConfig,
   renderer: SvgToCanvasRenderer,
-  createRecorder: () => VideoRecorder,
+  createRecorder: () => IVideoRecorder,
   callbacks: SequencerCallbacks,
   abortSignal: AbortSignal,
 ): Promise<RecordingResult> {
-  const pacer = new FramePacer(config.fps);
+  const isFastMode = config.useFastMode ?? false;
+  const pacer = isFastMode ? null : new FramePacer(config.fps);
+  // 個別モードでは都度 createRecorder するのでここでは型だけ合わせる
+  
   try {
     const totalTransitions = steps.length - 1;
     const files: Array<{ blob: Blob; filename: string; segmentIndex: number }> =
@@ -324,10 +380,18 @@ async function runIndividual(
 
       // 録画開始（セグメントごとに新しい recorder を使う）
       const recorder = createRecorder();
+      const fastRecorder = isFastMode ? (recorder as FastVideoRecorder) : null;
       recorder.start();
 
       // 遷移前の静止
-      await holdAndRender(renderer, config.holdBeforeMs, pacer, abortSignal);
+      await holdAndRender(
+        renderer,
+        config.holdBeforeMs,
+        pacer,
+        fastRecorder,
+        config.fps,
+        abortSignal,
+      );
       if (abortSignal.aborted) {
         recorder.dispose();
         break;
@@ -346,6 +410,7 @@ async function runIndividual(
         renderer,
         callbacks.waitForTransitionComplete,
         pacer,
+        fastRecorder,
         abortSignal,
       );
       if (abortSignal.aborted) {
@@ -354,7 +419,14 @@ async function runIndividual(
       }
 
       // 遷移後の静止
-      await holdAndRender(renderer, config.holdAfterMs, pacer, abortSignal);
+      await holdAndRender(
+        renderer,
+        config.holdAfterMs,
+        pacer,
+        fastRecorder,
+        config.fps,
+        abortSignal,
+      );
 
       const blob = await recorder.stop();
       recorder.dispose();
@@ -383,7 +455,7 @@ async function runIndividual(
 
     return { mode: "individual", files };
   } finally {
-    pacer.dispose();
+    pacer?.dispose();
   }
 }
 
@@ -401,8 +473,8 @@ export async function runRecording(
   steps: RecordingStep[],
   config: RecordingConfig,
   renderer: SvgToCanvasRenderer,
-  recorder: VideoRecorder,
-  createRecorder: () => VideoRecorder,
+  recorder: IVideoRecorder,
+  createRecorder: () => IVideoRecorder,
   callbacks: SequencerCallbacks,
   abortSignal: AbortSignal,
 ): Promise<RecordingResult> {
