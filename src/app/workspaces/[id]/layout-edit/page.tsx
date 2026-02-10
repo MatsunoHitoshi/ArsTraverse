@@ -346,6 +346,7 @@ export default function LayoutEditPage() {
                     metaGraphStoryData={metaGraphStory.metaGraphData}
                     setIsStorytellingMode={setIsStorytellingMode}
                     onEditModeChange={setIsStoryEditMode}
+                    graphDocument={graphData}
                   />
                 ) : isSidePanelOpen ? (
                   <>
