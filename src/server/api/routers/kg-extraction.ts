@@ -11,6 +11,11 @@ import { completeTranslateProperties } from "@/app/_utils/kg/node-name-translati
 import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage } from "@langchain/core/messages";
 import type { TextChunk } from "@/server/lib/extractors/base";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import {
   ExtractInputSchema,
   AnalyzeTextStructureInputSchema,
@@ -19,9 +24,86 @@ import {
   ExtractPhase1InputSchema,
   ExtractPhase2InputSchema,
   FinalizeGraphInputSchema,
+  PerformOCRInputSchema,
 } from "../schemas/knowledge-graph";
 
 export const extractionProcedures = {
+  performOCR: publicProcedure
+    .input(PerformOCRInputSchema)
+    .mutation(async ({ input }) => {
+      const { fileUrl } = input;
+
+      const localFilePath = await writeLocalFileFromUrl(fileUrl, "input.pdf");
+      let tempDir: string | null = null;
+
+      try {
+        const { createWorker } = await import("tesseract.js");
+
+        tempDir = await fs.promises.mkdtemp(
+          path.join(os.tmpdir(), "ocr-"),
+        );
+
+        const execFileAsync = promisify(execFile);
+        try {
+          await execFileAsync(
+            "pdftocairo",
+            ["-png", "-scale-to", "1024", localFilePath, "page"],
+            { cwd: tempDir },
+          );
+        } catch (pdftocairoErr) {
+          const msg =
+            (pdftocairoErr as NodeJS.ErrnoException).code === "ENOENT"
+              ? "pdftocairo が見つかりません。Poppler をインストールしてください（例: brew install poppler）"
+              : String(pdftocairoErr);
+          throw new Error(msg);
+        }
+
+        const entries = await fs.promises.readdir(tempDir);
+        const pageFiles = entries
+          .filter((f) => f.startsWith("page-") && f.endsWith(".png"))
+          .sort(
+            (a, b) =>
+              parseInt(a.replace("page-", "").replace(".png", ""), 10) -
+              parseInt(b.replace("page-", "").replace(".png", ""), 10),
+          );
+
+        const extractedDocs: { pageContent: string; metadata: { source: string; page: number } }[] = [];
+        const worker = await createWorker("jpn+eng");
+
+        for (let i = 0; i < pageFiles.length; i++) {
+          const name = pageFiles[i];
+          if (!name) continue;
+          const filePath = path.join(tempDir, name);
+          const buffer = await fs.promises.readFile(filePath);
+          const {
+            data: { text },
+          } = await worker.recognize(buffer);
+
+          if (text.trim()) {
+            extractedDocs.push({
+              pageContent: text,
+              metadata: { source: fileUrl, page: i + 1 },
+            });
+          }
+        }
+
+        await worker.terminate();
+
+        return {
+          data: { documents: extractedDocs },
+        };
+      } catch (error) {
+        console.error("OCR Error:", error);
+        return {
+          data: { documents: [], error: String(error) },
+        };
+      } finally {
+        if (tempDir) {
+          await fs.promises.rm(tempDir, { recursive: true }).catch((err: unknown) => { console.error("OCR temp cleanup:", err); });
+        }
+      }
+    }),
+
   finalizeGraph: publicProcedure
     .input(FinalizeGraphInputSchema)
     .mutation(async ({ input }) => {

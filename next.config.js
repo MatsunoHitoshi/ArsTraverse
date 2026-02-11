@@ -10,6 +10,7 @@ const withNextIntl = createNextIntlPlugin();
 
 /** @type {import("next").NextConfig} */
 const config = {
+  serverExternalPackages: ["pdf-parse", "tesseract.js"],
   images: {
     domains: ["matsuno.caric.jp"],
     remotePatterns: [

@@ -289,6 +289,10 @@ export const TestInspectInputSchema = z.object({
   isPlaneTextMode: z.boolean(),
 });
 
+export const PerformOCRInputSchema = z.object({
+  fileUrl: z.string().url(),
+});
+
 export const IntegrateGraphInputSchema = z.object({
   topicSpaceId: z.string(),
   graphDocument: KnowledgeGraphInputSchema,

@@ -53,6 +53,7 @@ export const DocumentForm = ({
 
   const extractKG = api.kg.extractKG.useMutation();
   const textInspect = api.kg.textInspect.useMutation();
+  const performOCR = api.kg.performOCR.useMutation();
   const extractPhase1 = api.kg.extractPhase1.useMutation();
   const extractPhase2 = api.kg.extractPhase2.useMutation();
   const finalizeGraph = api.kg.finalizeGraph.useMutation();
@@ -185,6 +186,82 @@ export const DocumentForm = ({
         },
       },
     );
+  };
+
+  const handleOCR = async () => {
+    if (!file) {
+      alert("ファイルが選択されていません。");
+      return;
+    }
+
+    setIsProcessing(true);
+    setProgress("OCRの準備中...");
+
+    let fileUrl: string | null | undefined = documentUrl;
+
+    try {
+      if (!fileUrl) {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        fileUrl = await new Promise<string | undefined>((resolve, reject) => {
+          reader.onload = async () => {
+            const base64Data = reader.result?.toString();
+            if (base64Data) {
+              try {
+                const url = await storageUtils.uploadFromDataURL(
+                  base64Data,
+                  BUCKETS.PATH_TO_INPUT_PDF,
+                );
+                resolve(url || undefined);
+              } catch (error) {
+                reject(error);
+              }
+            } else {
+              resolve(undefined);
+            }
+          };
+          reader.onerror = reject;
+        });
+
+        if (fileUrl) {
+          setDocumentUrl(fileUrl);
+        } else {
+          throw new Error("ファイルのアップロードに失敗しました。");
+        }
+      }
+
+      setProgress("OCR実行中...");
+      performOCR.mutate(
+        { fileUrl },
+        {
+          onSuccess: (res) => {
+            if (res.data.documents && res.data.documents.length > 0) {
+              setInspectResult(res.data.documents);
+            } else {
+              alert(
+                "文字を検出できませんでした。" +
+                  (res.data.error ? ` (${res.data.error})` : ""),
+              );
+            }
+            setIsProcessing(false);
+            setProgress("");
+          },
+          onError: (e) => {
+            console.error(e);
+            alert("OCR処理中にエラーが発生しました。");
+            setIsProcessing(false);
+            setProgress("");
+          },
+        },
+      );
+    } catch (error) {
+      console.error("OCR Error:", error);
+      alert(
+        `OCR処理中にエラーが発生しました: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      setIsProcessing(false);
+      setProgress("");
+    }
   };
 
   const inspect = (fileUrl: string) => {
@@ -403,7 +480,17 @@ export const DocumentForm = ({
               </div>
               {((!!text && isPlaneTextMode) || (file && !isPlaneTextMode)) && (
                 <div className="flex flex-col items-end gap-2">
-                  <div className="flex flex-row justify-end">
+                  <div className="flex flex-row items-center justify-end gap-2">
+                    {!isPlaneTextMode && file?.type === "application/pdf" && (
+                      <Button
+                        type="button"
+                        onClick={handleOCR}
+                        isLoading={isProcessing}
+                        className="bg-slate-500 hover:bg-slate-600"
+                      >
+                        OCRする
+                      </Button>
+                    )}
                     {isPlaneTextMode || inspectResult.length > 0 ? (
                       <Button type="submit" isLoading={isProcessing}>
                         グラフを構築する
