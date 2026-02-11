@@ -335,6 +335,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
           entities={entities}
           onGraphUpdate={onGraphUpdate}
           centralSubject={node}
+          topicSpaceId={topicSpaceId}
         />
       )}
     </div>
