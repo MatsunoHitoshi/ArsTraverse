@@ -52,6 +52,7 @@ import { NodeLinkEditModal } from "../modal/node-link-edit-modal";
 import { ProposalCreateModal } from "./proposal-create-modal";
 import { ShareTopicSpaceModal } from "./share-topic-space-modal";
 import { PublishWorkspaceModal } from "./publish-workspace-modal";
+import { AdditionalGraphExtractionModal } from "./tiptap/tools/additional-graph-extraction-modal";
 import { DirectedLinksToggleButton } from "../view/graph-view/directed-links-toggle-button";
 import { SnapshotStoryboard } from "./artifact/snapshot-storyboard";
 import { useMetaGraphStory } from "@/app/_hooks/use-meta-graph-story";
@@ -128,6 +129,9 @@ const CuratorsWritingWorkspace = ({
     [],
   );
   const [isPublishModalOpen, setIsPublishModalOpen] = useState<boolean>(false);
+  /** ストーリーセグメントのテキストをグラフ抽出モーダルに渡す（null のときモーダル非表示） */
+  const [segmentGraphExtractionText, setSegmentGraphExtractionText] =
+    useState<string | null>(null);
   const completionWithSubgraphRef = useRef<
     null | ((subgraph: GraphDocumentForFrontend) => void)
   >(null);
@@ -145,14 +149,44 @@ const CuratorsWritingWorkspace = ({
     LayoutInstruction["filter"] | null
   >(null);
 
-  // ストーリーテリングモード
-  const [isStorytellingMode, setIsStorytellingMode] = useState<boolean>(false);
+  // ストーリーテリングモード（初期値はクエリ ?storytelling=1 から復元）
+  const [isStorytellingMode, setIsStorytellingMode] = useState<boolean>(
+    () => searchParams.get("storytelling") === "1",
+  );
 
   // ストーリー編集モード（並び替えモード）
   const [isStoryEditMode, setIsStoryEditMode] = useState<boolean>(false);
 
-  // メタグラフ関連の状態
-  const [isMetaGraphMode, setIsMetaGraphMode] = useState<boolean>(false);
+  // メタグラフ関連の状態（ストーリーテリングONのときはメタグラフもONで復元）
+  const [isMetaGraphMode, setIsMetaGraphMode] = useState<boolean>(
+    () => searchParams.get("storytelling") === "1",
+  );
+
+  // クエリとストーリーテリングモードを同期（ブラウザ戻る等でURLが変わったとき）
+  useEffect(() => {
+    const storytelling = searchParams.get("storytelling") === "1";
+    setIsStorytellingMode(storytelling);
+    if (storytelling) {
+      setIsMetaGraphMode(true);
+    }
+  }, [searchParams]);
+
+  // ストーリーテリングモード変更時にURLを更新（リロードで復元できるようにする）
+  const setStorytellingModeWithUrl: React.Dispatch<
+    React.SetStateAction<boolean>
+  > = (value) => {
+    setIsStorytellingMode((prev) => {
+      const next = typeof value === "function" ? value(prev) : value;
+      const params = new URLSearchParams(searchParams.toString());
+      if (next) {
+        params.set("storytelling", "1");
+      } else {
+        params.delete("storytelling");
+      }
+      router.push(`?${params.toString()}`, { scroll: false });
+      return next;
+    });
+  };
 
   // 現在フォーカス中のコミュニティID（ストーリーテリングモード用）
   const [focusedCommunityId, setFocusedCommunityId] = useState<string | null>(
@@ -160,6 +194,13 @@ const CuratorsWritingWorkspace = ({
   );
   // セグメント単位のフォーカス（段落クリックで局所グラフをハイライト）
   const [focusedSegmentRef, setFocusedSegmentRef] = useState<FocusedSegmentRef | null>(null);
+  // セグメントのノード・エッジを手動で選択中（グラフでトグルして確定で保存）
+  const [segmentSelectionEdit, setSegmentSelectionEdit] = useState<{
+    communityId: string;
+    paragraphIndex: number;
+    nodeIds: string[];
+    edgeIds: string[];
+  } | null>(null);
 
   // レイアウト方向
   const [layoutOrientation, setLayoutOrientation] = useState<"vertical" | "horizontal">("vertical");
@@ -500,12 +541,12 @@ const CuratorsWritingWorkspace = ({
               if (!isStorytellingMode) {
                 setIsMetaGraphMode(true);
               }
-              setIsStorytellingMode(!isStorytellingMode);
+              setStorytellingModeWithUrl(!isStorytellingMode);
             }}
             isMetaGraphMode={isMetaGraphMode}
             onMetaGraphModeToggle={() => {
               if (isMetaGraphMode) {
-                setIsStorytellingMode(false);
+                setStorytellingModeWithUrl(false);
               }
               setIsMetaGraphMode(!isMetaGraphMode);
             }}
@@ -544,6 +585,28 @@ const CuratorsWritingWorkspace = ({
                   setFocusedSegmentRef(ref);
                   if (ref) setFocusedCommunityId(ref.communityId);
                 }}
+                segmentSelectionEdit={segmentSelectionEdit}
+                onStartSegmentSelectionEdit={(communityId, paragraphIndex, nodeIds, edgeIds) => {
+                  setSegmentSelectionEdit({
+                    communityId,
+                    paragraphIndex,
+                    nodeIds: nodeIds ?? [],
+                    edgeIds: edgeIds ?? [],
+                  });
+                }}
+                onConfirmSegmentSelectionEdit={() => {
+                  setSegmentSelectionEdit((prev) => {
+                    if (prev) {
+                      setFocusedSegmentRef({
+                        communityId: prev.communityId,
+                        nodeIds: prev.nodeIds,
+                        edgeIds: prev.edgeIds,
+                      });
+                      setFocusedCommunityId(prev.communityId);
+                    }
+                    return null;
+                  });
+                }}
                 metaGraphData={
                   metaGraphStory.metaGraphData
                     ? {
@@ -559,13 +622,14 @@ const CuratorsWritingWorkspace = ({
                 }}
                 referencedTopicSpaceId={topicSpaceId ?? undefined}
                 metaGraphStoryData={metaGraphStory.metaGraphData}
-                setIsStorytellingMode={setIsStorytellingMode}
+                setIsStorytellingMode={setStorytellingModeWithUrl}
                 onEditModeChange={setIsStoryEditMode}
                 onStoryDelete={() => {
-                  setIsStorytellingMode(false);
+                  setStorytellingModeWithUrl(false);
                   setIsMetaGraphMode(false);
                 }}
                 onApplyStoryFilter={(filter) => setStoryFilter(filter ?? null)}
+                onRequestSegmentGraphExtraction={setSegmentGraphExtractionText}
               />
             ) : (
               <TiptapGraphFilterContext.Provider
@@ -638,6 +702,25 @@ const CuratorsWritingWorkspace = ({
                       }
                       focusedCommunityId={focusedCommunityId}
                       focusedSegmentRef={focusedSegmentRef}
+                      segmentSelectionEdit={segmentSelectionEdit}
+                      onSegmentNodeToggle={(nodeId: string) => {
+                        setSegmentSelectionEdit((prev) => {
+                          if (!prev) return prev;
+                          const next = prev.nodeIds.includes(nodeId)
+                            ? prev.nodeIds.filter((id: string) => id !== nodeId)
+                            : [...prev.nodeIds, nodeId];
+                          return { ...prev, nodeIds: next };
+                        });
+                      }}
+                      onSegmentEdgeToggle={(edgeKey: string) => {
+                        setSegmentSelectionEdit((prev) => {
+                          if (!prev) return prev;
+                          const next = prev.edgeIds.includes(edgeKey)
+                            ? prev.edgeIds.filter((k: string) => k !== edgeKey)
+                            : [...prev.edgeIds, edgeKey];
+                          return { ...prev, edgeIds: next };
+                        });
+                      }}
                       graphSize={graphSize}
                       svgRef={svgRef}
                       currentScale={currentScale}
@@ -983,10 +1066,32 @@ const CuratorsWritingWorkspace = ({
         workspaceId={workspace.id}
         workspaceStatus={workspace.status}
         workspaceName={workspace.name}
+        hasStories={
+          (metaGraphStory.metaGraphData?.narrativeFlow?.length ?? 0) > 0
+        }
         onSuccess={() => {
           void refetch();
         }}
       />
+
+      {/* ストーリーセグメントからグラフ抽出モーダル（ストーリーテリングモードでセグメントの文章を元グラフに反映） */}
+      {segmentGraphExtractionText !== null && (
+        <AdditionalGraphExtractionModal
+          text={segmentGraphExtractionText}
+          isAdditionalGraphExtractionModalOpen={true}
+          setIsAdditionalGraphExtractionModalOpen={(
+            value: React.SetStateAction<boolean>,
+          ) => {
+            const open =
+              typeof value === "function" ? value(true) : value;
+            if (!open) setSegmentGraphExtractionText(null);
+          }}
+          onGraphUpdate={onGraphUpdate}
+          setIsGraphEditor={setIsGraphEditor}
+          entities={nodes}
+          topicSpaceId={topicSpaceId ?? undefined}
+        />
+      )}
 
       {/* グラフ編集用モーダル */}
       {isGraphEditor && graphDocument && (

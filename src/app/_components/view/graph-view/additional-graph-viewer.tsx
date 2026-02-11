@@ -17,14 +17,27 @@ import { createId } from "@/app/_utils/cuid/cuid";
 const AdditionalGraphViewer = ({
   topicSpaceId,
   refetch,
-  graphDocument,
+  newGraphDocument,
   setGraphDocument,
+  onConfirm,
+  hideConfirmButton = false,
+  /** 親で一覧パネルを表示する場合は渡す（onConfirm 利用時）。渡すとグラフ更新時にモーダルを開かず親の state を更新する */
+  additionalGraph: controlledAdditionalGraph,
+  setAdditionalGraph: controlledSetAdditionalGraph,
 }: {
   topicSpaceId: string;
   refetch: () => void;
-  graphDocument: GraphDocumentForFrontend | null;
+  newGraphDocument: GraphDocumentForFrontend | null;
   setGraphDocument: React.Dispatch<
     React.SetStateAction<GraphDocumentForFrontend | null>
+  >;
+  /** 渡されたときは「統合」の代わりに「グラフに反映」を表示し、クリックで onConfirm(マージ済みグラフ) を呼ぶ */
+  onConfirm?: (graph: GraphDocumentForFrontend) => void;
+  /** onConfirm 利用時に true にすると「グラフに反映」ボタンを描画しない（親のフッターなどに配置する場合） */
+  hideConfirmButton?: boolean;
+  additionalGraph?: GraphDocumentForFrontend | undefined;
+  setAdditionalGraph?: React.Dispatch<
+    React.SetStateAction<GraphDocumentForFrontend | undefined>
   >;
 }) => {
   const integrateGraph = api.kg.integrateGraph.useMutation();
@@ -40,8 +53,8 @@ const AdditionalGraphViewer = ({
 
   // グラフデータに統合予定フラグを付与
   const annotatedGraphDocument = useMemo(() => {
-    if (!graphDocument || !topicSpaceData?.graphData) {
-      return graphDocument;
+    if (!newGraphDocument || !topicSpaceData?.graphData) {
+      return newGraphDocument;
     }
 
     const existingNodes = topicSpaceData.graphData.nodes ?? [];
@@ -60,7 +73,7 @@ const AdditionalGraphViewer = ({
     // 統合予定ノードのIDセットを作成（追加グラフ内のノードID）
     const mergeTargetNodeIds = new Set<string>();
     const mergeTargetNodeKeys = new Set<string>();
-    graphDocument.nodes.forEach((node) => {
+    newGraphDocument.nodes.forEach((node) => {
       const key = `${node.name}:${node.label}`;
       if (existingNodeMap.has(key)) {
         mergeTargetNodeIds.add(node.id);
@@ -130,7 +143,7 @@ const AdditionalGraphViewer = ({
 
       if (mergeTargetNodeKeys.has(sourceKey)) {
         // 追加グラフ内の統合予定ノードのIDを探す
-        const mergeTargetNode = graphDocument.nodes.find(
+        const mergeTargetNode = newGraphDocument.nodes.find(
           (n) => `${n.name}:${n.label}` === sourceKey,
         );
         if (mergeTargetNode) {
@@ -142,7 +155,7 @@ const AdditionalGraphViewer = ({
       }
 
       if (mergeTargetNodeKeys.has(targetKey)) {
-        const mergeTargetNode = graphDocument.nodes.find(
+        const mergeTargetNode = newGraphDocument.nodes.find(
           (n) => `${n.name}:${n.label}` === targetKey,
         );
         if (mergeTargetNode) {
@@ -163,7 +176,7 @@ const AdditionalGraphViewer = ({
     });
 
     // 追加グラフのノードにフラグを付与
-    const annotatedNodes = graphDocument.nodes.map((node) => ({
+    const annotatedNodes = newGraphDocument.nodes.map((node) => ({
       ...node,
       isMergeTarget: mergeTargetNodeIds.has(node.id),
       isExistingContext: false, // 新しく追加される予定のノードは通常表示
@@ -172,7 +185,7 @@ const AdditionalGraphViewer = ({
     // 既存コンテキストノードとエッジを追加
     const allNodes = [...annotatedNodes, ...contextNodes];
     const allRelationships = [
-      ...graphDocument.relationships,
+      ...newGraphDocument.relationships,
       ...contextRelationships,
     ];
 
@@ -183,11 +196,11 @@ const AdditionalGraphViewer = ({
     console.log("追加グラフの全エッジ数:", allRelationships.length);
 
     return {
-      ...graphDocument,
+      ...newGraphDocument,
       nodes: allNodes,
       relationships: allRelationships,
     };
-  }, [graphDocument, topicSpaceData]);
+  }, [newGraphDocument, topicSpaceData]);
   const submitGraph = () => {
     setIsIntegrating(true);
     if (
@@ -355,20 +368,27 @@ const AdditionalGraphViewer = ({
   const [focusedNode, setFocusedNode] = useState<CustomNodeType>();
   const [focusedLink, setFocusedLink] = useState<CustomLinkType>();
 
-  // graph編集用の変数
-  const [additionalGraph, setAdditionalGraph] = useState<
+  // graph編集用の変数（親から渡されていればそれを使う）
+  const [internalAdditionalGraph, setInternalAdditionalGraph] = useState<
     GraphDocumentForFrontend | undefined
   >();
+  const additionalGraph =
+    controlledAdditionalGraph ?? internalAdditionalGraph;
+  const setAdditionalGraph =
+    controlledSetAdditionalGraph ?? setInternalAdditionalGraph;
+
   const [isNodeLinkAttachModalOpen, setIsNodeLinkAttachModalOpen] =
     useState<boolean>(false);
   const [isNodePropertyEditModalOpen, setIsNodePropertyEditModalOpen] =
     useState<boolean>(false);
   const [isLinkPropertyEditModalOpen, setIsLinkPropertyEditModalOpen] =
     useState<boolean>(false);
-  const onGraphUpdate = (additionalGraph: GraphDocumentForFrontend) => {
-    console.log("onGraphUpdate", additionalGraph);
-    setAdditionalGraph(additionalGraph);
-    setIsNodeLinkAttachModalOpen(true);
+  const onGraphUpdate = (nextAdditionalGraph: GraphDocumentForFrontend) => {
+    console.log("onGraphUpdate", nextAdditionalGraph);
+    setAdditionalGraph(nextAdditionalGraph);
+    if (!onConfirm) {
+      setIsNodeLinkAttachModalOpen(true);
+    }
   };
 
   const onNodeContextMenu = (graphNode: CustomNodeType) => {
@@ -382,25 +402,68 @@ const AdditionalGraphViewer = ({
     setFocusedLink(graphLink);
     setIsLinkPropertyEditModalOpen(true);
   };
+
+  const getMergedGraphForConfirm = (): GraphDocumentForFrontend | null => {
+    if (!newGraphDocument) return null;
+    return {
+      nodes: [
+        ...(newGraphDocument.nodes ?? []),
+        ...(additionalGraph?.nodes?.map((node) => ({
+          ...node,
+          isAdditional: true,
+        })) ?? []),
+      ],
+      relationships: [
+        ...(newGraphDocument.relationships ?? []),
+        ...(additionalGraph?.relationships?.map((r) => ({
+          ...r,
+          isAdditional: true,
+        })) ?? []),
+      ],
+    };
+  };
+
+  const useConfirmButton = !!onConfirm;
+  const showTopButtons = !(useConfirmButton && hideConfirmButton);
+
   return (
     <>
-      <div className="flex flex-row gap-2">
-        <Button
-          onClick={() => setGraphDocument(null)}
-          className="!h-8 !w-8 !p-2"
-        >
-          <div className="h-4 w-4">
-            <CrossLargeIcon color="white" width={16} height={16} />
-          </div>
-        </Button>
-        <Button
-          onClick={() => submitGraph()}
-          disabled={isIntegrating}
-          className="!px-2 !py-1 !text-sm"
-        >
-          {isIntegrating ? <Loading color="white" size={12} /> : "統合"}
-        </Button>
-      </div>
+      {showTopButtons && (
+        <div className="flex flex-row gap-2">
+          {!useConfirmButton && (
+            <Button
+              onClick={() => setGraphDocument(null)}
+              className="!h-8 !w-8 !p-2"
+            >
+              <div className="h-4 w-4">
+                <CrossLargeIcon color="white" width={16} height={16} />
+              </div>
+            </Button>
+          )}
+          {useConfirmButton ? (
+            <Button
+              onClick={() => {
+                const toConfirm =
+                  controlledSetAdditionalGraph != null
+                    ? newGraphDocument
+                    : getMergedGraphForConfirm();
+                if (toConfirm) onConfirm(toConfirm);
+              }}
+              className="!px-2 !py-1 !text-sm"
+            >
+              グラフに反映
+            </Button>
+          ) : (
+            <Button
+              onClick={() => submitGraph()}
+              disabled={isIntegrating}
+              className="!px-2 !py-1 !text-sm"
+            >
+              {isIntegrating ? <Loading color="white" size={12} /> : "統合"}
+            </Button>
+          )}
+        </div>
+      )}
 
       <ContainerSizeProvider
         containerRef={containerRef}
@@ -429,25 +492,27 @@ const AdditionalGraphViewer = ({
           />
         )}
       </ContainerSizeProvider>
-      <NodeLinkEditModal
-        isOpen={isNodeLinkAttachModalOpen}
-        setIsOpen={setIsNodeLinkAttachModalOpen}
-        graphDocument={graphDocument}
-        setGraphDocument={setGraphDocument}
-        additionalGraph={additionalGraph}
-        setAdditionalGraph={setAdditionalGraph}
-      />
+      {!useConfirmButton && (
+        <NodeLinkEditModal
+          isOpen={isNodeLinkAttachModalOpen}
+          setIsOpen={setIsNodeLinkAttachModalOpen}
+          graphDocument={newGraphDocument}
+          setGraphDocument={setGraphDocument}
+          additionalGraph={additionalGraph}
+          setAdditionalGraph={setAdditionalGraph}
+        />
+      )}
       <NodePropertyEditModal
         isOpen={isNodePropertyEditModalOpen}
         setIsOpen={setIsNodePropertyEditModalOpen}
-        graphDocument={graphDocument}
+        graphDocument={newGraphDocument}
         setGraphDocument={setGraphDocument}
         graphNode={focusedNode}
       />
       <LinkPropertyEditModal
         isOpen={isLinkPropertyEditModalOpen}
         setIsOpen={setIsLinkPropertyEditModalOpen}
-        graphDocument={graphDocument}
+        graphDocument={newGraphDocument}
         setGraphDocument={setGraphDocument}
         graphLink={focusedLink}
       />

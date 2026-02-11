@@ -9,8 +9,9 @@ import {
   ResetIcon,
   TriangleDownIcon,
   ListNumberIcon,
-  PaperRollIcon,
   FilterIcon,
+  CheckIcon,
+  CrossLargeIcon,
 } from "@/app/_components/icons";
 import { useInView } from "react-intersection-observer";
 import { useEffect, useState, useRef, useMemo } from "react";
@@ -28,7 +29,6 @@ import {
 } from "@/app/_hooks/use-meta-graph-story";
 import type { FocusedSegmentRef } from "@/app/const/story-segment";
 import { Loading } from "../../loading/loading";
-import { LinkButton } from "../../button/link-button";
 import { SortableList } from "@/app/_components/sortable";
 import { SortableItem } from "@/app/_components/sortable/sortable-item";
 import { DeleteRecordModal } from "../../modal/delete-record-modal";
@@ -55,6 +55,10 @@ export const SnapshotStoryboard = ({
   onEditModeChange,
   onStoryDelete,
   onApplyStoryFilter,
+  segmentSelectionEdit,
+  onStartSegmentSelectionEdit,
+  onConfirmSegmentSelectionEdit,
+  onRequestSegmentGraphExtraction,
 }: {
   workspaceId: string;
   metaGraphSummaries?: Array<{
@@ -98,6 +102,22 @@ export const SnapshotStoryboard = ({
   onApplyStoryFilter?: (filter: LayoutInstruction["filter"]) => void;
   /** 段落クリックで局所グラフをハイライト（対応する nodeIds/edgeIds を渡す） */
   onSegmentFocus?: (ref: FocusedSegmentRef | null) => void;
+  /** 手動でノード・エッジ選択中（確定で保存） */
+  segmentSelectionEdit?: {
+    communityId: string;
+    paragraphIndex: number;
+    nodeIds: string[];
+    edgeIds: string[];
+  } | null;
+  onStartSegmentSelectionEdit?: (
+    communityId: string,
+    paragraphIndex: number,
+    nodeIds: string[],
+    edgeIds: string[],
+  ) => void;
+  onConfirmSegmentSelectionEdit?: () => void;
+  /** セグメントのテキストを元にグラフ抽出モーダルを開く（元グラフに反映） */
+  onRequestSegmentGraphExtraction?: (text: string) => void;
 }) => {
   // ストーリーデータの取得（refetch用）
   const { refetch: refetchStory } = api.story.get.useQuery(
@@ -135,6 +155,11 @@ export const SnapshotStoryboard = ({
   const [isEditMode, setIsEditMode] = useState(false);
   const [isFilterMode, setIsFilterMode] = useState(false);
   const [isDeleteStoryModalOpen, setIsDeleteStoryModalOpen] = useState(false);
+  /** セグメント単位の再アノテーション中 { communityId, paragraphIndex } */
+  const [reannotatingSegment, setReannotatingSegment] = useState<{
+    communityId: string;
+    paragraphIndex: number;
+  } | null>(null);
 
   // フィルタ設定（DB保存用・印刷反映用）
   const [localFilter, setLocalFilter] = useState<
@@ -154,6 +179,8 @@ export const SnapshotStoryboard = ({
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState<Record<string, string>>({});
   const [editingDescription, setEditingDescription] = useState<Record<string, string>>({});
+  /** セクション保存中（保存ボタンの loading/二重クリック防止用） */
+  const [savingSectionId, setSavingSectionId] = useState<string | null>(null);
 
   // 編集モードの変更を親に通知
   useEffect(() => {
@@ -467,12 +494,13 @@ export const SnapshotStoryboard = ({
     }
   };
 
-  // セクションを保存するハンドラー（編集後は再アノテーションで対応付けを更新）
+  // セクションを保存するハンドラー（段落数が同じならテキストのみ更新して attrs 維持、段落増減時のみ再アノテーション）
   const handleSaveSection = async (sectionId: string) => {
     if (!metaGraphStoryData || !referencedTopicSpaceId) {
       alert("ストーリーのデータがないか、リポジトリが設定されていません。");
       return;
     }
+    if (savingSectionId !== null) return;
 
     const title = editingTitle[sectionId];
     const description = editingDescription[sectionId] ?? "";
@@ -482,28 +510,56 @@ export const SnapshotStoryboard = ({
       return;
     }
 
-    let storyValue: string | JSONContent = description;
+    setSavingSectionId(sectionId);
+
+    const rawStory = metaGraphStoryData.detailedStories[sectionId];
     const preparedCommunity = preparedCommunities?.find(
       (c) => c.communityId === sectionId,
     );
+
+    let storyValue: string | JSONContent = description;
+
     if (
-      preparedCommunity?.memberNodes?.length &&
-      preparedCommunity?.internalEdgesDetailed?.length
+      typeof rawStory === "object" &&
+      rawStory?.content &&
+      Array.isArray(rawStory.content)
     ) {
-      try {
-        const result = await annotateStorySegments.mutateAsync({
-          communityId: sectionId,
-          fullText: description,
-          memberNodes: preparedCommunity.memberNodes,
-          internalEdgesDetailed: preparedCommunity.internalEdgesDetailed,
-        });
-        if (result.segments.length > 0) {
-          // tRPC の mutateAsync 戻り値が error 型と誤検知されるため無効化
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
-          storyValue = buildStoryDocFromSegments(result.segments);
+      const newParagraphs = description.trim().split(/\n\n+/);
+      const existingContent = rawStory.content;
+
+      if (newParagraphs.length === existingContent.length) {
+        // 段落数が同じ: テキストのみ差し替え、attrs（セグメント情報）は維持
+        const newContent: JSONContent[] = existingContent.map(
+          (node: JSONContent, i: number) => {
+            if (node.type === "paragraph") {
+              const newText = newParagraphs[i] ?? "";
+              return {
+                ...node,
+                content: [{ type: "text" as const, text: newText }],
+              };
+            }
+            return node;
+          },
+        );
+        storyValue = { type: "doc", content: newContent };
+      } else if (
+        preparedCommunity?.memberNodes?.length &&
+        preparedCommunity?.internalEdgesDetailed?.length
+      ) {
+        // 段落が増減した場合のみ再アノテーションでセグメントを付け直す
+        try {
+          const result = await annotateStorySegments.mutateAsync({
+            communityId: sectionId,
+            fullText: description,
+            memberNodes: preparedCommunity.memberNodes,
+            internalEdgesDetailed: preparedCommunity.internalEdgesDetailed,
+          });
+          if (result.segments.length > 0) {
+            storyValue = buildStoryDocFromSegments(result.segments);
+          }
+        } catch {
+          // 再アノテーション失敗時はプレーンテキストのまま保存
         }
-      } catch {
-        // 再アノテーション失敗時はプレーンテキストのまま保存
       }
     }
 
@@ -528,7 +584,6 @@ export const SnapshotStoryboard = ({
       },
       {
         onSuccess: () => {
-          // 編集状態を解除
           setEditingSectionId(null);
           setEditingTitle((prev) => {
             const newState = { ...prev };
@@ -540,8 +595,9 @@ export const SnapshotStoryboard = ({
             delete newState[sectionId];
             return newState;
           });
-          // 親コンポーネントに更新を通知する必要がある場合はここで処理
-          // 現在はuseMetaGraphStoryフックが自動的に再取得するため、特に必要なし
+        },
+        onSettled: () => {
+          setSavingSectionId(null);
         },
       },
     );
@@ -563,6 +619,132 @@ export const SnapshotStoryboard = ({
         return newState;
       });
     }
+  };
+
+  /** 単一セグメントのノード・エッジを LLM で再推定し保存 */
+  const handleReannotateSegment = async (
+    communityId: string,
+    paragraphIndex: number,
+    text: string,
+  ) => {
+    if (!metaGraphStoryData || !referencedTopicSpaceId || !text.trim()) return;
+    const preparedCommunity = preparedCommunities?.find(
+      (c) => c.communityId === communityId,
+    );
+    if (
+      !preparedCommunity?.memberNodes?.length ||
+      !preparedCommunity?.internalEdgesDetailed?.length
+    ) {
+      return;
+    }
+    setReannotatingSegment({ communityId, paragraphIndex });
+    try {
+      const result = await annotateStorySegments.mutateAsync({
+        communityId,
+        segments: [{ text: text.trim() }],
+        memberNodes: preparedCommunity.memberNodes,
+        internalEdgesDetailed: preparedCommunity.internalEdgesDetailed,
+      });
+      const seg = result.segments[0];
+      if (!seg) {
+        setReannotatingSegment(null);
+        return;
+      }
+      const currentStory = metaGraphStoryData.detailedStories[communityId];
+      if (typeof currentStory !== "object" || !Array.isArray(currentStory.content)) {
+        setReannotatingSegment(null);
+        return;
+      }
+      const content = [...currentStory.content];
+      const target = content[paragraphIndex];
+      if (!target || target.type !== "paragraph") {
+        setReannotatingSegment(null);
+        return;
+      }
+      content[paragraphIndex] = {
+        ...target,
+        attrs: {
+          ...(target.attrs ?? {}),
+          ...(seg.nodeIds?.length ? { segmentNodeIds: seg.nodeIds } : {}),
+          ...(seg.edgeIds?.length ? { segmentEdgeIds: seg.edgeIds } : {}),
+          segmentSource: seg.source ?? "auto_annotated",
+        },
+      };
+      const updatedDoc: JSONContent = {
+        ...currentStory,
+        content,
+      };
+      const updatedData = {
+        ...metaGraphStoryData,
+        detailedStories: {
+          ...metaGraphStoryData.detailedStories,
+          [communityId]: updatedDoc,
+        },
+      };
+      saveStory.mutate(
+        {
+          workspaceId,
+          referencedTopicSpaceId,
+          data: updatedData,
+        },
+        {
+          onSettled: () => setReannotatingSegment(null),
+        },
+      );
+    } catch {
+      setReannotatingSegment(null);
+    }
+  };
+
+  /** 手動選択を確定して段落 attrs を更新し保存 */
+  const handleConfirmSegmentSelection = () => {
+    if (
+      !segmentSelectionEdit ||
+      !metaGraphStoryData ||
+      !referencedTopicSpaceId
+    ) {
+      return;
+    }
+    const { communityId, paragraphIndex, nodeIds, edgeIds } =
+      segmentSelectionEdit;
+    const currentStory = metaGraphStoryData.detailedStories[communityId];
+    if (typeof currentStory !== "object" || !Array.isArray(currentStory.content)) {
+      onConfirmSegmentSelectionEdit?.();
+      return;
+    }
+    const content = [...currentStory.content];
+    const target = content[paragraphIndex];
+    if (!target || target.type !== "paragraph") {
+      onConfirmSegmentSelectionEdit?.();
+      return;
+    }
+    content[paragraphIndex] = {
+      ...target,
+      attrs: {
+        ...(target.attrs ?? {}),
+        ...(nodeIds.length ? { segmentNodeIds: nodeIds } : {}),
+        ...(edgeIds.length ? { segmentEdgeIds: edgeIds } : {}),
+        segmentSource: "user_selected" as const,
+      },
+    };
+    const updatedDoc: JSONContent = { ...currentStory, content };
+    const updatedData = {
+      ...metaGraphStoryData,
+      detailedStories: {
+        ...metaGraphStoryData.detailedStories,
+        [communityId]: updatedDoc,
+      },
+    };
+    saveStory.mutate(
+      {
+        workspaceId,
+        referencedTopicSpaceId,
+        data: updatedData,
+      },
+      {
+        onSuccess: () => onConfirmSegmentSelectionEdit?.(),
+      },
+    );
   };
 
   // 利用可能なコミュニティ（ストーリーに含まれていないもの）
@@ -673,15 +855,6 @@ export const SnapshotStoryboard = ({
               </>
             )}
           </Button>
-          <LinkButton
-            target="_blank"
-            size="small"
-            href={`/workspaces/${workspaceId}/print-preview`}
-            className="texts-sm flex items-center gap-2"
-          >
-            <PaperRollIcon width={14} height={14} />
-            <span>出力</span>
-          </LinkButton>
           {metaGraphStoryData && (
             <Button
               size="small"
@@ -703,6 +876,30 @@ export const SnapshotStoryboard = ({
           onStoryDelete?.();
         }}
       />
+
+      {segmentSelectionEdit && (
+        <div className="mb-3 flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-300">
+          <span>グラフでノード・エッジをクリックして選択し、確定で保存します。</span>
+          <Button
+            size="small"
+            onClick={handleConfirmSegmentSelection}
+            className="bg-slate-600 hover:bg-slate-500"
+          >
+            <CheckIcon width={16} height={16} color="green" />
+          </Button>
+          <Button
+            size="small"
+            onClick={() => onConfirmSegmentSelectionEdit?.()}
+            className="bg-slate-600 hover:bg-slate-500"
+          >
+            <CrossLargeIcon
+              width={14}
+              height={14}
+              color="red"
+            />
+          </Button>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto pr-2">
         {isFilterMode ? (
@@ -742,6 +939,11 @@ export const SnapshotStoryboard = ({
                     storyContent={"storyContent" in item ? item.storyContent : undefined}
                     onSegmentFocus={onSegmentFocus}
                     focusedSegmentRef={focusedSegmentRef}
+                    reannotatingSegment={reannotatingSegment}
+                    onReannotateSegment={handleReannotateSegment}
+                    segmentSelectionEdit={segmentSelectionEdit}
+                    onStartSegmentSelectionEdit={onStartSegmentSelectionEdit}
+                    onRequestSegmentGraphExtraction={onRequestSegmentGraphExtraction}
                     onInView={() => {
                       if (onCommunityFocus) {
                         if (narrativeFlow && narrativeFlow.length > 0) {
@@ -764,6 +966,7 @@ export const SnapshotStoryboard = ({
                     isFirst={index === 0}
                     isLast={index === storyItems.length - 1}
                     isEditing={editingSectionId === item.id}
+                    isSavingSection={savingSectionId === item.id}
                     onSectionClick={() => handleSectionClick(item.id)}
                     onSave={() => handleSaveSection(item.id)}
                     onCancel={handleCancelEdit}
@@ -856,6 +1059,11 @@ const StorySection = ({
   storyContent,
   onSegmentFocus,
   focusedSegmentRef,
+  reannotatingSegment,
+  onReannotateSegment,
+  segmentSelectionEdit,
+  onStartSegmentSelectionEdit,
+  onRequestSegmentGraphExtraction,
   metaGraphData,
   hasDetailedStory,
   isEditMode,
@@ -865,6 +1073,7 @@ const StorySection = ({
   isFirst,
   isLast,
   isEditing,
+  isSavingSection,
   onSectionClick,
   onSave,
   onCancel,
@@ -884,6 +1093,25 @@ const StorySection = ({
   storyContent?: string | JSONContent;
   onSegmentFocus?: (ref: FocusedSegmentRef | null) => void;
   focusedSegmentRef?: FocusedSegmentRef | null;
+  reannotatingSegment?: { communityId: string; paragraphIndex: number } | null;
+  onReannotateSegment?: (
+    communityId: string,
+    paragraphIndex: number,
+    text: string,
+  ) => void;
+  segmentSelectionEdit?: {
+    communityId: string;
+    paragraphIndex: number;
+    nodeIds: string[];
+    edgeIds: string[];
+  } | null;
+  onStartSegmentSelectionEdit?: (
+    communityId: string,
+    paragraphIndex: number,
+    nodeIds: string[],
+    edgeIds: string[],
+  ) => void;
+  onRequestSegmentGraphExtraction?: (text: string) => void;
   onInView: () => void;
   metaGraphData?: {
     metaNodes: Array<{
@@ -901,6 +1129,7 @@ const StorySection = ({
   isFirst?: boolean;
   isLast?: boolean;
   isEditing?: boolean;
+  isSavingSection?: boolean;
   onSectionClick?: () => void;
   onSave?: () => void;
   onCancel?: () => void;
@@ -1040,9 +1269,14 @@ const StorySection = ({
               onClick={() => {
                 onSave?.();
               }}
+              disabled={isSavingSection}
               className="flex items-center gap-1"
             >
-              <span>保存</span>
+              {isSavingSection ? (
+                <span>保存中...</span>
+              ) : (
+                <span>保存</span>
+              )}
             </Button>
           </div>
         </div>
@@ -1106,43 +1340,116 @@ const StorySection = ({
                     edgeIds: attrs.segmentEdgeIds ?? [],
                   };
                   const isFocused = hasRef && isSameSegmentRef(focusedSegmentRef, segmentRef);
+                  const isReannotating =
+                    reannotatingSegment?.communityId === item.id &&
+                    reannotatingSegment?.paragraphIndex === idx;
+                  const segEdit = segmentSelectionEdit;
+                  const isEditingSelection =
+                    segEdit != null &&
+                    segEdit.communityId === item.id &&
+                    segEdit.paragraphIndex === idx;
                   return (
                     <div
                       key={idx}
-                      role={hasRef ? "button" : undefined}
-                      tabIndex={hasRef ? 0 : undefined}
-                      onClick={
-                        hasRef && onSegmentFocus
-                          ? () => {
-                            if (isFocused) {
-                              onSegmentFocus(null);
-                            } else {
-                              onSegmentFocus(segmentRef);
-                            }
-                          }
-                          : undefined
-                      }
-                      onKeyDown={
-                        hasRef && onSegmentFocus
-                          ? (e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
+                      className="group/seg flex flex-col items-start gap-1 rounded px-1 py-0.5"
+                    >
+                      <div
+                        role={hasRef ? "button" : undefined}
+                        tabIndex={hasRef ? 0 : undefined}
+                        onClick={
+                          hasRef && onSegmentFocus
+                            ? () => {
                               if (isFocused) {
                                 onSegmentFocus(null);
                               } else {
                                 onSegmentFocus(segmentRef);
                               }
                             }
-                          }
-                          : undefined
-                      }
-                      className={
-                        hasRef
-                          ? `cursor-pointer rounded px-1 py-0.5 hover:bg-slate-700/50 focus:bg-slate-700/50 focus:outline-none ${isFocused ? "bg-slate-700/50" : ""}`
-                          : ""
-                      }
-                    >
-                      {text}
+                            : undefined
+                        }
+                        onKeyDown={
+                          hasRef && onSegmentFocus
+                            ? (e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                if (isFocused) {
+                                  onSegmentFocus(null);
+                                } else {
+                                  onSegmentFocus(segmentRef);
+                                }
+                              }
+                            }
+                            : undefined
+                        }
+                        className={
+                          hasRef
+                            ? `cursor-pointer flex-1 rounded hover:bg-slate-700/50 focus:bg-slate-700/50 focus:outline-none ${isFocused ? "bg-slate-700/50" : ""}`
+                            : "flex-1"
+                        }
+                      >
+                        {text}
+                      </div>
+                      {text.trim() && !isEditMode && (
+                        <span className="flex w-full justify-end gap-1">
+                          {onReannotateSegment &&
+                            (isReannotating ? (
+                              <span className="inline-flex text-slate-400">
+                                <Loading size={14} color="currentColor" />
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onReannotateSegment(item.id, idx, text);
+                                }}
+                                className="rounded px-1.5 py-0.5 text-xs text-slate-500 opacity-0 transition-opacity hover:bg-slate-700/50 hover:text-slate-300 group-hover/seg:opacity-100"
+                                title="この段落のノード・エッジを再推定"
+                              >
+                                再推定
+                              </button>
+                            ))}
+                          {onStartSegmentSelectionEdit && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const nodeIds: string[] =
+                                  Array.isArray(attrs.segmentNodeIds) ?
+                                    attrs.segmentNodeIds :
+                                    [];
+                                const edgeIds: string[] =
+                                  Array.isArray(attrs.segmentEdgeIds) ?
+                                    attrs.segmentEdgeIds :
+                                    [];
+                                onStartSegmentSelectionEdit(
+                                  item.id,
+                                  idx,
+                                  nodeIds,
+                                  edgeIds,
+                                );
+                              }}
+                              className={`rounded px-1.5 py-0.5 text-xs opacity-0 transition-opacity hover:bg-slate-700/50 group-hover/seg:opacity-100 ${isEditingSelection ? "bg-slate-700/50 text-blue-300" : "text-slate-500 hover:text-slate-300"}`}
+                              title="グラフでノード・エッジを手動で選択"
+                            >
+                              {isEditingSelection ? "選択中" : "手動で選択"}
+                            </button>
+                          )}
+                          {onRequestSegmentGraphExtraction && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onRequestSegmentGraphExtraction(text);
+                              }}
+                              className="rounded px-1.5 py-0.5 text-xs text-slate-500 opacity-0 transition-opacity hover:bg-slate-700/50 hover:text-slate-300 group-hover/seg:opacity-100"
+                              title="この段落の文章を元のグラフに反映"
+                            >
+                              グラフ抽出
+                            </button>
+                          )}
+                        </span>
+                      )}
                     </div>
                   );
                 })}
