@@ -228,7 +228,7 @@ export const MultiDocumentGraphEditor = ({
 
                     <div className="absolute mt-12 flex flex-col items-start gap-2">
                       <div className="flex flex-row items-center gap-2">
-                        <div className="text-sm">編集モード</div>
+                        <div className="text-sm">直接編集</div>
                         <Switch
                           checked={isEditor}
                           onChange={setIsEditor}
