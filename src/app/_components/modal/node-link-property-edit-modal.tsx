@@ -70,9 +70,14 @@ export const NodePropertyEditModal = ({
               value={graphNodeField.name}
               defaultValue={graphNodeField.name}
               onChange={(e) => {
+                const newName = e.target.value;
                 setGraphNodeField({
                   ...graphNodeField,
-                  name: e.target.value,
+                  name: newName,
+                  properties: {
+                    ...graphNodeField.properties,
+                    name_ja: newName,
+                  },
                 });
               }}
             />
@@ -121,9 +126,16 @@ export const NodePropertyEditModal = ({
               type="button"
               className="text-sm"
               onClick={() => {
+                const updatedNode = {
+                  ...graphNodeField,
+                  properties: {
+                    ...graphNodeField.properties,
+                    name_ja: graphNodeField.name,
+                  },
+                };
                 const newNodes =
                   graphDocument?.nodes.map((node) =>
-                    node.id === graphNodeField.id ? graphNodeField : node,
+                    node.id === graphNodeField.id ? updatedNode : node,
                   ) ?? [];
 
                 const newGraphDocument: GraphDocumentForFrontend = {

@@ -1,6 +1,6 @@
 import { GraphIcon } from "@/app/_components/icons";
 import type { CustomNodeType } from "@/app/const/types";
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "../button/button";
 import { CheckboxInput } from "../input/checkbox-input";
 import { MergeNodesForm } from "../form/merge-nodes-form";
@@ -20,6 +20,10 @@ export const NodeLinkList = ({
   isClustered = false,
   nodeSearchQuery,
   toolComponent,
+  onEditNode,
+  isGraphUpdated = false,
+  onGraphUpdate,
+  isGraphUpdatePending = false,
 }: {
   graphDocument: GraphDocumentForFrontend;
   contextId: string;
@@ -30,6 +34,14 @@ export const NodeLinkList = ({
   isClustered?: boolean;
   isEditor?: boolean;
   refetch?: () => void;
+  /** 編集モード時、リストからノードを編集するコールバック（NodePropertyEditModal を開くために使用） */
+  onEditNode?: (node: CustomNodeType) => void;
+  /** モーダルで変更したなど、グラフに未保存の変更がある場合に true */
+  isGraphUpdated?: boolean;
+  /** グラフをサーバーに更新するコールバック（リスト表示時の「更新」ボタン用） */
+  onGraphUpdate?: () => void;
+  /** 更新 API 送信中かどうか（更新ボタンの loading 表示用） */
+  isGraphUpdatePending?: boolean;
 }) => {
   const [isNodeMergeMode, setIsNodeMergeMode] = useState<boolean>(false);
   const [mergeNodes, setMergeNodes] = useState<CustomNodeType[]>();
@@ -112,6 +124,16 @@ export const NodeLinkList = ({
           {sortType === "centrality" && "中心度順"}
           {sortType === "none" && "並び替え"}
         </Button>
+
+        {isGraphUpdated && onGraphUpdate && (
+          <Button
+            className="!text-xs !text-orange-500"
+            onClick={onGraphUpdate}
+            isLoading={isGraphUpdatePending}
+          >
+            更新
+          </Button>
+        )}
       </div>
 
       <div className="flex w-full flex-col divide-y divide-slate-400">
@@ -139,7 +161,7 @@ export const NodeLinkList = ({
                 />
               )}
               <div className="flex w-full flex-col gap-2">
-                <div className="flex flex-row items-center gap-2">
+                <div className="flex flex-row items-center gap-2 flex-wrap">
                   <div>{node.name}</div>
                   <div className="flex w-max flex-row items-center justify-center rounded-md bg-white px-2 text-sm text-slate-900">
                     {node.label}
@@ -161,6 +183,7 @@ export const NodeLinkList = ({
                   contextId={contextId}
                   contextType={contextType}
                   withDetail={true}
+                  onEditNode={isEditor ? onEditNode : undefined}
                 />
               </div>
             </div>
