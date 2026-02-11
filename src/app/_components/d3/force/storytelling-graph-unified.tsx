@@ -1202,8 +1202,10 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
           </g>
         );
       })}
-      {/* 2. ラベルをパスの前面に描画（代表ラベルのみ） */}
-      {linksToRender.map((link) => {
+      {/* 2. ラベルをパスの前面に描画（ノード対ごとに1つだけ） */}
+      {Array.from(linksByNodePair.entries()).map(([pairKey, linksInPair]) => {
+        const link = linksInPair[0];
+        if (!link) return null;
         const source = link.source as CustomNodeType;
         const target = link.target as CustomNodeType;
         if (
@@ -1214,22 +1216,17 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         ) {
           return null;
         }
-        const pairKey = getNodePairKey(link);
-        const linksInPair = linksByNodePair.get(pairKey) ?? [link];
-        const pairIndex = linksInPair.findIndex(
-          (l) => getEdgeCompositeKeyFromLink(l) === getEdgeCompositeKeyFromLink(link),
-        );
         const pairCount = linksInPair.length;
         const typesInPair = linksInPair.map((l) => l.type ?? "").filter(Boolean);
-        const isRepresentativeLabel = pairIndex === 0;
-        if (!isRepresentativeLabel || !showEdgeLabels || typesInPair.length === 0) {
+        if (!showEdgeLabels || typesInPair.length === 0) {
           return null;
         }
 
         const [sx, sy] = toView(source.x, source.y);
         const [tx, ty] = toView(target.x, target.y);
-        const key = getEdgeCompositeKeyFromLink(link);
-        const isFocusEdge = focusEdgeIdSet.has(key);
+        const isFocusEdge = linksInPair.some((l) =>
+          focusEdgeIdSet.has(getEdgeCompositeKeyFromLink(l)),
+        );
         const dx = tx - sx;
         const dy = ty - sy;
         const len = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -1256,11 +1253,11 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         const handleLabelClick =
           pairCount > 1
             ? (e: React.MouseEvent) => {
-              e.stopPropagation();
-              setExpandedEdgePairKey((prev) =>
-                prev === pairKey ? null : pairKey,
-              );
-            }
+                e.stopPropagation();
+                setExpandedEdgePairKey((prev) =>
+                  prev === pairKey ? null : pairKey,
+                );
+              }
             : undefined;
 
         if (hasExplicitEdges && isFocusEdge) {
