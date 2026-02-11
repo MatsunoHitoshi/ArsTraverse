@@ -1422,13 +1422,12 @@ const StorySection = ({
                                   Array.isArray(attrs.segmentEdgeIds) ?
                                     attrs.segmentEdgeIds :
                                     [];
-                                const startEdit = onStartSegmentSelectionEdit as (
-                                  communityId: string,
-                                  paragraphIndex: number,
-                                  nodeIds: string[],
-                                  edgeIds: string[],
-                                ) => void;
-                                startEdit(item.id, idx, nodeIds, edgeIds);
+                                onStartSegmentSelectionEdit(
+                                  item.id,
+                                  idx,
+                                  nodeIds,
+                                  edgeIds,
+                                );
                               }}
                               className={`rounded px-1.5 py-0.5 text-xs opacity-0 transition-opacity hover:bg-slate-700/50 group-hover/seg:opacity-100 ${isEditingSelection ? "bg-slate-700/50 text-blue-300" : "text-slate-500 hover:text-slate-300"}`}
                               title="グラフでノード・エッジを手動で選択"
