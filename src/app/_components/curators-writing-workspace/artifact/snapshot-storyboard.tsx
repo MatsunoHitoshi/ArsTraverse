@@ -1323,7 +1323,15 @@ const StorySection = ({
             {typeof storyContent === "object" &&
               storyContent?.content &&
               Array.isArray(storyContent.content) ? (
-              <div className={`mb-2 space-y-2 text-slate-300 ${isEditMode ? "line-clamp-3 overflow-hidden text-ellipsis" : ""}`}>
+              isEditMode ? (
+                <div
+                  className="mb-2 line-clamp-3 overflow-hidden text-ellipsis whitespace-pre-line text-slate-300"
+                  title={item.description}
+                >
+                  {item.description}
+                </div>
+              ) : (
+              <div className="mb-2 space-y-2 text-slate-300">
                 {storyContent.content.map((node, idx) => {
                   if (node.type !== "paragraph" || !node.content) return null;
                   const text = (node.content as Array<{ type?: string; text?: string }>)
@@ -1454,9 +1462,10 @@ const StorySection = ({
                   );
                 })}
               </div>
+              )
             ) : (
               <div
-                className={`mb-2 whitespace-pre-line text-slate-300 ${isEditMode ? "line-clamp-1 overflow-hidden text-ellipsis" : ""}`}
+                className={`mb-2 whitespace-pre-line text-slate-300 ${isEditMode ? "line-clamp-3 overflow-hidden text-ellipsis" : ""}`}
                 title={isEditMode ? item.description : undefined}
               >
                 {item.description}
