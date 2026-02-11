@@ -376,7 +376,7 @@ export function ScrollStorytellingViewerUnified({
               >
                 {graphSection}
               </div>
-              <div className="min-w-0 flex-1 w-1/3">
+              <div className="relative min-w-0 flex-1 w-1/3">
                 {progressStep?.communityTitle != null && progressStep.communityTitle !== "" && (
                   <div
                     className={`sticky top-72 z-10 w-full pb-2 pt-0 font-semibold text-white ${progressStep?.id === "__overview__" ? "text-4xl" : "text-xl"}`}
@@ -384,6 +384,17 @@ export function ScrollStorytellingViewerUnified({
                     {progressStep.communityTitle}
                   </div>
                 )}
+                {/* PC版: 本文が入ってくる・出ていく時のフェード用グラデーション（上下） */}
+                <div className="pointer-events-none absolute inset-x-0 top-0 bottom-0 z-[5] flex flex-col justify-between">
+                  <div
+                    className="sticky top-0 h-[50vh] shrink-0 bg-gradient-to-b from-slate-900 to-transparent"
+                    aria-hidden
+                  />
+                  <div
+                    className="sticky bottom-0 h-[50vh] shrink-0 bg-gradient-to-t from-slate-900 to-transparent"
+                    aria-hidden
+                  />
+                </div>
                 <Scrollama
                   offset={SCROLLAMA_OFFSET}
                   onStepEnter={onStepEnter}
