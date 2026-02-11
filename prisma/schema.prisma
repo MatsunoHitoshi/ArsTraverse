@@ -78,6 +78,7 @@ model User {
   reviewingEdits       GraphEditProposal[] @relation("GraphEditProposalReviewer")
   lockedProposals      GraphEditProposal[] @relation("GraphEditProposalLock")
   proposalComments     ProposalComment[]
+  storyHistories       StoryHistory[]       @relation("StoryHistorySavedBy")
   
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
@@ -700,6 +701,9 @@ model Story {
   metaNodes   MetaGraphNode[] @relation("StoryMetaNodes")
   metaEdges   MetaGraphRelationship[] @relation("StoryMetaEdges")
   
+  // 保存履歴（上書き前にスナップショットを保存）
+  storyHistories StoryHistory[]
+  
   // グラフフィルタリング設定（LayoutInstruction["filter"]）
   filter      Json?
   
@@ -816,4 +820,19 @@ model CommunityStory {
   updatedAt   DateTime @updatedAt
   
   @@index([metaNodeId])
+}
+
+// ストーリー保存履歴（保存時に上書き前の状態をスナップショット）
+model StoryHistory {
+  id            String   @id @default(cuid())
+  story         Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  storyId       String
+  snapshotData  Json     // MetaGraphStoryData 相当のオブジェクト
+  description   String?  // 保存時のメモ（任意）
+  savedBy       User     @relation("StoryHistorySavedBy", fields: [savedById], references: [id])
+  savedById    String
+  createdAt     DateTime @default(now())
+
+  @@index([storyId])
+  @@index([createdAt])
 }

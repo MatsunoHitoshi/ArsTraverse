@@ -34,6 +34,7 @@ import { SortableItem } from "@/app/_components/sortable/sortable-item";
 import { DeleteRecordModal } from "../../modal/delete-record-modal";
 import { Textarea } from "../../textarea";
 import { FilterSection } from "@/app/_components/layout-edit/sections/filter-section";
+import { StoryHistoryModal } from "./story-history-modal";
 
 export const SnapshotStoryboard = ({
   workspaceId,
@@ -135,6 +136,7 @@ export const SnapshotStoryboard = ({
   const [isEditMode, setIsEditMode] = useState(false);
   const [isFilterMode, setIsFilterMode] = useState(false);
   const [isDeleteStoryModalOpen, setIsDeleteStoryModalOpen] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
 
   // フィルタ設定（DB保存用・印刷反映用）
   const [localFilter, setLocalFilter] = useState<
@@ -633,6 +635,13 @@ export const SnapshotStoryboard = ({
 
         {/* 右側：保存、エクスポートと追加ボタン */}
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="small"
+            onClick={() => setIsHistoryModalOpen(true)}
+            className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600"
+          >
+            <span>履歴</span>
+          </Button>
           {metaGraphStoryData && referencedTopicSpaceId && (
             <Button
               size="small"
@@ -703,6 +712,13 @@ export const SnapshotStoryboard = ({
           onStoryDelete?.();
         }}
       />
+
+      {isHistoryModalOpen && (
+        <StoryHistoryModal
+          workspaceId={workspaceId}
+          onClose={() => setIsHistoryModalOpen(false)}
+        />
+      )}
 
       <div className="flex-1 overflow-y-auto pr-2">
         {isFilterMode ? (

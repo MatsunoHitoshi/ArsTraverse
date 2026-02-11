@@ -59,12 +59,25 @@ export const storyRouter = createTRPCRouter({
       );
 
       // 既存のStoryを取得（同一workspaceIdのもの。削除済みも含む）
+      // convertFromDatabase で履歴スナップショット用に relationshipsFrom も取得
       const existingStory = await ctx.db.story.findUnique({
         where: { workspaceId },
         include: {
           metaNodes: {
             include: {
-              memberNodes: true,
+              memberNodes: {
+                include: {
+                  relationshipsFrom: {
+                    select: {
+                      id: true,
+                      type: true,
+                      properties: true,
+                      fromNodeId: true,
+                      toNodeId: true,
+                    },
+                  },
+                },
+              },
               summary: true,
               storyContent: true,
             },
@@ -80,6 +93,20 @@ export const storyRouter = createTRPCRouter({
 
       // トランザクションで一括保存
       const result = await ctx.db.$transaction(async (tx) => {
+        // 既存ストーリーがある場合は、上書き前に履歴としてスナップショットを保存
+        if (existingStory) {
+          const snapshotData = convertFromDatabase(
+            existingStory as StoryWithRelations,
+          );
+          await tx.storyHistory.create({
+            data: {
+              storyId: existingStory.id,
+              snapshotData: snapshotData as unknown as Prisma.InputJsonValue,
+              savedById: ctx.session.user.id,
+            },
+          });
+        }
+
         // Storyをupsert（同一workspaceIdの既存があればupdateで復元、なければcreate）
         const story = existingStory
           ? await tx.story.update({
@@ -387,5 +414,82 @@ export const storyRouter = createTRPCRouter({
             }
           : null,
       );
+    }),
+
+  /**
+   * ストーリー保存履歴一覧を取得
+   */
+  listHistory: protectedProcedure
+    .input(z.object({ workspaceId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const workspace = await ctx.db.workspace.findFirst({
+        where: {
+          id: input.workspaceId,
+          OR: [
+            { userId: ctx.session.user.id },
+            { collaborators: { some: { id: ctx.session.user.id } } },
+          ],
+        },
+      });
+      if (!workspace) {
+        throw new Error("Workspace not found or access denied");
+      }
+
+      const story = await ctx.db.story.findUnique({
+        where: { workspaceId: input.workspaceId },
+      });
+      if (!story) {
+        return [];
+      }
+
+      return ctx.db.storyHistory.findMany({
+        where: { storyId: story.id },
+        include: {
+          savedBy: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+    }),
+
+  /**
+   * ストーリー保存履歴の1件を取得（内容の振り返り用）
+   */
+  getHistoryEntry: protectedProcedure
+    .input(z.object({ historyId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const entry = await ctx.db.storyHistory.findFirst({
+        where: { id: input.historyId },
+        include: { story: true },
+      });
+      if (!entry) {
+        throw new Error("Story history not found");
+      }
+
+      const workspace = await ctx.db.workspace.findFirst({
+        where: {
+          id: entry.story.workspaceId,
+          OR: [
+            { userId: ctx.session.user.id },
+            { collaborators: { some: { id: ctx.session.user.id } } },
+          ],
+        },
+      });
+      if (!workspace) {
+        throw new Error("Access denied");
+      }
+
+      return {
+        id: entry.id,
+        snapshotData: entry.snapshotData,
+        description: entry.description,
+        savedById: entry.savedById,
+        createdAt: entry.createdAt,
+      };
     }),
 });
