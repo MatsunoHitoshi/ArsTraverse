@@ -80,11 +80,64 @@ const GraphNodeCircle = memo(function GraphNodeCircle({
   isSelectionMode?: boolean;
   onNodeSelectionToggle?: (node: CustomNodeType) => void;
 }) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  const baseR =
+    1.6 *
+    ((graphNode.neighborLinkCount ?? 0) * 0.1 + 3.6) *
+    (isNodeFiltered(graphNode, filterOption) ? 1 : 0.5) *
+    nodeMagnification;
+  const imageUrl = graphNode.properties?.imageUrl as string | undefined;
+  const showImage = !!imageUrl && !imageFailed;
+  const r = showImage ? baseR * 1.25 : baseR;
+
+  const fill =
+    ((isSelectionMode && isSelected) ?? isFocused ?? isDragEditorTarget)
+      ? "#ef7234"
+      : isPathNode
+        ? "#eae80c"
+        : graphNode.isAddedInHistory
+          ? "#10b981"
+          : graphNode.isRemovedInHistory
+            ? "#ef4444"
+            : graphNode.isMergeTarget
+              ? "#10b981"
+              : graphNode.isAdditional
+                ? "#8b9dc3"
+                : graphUnselected
+                  ? "#324557"
+                  : isClustered && graphNode.nodeColor
+                    ? graphNode.nodeColor
+                    : "whitesmoke";
+  const opacity =
+    graphNode.isExistingContext
+      ? 0.3
+      : isNodeFiltered(graphNode, filterOption)
+        ? 0.9
+        : 0.6;
+  const stroke =
+    graphNode.isAddedInHistory
+      ? "#10b981"
+      : graphNode.isRemovedInHistory
+        ? "#ef4444"
+        : graphNode.isMergeTarget
+          ? "#10b981"
+          : "#eae80c";
+  const strokeWidth =
+    (graphNode.isAddedInHistory ??
+      graphNode.isRemovedInHistory ??
+      graphNode.isMergeTarget)
+      ? 2.5
+      : queryFiltered
+        ? 2.5
+        : 0;
+
   return (
     <g
       key={graphNode.id}
       ref={nodeRef}
       className={`${graphIdentifier}-node cursor-pointer`}
+      transform={`translate(${graphNode.x}, ${graphNode.y})`}
       onClick={() => {
         if (isSelectionMode) {
           onNodeSelectionToggle?.(graphNode);
@@ -101,69 +154,52 @@ const GraphNodeCircle = memo(function GraphNodeCircle({
         onNodeContextMenu?.(graphNode);
       }}
     >
-      <circle
-        r={
-          1.6 *
-          ((graphNode.neighborLinkCount ?? 0) * 0.1 + 3.6) *
-          (isNodeFiltered(graphNode, filterOption) ? 1 : 0.5) *
-          nodeMagnification
-        }
-        data-node-id={graphNode.id}
-        data-is-added={graphNode.isAddedInHistory}
-        data-is-removed={graphNode.isRemovedInHistory}
-        fill={
-          // AIモード時のみ選択ノードをオレンジ
-          ((isSelectionMode && isSelected) ?? isFocused ?? isDragEditorTarget)
-            ? "#ef7234"
-            : isPathNode
-              ? "#eae80c"
-              : graphNode.isAddedInHistory
-                ? "#10b981" // 変更履歴で追加されたノードは緑色
-                : graphNode.isRemovedInHistory
-                  ? "#ef4444" // 変更履歴で削除されたノードは赤色
-                  : graphNode.isMergeTarget
-                    ? "#10b981" // 統合予定ノードは緑色
-                    : graphNode.isAdditional
-                      ? "#8b9dc3"
-                      : graphUnselected
-                        ? "#324557"
-                        : isClustered && graphNode.nodeColor
-                          ? graphNode.nodeColor
-                          : "whitesmoke"
-        }
-        opacity={
-          graphNode.isExistingContext
-            ? 0.3 // 既存グラフのコンテキストノードは薄く表示
-            : isNodeFiltered(graphNode, filterOption)
-              ? 0.9
-              : 0.6
-        }
-        cx={graphNode.x}
-        cy={graphNode.y}
-        stroke={
-          graphNode.isAddedInHistory
-            ? "#10b981" // 変更履歴で追加されたノードの枠線も緑色
-            : graphNode.isRemovedInHistory
-              ? "#ef4444" // 変更履歴で削除されたノードの枠線も赤色
-              : graphNode.isMergeTarget
-                ? "#10b981" // 統合予定ノードの枠線も緑色
-                : "#eae80c"
-        }
-        strokeWidth={
-          (graphNode.isAddedInHistory ??
-          graphNode.isRemovedInHistory ??
-          graphNode.isMergeTarget)
-            ? 2.5 // ハイライトノードの枠線を太く
-            : queryFiltered
-              ? 2.5
-              : 0
-        }
-      />
+      {showImage ? (
+        <>
+          <defs>
+            <clipPath id={`graph-node-image-clip-${graphNode.id}`}>
+              <circle r={r} />
+            </clipPath>
+          </defs>
+          <g clipPath={`url(#graph-node-image-clip-${graphNode.id})`}>
+            <image
+              x={-r}
+              y={-r}
+              width={r * 2}
+              height={r * 2}
+              href={imageUrl}
+              preserveAspectRatio="xMidYMid slice"
+              onError={() => setImageFailed(true)}
+            />
+          </g>
+          <circle
+            r={r}
+            fill="none"
+            stroke={fill}
+            strokeWidth={strokeWidth || 1}
+            data-node-id={graphNode.id}
+            data-is-added={graphNode.isAddedInHistory}
+            data-is-removed={graphNode.isRemovedInHistory}
+          />
+        </>
+      ) : (
+        <circle
+          r={r}
+          data-node-id={graphNode.id}
+          data-is-added={graphNode.isAddedInHistory}
+          data-is-removed={graphNode.isRemovedInHistory}
+          fill={fill}
+          opacity={opacity}
+          stroke={stroke}
+          strokeWidth={strokeWidth}
+        />
+      )}
       {(currentScale > 0.7 || isGraphFullScreen) && (
         <text
-          x={graphNode.x}
-          y={graphNode.y}
+          x={0}
+          y={0}
           textAnchor="middle"
+          dominantBaseline="middle"
           fill={
             isFocused
               ? "whitesmoke"
@@ -630,14 +666,14 @@ export const D3ForceGraph = ({
         // link.sourceとlink.targetはCustomNodeType型なので、直接idにアクセス可能
         const sourceId =
           typeof link.source === "object" &&
-          link.source !== null &&
-          "id" in link.source
+            link.source !== null &&
+            "id" in link.source
             ? link.source.id
             : link.sourceId;
         const targetId =
           typeof link.target === "object" &&
-          link.target !== null &&
-          "id" in link.target
+            link.target !== null &&
+            "id" in link.target
             ? link.target.id
             : link.targetId;
         const sourceNode = nodeMapForLinks.get(sourceId);
@@ -850,7 +886,7 @@ export const D3ForceGraph = ({
                         data-is-removed={graphLink.isRemovedInHistory}
                         strokeOpacity={
                           (graphLink.isAddedInHistory ??
-                          graphLink.isRemovedInHistory)
+                            graphLink.isRemovedInHistory)
                             ? 0.8 // ハイライトエッジは少し濃く
                             : isFocused
                               ? 1
@@ -861,18 +897,18 @@ export const D3ForceGraph = ({
                                   : isGradient
                                     ? 0.04
                                     : (distance(graphLink) ? 0.6 : 0.4) /
-                                      (distance(graphLink) *
-                                        distance(graphLink) || 1)
+                                    (distance(graphLink) *
+                                      distance(graphLink) || 1)
                         }
                         strokeWidth={
                           (graphLink.isAddedInHistory ??
-                          graphLink.isRemovedInHistory)
+                            graphLink.isRemovedInHistory)
                             ? 2.5 // ハイライトエッジは太く
                             : (isFocused || (isSelectionMode && isSelectedLink)
-                                ? 2
-                                : 1.2) *
-                              linkMagnification *
-                              1.5
+                              ? 2
+                              : 1.2) *
+                            linkMagnification *
+                            1.5
                         }
                         // strokeOpacity={isFocused ? 1 : isGradient ? 0.3 : 0.4}
                         x1={modSource.x}

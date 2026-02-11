@@ -1,9 +1,11 @@
 import React from "react";
 import { NodeAnnotationSection } from "../view/node/node-annotation-section";
+import { NodeImageFormSection } from "../form/node-image-form-section";
 import type {
   CustomNodeType,
   GraphDocumentForFrontend,
 } from "@/app/const/types";
+
 interface NodeDetailPanelProps {
   activeEntity: CustomNodeType | undefined;
   topicSpaceId: string;
@@ -12,6 +14,8 @@ interface NodeDetailPanelProps {
   >;
   setIsGraphEditor: React.Dispatch<React.SetStateAction<boolean>>;
   onGraphUpdate: (additionalGraph: GraphDocumentForFrontend) => void;
+  /** 画像保存時にグラフを更新するために必要。null の場合は onGraphUpdate は呼ばない */
+  currentGraph?: GraphDocumentForFrontend | null;
 }
 
 export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({
@@ -20,6 +24,7 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({
   setFocusedNode,
   setIsGraphEditor,
   onGraphUpdate,
+  currentGraph,
 }) => {
   if (!activeEntity) {
     return (
@@ -41,6 +46,26 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({
         <p className="mt-2 text-sm">
           {String(activeEntity.properties?.description ?? "No description")}
         </p>
+
+        {/* ノード画像の挿入・変更・削除 */}
+        <div className="mt-3">
+          <NodeImageFormSection
+            topicSpaceId={topicSpaceId}
+            node={activeEntity}
+            onSaveSuccess={(updatedNode) => {
+              if (currentGraph) {
+                const newGraph: GraphDocumentForFrontend = {
+                  nodes: currentGraph.nodes.map((n) =>
+                    n.id === updatedNode.id ? updatedNode : n,
+                  ),
+                  relationships: currentGraph.relationships,
+                };
+                onGraphUpdate(newGraph);
+              }
+            }}
+          />
+        </div>
+
         <div className="my-3 border-b border-gray-400" />
       </div>
 

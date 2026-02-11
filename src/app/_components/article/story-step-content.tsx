@@ -71,9 +71,8 @@ export const StoryStepContent = forwardRef<
       style={style}
     >
       <SegmentFadeIn>
-        {nodeImageUrl && (
+        {/* {nodeImageUrl && (
           <div className="mb-4 max-w-sm">
-            {/* eslint-disable-next-line @next/next/no-img-element -- node image URL is dynamic (Supabase storage) */}
             <img
               src={nodeImageUrl}
               alt={
@@ -89,7 +88,7 @@ export const StoryStepContent = forwardRef<
               </p>
             )}
           </div>
-        )}
+        )} */}
         <p
           className={
             step.isTransition

@@ -56,6 +56,8 @@ const GenerativeGraphNode = memo(function GenerativeGraphNode({
   storyOrder?: number;
   isEditMode?: boolean;
 }) {
+  const [imageFailed, setImageFailed] = useState(false);
+
   // 座標が未定義またはNaNの場合は描画しない
   if (
     node.x === undefined ||
@@ -80,6 +82,14 @@ const GenerativeGraphNode = memo(function GenerativeGraphNode({
   // MetaNode用のグラデーションID（各ノードで一意）
   const gradientId = isMetaNode ? `metaNodeGradient-${node.id}` : undefined;
 
+  // 通常ノードで画像がある場合は円を大きくして画像を表示
+  const imageUrl = !isMetaNode
+    ? (node.properties?.imageUrl as string | undefined)
+    : undefined;
+  const showImage =
+    !!imageUrl && !imageFailed;
+  const r = showImage ? baseRadius * 1.25 : baseRadius;
+
   return (
     <g
       key={node.id}
@@ -95,13 +105,40 @@ const GenerativeGraphNode = memo(function GenerativeGraphNode({
         onClick?.(node);
       }}
     >
-      <circle
-        r={baseRadius}
-        fill={isMetaNode && gradientId ? `url(#${gradientId})` : fillColor}
-        opacity={isMetaNode ? 1 : 0.9} // グラデーションを使う場合はopacityは1にする
-        stroke={isMetaNode ? undefined : strokeColor} // グラデーションの場合はストロークなし
-        strokeWidth={isMetaNode ? 0 : queryFiltered ? 2.5 : 0} // グラデーションの場合はストロークなし
-      />
+      {showImage ? (
+        <>
+          <defs>
+            <clipPath id={`gen-node-image-clip-${node.id}`}>
+              <circle r={r} />
+            </clipPath>
+          </defs>
+          <g clipPath={`url(#gen-node-image-clip-${node.id})`}>
+            <image
+              x={-r}
+              y={-r}
+              width={r * 2}
+              height={r * 2}
+              href={imageUrl}
+              preserveAspectRatio="xMidYMid slice"
+              onError={() => setImageFailed(true)}
+            />
+          </g>
+          <circle
+            r={r}
+            fill="none"
+            stroke={fillColor}
+            strokeWidth={queryFiltered ? 2.5 : 1}
+          />
+        </>
+      ) : (
+        <circle
+          r={r}
+          fill={isMetaNode && gradientId ? `url(#${gradientId})` : fillColor}
+          opacity={isMetaNode ? 1 : 0.9}
+          stroke={isMetaNode ? undefined : strokeColor}
+          strokeWidth={isMetaNode ? 0 : queryFiltered ? 2.5 : 0}
+        />
+      )}
       {currentScale > 0.7 && (
         <text
           y={-10}

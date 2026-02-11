@@ -61,6 +61,7 @@ export const RightPanelContainer = ({
         setFocusedNode={setFocusedNode}
         setIsGraphEditor={setIsGraphEditor}
         onGraphUpdate={onGraphUpdate}
+        currentGraph={currentGraphData}
       />
     );
   }

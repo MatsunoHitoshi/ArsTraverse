@@ -947,6 +947,28 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     null,
   );
 
+  /** 冒頭の全体グラフ表示時のエッジ描画アニメーション進捗（0→1）。showFullGraph 時に再生 */
+  const [overviewEdgeProgress, setOverviewEdgeProgress] = useState(0);
+  useEffect(() => {
+    if (!showFullGraph) {
+      setOverviewEdgeProgress(0);
+      return;
+    }
+    const durationMs = FOCUS_TRANSITION_MS;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const elapsed = now - start;
+      const t = Math.min(1, elapsed / durationMs);
+      setOverviewEdgeProgress(easeOutCubic(t));
+      if (t < 1) rafIdRef.current = requestAnimationFrame(tick);
+    };
+    const rafIdRef = { current: 0 };
+    rafIdRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+    };
+  }, [showFullGraph]);
+
   /** ストーリーに含まれるコミュニティID（order が付いているもの） */
   const storyCommunityIdSet = useMemo(
     () =>
@@ -1127,7 +1149,13 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         const pathD = `M ${sx} ${sy} L ${tx} ${ty}`;
         const isFocusEdge = focusEdgeIdSet.has(key);
         const edgeProgress = fadeProgress < 1 ? fadeProgress : effectiveProgress;
-        const effectiveEdgeProgress = freeExploreMode ? 1 : edgeProgress;
+        /** 冒頭の全体グラフ表示時は overviewEdgeProgress でエッジを描くアニメーションを再生 */
+        const effectiveEdgeProgress =
+          freeExploreMode
+            ? 1
+            : showFullGraph && isFocusEdge
+              ? overviewEdgeProgress
+              : edgeProgress;
 
         if (hasExplicitEdges && isFocusEdge) {
           const focusStrokeOpacity =
