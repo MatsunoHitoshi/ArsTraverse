@@ -41,6 +41,15 @@ const NEIGHBOR_EDGE_OPACITY = 0.15;
 /** フォーカス・隣接以外のエッジをほんのり表示する不透明度 */
 const DIM_EDGE_OPACITY = 0.05;
 
+/** 探索モード用: フォーカス・隣接以外のノードの不透明度（通常モードより差を小さく） */
+const EXPLORE_DIM_NODE_OPACITY = 0.4;
+/** 探索モード用: 隣接ノードの不透明度 */
+const EXPLORE_NEIGHBOR_NODE_OPACITY = 0.8;
+/** 探索モード用: フォーカス・隣接以外のエッジの不透明度 */
+const EXPLORE_DIM_EDGE_OPACITY = 0.4;
+/** 探索モード用: 隣接エッジの不透明度 */
+const EXPLORE_NEIGHBOR_EDGE_OPACITY = 0.8;
+
 /** フォーカス遷移アニメーションの所要時間（ms） */
 const FOCUS_TRANSITION_MS = 1200;
 /** フェード開始を遅らせるオフセット（ms）。ビュー遷移を先行させる */
@@ -628,9 +637,15 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
 
   const getTargetNodeOpacity = useCallback(
     (node: CustomNodeType): number => {
-      if (freeExploreMode) return FOCUS_NODE_OPACITY;
       const isFocus = focusNodeIdSet.has(node.id);
       const isNeighbor = neighborNodeIdSet.has(node.id);
+      if (freeExploreMode) {
+        return isFocus
+          ? FOCUS_NODE_OPACITY
+          : isNeighbor
+            ? EXPLORE_NEIGHBOR_NODE_OPACITY
+            : EXPLORE_DIM_NODE_OPACITY;
+      }
       const isSource = sourceNodeIdsOfFocusEdges.has(node.id);
       const isTarget = targetNodeIdsOfFocusEdges.has(node.id);
       const maxOpacity = isFocus
@@ -671,9 +686,15 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
 
   const getPrevNodeOpacity = useCallback(
     (node: CustomNodeType): number => {
-      if (freeExploreMode) return FOCUS_NODE_OPACITY;
       const isFocus = transitionFromNodeIdSet.has(node.id);
       const isNeighbor = neighborNodeIdSet.has(node.id);
+      if (freeExploreMode) {
+        return isFocus
+          ? FOCUS_NODE_OPACITY
+          : isNeighbor
+            ? EXPLORE_NEIGHBOR_NODE_OPACITY
+            : EXPLORE_DIM_NODE_OPACITY;
+      }
       return isFocus
         ? FOCUS_NODE_OPACITY
         : isNeighbor
@@ -1444,12 +1465,16 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         const isNeighborEdge =
           neighborNodeIdSet.has(sourceNode.id) ||
           neighborNodeIdSet.has(targetNode.id);
-        const baseEdgeOpacity = isNeighborEdge
-          ? NEIGHBOR_EDGE_OPACITY
-          : DIM_EDGE_OPACITY;
+        const baseEdgeOpacity = freeExploreMode
+          ? isNeighborEdge
+            ? EXPLORE_NEIGHBOR_EDGE_OPACITY
+            : EXPLORE_DIM_EDGE_OPACITY
+          : isNeighborEdge
+            ? NEIGHBOR_EDGE_OPACITY
+            : DIM_EDGE_OPACITY;
         const edgeOpacity =
           freeExploreMode
-            ? FOCUS_EDGE_OPACITY
+            ? baseEdgeOpacity
             : showFullGraph
               ? (() => {
                 const layoutDx = target.x - source.x;
@@ -1576,12 +1601,16 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         const isNeighborEdge =
           neighborNodeIdSet.has(sourceNode.id) ||
           neighborNodeIdSet.has(targetNode.id);
-        const baseEdgeOpacity = isNeighborEdge
-          ? NEIGHBOR_EDGE_OPACITY
-          : DIM_EDGE_OPACITY;
+        const baseEdgeOpacity = freeExploreMode
+          ? isNeighborEdge
+            ? EXPLORE_NEIGHBOR_EDGE_OPACITY
+            : EXPLORE_DIM_EDGE_OPACITY
+          : isNeighborEdge
+            ? NEIGHBOR_EDGE_OPACITY
+            : DIM_EDGE_OPACITY;
         const edgeOpacity =
           freeExploreMode
-            ? FOCUS_EDGE_OPACITY
+            ? baseEdgeOpacity
             : showFullGraph
               ? (() => {
                 const layoutDx = target.x - source.x;
