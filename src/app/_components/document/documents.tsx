@@ -4,10 +4,11 @@ import { useSession } from "next-auth/react";
 import { TabsContainer } from "../tab/tab";
 import { DocumentList, DocumentListMenuButton } from "../list/document-list";
 import { DocumentDetail } from "./document-detail";
-import { Pencil2Icon, TrashIcon } from "../icons";
+import { PaperPlaneIcon, Pencil2Icon, TrashIcon } from "../icons";
 import { useState } from "react";
 import { DeleteRecordModal } from "../modal/delete-record-modal";
 import { DocumentEditModal } from "./document-edit-modal";
+import { DocumentSendModal } from "./document-send-modal";
 import { Pagination } from "../pagination/pagination";
 export const Documents = ({ id }: { id?: string }) => {
   const { data: session } = useSession();
@@ -22,6 +23,9 @@ export const Documents = ({ id }: { id?: string }) => {
   const [deleteDocumentId, setDeleteDocumentId] = useState<string>();
   const [editModalOpen, setEditModalOpen] = useState<boolean>(false);
   const [editDocumentId, setEditDocumentId] = useState<string | null>(null);
+  const [sendModalOpen, setSendModalOpen] = useState<boolean>(false);
+  const [sendDocumentId, setSendDocumentId] = useState<string | null>(null);
+  const [sendDocumentName, setSendDocumentName] = useState<string>("");
 
   if (!session) return null;
   return (
@@ -38,14 +42,19 @@ export const Documents = ({ id }: { id?: string }) => {
                     <div className="flex min-w-[150px] flex-col">
                       <DocumentListMenuButton
                         icon={
-                          <TrashIcon width={16} height={16} color="#ea1c0c" />
+                          <PaperPlaneIcon
+                            width={16}
+                            height={16}
+                            color="white"
+                          />
                         }
                         onClick={() => {
-                          setDeleteDocumentId(document.id);
-                          setDeleteModalOpen(true);
+                          setSendDocumentId(document.id);
+                          setSendDocumentName(document.name);
+                          setSendModalOpen(true);
                         }}
                       >
-                        <div className="text-error-red">削除</div>
+                        <div className="text-white">ユーザに送る</div>
                       </DocumentListMenuButton>
                       <DocumentListMenuButton
                         icon={
@@ -57,6 +66,17 @@ export const Documents = ({ id }: { id?: string }) => {
                         }}
                       >
                         <div className="text-white">名前を編集</div>
+                      </DocumentListMenuButton>
+                      <DocumentListMenuButton
+                        icon={
+                          <TrashIcon width={16} height={16} color="#ea1c0c" />
+                        }
+                        onClick={() => {
+                          setDeleteDocumentId(document.id);
+                          setDeleteModalOpen(true);
+                        }}
+                      >
+                        <div className="text-error-red">削除</div>
                       </DocumentListMenuButton>
                     </div>
                   );
@@ -94,6 +114,13 @@ export const Documents = ({ id }: { id?: string }) => {
         isOpen={editModalOpen}
         setIsOpen={setEditModalOpen}
         documentId={editDocumentId}
+        refetch={refetch}
+      />
+      <DocumentSendModal
+        isOpen={sendModalOpen}
+        setIsOpen={setSendModalOpen}
+        documentId={sendDocumentId}
+        documentName={sendDocumentName}
         refetch={refetch}
       />
     </TabsContainer>

@@ -373,4 +373,109 @@ export const sourceDocumentRouter = createTRPCRouter({
 
       return relevantSections;
     }),
+
+  sendToUser: protectedProcedure
+    .input(
+      z.object({
+        documentId: z.string(),
+        recipientUserId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const senderId = ctx.session.user.id;
+      if (input.recipientUserId === senderId) {
+        throw new Error("自分自身には送信できません");
+      }
+
+      const document = await ctx.db.sourceDocument.findFirst({
+        where: {
+          id: input.documentId,
+          isDeleted: false,
+          userId: senderId,
+        },
+        include: {
+          graph: {
+            include: {
+              graphNodes: true,
+              graphRelationships: true,
+            },
+          },
+        },
+      });
+
+      if (!document) {
+        throw new Error("Document not found");
+      }
+
+      const recipient = await ctx.db.user.findUnique({
+        where: { id: input.recipientUserId },
+      });
+      if (!recipient) {
+        throw new Error("受信者が見つかりません");
+      }
+
+      const result = await ctx.db.$transaction(async (tx) => {
+        const newDocument = await tx.sourceDocument.create({
+          data: {
+            name: document.name,
+            url: document.url,
+            documentType: document.documentType,
+            user: { connect: { id: input.recipientUserId } },
+          },
+        });
+
+        if (!document.graph) {
+          return { sourceDocument: newDocument };
+        }
+
+        const newGraph = await tx.documentGraph.create({
+          data: {
+            dataJson: {},
+            user: { connect: { id: input.recipientUserId } },
+            sourceDocument: { connect: { id: newDocument.id } },
+          },
+        });
+
+        const oldToNewNodeId = new Map<string, string>();
+        for (const node of document.graph.graphNodes) {
+          const created = await tx.graphNode.create({
+            data: {
+              name: node.name,
+              label: node.label,
+              properties: node.properties ?? {},
+              documentGraphId: newGraph.id,
+            },
+          });
+          oldToNewNodeId.set(node.id, created.id);
+        }
+
+        const relationshipsToCreate = document.graph.graphRelationships
+          .map((rel) => {
+            const fromId = oldToNewNodeId.get(rel.fromNodeId);
+            const toId = oldToNewNodeId.get(rel.toNodeId);
+            if (!fromId || !toId) return null;
+            return {
+              type: rel.type,
+              properties: rel.properties ?? {},
+              fromNodeId: fromId,
+              toNodeId: toId,
+              documentGraphId: newGraph.id,
+            };
+          })
+          .filter((r): r is NonNullable<typeof r> => r !== null);
+
+        if (relationshipsToCreate.length > 0) {
+          await tx.graphRelationship.createMany({
+            data: relationshipsToCreate,
+          });
+        }
+
+        return {
+          sourceDocument: newDocument,
+          documentGraph: newGraph,
+        };
+      });
+
+      return result;
+    }),
 });
