@@ -5,6 +5,8 @@ import React, {
   useCallback,
   useRef,
   useMemo,
+  forwardRef,
+  useImperativeHandle,
 } from "react";
 import type { GraphDocumentForFrontend } from "@/app/const/types";
 import type { MetaGraphStoryData } from "@/app/_hooks/use-meta-graph-story";
@@ -40,16 +42,22 @@ export interface StorytellingGraphRecorderProps {
   workspaceTitle?: string;
 }
 
+export interface StorytellingGraphRecorderHandle {
+  openVideoModal: () => void;
+}
+
 /**
  * 動画書き出し用のレコーダーコンポーネント。
  * StorytellingGraphUnified を内部にマウントし、
  * セグメントを順次切り替えながらアニメーションを録画する。
  */
-export function StorytellingGraphRecorder({
-  graphDocument,
-  metaGraphData,
-  workspaceTitle,
-}: StorytellingGraphRecorderProps) {
+export const StorytellingGraphRecorder = forwardRef<
+  StorytellingGraphRecorderHandle,
+  StorytellingGraphRecorderProps
+>(function StorytellingGraphRecorder(
+  { graphDocument, metaGraphData, workspaceTitle },
+  ref,
+) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [recordingProgress, setRecordingProgress] =
     useState<RecordingProgress | null>(null);
@@ -175,7 +183,7 @@ export function StorytellingGraphRecorder({
           RECORDING_BACKGROUND,
         );
         const canvas = renderer.getCanvas();
-        
+
         if (config.useFastMode) {
           recorder = new FastVideoRecorder({
             canvas,
@@ -193,11 +201,11 @@ export function StorytellingGraphRecorder({
         const createRecorder = () =>
           config.useFastMode
             ? new FastVideoRecorder({
-                canvas,
-                fps: config.fps,
-                width: RECORDING_WIDTH,
-                height: RECORDING_HEIGHT,
-              })
+              canvas,
+              fps: config.fps,
+              width: RECORDING_WIDTH,
+              height: RECORDING_HEIGHT,
+            })
             : new VideoRecorder({ canvas, fps: config.fps });
 
         const result = await runRecording(
@@ -300,6 +308,14 @@ export function StorytellingGraphRecorder({
   const isRecording =
     recordingProgress != null && recordingProgress.phase === "recording";
 
+  useImperativeHandle(
+    ref,
+    () => ({
+      openVideoModal: () => setIsModalOpen(true),
+    }),
+    [],
+  );
+
   return (
     <>
       {/* 録画用のグラフ（録画中のみ表示、画面外にオフスクリーン配置） */}
@@ -347,41 +363,7 @@ export function StorytellingGraphRecorder({
         recordingProgress={recordingProgress}
         onAbortRecording={handleAbortRecording}
       />
-
-      {/* 外部からモーダルを開くためのトリガー */}
-      <RecorderTrigger onOpen={() => setIsModalOpen(true)} />
     </>
   );
-}
+});
 
-/** ストーリーボードに埋め込むボタン（外部から open を呼ぶ） */
-function RecorderTrigger({ onOpen }: { onOpen: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="flex items-center gap-2 rounded-md bg-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-400"
-    >
-      <VideoIcon />
-      <span>動画書き出し</span>
-    </button>
-  );
-}
-
-function VideoIcon() {
-  return (
-    <svg
-      width={14}
-      height={14}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polygon points="23 7 16 12 23 17 23 7" />
-      <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-    </svg>
-  );
-}

@@ -34,7 +34,10 @@ import { SortableItem } from "@/app/_components/sortable/sortable-item";
 import { DeleteRecordModal } from "../../modal/delete-record-modal";
 import { Textarea } from "../../textarea";
 import { FilterSection } from "@/app/_components/layout-edit/sections/filter-section";
-import { StorytellingGraphRecorder } from "../../d3/force/storytelling-graph-recorder";
+import {
+  StorytellingGraphRecorder,
+  type StorytellingGraphRecorderHandle,
+} from "../../d3/force/storytelling-graph-recorder";
 
 export const SnapshotStoryboard = ({
   workspaceId,
@@ -62,6 +65,7 @@ export const SnapshotStoryboard = ({
   onRequestSegmentGraphExtraction,
   graphDocument,
   workspaceTitle,
+  videoExportRef,
 }: {
   workspaceId: string;
   metaGraphSummaries?: Array<{
@@ -127,6 +131,8 @@ export const SnapshotStoryboard = ({
   graphDocument?: GraphDocumentForFrontend | null;
   /** 動画書き出し用のワークスペースタイトル */
   workspaceTitle?: string;
+  /** 動画書き出しモーダルを開くための ref（親から渡す） */
+  videoExportRef?: React.Ref<StorytellingGraphRecorderHandle>;
 }) => {
   // ストーリーデータの取得（refetch用）
   const { refetch: refetchStory } = api.story.get.useQuery(
@@ -871,6 +877,7 @@ export const SnapshotStoryboard = ({
           </Button>
           {metaGraphStoryData && graphDocument && (
             <StorytellingGraphRecorder
+              ref={videoExportRef}
               graphDocument={graphDocument}
               metaGraphData={metaGraphStoryData}
               workspaceTitle={workspaceTitle}

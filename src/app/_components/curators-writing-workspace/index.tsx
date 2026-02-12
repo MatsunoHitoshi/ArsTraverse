@@ -14,6 +14,7 @@ import React, {
   useRef,
   useMemo,
   createContext,
+  useCallback,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -55,6 +56,7 @@ import { PublishWorkspaceModal } from "./publish-workspace-modal";
 import { AdditionalGraphExtractionModal } from "./tiptap/tools/additional-graph-extraction-modal";
 import { DirectedLinksToggleButton } from "../view/graph-view/directed-links-toggle-button";
 import { SnapshotStoryboard } from "./artifact/snapshot-storyboard";
+import type { StorytellingGraphRecorderHandle } from "../d3/force/storytelling-graph-recorder";
 import { useMetaGraphStory } from "@/app/_hooks/use-meta-graph-story";
 import { WorkspaceToolbar } from "./workspace-toolbar";
 import { GraphViewContainer } from "./graph-view-container";
@@ -135,6 +137,14 @@ const CuratorsWritingWorkspace = ({
   const completionWithSubgraphRef = useRef<
     null | ((subgraph: GraphDocumentForFrontend) => void)
   >(null);
+  const videoExportTriggerRef =
+    useRef<StorytellingGraphRecorderHandle | null>(null);
+  const videoExportRefCallback = useCallback(
+    (instance: StorytellingGraphRecorderHandle | null) => {
+      videoExportTriggerRef.current = instance;
+    },
+    [],
+  );
 
   // 右パネルの状態管理
   const [rightPanelMode, setRightPanelMode] = useState<"detail" | "copilot">(
@@ -632,6 +642,7 @@ const CuratorsWritingWorkspace = ({
                 onRequestSegmentGraphExtraction={setSegmentGraphExtractionText}
                 graphDocument={graphDocument}
                 workspaceTitle={workspace.name ?? undefined}
+                videoExportRef={videoExportRefCallback}
               />
             ) : (
               <TiptapGraphFilterContext.Provider
@@ -1074,6 +1085,9 @@ const CuratorsWritingWorkspace = ({
         onSuccess={() => {
           void refetch();
         }}
+        onOpenVideoExport={() =>
+          videoExportTriggerRef.current?.openVideoModal()
+        }
       />
 
       {/* ストーリーセグメントからグラフ抽出モーダル（ストーリーテリングモードでセグメントの文章を元グラフに反映） */}
