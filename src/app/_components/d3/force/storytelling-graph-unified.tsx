@@ -48,6 +48,17 @@ const FADE_DELAY_MS = 80;
 /** フェードアニメーションの所要時間（ms）。FADE_DELAY_MS 経過後からこの時間で 0→1 */
 const FADE_DURATION_MS = FOCUS_TRANSITION_MS - FADE_DELAY_MS;
 
+/** 定常パルスアニメーションの周期（ms）。1→1.15→1 のスケール往復 */
+const STEADY_PULSE_PERIOD_MS = 4000;
+/** 定常エッジフローアニメーションの周期（ms） */
+const STEADY_EDGE_FLOW_PERIOD_MS = 4000;
+/** エッジフローの谷（最低不透明度）の広がり幅（エッジ長に対する割合 0–1） */
+const STEADY_EDGE_FLOW_VALLEY_WIDTH = 0.2;
+/** エッジフローの最低不透明度（谷の底） */
+const STEADY_EDGE_FLOW_MIN_OPACITY = 0.25;
+/** 定常アニメーション開始時のフェードイン時間（ms） */
+const STEADY_ANIM_FADE_IN_MS = 400;
+
 /** 出る側ノードのフェードイン完了までに使う progress の割合 (0–1) */
 const SOURCE_FADE_END = 0.25;
 /** 入る側ノードのフェードイン開始となる progress の閾値 */
@@ -86,6 +97,9 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   showFullGraph = false,
   communityTitles,
   onCommunityTitleClick,
+  onTransitionComplete,
+  onSvgRef,
+  forRecording = false,
 }: {
   graphDocument: GraphDocumentForFrontend;
   focusNodeIds: string[];
@@ -107,6 +121,12 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   communityTitles?: Record<string, string>;
   /** コミュニティタイトルクリック時。そのコミュニティの先頭セグメントへ遷移するために使用 */
   onCommunityTitleClick?: (communityId: string) => void;
+  /** フォーカス遷移アニメーションが完了したときに呼ばれるコールバック */
+  onTransitionComplete?: () => void;
+  /** 外部から SVG 要素にアクセスするためのコールバック ref */
+  onSvgRef?: (el: SVGSVGElement | null) => void;
+  /** 録画時など、ビューパディングを 0 にしてグラフを最大表示する */
+  forRecording?: boolean;
 }) {
   const showBottomFadeGradient = !isPc;
   // PC版のフェードは親コンテナ（CSS Overlay）で行うため、ここでは SVG Mask を生成しない（描画負荷軽減）
@@ -116,6 +136,13 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     narrativeFlow != null &&
     (narrativeFlow?.some((n) => n.order != null) ?? false);
   const svgRef = useRef<SVGSVGElement>(null);
+  // 外部から SVG 要素にアクセスできるよう ref をコールバックで通知
+  const onSvgRefStable = useRef(onSvgRef);
+  onSvgRefStable.current = onSvgRef;
+  useEffect(() => {
+    onSvgRefStable.current?.(svgRef.current);
+    return () => onSvgRefStable.current?.(null);
+  }, []);
   const [zoomScale, setZoomScale] = useState(1);
   const [zoomX, setZoomX] = useState(0);
   const [zoomY, setZoomY] = useState(0);
@@ -271,6 +298,50 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   }, [focusNodeIds, focusEdgeIds, showFullGraph]);
 
   const isTransitionComplete = transitionElapsedMs >= FOCUS_TRANSITION_MS;
+
+  // 遷移完了時に親へ通知（録画シーケンサーが遷移完了を検知するために使用）
+  const onTransitionCompleteRef = useRef(onTransitionComplete);
+  onTransitionCompleteRef.current = onTransitionComplete;
+  const prevTransitionCompleteRef = useRef(isTransitionComplete);
+  useEffect(() => {
+    // false → true に変わった瞬間のみコールバックを呼ぶ
+    if (isTransitionComplete && !prevTransitionCompleteRef.current) {
+      onTransitionCompleteRef.current?.();
+    }
+    prevTransitionCompleteRef.current = isTransitionComplete;
+  }, [isTransitionComplete]);
+
+  // ── 定常アニメーション（セグメント遷移完了後、探索モード・全体表示以外で駆動） ──
+  const shouldRunSteadyAnim = isTransitionComplete && !freeExploreMode && !showFullGraph;
+  const steadyRafRef = useRef<number | null>(null);
+  const steadyStartRef = useRef<number | null>(null);
+  const [steadyAnimTimeMs, setSteadyAnimTimeMs] = useState(0);
+
+  useEffect(() => {
+    if (!shouldRunSteadyAnim) {
+      if (steadyRafRef.current != null) {
+        cancelAnimationFrame(steadyRafRef.current);
+        steadyRafRef.current = null;
+      }
+      steadyStartRef.current = null;
+      setSteadyAnimTimeMs(0);
+      return;
+    }
+    const tick = (now: number) => {
+      if (steadyStartRef.current == null) {
+        steadyStartRef.current = now;
+      }
+      setSteadyAnimTimeMs(now - steadyStartRef.current);
+      steadyRafRef.current = requestAnimationFrame(tick);
+    };
+    steadyRafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (steadyRafRef.current != null) {
+        cancelAnimationFrame(steadyRafRef.current);
+        steadyRafRef.current = null;
+      }
+    };
+  }, [shouldRunSteadyAnim]);
 
   const [transitionFromLayoutTransform, setTransitionFromLayoutTransform] = useState<{
     scale: number;
@@ -660,7 +731,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
       }
     }
     if (minX === Infinity) return { scale: 0.75, centerX: 0, centerY: 0 };
-    const paddingX = isPc ? 64 : 32;
+    const paddingX = isPc ? forRecording ? 128 : 64 : 32;
     const paddingY = 128; // 上下のみ 128
     const rangeX = maxX - minX || 1;
     const rangeY = maxY - minY || 1;
@@ -668,11 +739,12 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
       (width - 2 * paddingX) / rangeX,
       (height - 2 * paddingY) / rangeY,
     );
-    const scale = Math.min(rawScale, MAX_VIEW_SCALE);
+    const maxScale = forRecording ? 8 : MAX_VIEW_SCALE;
+    const scale = Math.min(rawScale, maxScale);
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
     return { scale, centerX, centerY };
-  }, [nodes, width, height, effectiveFocusNodeIds, focusEdgeIdSet, links, isPc, communityMap]);
+  }, [nodes, width, height, effectiveFocusNodeIds, focusEdgeIdSet, links, isPc, communityMap, forRecording]);
 
   // 遷移が完了し、かつこのレンダーでフォーカスが変わっていないときだけ ref を更新する。
   // （フォーカス変更直後のレンダーで ref を更新すると、effect が「from」として新しい layout を
@@ -729,17 +801,16 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     ? lastLayoutTransformRef.current.centerY
     : interpolatedCenterY;
 
-  /** ラベル・線・ノードの表示用の実効スケール。自由探索時はズーム倍率を掛けて scale に応じて表示（print-generative-layout-graph に倣う） */
-  const effectiveScaleForLabels =
-    freeExploreMode ? displayScale * zoomScale : displayScale;
-  /** ノード半径・エッジ太さ・ストロークに使うスケール（自由探索時は effectiveScale でズームに応じて変化） */
-  const scaleForSize =
-    freeExploreMode ? effectiveScaleForLabels : displayScale;
-  /** 探索モード時はスケールが小さくてもストローク・線の太さを下げない（薄く見えないように下限 1 を設ける） */
-  const scaleForStroke =
-    freeExploreMode ? Math.max(1, scaleForSize) : scaleForSize;
+  /** ラベル表示用の実効スケール（ラベル表示・サイズはスケールに連動）。自由探索時はズーム倍率を掛ける */
+  const effectiveScaleForLabels = freeExploreMode
+    ? displayScale * zoomScale
+    : displayScale;
+  /** ノード半径・エッジ太さ・ストロークに使うスケール（effectiveScaleForLabels と同じ値） */
+  const scaleForSize = effectiveScaleForLabels;
+  /** ストローク用スケール。探索モード時は薄くなりすぎないよう下限 1 */
+  const scaleForStroke = freeExploreMode ? Math.max(1, scaleForSize) : scaleForSize;
 
-  /** ノード半径（generative-layout-graph と同様。自由探索時は scaleForSize でズームに応じて変化） */
+  /** ノード半径（generative-layout-graph と同様 */
   const getNodeRadius = useCallback(
     (node: CustomNodeType) => {
       const baseRadiusLayout =
@@ -750,14 +821,56 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   );
   /** ノードラベルを表示する閾値（generative-layout-graph と同様、引きで表示する時は非表示。自由探索時はズームに応じて表示） */
   const showNodeLabels = effectiveScaleForLabels > 0.7;
-  /** スケールに応じたノードラベルフォントサイズ（引きで小さく、寄りで読みやすく） */
-  const nodeLabelFontSize = showNodeLabels
-    ? (effectiveScaleForLabels > 4 ? 3 : 6) * 3
-    : 0;
+  /** ノードラベルフォントサイズの基準値。録画時はスケールに比例（係数と下限で引きのサイズを確保）、通常時は graph.tsx に倣い小刻みに */
+  const nodeLabelFontSizeBase = forRecording
+    ? Math.max(6, effectiveScaleForLabels) * 0.7
+    : (effectiveScaleForLabels > 4
+      ? 3
+      : effectiveScaleForLabels > 3
+        ? 4
+        : effectiveScaleForLabels > 2
+          ? 5
+          : effectiveScaleForLabels > 1.5
+            ? 6
+            : effectiveScaleForLabels > 1
+              ? 7
+              : effectiveScaleForLabels > 0.9
+                ? 8
+                : 9) * 1.5;
+  const getNodeLabelFontSize = useCallback(
+    (isFocusNode: boolean) =>
+      showNodeLabels
+        ? nodeLabelFontSizeBase *
+        (forRecording && isFocusNode ? 4 : 2)
+        : 0,
+    [showNodeLabels, nodeLabelFontSizeBase, forRecording],
+  );
   /** エッジラベルを表示する閾値（generative では currentScale > 1.4） */
   const showEdgeLabels = effectiveScaleForLabels > 1.4;
+  /** スケールに応じたエッジラベルのフォントサイズ基準値（graph.tsx に倣いスケールで小刻みに） */
+  const edgeLabelFontSizeBase =
+    effectiveScaleForLabels > 4
+      ? 5
+      : effectiveScaleForLabels > 3
+        ? 6
+        : effectiveScaleForLabels > 2
+          ? 7
+          : effectiveScaleForLabels > 1.5
+            ? 8
+            : effectiveScaleForLabels > 1
+              ? 9
+              : effectiveScaleForLabels > 0.9
+                ? 10
+                : 12;
+  /** エッジラベルフォントサイズ（getNodeLabelFontSize と同様にフォーカス有無で倍率を切り替え） */
+  const getEdgeLabelFontSize = useCallback(
+    (isFocusEdge: boolean) =>
+      edgeLabelFontSizeBase *
+      (forRecording && isFocusEdge ? 3 : forRecording ? 2 : isFocusEdge ? 2 : 1),
+    [edgeLabelFontSizeBase, forRecording],
+  );
   /** スケールに応じたエッジ・ノードの線の太さ（探索モード時は scaleForStroke で引きでも薄くならない） */
-  const edgeStrokeWidthFocus = Math.max(0.4, Math.min(2.5, 2 * scaleForStroke));
+  const edgeStrokeWidthFocus = forRecording ? Math.max(0.8, Math.min(3.5, 2 * scaleForStroke)) : Math.max(0.4, Math.min(2.5, 2 * scaleForStroke));
   const edgeStrokeWidthNormal = Math.max(0.3, Math.min(1.5, 1.5 * scaleForStroke));
   const nodeStrokeWidth = Math.max(0.25, Math.min(1.5, 1.5 * scaleForStroke));
   const toView = useCallback(
@@ -1057,6 +1170,45 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     };
   }, [linksToRender]);
 
+  // ── 定常アニメーション計算値 ──
+  /** フォーカスノードのパルススケール（1→1.15→1 の3秒ループ） */
+  const nodePulseScale = useMemo(() => {
+    if (!shouldRunSteadyAnim) return 1;
+    const fadeIn = Math.min(1, steadyAnimTimeMs / STEADY_ANIM_FADE_IN_MS);
+    const phase = (steadyAnimTimeMs % STEADY_PULSE_PERIOD_MS) / STEADY_PULSE_PERIOD_MS;
+    const amplitude = 0.15 * fadeIn;
+    return 1 + amplitude * 0.5 * (1 - Math.cos(2 * Math.PI * phase));
+  }, [shouldRunSteadyAnim, steadyAnimTimeMs]);
+
+  /** フォーカスエッジの流れるグラデーション停止点 */
+  const edgeFlowStops = useMemo(() => {
+    if (!shouldRunSteadyAnim) return null;
+    const fadeIn = Math.min(1, steadyAnimTimeMs / STEADY_ANIM_FADE_IN_MS);
+    const effectiveMinOpacity =
+      1 - (1 - STEADY_EDGE_FLOW_MIN_OPACITY) * fadeIn;
+    // 谷がエッジの外側から入り、反対側の外側へ出ていくことでシームレスにループさせる
+    const totalRange = 1 + 2 * STEADY_EDGE_FLOW_VALLEY_WIDTH;
+    const rawPhase =
+      (steadyAnimTimeMs % STEADY_EDGE_FLOW_PERIOD_MS) /
+      STEADY_EDGE_FLOW_PERIOD_MS;
+    const flowCenter =
+      -STEADY_EDGE_FLOW_VALLEY_WIDTH + rawPhase * totalRange;
+
+    const stops: Array<{ offset: string; opacity: number }> = [];
+    const numSteps = 10;
+    for (let i = 0; i <= numSteps; i++) {
+      const t = i / numSteps;
+      const dist = Math.abs(t - flowCenter);
+      const normalized = Math.min(1, dist / STEADY_EDGE_FLOW_VALLEY_WIDTH);
+      // smoothstep で滑らかに遷移
+      const smooth = normalized * normalized * (3 - 2 * normalized);
+      const opacity =
+        effectiveMinOpacity + (1 - effectiveMinOpacity) * smooth;
+      stops.push({ offset: `${(t * 100).toFixed(1)}%`, opacity });
+    }
+    return stops;
+  }, [shouldRunSteadyAnim, steadyAnimTimeMs]);
+
   if (!baseGraph || baseGraph.nodes.length === 0) {
     return (
       <div
@@ -1070,6 +1222,46 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
 
   const graphContent = (
     <g>
+      {/* 定常エッジフローアニメーション用グラデーション */}
+      {shouldRunSteadyAnim && edgeFlowStops && (
+        <defs>
+          {linksToRender.map((link, i) => {
+            const edgeKey = getEdgeCompositeKeyFromLink(link);
+            if (!focusEdgeIdSet.has(edgeKey)) return null;
+            const src = link.source as CustomNodeType;
+            const tgt = link.target as CustomNodeType;
+            if (
+              src.x == null ||
+              src.y == null ||
+              tgt.x == null ||
+              tgt.y == null
+            )
+              return null;
+            const [gsx, gsy] = toView(src.x, src.y);
+            const [gtx, gty] = toView(tgt.x, tgt.y);
+            return (
+              <linearGradient
+                key={`edge-flow-${i}`}
+                id={`edge-flow-${i}`}
+                gradientUnits="userSpaceOnUse"
+                x1={gsx}
+                y1={gsy}
+                x2={gtx}
+                y2={gty}
+              >
+                {edgeFlowStops.map((stop, j) => (
+                  <stop
+                    key={j}
+                    offset={stop.offset}
+                    stopColor="#94a3b8"
+                    stopOpacity={stop.opacity}
+                  />
+                ))}
+              </linearGradient>
+            );
+          })}
+        </defs>
+      )}
       {/* ストーリー冒頭の全体グラフ時: コミュニティの円とタイトル（print-generative-layout-graph に倣う） */}
       {showFullGraph && communityDisplayData.length > 0 && (
         <>
@@ -1176,19 +1368,31 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
                   return 0.6 - normalizedDistance * 0.59;
                 })()
                 : FOCUS_EDGE_OPACITY;
+          const useFlowGrad =
+            shouldRunSteadyAnim && edgeFlowStops != null;
           return (
             <g key={`path-${key}-${i}`}>
-              <path
-                d={pathD}
-                fill="none"
-                stroke="#94a3b8"
-                pathLength={1}
-                strokeDasharray={1}
-                strokeDashoffset={1 - effectiveEdgeProgress}
-                strokeLinecap="round"
-                strokeOpacity={focusStrokeOpacity}
-                strokeWidth={edgeStrokeWidthFocus}
-              />
+              {useFlowGrad ? (
+                <path
+                  d={pathD}
+                  fill="none"
+                  stroke={`url(#edge-flow-${i})`}
+                  strokeLinecap="round"
+                  strokeWidth={edgeStrokeWidthFocus}
+                />
+              ) : (
+                <path
+                  d={pathD}
+                  fill="none"
+                  stroke="#94a3b8"
+                  pathLength={1}
+                  strokeDasharray={1}
+                  strokeDashoffset={1 - effectiveEdgeProgress}
+                  strokeLinecap="round"
+                  strokeOpacity={focusStrokeOpacity}
+                  strokeWidth={edgeStrokeWidthFocus}
+                />
+              )}
             </g>
           );
         }
@@ -1295,8 +1499,8 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
                 x={labelX}
                 y={labelY}
                 textAnchor="middle"
-                fill="#d4d3d8"
-                fontSize={12}
+                fill="#94a3b8"
+                fontSize={getEdgeLabelFontSize(false)}
                 className={
                   pairCount > 1 ? "cursor-pointer" : "pointer-events-none"
                 }
@@ -1388,9 +1592,13 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
       })}
       {nodesToRender.map((node) => {
         if (node.x == null || node.y == null) return null;
+        const isFocusNode = focusNodeIdSet.has(node.id);
         const [vx, vy] = toView(node.x, node.y);
         const opacity = getNodeOpacity(node);
         const baseR = getNodeRadius(node) * (0.8 / Math.max(1, scaleForSize));
+        const pulseScale = focusNodeIdSet.has(node.id)
+          ? nodePulseScale
+          : 1;
         const imageUrl = node.properties?.imageUrl as string | undefined;
         const showImage =
           imageUrl &&
@@ -1415,55 +1623,57 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
               }),
             }}
           >
-            {showImage ? (
-              <>
-                <defs>
-                  <clipPath id={`node-image-clip-${node.id}`}>
-                    <circle r={r} />
-                  </clipPath>
-                </defs>
-                <g clipPath={`url(#node-image-clip-${node.id})`}>
-                  <image
-                    x={-r}
-                    y={-r}
-                    width={r * 2}
-                    height={r * 2}
-                    href={imageUrl}
-                    preserveAspectRatio="xMidYMid slice"
-                    onError={() => {
-                      setFailedImageNodeIds((prev) =>
-                        new Set(prev).add(node.id),
-                      );
-                    }}
+            <g transform={pulseScale !== 1 ? `scale(${pulseScale})` : undefined}>
+              {showImage ? (
+                <>
+                  <defs>
+                    <clipPath id={`node-image-clip-${node.id}`}>
+                      <circle r={r} />
+                    </clipPath>
+                  </defs>
+                  <g clipPath={`url(#node-image-clip-${node.id})`}>
+                    <image
+                      x={-r}
+                      y={-r}
+                      width={r * 2}
+                      height={r * 2}
+                      href={imageUrl}
+                      preserveAspectRatio="xMidYMid slice"
+                      onError={() => {
+                        setFailedImageNodeIds((prev) =>
+                          new Set(prev).add(node.id),
+                        );
+                      }}
+                    />
+                  </g>
+                  <circle
+                    r={r}
+                    fill="none"
+                    stroke="#94a3b8"
+                    strokeWidth={nodeStrokeWidth}
                   />
-                </g>
+                </>
+              ) : (
                 <circle
                   r={r}
-                  fill="none"
+                  fill="#e2e8f0"
                   stroke="#94a3b8"
                   strokeWidth={nodeStrokeWidth / 2}
                 />
-              </>
-            ) : (
-              <circle
-                r={r}
-                fill="#e2e8f0"
-                stroke="#94a3b8"
-                strokeWidth={nodeStrokeWidth}
-              />
-            )}
-            {showNodeLabels && nodeLabelFontSize > 0 && (
-              <text
-                y={-10}
-                textAnchor="middle"
-                fill="#e2e8f0"
-                fontSize={nodeLabelFontSize}
-                fontWeight={focusNodeIdSet.has(node.id) ? "bold" : "normal"}
-                className="pointer-events-none select-none"
-              >
-                {node.name}
-              </text>
-            )}
+              )}
+              {getNodeLabelFontSize(isFocusNode) > 0 && (
+                <text
+                  y={-10}
+                  textAnchor="middle"
+                  fill="#e2e8f0"
+                  fontSize={getNodeLabelFontSize(isFocusNode)}
+                  fontWeight={focusNodeIdSet.has(node.id) ? "bold" : "normal"}
+                  className="pointer-events-none select-none"
+                >
+                  {node.name}
+                </text>
+              )}
+            </g>
           </g>
         );
       })}

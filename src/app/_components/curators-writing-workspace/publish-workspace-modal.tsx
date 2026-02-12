@@ -4,7 +4,7 @@ import { Button } from "../button/button";
 import { LinkButton } from "../button/link-button";
 import { api } from "@/trpc/react";
 import { WorkspaceStatus } from "@prisma/client";
-import { Link2Icon, PaperRollIcon } from "../icons";
+import { Link2Icon, PaperRollIcon, VideoIcon } from "../icons";
 import Link from "next/link";
 
 const PrintOutputButton: React.FC<{ workspaceId: string }> = ({
@@ -21,6 +21,20 @@ const PrintOutputButton: React.FC<{ workspaceId: string }> = ({
   </LinkButton>
 );
 
+const VideoExportButton: React.FC<{ onClick?: () => void }> = ({
+  onClick,
+}) => (
+  <Button
+    type="button"
+    onClick={onClick}
+    size="small"
+    className="flex items-center gap-2 text-slate-400 hover:text-slate-300"
+  >
+    <VideoIcon width={14} height={14} />
+    <span>動画書き出し</span>
+  </Button>
+);
+
 interface PublishWorkspaceModalProps {
   isOpen: boolean;
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -30,6 +44,8 @@ interface PublishWorkspaceModalProps {
   /** ストーリーが生成されている場合のみ出力ボタンを表示する */
   hasStories?: boolean;
   onSuccess?: () => void;
+  /** 動画書き出しボタンクリック時のコールバック */
+  onOpenVideoExport?: () => void;
 }
 
 export const PublishWorkspaceModal: React.FC<PublishWorkspaceModalProps> = ({
@@ -40,6 +56,7 @@ export const PublishWorkspaceModal: React.FC<PublishWorkspaceModalProps> = ({
   workspaceName,
   hasStories = false,
   onSuccess,
+  onOpenVideoExport,
 }) => {
   const [isPublished, setIsPublished] = useState(false);
   const [publishedWorkspaceId, setPublishedWorkspaceId] = useState<
@@ -134,8 +151,9 @@ export const PublishWorkspaceModal: React.FC<PublishWorkspaceModalProps> = ({
             )}
 
             {hasStories && (
-              <div className="pt-2">
+              <div className="flex flex-row flex-wrap items-center gap-3 pt-2">
                 <PrintOutputButton workspaceId={workspaceId} />
+                <VideoExportButton onClick={onOpenVideoExport} />
               </div>
             )}
           </div>
@@ -186,8 +204,9 @@ export const PublishWorkspaceModal: React.FC<PublishWorkspaceModalProps> = ({
             )}
 
             {hasStories && (
-              <div className="pt-2">
+              <div className="flex flex-row flex-wrap items-center gap-3 pt-2">
                 <PrintOutputButton workspaceId={workspaceId} />
+                <VideoExportButton onClick={onOpenVideoExport} />
               </div>
             )}
 
@@ -228,8 +247,9 @@ export const PublishWorkspaceModal: React.FC<PublishWorkspaceModalProps> = ({
               </div>
 
               {hasStories && (
-                <div className="pt-2">
+                <div className="flex flex-row flex-wrap items-center gap-3 pt-2">
                   <PrintOutputButton workspaceId={workspaceId} />
+                  <VideoExportButton onClick={onOpenVideoExport} />
                 </div>
               )}
             </div>
@@ -250,8 +270,9 @@ export const PublishWorkspaceModal: React.FC<PublishWorkspaceModalProps> = ({
             </div>
 
             {hasStories && (
-              <div className="pt-2">
+              <div className="flex flex-row flex-wrap items-center gap-3 pt-2">
                 <PrintOutputButton workspaceId={workspaceId} />
+                <VideoExportButton onClick={onOpenVideoExport} />
               </div>
             )}
 

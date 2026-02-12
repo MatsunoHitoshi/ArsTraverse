@@ -34,6 +34,10 @@ import { SortableItem } from "@/app/_components/sortable/sortable-item";
 import { DeleteRecordModal } from "../../modal/delete-record-modal";
 import { Textarea } from "../../textarea";
 import { FilterSection } from "@/app/_components/layout-edit/sections/filter-section";
+import {
+  StorytellingGraphRecorder,
+  type StorytellingGraphRecorderHandle,
+} from "../../d3/force/storytelling-graph-recorder";
 
 export const SnapshotStoryboard = ({
   workspaceId,
@@ -59,6 +63,9 @@ export const SnapshotStoryboard = ({
   onStartSegmentSelectionEdit,
   onConfirmSegmentSelectionEdit,
   onRequestSegmentGraphExtraction,
+  graphDocument,
+  workspaceTitle,
+  videoExportRef,
 }: {
   workspaceId: string;
   metaGraphSummaries?: Array<{
@@ -120,6 +127,12 @@ export const SnapshotStoryboard = ({
   onConfirmSegmentSelectionEdit?: () => void;
   /** セグメントのテキストを元にグラフ抽出モーダルを開く（元グラフに反映） */
   onRequestSegmentGraphExtraction?: (text: string) => void;
+  /** 動画書き出し用のグラフデータ */
+  graphDocument?: GraphDocumentForFrontend | null;
+  /** 動画書き出し用のワークスペースタイトル */
+  workspaceTitle?: string;
+  /** 動画書き出しモーダルを開くための ref（親から渡す） */
+  videoExportRef?: React.Ref<StorytellingGraphRecorderHandle>;
 }) => {
   // ストーリーデータの取得（refetch用）
   const { refetch: refetchStory } = api.story.get.useQuery(
@@ -862,6 +875,14 @@ export const SnapshotStoryboard = ({
               </>
             )}
           </Button>
+          {metaGraphStoryData && graphDocument && (
+            <StorytellingGraphRecorder
+              ref={videoExportRef}
+              graphDocument={graphDocument}
+              metaGraphData={metaGraphStoryData}
+              workspaceTitle={workspaceTitle}
+            />
+          )}
           {metaGraphStoryData && (
             <Button
               size="small"
@@ -1338,137 +1359,137 @@ const StorySection = ({
                   {item.description}
                 </div>
               ) : (
-              <div className="mb-2 space-y-2 text-slate-300">
-                {storyContent.content.map((node, idx) => {
-                  if (node.type !== "paragraph" || !node.content) return null;
-                  const text = (node.content as Array<{ type?: string; text?: string }>)
-                    .map((c) => (c.type === "text" ? c.text ?? "" : ""))
-                    .join("");
-                  const attrs = (node.attrs ?? {}) as {
-                    segmentNodeIds?: string[];
-                    segmentEdgeIds?: string[];
-                  };
-                  const hasRef = (attrs.segmentNodeIds?.length ?? 0) > 0;
-                  const segmentRef = {
-                    communityId: item.id,
-                    nodeIds: attrs.segmentNodeIds ?? [],
-                    edgeIds: attrs.segmentEdgeIds ?? [],
-                  };
-                  const isFocused = hasRef && isSameSegmentRef(focusedSegmentRef, segmentRef);
-                  const isReannotating =
-                    reannotatingSegment?.communityId === item.id &&
-                    reannotatingSegment?.paragraphIndex === idx;
-                  const segEdit = segmentSelectionEdit;
-                  const isEditingSelection =
-                    segEdit != null &&
-                    segEdit.communityId === item.id &&
-                    segEdit.paragraphIndex === idx;
-                  return (
-                    <div
-                      key={idx}
-                      className="group/seg flex flex-col items-start gap-1 rounded px-1 py-0.5"
-                    >
+                <div className="mb-2 space-y-2 text-slate-300">
+                  {storyContent.content.map((node, idx) => {
+                    if (node.type !== "paragraph" || !node.content) return null;
+                    const text = (node.content as Array<{ type?: string; text?: string }>)
+                      .map((c) => (c.type === "text" ? c.text ?? "" : ""))
+                      .join("");
+                    const attrs = (node.attrs ?? {}) as {
+                      segmentNodeIds?: string[];
+                      segmentEdgeIds?: string[];
+                    };
+                    const hasRef = (attrs.segmentNodeIds?.length ?? 0) > 0;
+                    const segmentRef = {
+                      communityId: item.id,
+                      nodeIds: attrs.segmentNodeIds ?? [],
+                      edgeIds: attrs.segmentEdgeIds ?? [],
+                    };
+                    const isFocused = hasRef && isSameSegmentRef(focusedSegmentRef, segmentRef);
+                    const isReannotating =
+                      reannotatingSegment?.communityId === item.id &&
+                      reannotatingSegment?.paragraphIndex === idx;
+                    const segEdit = segmentSelectionEdit;
+                    const isEditingSelection =
+                      segEdit != null &&
+                      segEdit.communityId === item.id &&
+                      segEdit.paragraphIndex === idx;
+                    return (
                       <div
-                        role={hasRef ? "button" : undefined}
-                        tabIndex={hasRef ? 0 : undefined}
-                        onClick={
-                          hasRef && onSegmentFocus
-                            ? () => {
-                              if (isFocused) {
-                                onSegmentFocus(null);
-                              } else {
-                                onSegmentFocus(segmentRef);
-                              }
-                            }
-                            : undefined
-                        }
-                        onKeyDown={
-                          hasRef && onSegmentFocus
-                            ? (e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
+                        key={idx}
+                        className="group/seg flex flex-col items-start gap-1 rounded px-1 py-0.5"
+                      >
+                        <div
+                          role={hasRef ? "button" : undefined}
+                          tabIndex={hasRef ? 0 : undefined}
+                          onClick={
+                            hasRef && onSegmentFocus
+                              ? () => {
                                 if (isFocused) {
                                   onSegmentFocus(null);
                                 } else {
                                   onSegmentFocus(segmentRef);
                                 }
                               }
-                            }
-                            : undefined
-                        }
-                        className={
-                          hasRef
-                            ? `cursor-pointer flex-1 rounded hover:bg-slate-700/50 focus:bg-slate-700/50 focus:outline-none ${isFocused ? "bg-slate-700/50" : ""}`
-                            : "flex-1"
-                        }
-                      >
-                        {text}
-                      </div>
-                      {text.trim() && !isEditMode && (
-                        <span className="flex w-full justify-end gap-1">
-                          {onReannotateSegment &&
-                            (isReannotating ? (
-                              <span className="inline-flex text-slate-400">
-                                <Loading size={14} color="currentColor" />
-                              </span>
-                            ) : (
+                              : undefined
+                          }
+                          onKeyDown={
+                            hasRef && onSegmentFocus
+                              ? (e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  if (isFocused) {
+                                    onSegmentFocus(null);
+                                  } else {
+                                    onSegmentFocus(segmentRef);
+                                  }
+                                }
+                              }
+                              : undefined
+                          }
+                          className={
+                            hasRef
+                              ? `cursor-pointer flex-1 rounded hover:bg-slate-700/50 focus:bg-slate-700/50 focus:outline-none ${isFocused ? "bg-slate-700/50" : ""}`
+                              : "flex-1"
+                          }
+                        >
+                          {text}
+                        </div>
+                        {text.trim() && !isEditMode && (
+                          <span className="flex w-full justify-end gap-1">
+                            {onReannotateSegment &&
+                              (isReannotating ? (
+                                <span className="inline-flex text-slate-400">
+                                  <Loading size={14} color="currentColor" />
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onReannotateSegment(item.id, idx, text);
+                                  }}
+                                  className="rounded px-1.5 py-0.5 text-xs text-slate-500 opacity-0 transition-opacity hover:bg-slate-700/50 hover:text-slate-300 group-hover/seg:opacity-100"
+                                  title="この段落のノード・エッジを再推定"
+                                >
+                                  再推定
+                                </button>
+                              ))}
+                            {onStartSegmentSelectionEdit && (
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  onReannotateSegment(item.id, idx, text);
+                                  const nodeIds: string[] =
+                                    Array.isArray(attrs.segmentNodeIds) ?
+                                      attrs.segmentNodeIds :
+                                      [];
+                                  const edgeIds: string[] =
+                                    Array.isArray(attrs.segmentEdgeIds) ?
+                                      attrs.segmentEdgeIds :
+                                      [];
+                                  onStartSegmentSelectionEdit(
+                                    item.id,
+                                    idx,
+                                    nodeIds,
+                                    edgeIds,
+                                  );
+                                }}
+                                className={`rounded px-1.5 py-0.5 text-xs opacity-0 transition-opacity hover:bg-slate-700/50 group-hover/seg:opacity-100 ${isEditingSelection ? "bg-slate-700/50 text-blue-300" : "text-slate-500 hover:text-slate-300"}`}
+                                title="グラフでノード・エッジを手動で選択"
+                              >
+                                {isEditingSelection ? "選択中" : "手動で選択"}
+                              </button>
+                            )}
+                            {onRequestSegmentGraphExtraction && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onRequestSegmentGraphExtraction(text);
                                 }}
                                 className="rounded px-1.5 py-0.5 text-xs text-slate-500 opacity-0 transition-opacity hover:bg-slate-700/50 hover:text-slate-300 group-hover/seg:opacity-100"
-                                title="この段落のノード・エッジを再推定"
+                                title="この段落の文章を元のグラフに反映"
                               >
-                                再推定
+                                グラフ抽出
                               </button>
-                            ))}
-                          {onStartSegmentSelectionEdit && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const nodeIds: string[] =
-                                  Array.isArray(attrs.segmentNodeIds) ?
-                                    attrs.segmentNodeIds :
-                                    [];
-                                const edgeIds: string[] =
-                                  Array.isArray(attrs.segmentEdgeIds) ?
-                                    attrs.segmentEdgeIds :
-                                    [];
-                                onStartSegmentSelectionEdit(
-                                  item.id,
-                                  idx,
-                                  nodeIds,
-                                  edgeIds,
-                                );
-                              }}
-                              className={`rounded px-1.5 py-0.5 text-xs opacity-0 transition-opacity hover:bg-slate-700/50 group-hover/seg:opacity-100 ${isEditingSelection ? "bg-slate-700/50 text-blue-300" : "text-slate-500 hover:text-slate-300"}`}
-                              title="グラフでノード・エッジを手動で選択"
-                            >
-                              {isEditingSelection ? "選択中" : "手動で選択"}
-                            </button>
-                          )}
-                          {onRequestSegmentGraphExtraction && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onRequestSegmentGraphExtraction(text);
-                              }}
-                              className="rounded px-1.5 py-0.5 text-xs text-slate-500 opacity-0 transition-opacity hover:bg-slate-700/50 hover:text-slate-300 group-hover/seg:opacity-100"
-                              title="この段落の文章を元のグラフに反映"
-                            >
-                              グラフ抽出
-                            </button>
-                          )}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               )
             ) : (
               <div
