@@ -4,6 +4,7 @@ export type PageOrientation = "portrait" | "landscape";
 export type ColorMode = "color" | "grayscale";
 export type MetaGraphDisplayMode = "none" | "story" | "all";
 export type TextOverlayDisplayMode = "none" | "show";
+export type WorkspaceTitleDisplayMode = "none" | "show";
 export type LayoutOrientation = "vertical" | "horizontal";
 export type DetailedGraphDisplayMode = "all" | "story";
 
@@ -24,7 +25,10 @@ export interface MarginSettings {
 }
 
 export interface FontSizeSettings {
-  title: number;
+  /** ワークスペースタイトル（メインタイトル）のフォントサイズ */
+  workspaceTitle: number;
+  /** セクションタイトル（ストーリー各セクションのタイトル）のフォントサイズ */
+  sectionTitle: number;
   body: number;
   graph: number;
 }
@@ -43,6 +47,12 @@ export interface PrintLayoutSettings {
   colorMode: ColorMode;
   metaGraphDisplay: MetaGraphDisplayMode;
   textOverlayDisplay?: TextOverlayDisplayMode;
+  workspaceTitleDisplay?: WorkspaceTitleDisplayMode;
+  workspaceTitlePosition?: { x: number; y: number };
+  /** ワークスペースタイトルの表示範囲（幅・高さ） */
+  workspaceTitleSize?: { width: number; height: number };
+  /** セクション（ストーリー各セクション）の表示範囲（幅・高さ）communityIdごとの個別設定 */
+  sectionSizes?: Record<string, { width: number; height: number }>;
   layoutOrientation?: LayoutOrientation;
   detailedGraphDisplay?: DetailedGraphDisplayMode;
   showEdgeLabels?: boolean;

@@ -93,7 +93,8 @@ export default function PrintPage() {
       left: 0,
     },
     fontSize: {
-      title: 14,
+      workspaceTitle: 21,
+      sectionTitle: 14,
       body: 7,
       graph: 12,
     },

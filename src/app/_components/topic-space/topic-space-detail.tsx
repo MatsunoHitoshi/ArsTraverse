@@ -24,6 +24,7 @@ import { DocumentEditModal } from "../document/document-edit-modal";
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
 import { TopicSpaceChangeHistory } from "./topic-space-change-history";
 import { ProposalList } from "../graph-edit-proposal/proposal-list";
+import { MemberListModal } from "./member-list-modal";
 
 export const TopicSpaceDetail = ({ id }: { id: string }) => {
   // 変更履歴のハイライト情報を管理
@@ -81,6 +82,7 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
   const [documentEditModalOpen, setDocumentEditModalOpen] =
     useState<boolean>(false);
   const [documentId, setDocumentId] = useState<string | null>(null);
+  const [memberModalOpen, setMemberModalOpen] = useState<boolean>(false);
 
   if (!session || !topicSpace) return null;
   return (
@@ -109,20 +111,25 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
 
             <div className="flex flex-row items-center justify-between">
               <div className="flex flex-row items-center justify-start gap-4 py-2">
-                <div className="flex flex-col items-center">
+                <button
+                  type="button"
+                  onClick={() => setMemberModalOpen(true)}
+                  className="flex flex-col items-center cursor-pointer rounded-md p-1 hover:bg-slate-50/10 transition-colors"
+                  aria-label="メンバーを表示"
+                >
                   <div className="flex flex-row items-center gap-2">
                     <PersonIcon height={20} width={20} color="white" />
                     <div className="">{topicSpace.admins?.length ?? "-"}</div>
                   </div>
-                  <div className="text-sm">メンバー数</div>
-                </div>
+                  <div className="text-xs">メンバー</div>
+                </button>
 
                 <div className="flex flex-col items-center">
                   <div className="flex flex-row items-center gap-2">
                     <StarIcon height={20} width={20} color="white" />
                     <div className="">{topicSpace.star}</div>
                   </div>
-                  <div className="text-sm">お気に入り数</div>
+                  <div className="text-xs">お気に入り</div>
                 </div>
 
                 <div className="flex flex-col items-center">
@@ -132,7 +139,7 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
                       {topicSpace.sourceDocuments?.length ?? 0}
                     </div>
                   </div>
-                  <div className="text-sm">ドキュメント数</div>
+                  <div className="text-xs">ドキュメント</div>
                 </div>
               </div>
 
@@ -297,6 +304,17 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
         isOpen={documentEditModalOpen}
         setIsOpen={setDocumentEditModalOpen}
         documentId={documentId}
+        refetch={refetch}
+      />
+      <MemberListModal
+        isOpen={memberModalOpen}
+        setIsOpen={setMemberModalOpen}
+        members={topicSpace.admins}
+        isCurrentUserAdmin={topicSpace.admins?.some(
+          (a) => a.id === session.user?.id,
+        )}
+        currentUserId={session.user?.id}
+        topicSpaceId={id}
         refetch={refetch}
       />
     </TabsContainer>

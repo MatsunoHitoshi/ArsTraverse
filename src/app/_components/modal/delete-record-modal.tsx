@@ -8,12 +8,15 @@ export type DeleteRecordType =
   | "topicSpace"
   | "workspace"
   | "annotation"
-  | "story";
+  | "story"
+  | "topicSpaceMember";
 type DeleteModalProps = {
   isOpen: boolean;
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
   type: DeleteRecordType;
   id: string;
+  /** topicSpaceMember のときに必要。id は userId として使用 */
+  topicSpaceId?: string;
   refetch: () => void;
 };
 
@@ -22,6 +25,7 @@ export const DeleteRecordModal = ({
   setIsOpen,
   type,
   id,
+  topicSpaceId,
   refetch,
 }: DeleteModalProps) => {
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
@@ -38,6 +42,7 @@ export const DeleteRecordModal = ({
   const deleteWorkspace = api.workspace.delete.useMutation();
   const deleteAnnotation = api.annotation.deleteAnnotation.useMutation();
   const deleteStory = api.story.delete.useMutation();
+  const removeAdmin = api.topicSpaces.removeAdmin.useMutation();
 
   const title = () => {
     switch (type) {
@@ -51,8 +56,12 @@ export const DeleteRecordModal = ({
         return "注釈";
       case "story":
         return "ストーリー";
+      case "topicSpaceMember":
+        return "メンバー";
     }
   };
+
+  const isRemoveMember = type === "topicSpaceMember";
 
   const submit = () => {
     switch (type) {
@@ -128,13 +137,36 @@ export const DeleteRecordModal = ({
             },
           },
         );
+      case "topicSpaceMember":
+        if (!topicSpaceId) return;
+        return removeAdmin.mutate(
+          { topicSpaceId, userId: id },
+          {
+            onSuccess: (_res) => {
+              refetch();
+              setIsOpen(false);
+            },
+            onError: (e) => {
+              console.log(e);
+              setErrorMessage(e.message || "メンバーを外すのに失敗しました");
+            },
+          },
+        );
     }
   };
 
   return (
-    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title={`${title()}を削除する`}>
+    <Modal
+      isOpen={isOpen}
+      setIsOpen={setIsOpen}
+      title={isRemoveMember ? "メンバーを外す" : `${title()}を削除する`}
+    >
       <div className="flex flex-col gap-6">
-        <div>{`1件の${title()}を削除してもよろしいですか？`}</div>
+        <div>
+          {isRemoveMember
+            ? "このメンバーをリポジトリから外しますか？"
+            : `1件の${title()}を削除してもよろしいですか？`}
+        </div>
 
         {errorMessage && (
           <div className="rounded-md bg-black/50  p-2 text-red-500">
@@ -159,7 +191,7 @@ export const DeleteRecordModal = ({
             className="text-sm text-error-red"
             onClick={() => submit()}
           >
-            削除する
+            {isRemoveMember ? "外す" : "削除する"}
           </Button>
         </div>
       </div>

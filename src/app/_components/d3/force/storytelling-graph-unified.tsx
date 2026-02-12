@@ -42,22 +42,22 @@ const NEIGHBOR_EDGE_OPACITY = 0.15;
 const DIM_EDGE_OPACITY = 0.05;
 
 /** フォーカス遷移アニメーションの所要時間（ms） */
-const FOCUS_TRANSITION_MS = 800;
+const FOCUS_TRANSITION_MS = 1200;
 /** フェード開始を遅らせるオフセット（ms）。ビュー遷移を先行させる */
-const FADE_DELAY_MS = 80;
+const FADE_DELAY_MS = 200;
 /** フェードアニメーションの所要時間（ms）。FADE_DELAY_MS 経過後からこの時間で 0→1 */
 const FADE_DURATION_MS = FOCUS_TRANSITION_MS - FADE_DELAY_MS;
 
 /** 定常パルスアニメーションの周期（ms）。1→1.15→1 のスケール往復 */
-const STEADY_PULSE_PERIOD_MS = 4000;
+const STEADY_PULSE_PERIOD_MS = 3000;
 /** 定常エッジフローアニメーションの周期（ms） */
-const STEADY_EDGE_FLOW_PERIOD_MS = 4000;
+const STEADY_EDGE_FLOW_PERIOD_MS = 3000;
 /** エッジフローの谷（最低不透明度）の広がり幅（エッジ長に対する割合 0–1） */
 const STEADY_EDGE_FLOW_VALLEY_WIDTH = 0.2;
 /** エッジフローの最低不透明度（谷の底） */
-const STEADY_EDGE_FLOW_MIN_OPACITY = 0.25;
+const STEADY_EDGE_FLOW_MIN_OPACITY = 0.2;
 /** 定常アニメーション開始時のフェードイン時間（ms） */
-const STEADY_ANIM_FADE_IN_MS = 400;
+const STEADY_ANIM_FADE_IN_MS = 50;
 
 /** 出る側ノードのフェードイン完了までに使う progress の割合 (0–1) */
 const SOURCE_FADE_END = 0.25;
@@ -80,6 +80,13 @@ function getNodePairKey(link: CustomLinkType): string {
   const a = (link.source as CustomNodeType).id;
   const b = (link.target as CustomNodeType).id;
   return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
+
+/** 方向付きエッジキー（source→target。逆向きは別キー、同一方向の重複パス描画を省くため） */
+function getDirectionalKey(link: CustomLinkType): string {
+  const src = (link.source as CustomNodeType).id;
+  const tgt = (link.target as CustomNodeType).id;
+  return `${src}|${tgt}`;
 }
 
 export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
@@ -1055,6 +1062,30 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     return map;
   }, [linksToRender]);
 
+  /** パス描画用: 同一方向のエッジを1本に集約。逆向きは別パス。代表リンクとその方向にフォーカスが含まれるか */
+  const linksForPathRendering = useMemo(() => {
+    const byDir = new Map<
+      string,
+      { link: CustomLinkType; hasFocus: boolean }
+    >();
+    for (const link of linksToRender) {
+      const key = getDirectionalKey(link);
+      const isFocus = focusEdgeIdSet.has(
+        getEdgeCompositeKeyFromLink(link),
+      );
+      const cur = byDir.get(key);
+      if (!cur) {
+        byDir.set(key, { link, hasFocus: isFocus });
+      } else {
+        const newHasFocus = cur.hasFocus || isFocus;
+        const rep =
+          isFocus && !cur.hasFocus ? link : cur.link;
+        byDir.set(key, { link: rep, hasFocus: newHasFocus });
+      }
+    }
+    return Array.from(byDir.values());
+  }, [linksToRender, focusEdgeIdSet]);
+
   /** クリックでラベルを垂直展開したノード対キー（null で閉じる） */
   const [expandedEdgePairKey, setExpandedEdgePairKey] = useState<string | null>(
     null,
@@ -1143,7 +1174,8 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
 
   /** グラフ全体表示時用: エッジ長（レイアウト座標）の min/max/range（generative と同様の距離ベース透明度に使用） */
   const linkDistanceRange = useMemo(() => {
-    const distances = linksToRender
+    const distances = linksForPathRendering
+      .map((item) => item.link)
       .map((link) => {
         const src = link.source as CustomNodeType;
         const tgt = link.target as CustomNodeType;
@@ -1168,15 +1200,24 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
       maxDistance,
       distanceRange: maxDistance - minDistance || 1,
     };
-  }, [linksToRender]);
+  }, [linksForPathRendering]);
+
+  /** パス描画用アイテムにフォーカス時のグラデーションID用インデックスを付与 */
+  const pathItemsWithFocusIndex = useMemo(() => {
+    let idx = 0;
+    return linksForPathRendering.map((item) => ({
+      ...item,
+      focusGradientIndex: item.hasFocus ? idx++ : -1,
+    }));
+  }, [linksForPathRendering]);
 
   // ── 定常アニメーション計算値 ──
-  /** フォーカスノードのパルススケール（1→1.15→1 の3秒ループ） */
+  /** フォーカスノードのパルススケール（1→1.1→1 のループ） */
   const nodePulseScale = useMemo(() => {
     if (!shouldRunSteadyAnim) return 1;
     const fadeIn = Math.min(1, steadyAnimTimeMs / STEADY_ANIM_FADE_IN_MS);
     const phase = (steadyAnimTimeMs % STEADY_PULSE_PERIOD_MS) / STEADY_PULSE_PERIOD_MS;
-    const amplitude = 0.15 * fadeIn;
+    const amplitude = 0.1 * fadeIn;
     return 1 + amplitude * 0.5 * (1 - Math.cos(2 * Math.PI * phase));
   }, [shouldRunSteadyAnim, steadyAnimTimeMs]);
 
@@ -1225,41 +1266,42 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
       {/* 定常エッジフローアニメーション用グラデーション */}
       {shouldRunSteadyAnim && edgeFlowStops && (
         <defs>
-          {linksToRender.map((link, i) => {
-            const edgeKey = getEdgeCompositeKeyFromLink(link);
-            if (!focusEdgeIdSet.has(edgeKey)) return null;
-            const src = link.source as CustomNodeType;
-            const tgt = link.target as CustomNodeType;
-            if (
-              src.x == null ||
-              src.y == null ||
-              tgt.x == null ||
-              tgt.y == null
-            )
-              return null;
-            const [gsx, gsy] = toView(src.x, src.y);
-            const [gtx, gty] = toView(tgt.x, tgt.y);
-            return (
-              <linearGradient
-                key={`edge-flow-${i}`}
-                id={`edge-flow-${i}`}
-                gradientUnits="userSpaceOnUse"
-                x1={gsx}
-                y1={gsy}
-                x2={gtx}
-                y2={gty}
-              >
-                {edgeFlowStops.map((stop, j) => (
-                  <stop
-                    key={j}
-                    offset={stop.offset}
-                    stopColor="#94a3b8"
-                    stopOpacity={stop.opacity}
-                  />
-                ))}
-              </linearGradient>
-            );
-          })}
+          {pathItemsWithFocusIndex
+            .filter((item) => item.hasFocus)
+            .map((item, i) => {
+              const link = item.link;
+              const src = link.source as CustomNodeType;
+              const tgt = link.target as CustomNodeType;
+              if (
+                src.x == null ||
+                src.y == null ||
+                tgt.x == null ||
+                tgt.y == null
+              )
+                return null;
+              const [gsx, gsy] = toView(src.x, src.y);
+              const [gtx, gty] = toView(tgt.x, tgt.y);
+              return (
+                <linearGradient
+                  key={`edge-flow-${i}`}
+                  id={`edge-flow-${i}`}
+                  gradientUnits="userSpaceOnUse"
+                  x1={gsx}
+                  y1={gsy}
+                  x2={gtx}
+                  y2={gty}
+                >
+                  {edgeFlowStops.map((stop, j) => (
+                    <stop
+                      key={j}
+                      offset={stop.offset}
+                      stopColor="#94a3b8"
+                      stopOpacity={stop.opacity}
+                    />
+                  ))}
+                </linearGradient>
+              );
+            })}
         </defs>
       )}
       {/* ストーリー冒頭の全体グラフ時: コミュニティの円とタイトル（print-generative-layout-graph に倣う） */}
@@ -1323,8 +1365,9 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
           })}
         </>
       )}
-      {/* 1. エッジのパスをすべて先に描画 */}
-      {linksToRender.map((link, i) => {
+      {/* 1. エッジのパスをすべて先に描画（同一方向は1本に集約） */}
+      {pathItemsWithFocusIndex.map((item, i) => {
+        const link = item.link;
         const source = link.source as CustomNodeType;
         const target = link.target as CustomNodeType;
         if (
@@ -1337,9 +1380,9 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         }
         const [sx, sy] = toView(source.x, source.y);
         const [tx, ty] = toView(target.x, target.y);
-        const key = getEdgeCompositeKeyFromLink(link);
+        const dirKey = getDirectionalKey(link);
         const pathD = `M ${sx} ${sy} L ${tx} ${ty}`;
-        const isFocusEdge = focusEdgeIdSet.has(key);
+        const isFocusEdge = item.hasFocus;
         const edgeProgress = fadeProgress < 1 ? fadeProgress : effectiveProgress;
         /** 冒頭の全体グラフ表示時は overviewEdgeProgress でエッジを描くアニメーションを再生 */
         const effectiveEdgeProgress =
@@ -1371,12 +1414,12 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
           const useFlowGrad =
             shouldRunSteadyAnim && edgeFlowStops != null;
           return (
-            <g key={`path-${key}-${i}`}>
+            <g key={`path-${dirKey}-${i}`}>
               {useFlowGrad ? (
                 <path
                   d={pathD}
                   fill="none"
-                  stroke={`url(#edge-flow-${i})`}
+                  stroke={`url(#edge-flow-${item.focusGradientIndex})`}
                   strokeLinecap="round"
                   strokeWidth={edgeStrokeWidthFocus}
                 />
@@ -1423,7 +1466,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
               })()
               : baseEdgeOpacity;
         return (
-          <g key={`path-${key}-${i}`}>
+          <g key={`path-${dirKey}-${i}`}>
             <path
               d={pathD}
               fill="none"
@@ -1485,11 +1528,11 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         const handleLabelClick =
           pairCount > 1
             ? (e: React.MouseEvent) => {
-                e.stopPropagation();
-                setExpandedEdgePairKey((prev) =>
-                  prev === pairKey ? null : pairKey,
-                );
-              }
+              e.stopPropagation();
+              setExpandedEdgePairKey((prev) =>
+                prev === pairKey ? null : pairKey,
+              );
+            }
             : undefined;
 
         if (hasExplicitEdges && isFocusEdge) {
@@ -1500,7 +1543,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
                 y={labelY}
                 textAnchor="middle"
                 fill="#94a3b8"
-                fontSize={getEdgeLabelFontSize(false)}
+                fontSize={getEdgeLabelFontSize(true)}
                 className={
                   pairCount > 1 ? "cursor-pointer" : "pointer-events-none"
                 }

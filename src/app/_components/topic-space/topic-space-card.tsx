@@ -87,7 +87,7 @@ export const TopicSpaceCard = ({ topicSpace, menu }: TopicSpaceCardProps) => {
             <PersonIcon height={20} width={20} color="white" />
             <div className="">{topicSpace.admins?.length ?? "-"}</div>
           </div>
-          <div className="text-sm">メンバー数</div>
+          <div className="text-xs">メンバー</div>
         </div>
 
         <div className="flex flex-col items-center">
@@ -95,7 +95,7 @@ export const TopicSpaceCard = ({ topicSpace, menu }: TopicSpaceCardProps) => {
             <StarIcon height={20} width={20} color="white" />
             <div className="">{topicSpace.star}</div>
           </div>
-          <div className="text-sm">お気に入り数</div>
+          <div className="text-xs">お気に入り</div>
         </div>
 
         <div className="flex flex-col items-center">
@@ -103,7 +103,7 @@ export const TopicSpaceCard = ({ topicSpace, menu }: TopicSpaceCardProps) => {
             <FileTextIcon height={20} width={20} color="white" />
             <div className="">{topicSpace.sourceDocuments?.length ?? 0}</div>
           </div>
-          <div className="text-sm">ドキュメント数</div>
+          <div className="text-xs">ドキュメント</div>
         </div>
       </div>
     </div>

@@ -67,7 +67,8 @@ export default function PrintPreviewPage() {
       left: 0,
     },
     fontSize: {
-      title: 14,
+      workspaceTitle: 21,
+      sectionTitle: 14,
       body: 7,
       graph: 12,
     },
@@ -79,6 +80,7 @@ export default function PrintPreviewPage() {
     colorMode: "color",
     metaGraphDisplay: "none",
     layoutOrientation: "vertical",
+    workspaceTitleDisplay: "none",
   });
 
   useEffect(() => {
@@ -174,12 +176,38 @@ export default function PrintPreviewPage() {
 
             {/* Preview Area */}
             {!!graphData ? (
-              <div className="flex-1 flex w-full items-center justify-center overflow-y-auto bg-[#f5f5f5]">
+              <div className="flex-1 flex w-full overflow-auto bg-[#f5f5f5] p-4">
                 <PrintPreviewContent
                   metaGraphData={metaGraphData}
                   originalGraphData={graphData}
                   layoutSettings={layoutSettings}
                   workspaceId={workspaceId}
+                  workspaceTitle={workspaceData?.name}
+                  onWorkspaceTitlePositionChange={(pos) =>
+                    setLayoutSettings((prev) => ({
+                      ...prev,
+                      workspaceTitlePosition: pos,
+                    }))
+                  }
+                  onWorkspaceTitleSizeChange={(size) =>
+                    setLayoutSettings((prev) => ({
+                      ...prev,
+                      workspaceTitleSize: size,
+                    }))
+                  }
+                  onSectionSizeChange={(communityId, size) =>
+                    setLayoutSettings((prev) => {
+                      const toRecord = (v: unknown): Record<string, { width: number; height: number }> =>
+                        v != null && typeof v === "object" && !Array.isArray(v) ? { ...(v as Record<string, { width: number; height: number }>) } : {};
+                      const current = toRecord(prev.sectionSizes);
+                      const w = typeof size.width === "number" ? size.width : 400;
+                      const h = typeof size.height === "number" ? size.height : 300;
+                      return {
+                        ...prev,
+                        sectionSizes: { ...current, [communityId]: { width: w, height: h } },
+                      };
+                    })
+                  }
                 />
               </div>
             ) : (

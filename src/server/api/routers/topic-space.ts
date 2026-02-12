@@ -546,6 +546,101 @@ export const topicSpaceRouter = createTRPCRouter({
       return updatedTopicSpace;
     }),
 
+  addAdmin: protectedProcedure
+    .input(z.object({ topicSpaceId: z.string(), userId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const topicSpace = await ctx.db.topicSpace.findFirst({
+        where: {
+          id: input.topicSpaceId,
+          isDeleted: false,
+        },
+        include: { admins: true },
+      });
+
+      if (
+        !topicSpace?.admins.some((admin) => admin.id === ctx.session.user.id)
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "TopicSpaceの管理者のみ追加できます",
+        });
+      }
+
+      const isAlreadyAdmin = topicSpace.admins.some(
+        (admin) => admin.id === input.userId,
+      );
+      if (isAlreadyAdmin) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "既にメンバーに追加されています",
+        });
+      }
+
+      const targetUser = await ctx.db.user.findUnique({
+        where: { id: input.userId },
+      });
+      if (!targetUser) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "ユーザーが見つかりません",
+        });
+      }
+
+      return ctx.db.topicSpace.update({
+        where: { id: input.topicSpaceId },
+        data: {
+          admins: { connect: { id: input.userId } },
+        },
+        include: { admins: true },
+      });
+    }),
+
+  removeAdmin: protectedProcedure
+    .input(z.object({ topicSpaceId: z.string(), userId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const topicSpace = await ctx.db.topicSpace.findFirst({
+        where: {
+          id: input.topicSpaceId,
+          isDeleted: false,
+        },
+        include: { admins: true },
+      });
+
+      if (
+        !topicSpace?.admins.some((admin) => admin.id === ctx.session.user.id)
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "TopicSpaceの管理者のみ実行できます",
+        });
+      }
+
+      if (input.userId === ctx.session.user.id) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "自分自身を外すことはできません",
+        });
+      }
+
+      const isAdmin = topicSpace.admins.some(
+        (admin) => admin.id === input.userId,
+      );
+      if (!isAdmin) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "対象のユーザーはメンバーに含まれていません",
+        });
+      }
+
+      return ctx.db.topicSpace.update({
+        where: { id: input.topicSpaceId },
+        data: {
+          admins: { disconnect: { id: input.userId } },
+        },
+        include: { admins: true },
+      });
+    }),
+
   attachDocuments: protectedProcedure
     .input(AttachDocumentSchema)
     .mutation(async ({ ctx, input }) => {

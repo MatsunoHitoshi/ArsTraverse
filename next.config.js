@@ -25,6 +25,10 @@ const config = {
         protocol: "https",
         hostname: "eenyhestucyildmglqhq.supabase.co",
       },
+      {
+        protocol: "https",
+        hostname: "avatars.githubusercontent.com",
+      },
     ],
   },
   async headers() {

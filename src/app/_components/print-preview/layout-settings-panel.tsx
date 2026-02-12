@@ -433,20 +433,38 @@ export function LayoutSettingsPanel({
         {isExpanded.fontSize && (
           <div className="mt-4 space-y-3">
             <div>
-              <label className="mb-2 block text-sm">タイトル</label>
+              <label className="mb-2 block text-sm">ワークスペースタイトル</label>
               <input
                 type="number"
-                value={settings.fontSize.title}
+                value={((v: unknown) => (typeof v === "number" && !Number.isNaN(v) ? v : 21))(settings.fontSize?.workspaceTitle)}
                 onChange={(e) =>
                   updateSettings({
                     fontSize: {
                       ...settings.fontSize,
-                      title: parseFloat(e.target.value) || 24,
+                      workspaceTitle: parseFloat(e.target.value) || 21,
                     },
                   })
                 }
                 min={8}
                 max={72}
+                className="w-full rounded border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm">セクションタイトル</label>
+              <input
+                type="number"
+                value={((v: unknown) => (typeof v === "number" && !Number.isNaN(v) ? v : 14))(settings.fontSize?.sectionTitle)}
+                onChange={(e) =>
+                  updateSettings({
+                    fontSize: {
+                      ...settings.fontSize,
+                      sectionTitle: parseFloat(e.target.value) || 14,
+                    },
+                  })
+                }
+                min={8}
+                max={48}
                 className="w-full rounded border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
               />
             </div>
@@ -666,6 +684,22 @@ export function LayoutSettingsPanel({
             checked={settings.textOverlayDisplay === "show"}
             onChange={(checked) => {
               updateSettings({ textOverlayDisplay: checked ? "show" : "none" });
+            }}
+            className="group inline-flex h-6 w-11 items-center rounded-full bg-slate-400 transition data-[checked]:bg-blue-500"
+          >
+            <span className="size-4 translate-x-1 rounded-full bg-white transition group-data-[checked]:translate-x-6" />
+          </Switch>
+        </div>
+      </div>
+
+      {/* ワークスペースタイトル表示設定 */}
+      <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold">タイトル表示</h3>
+          <Switch
+            checked={settings.workspaceTitleDisplay === "show"}
+            onChange={(checked) => {
+              updateSettings({ workspaceTitleDisplay: checked ? "show" : "none" });
             }}
             className="group inline-flex h-6 w-11 items-center rounded-full bg-slate-400 transition data-[checked]:bg-blue-500"
           >

@@ -80,7 +80,7 @@ const PrintGraphNode = memo(function PrintGraphNode({
   );
 });
 
-import type { PrintLayoutSettings, MetaGraphDisplayMode, TextOverlayDisplayMode, DetailedGraphDisplayMode } from "./types";
+import type { PrintLayoutSettings, MetaGraphDisplayMode, TextOverlayDisplayMode, DetailedGraphDisplayMode, WorkspaceTitleDisplayMode } from "./types";
 
 interface StoryItem {
   communityId: string;
@@ -107,6 +107,10 @@ interface PrintGenerativeLayoutGraphProps {
   onCommunityPositionsCalculated?: (positions: Map<string, { x: number; y: number }>) => void; // コミュニティの位置情報を外部に公開
   storyItems?: StoryItem[]; // ストーリーアイテム
   layoutSettings?: PrintLayoutSettings; // レイアウト設定
+  workspaceTitle?: string; // ワークスペース名
+  onWorkspaceTitlePositionChange?: (pos: { x: number; y: number }) => void; // タイトル位置変更時
+  onWorkspaceTitleSizeChange?: (size: { width: number; height: number }) => void; // タイトル表示範囲変更時
+  onSectionSizeChange?: (communityId: string, size: { width: number; height: number }) => void; // セクション表示範囲変更時（communityIdごと）
 }
 
 export const PrintGenerativeLayoutGraph = ({
@@ -122,6 +126,10 @@ export const PrintGenerativeLayoutGraph = ({
   onCommunityPositionsCalculated,
   storyItems = [],
   layoutSettings,
+  workspaceTitle,
+  onWorkspaceTitlePositionChange,
+  onWorkspaceTitleSizeChange,
+  onSectionSizeChange,
 }: PrintGenerativeLayoutGraphProps) => {
   const svgRef = useRef<SVGSVGElement>(null);
   // 詳細グラフ全体のレイアウト（一度だけ計算）
@@ -159,6 +167,23 @@ export const PrintGenerativeLayoutGraph = ({
   const metaGraphDisplayMode: MetaGraphDisplayMode = layoutSettings?.metaGraphDisplay ?? "none";
   // テキストオーバーレイの表示モード（layoutSettingsから取得）
   const textOverlayDisplayMode: TextOverlayDisplayMode = layoutSettings?.textOverlayDisplay ?? "none";
+  // ワークスペースタイトルの表示モード（layoutSettingsから取得）
+  const workspaceTitleDisplayMode: WorkspaceTitleDisplayMode =
+    layoutSettings?.workspaceTitleDisplay === "show" ? "show" : "none";
+  // ワークスペースタイトルのドラッグ中位置（ドラッグ中のみ使用）
+  const [workspaceTitleDragPosition, setWorkspaceTitleDragPosition] = useState<{ x: number; y: number } | null>(null);
+  // リサイズ中の状態（右下ハンドルDnD用）
+  const [resizing, setResizing] = useState<{
+    target: string;
+    elemX: number;
+    elemY: number;
+    startWidth: number;
+    startHeight: number;
+    startSvgX: number;
+    startSvgY: number;
+  } | null>(null);
+  // リサイズ中のプレビュー尺寸（スムーズ表示用）
+  const [resizePreviewSize, setResizePreviewSize] = useState<{ width: number; height: number } | null>(null);
   // レイアウト方向（layoutSettingsから取得）
   const layoutOrientation = layoutSettings?.layoutOrientation ?? "vertical";
   // 詳細グラフの表示モード（layoutSettingsから取得）
@@ -548,12 +573,26 @@ export const PrintGenerativeLayoutGraph = ({
       let maxY = Math.max(...nodeYValues) + maxNodeRadius;
 
       // テキストオーバーレイの範囲も考慮（storyItemsがある場合、かつ表示モードが"none"でない場合）
+      const defaultSectionW = layoutOrientation === "horizontal" ? width * 0.75 : width * 0.5;
+      const savedSectionSizes = layoutSettings?.sectionSizes as Record<string, { width: number; height: number }> | undefined;
+
+      const getSectionSize = (cid: string) => {
+        if (resizePreviewSize && resizing && resizing.target === cid) {
+          return { w: resizePreviewSize.width, h: resizePreviewSize.height };
+        }
+        const s = savedSectionSizes?.[cid];
+        return {
+          w: s != null && typeof s.width === "number" ? s.width : defaultSectionW,
+          h: s != null && typeof s.height === "number" ? s.height : 400,
+        };
+      };
+
       if (storyItems && storyItems.length > 0 && communityCenters.size > 0 && textOverlayDisplayMode !== "none") {
         storyItems.forEach((item) => {
           const center = communityCenters.get(item.communityId);
           if (!center) return;
 
-          // 実際に使用されるテキスト位置を取得（textPositionsまたは初期位置）
+          const { w: sw, h: sh } = getSectionSize(item.communityId);
           const savedPosition = textPositions.get(item.communityId);
           const isLeft = item.order % 2 === 1;
           const defaultX = isLeft ? width + 100 : -(width);
@@ -561,14 +600,71 @@ export const PrintGenerativeLayoutGraph = ({
 
           const textX = savedPosition?.x ?? defaultX;
           const textY = savedPosition?.y ?? defaultY;
-          const textWidth = width * 0.8;
-          const textHeight = 400; // foreignObjectの高さ
 
           minX = Math.min(minX, textX);
           minY = Math.min(minY, textY);
-          maxX = Math.max(maxX, textX + textWidth);
-          maxY = Math.max(maxY, textY + textHeight);
+          maxX = Math.max(maxX, textX + sw);
+          maxY = Math.max(maxY, textY + sh);
         });
+      }
+
+      // ワークスペースタイトルの範囲も考慮
+      const defaultTitleW = width * 0.6;
+      const defaultTitleH = 80;
+      const savedTitleSize = layoutSettings?.workspaceTitleSize as { width: number; height: number } | undefined;
+      const titleW = resizePreviewSize && resizing?.target === "__workspace_title__"
+        ? resizePreviewSize.width
+        : (savedTitleSize != null && typeof savedTitleSize.width === "number" ? savedTitleSize.width : defaultTitleW);
+      const titleH = resizePreviewSize && resizing?.target === "__workspace_title__"
+        ? resizePreviewSize.height
+        : (savedTitleSize != null && typeof savedTitleSize.height === "number" ? savedTitleSize.height : defaultTitleH);
+
+      if (workspaceTitleDisplayMode === "show" && workspaceTitle) {
+        const titleWidth = titleW;
+        const titleHeight = titleH;
+        const defaultTitlePos = { x: minX + 20, y: minY - titleHeight - 20 };
+        let titleX: number;
+        let titleY: number;
+        if (workspaceTitleDragPosition) {
+          titleX = workspaceTitleDragPosition.x;
+          titleY = workspaceTitleDragPosition.y;
+        } else {
+          const pos = layoutSettings?.workspaceTitlePosition as
+            | { x: number; y: number }
+            | undefined;
+          if (pos != null && typeof pos.x === "number" && typeof pos.y === "number") {
+            titleX = pos.x;
+            titleY = pos.y;
+          } else {
+            titleX = defaultTitlePos.x;
+            titleY = defaultTitlePos.y;
+          }
+        }
+        minX = Math.min(minX, titleX);
+        minY = Math.min(minY, titleY);
+        maxX = Math.max(maxX, titleX + titleWidth);
+        maxY = Math.max(maxY, titleY + titleHeight);
+      }
+
+      // バウンディングボックス用にワークスペースタイトルのキーを計算（既存のtitleX/titleYを再利用）
+      let workspaceTitleKey = "";
+      if (workspaceTitleDisplayMode === "show" && workspaceTitle) {
+        let wx: number;
+        let wy: number;
+        if (workspaceTitleDragPosition) {
+          wx = workspaceTitleDragPosition.x;
+          wy = workspaceTitleDragPosition.y;
+        } else {
+          const saved = layoutSettings?.workspaceTitlePosition as { x: number; y: number } | undefined;
+          if (saved != null && typeof saved.x === "number" && typeof saved.y === "number") {
+            wx = saved.x;
+            wy = saved.y;
+          } else {
+            wx = minX + 20;
+            wy = minY - titleH - 20;
+          }
+        }
+        workspaceTitleKey = `${wx},${wy},${titleW},${titleH}`;
       }
 
       // 余白を追加（グラフの端が見切れないように）
@@ -581,9 +677,16 @@ export const PrintGenerativeLayoutGraph = ({
       };
 
       // バウンディングボックスが実際に変更されたかチェック
+      const sectionSizeKey = textOverlayDisplayMode !== "none" && storyItems
+        ? storyItems
+            .map((it) => {
+              const { w, h } = getSectionSize(it.communityId);
+              return `${it.communityId}:${w},${h}`;
+            })
+            .join("|")
+        : "";
       const boundsKey = `${newBounds.minX.toFixed(2)},${newBounds.minY.toFixed(2)},${newBounds.maxX.toFixed(2)},${newBounds.maxY.toFixed(2)}`;
-
-      const combinedKey = `${boundsKey}|${textPositionsKey}`;
+      const combinedKey = `${boundsKey}|${textPositionsKey}|${workspaceTitleKey}|${sectionSizeKey}`;
 
       // 内容が変更されていない場合はスキップ
       if (prevGraphBoundsKeyRef.current === combinedKey) {
@@ -593,7 +696,7 @@ export const PrintGenerativeLayoutGraph = ({
       prevGraphBoundsKeyRef.current = combinedKey;
       setGraphBounds(newBounds);
     }
-  }, [detailedGraphLayout, communityMap, communityCenters, storyItems, width, height, textPositionsKey, textOverlayDisplayMode]);
+  }, [detailedGraphLayout, communityMap, communityCenters, storyItems, width, height, textPositionsKey, textOverlayDisplayMode, workspaceTitleDisplayMode, workspaceTitle, workspaceTitleDragPosition, layoutSettings?.workspaceTitlePosition, layoutSettings?.workspaceTitleSize, layoutSettings?.sectionSizes, layoutOrientation, resizing, resizePreviewSize]);
 
   // テキスト位置の初期値を計算（コミュニティ中心座標が計算された後）
   // 初期位置を追跡するためのref（ドラッグで調整された位置と区別するため）
@@ -697,6 +800,14 @@ export const PrintGenerativeLayoutGraph = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [communityCenters, storyItems, width, height, textOverlayDisplayMode, layoutOrientation]);
 
+  // ワークスペースタイトルの初期位置を設定（初回表示時のみ）
+  useEffect(() => {
+    if (workspaceTitleDisplayMode !== "show" || !workspaceTitle || !onWorkspaceTitlePositionChange || layoutSettings?.workspaceTitlePosition) return;
+    if (!graphBounds) return;
+    const defaultPos = { x: graphBounds.minX + 20, y: graphBounds.minY - 100 };
+    onWorkspaceTitlePositionChange(defaultPos);
+  }, [workspaceTitleDisplayMode, workspaceTitle, onWorkspaceTitlePositionChange, layoutSettings?.workspaceTitlePosition, graphBounds]);
+
   // メタグラフノードの生成（コミュニティ中心に固定）
   useEffect(() => {
     if (
@@ -781,33 +892,40 @@ export const PrintGenerativeLayoutGraph = ({
   useEffect(() => {
     if (!dragging || !svgRef.current) return;
 
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!svgRef.current) return;
+    const isWorkspaceTitleDrag = dragging.communityId === "__workspace_title__";
 
+    const getSvgCoords = (e: MouseEvent) => {
+      if (!svgRef.current) return null;
       const svgRect = svgRef.current.getBoundingClientRect();
-      const svgPoint = svgRef.current.createSVGPoint();
-      svgPoint.x = e.clientX - svgRect.left;
-      svgPoint.y = e.clientY - svgRect.top;
-
-      // viewBoxの変換を考慮
       const viewBox = svgRef.current.viewBox.baseVal;
       const scaleX = svgRef.current.clientWidth / viewBox.width;
       const scaleY = svgRef.current.clientHeight / viewBox.height;
-
-      const svgX = (svgPoint.x / scaleX) + viewBox.x;
-      const svgY = (svgPoint.y / scaleY) + viewBox.y;
-
-      const newX = svgX - dragging.offsetX;
-      const newY = svgY - dragging.offsetY;
-
-      setTextPositions((prev) => {
-        const updated = new Map(prev);
-        updated.set(dragging.communityId, { x: newX, y: newY });
-        return updated;
-      });
+      const svgX = (e.clientX - svgRect.left) / scaleX + viewBox.x;
+      const svgY = (e.clientY - svgRect.top) / scaleY + viewBox.y;
+      return { x: svgX - dragging.offsetX, y: svgY - dragging.offsetY };
     };
 
-    const handleMouseUp = () => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const coords = getSvgCoords(e);
+      if (!coords) return;
+
+      if (isWorkspaceTitleDrag) {
+        setWorkspaceTitleDragPosition(coords);
+      } else {
+        setTextPositions((prev) => {
+          const updated = new Map(prev);
+          updated.set(dragging.communityId, coords);
+          return updated;
+        });
+      }
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      if (isWorkspaceTitleDrag && onWorkspaceTitlePositionChange) {
+        const coords = getSvgCoords(e);
+        if (coords) onWorkspaceTitlePositionChange(coords);
+        setWorkspaceTitleDragPosition(null);
+      }
       setDragging(null);
     };
 
@@ -818,7 +936,57 @@ export const PrintGenerativeLayoutGraph = ({
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [dragging]);
+  }, [dragging, onWorkspaceTitlePositionChange]);
+
+  // リサイズ用グローバルマウスイベントハンドラー
+  useEffect(() => {
+    if (!resizing || !svgRef.current) return;
+
+    const getSvgCoords = (e: MouseEvent) => {
+      if (!svgRef.current) return null;
+      const svgRect = svgRef.current.getBoundingClientRect();
+      const viewBox = svgRef.current.viewBox.baseVal;
+      const scaleX = svgRef.current.clientWidth / viewBox.width;
+      const scaleY = svgRef.current.clientHeight / viewBox.height;
+      return {
+        x: (e.clientX - svgRect.left) / scaleX + viewBox.x,
+        y: (e.clientY - svgRect.top) / scaleY + viewBox.y,
+      };
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const coords = getSvgCoords(e);
+      if (!coords) return;
+
+      const newWidth = Math.max(60, coords.x - resizing.elemX);
+      const newHeight = Math.max(40, coords.y - resizing.elemY);
+      setResizePreviewSize({ width: newWidth, height: newHeight });
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      const coords = getSvgCoords(e);
+      if (coords) {
+        const newWidth = Math.max(60, coords.x - resizing.elemX);
+        const newHeight = Math.max(40, coords.y - resizing.elemY);
+
+        if (resizing.target === "__workspace_title__") {
+          onWorkspaceTitleSizeChange?.({ width: newWidth, height: newHeight });
+        } else {
+          onSectionSizeChange?.(resizing.target, { width: newWidth, height: newHeight });
+        }
+      }
+      setResizePreviewSize(null);
+      setResizing(null);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [resizing, onWorkspaceTitleSizeChange, onSectionSizeChange]);
 
   return (
     <div className="relative h-full w-full bg-white" style={{ overflow: "hidden" }}>
@@ -1184,8 +1352,17 @@ export const PrintGenerativeLayoutGraph = ({
                 const center = communityCenters.get(item.communityId);
                 if (!center) return null;
 
-                // グラフの反対側にテキストを配置
-                const textWidth = layoutOrientation === "horizontal" ? width * 0.75 : width * 0.5; // テキストの幅
+                // セクションの表示範囲（communityIdごとに個別設定）
+                const defaultSectionWidth = layoutOrientation === "horizontal" ? width * 0.75 : width * 0.5;
+                const defaultSectionHeight = 400;
+                const savedSectionSizes = layoutSettings?.sectionSizes as Record<string, { width: number; height: number }> | undefined;
+                const savedSectionSize = savedSectionSizes?.[item.communityId];
+                const sectionWidth = resizePreviewSize && resizing?.target === item.communityId
+                  ? resizePreviewSize.width
+                  : (savedSectionSize != null && typeof savedSectionSize.width === "number" ? savedSectionSize.width : defaultSectionWidth);
+                const sectionHeight = resizePreviewSize && resizing?.target === item.communityId
+                  ? resizePreviewSize.height
+                  : (savedSectionSize != null && typeof savedSectionSize.height === "number" ? savedSectionSize.height : defaultSectionHeight);
 
                 // 位置を取得（ドラッグで調整された位置、または初期位置）
                 const savedPosition = textPositions.get(item.communityId);
@@ -1212,26 +1389,22 @@ export const PrintGenerativeLayoutGraph = ({
                 const textX = savedPosition?.x ?? defaultX;
                 const textY = savedPosition?.y ?? defaultY;
 
-                const titleFontSize = layoutSettings?.fontSize?.title ?? 14;
-                const bodyFontSize = layoutSettings?.fontSize?.body ?? 12;
+                const safeNum = (v: unknown, def: number) =>
+                  (typeof v === "number" && !Number.isNaN(v) ? v : def);
+                const sectionTitleFontSize = safeNum(layoutSettings?.fontSize?.sectionTitle, 14);
+                const bodyFontSize = safeNum(layoutSettings?.fontSize?.body, 12);
 
-                // ドラッグ開始
+                // ドラッグ開始（ハンドル以外の領域）
                 const handleMouseDown = (e: React.MouseEvent<SVGForeignObjectElement>) => {
                   e.preventDefault();
                   if (!svgRef.current) return;
 
                   const svgRect = svgRef.current.getBoundingClientRect();
-                  const svgPoint = svgRef.current.createSVGPoint();
-                  svgPoint.x = e.clientX - svgRect.left;
-                  svgPoint.y = e.clientY - svgRect.top;
-
-                  // viewBoxの変換を考慮
                   const viewBox = svgRef.current.viewBox.baseVal;
                   const scaleX = svgRef.current.clientWidth / viewBox.width;
                   const scaleY = svgRef.current.clientHeight / viewBox.height;
-
-                  const svgX = (svgPoint.x / scaleX) + viewBox.x;
-                  const svgY = (svgPoint.y / scaleY) + viewBox.y;
+                  const svgX = (e.clientX - svgRect.left) / scaleX + viewBox.x;
+                  const svgY = (e.clientY - svgRect.top) / scaleY + viewBox.y;
 
                   setDragging({
                     communityId: item.communityId,
@@ -1242,13 +1415,38 @@ export const PrintGenerativeLayoutGraph = ({
                   });
                 };
 
+                // リサイズハンドル mousedown（ドラッグと競合しないよう stopPropagation）
+                const handleResizeMouseDown = (e: React.MouseEvent) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!svgRef.current) return;
+
+                  const svgRect = svgRef.current.getBoundingClientRect();
+                  const viewBox = svgRef.current.viewBox.baseVal;
+                  const scaleX = svgRef.current.clientWidth / viewBox.width;
+                  const scaleY = svgRef.current.clientHeight / viewBox.height;
+                  const svgX = (e.clientX - svgRect.left) / scaleX + viewBox.x;
+                  const svgY = (e.clientY - svgRect.top) / scaleY + viewBox.y;
+
+                  setResizing({
+                    target: item.communityId,
+                    elemX: textX,
+                    elemY: textY,
+                    startWidth: sectionWidth,
+                    startHeight: sectionHeight,
+                    startSvgX: svgX,
+                    startSvgY: svgY,
+                  });
+                  setResizePreviewSize({ width: sectionWidth, height: sectionHeight });
+                };
+
                 return (
                   <foreignObject
                     key={`story-${item.communityId}`}
                     x={textX}
                     y={textY}
-                    width={textWidth}
-                    height={400} // 高さは十分に確保
+                    width={sectionWidth}
+                    height={sectionHeight}
                     onMouseDown={handleMouseDown}
                     style={{
                       cursor: dragging?.communityId === item.communityId ? "grabbing" : "grab",
@@ -1258,6 +1456,9 @@ export const PrintGenerativeLayoutGraph = ({
                     <div
                       className="print-story-text-item"
                       style={{
+                        position: "relative",
+                        width: "100%",
+                        height: "100%",
                         fontSize: `${bodyFontSize}pt`,
                         color: "#1f2937",
                         fontFamily: "system-ui, -apple-system, sans-serif",
@@ -1267,11 +1468,12 @@ export const PrintGenerativeLayoutGraph = ({
                         padding: "16px",
                         borderRadius: "16px",
                         zIndex: 1000,
+                        overflow: "hidden",
                       }}
                     >
                       <h3
                         style={{
-                          fontSize: `${titleFontSize}pt`,
+                          fontSize: `${sectionTitleFontSize}pt`,
                           fontWeight: "bold",
                           marginBottom: "8px",
                           color: "#111827",
@@ -1284,14 +1486,166 @@ export const PrintGenerativeLayoutGraph = ({
                           whiteSpace: "pre-line",
                           color: "#374151",
                           lineHeight: "1.6",
+                          overflow: "auto",
+                          maxHeight: "calc(100% - 60px)",
                         }}
                       >
                         {item.content}
                       </div>
+                      {/* 右下リサイズハンドル */}
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onMouseDown={handleResizeMouseDown}
+                        style={{
+                          position: "absolute",
+                          right: 0,
+                          bottom: 0,
+                          width: 16,
+                          height: 16,
+                          cursor: "nwse-resize",
+                          background: "linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.2) 50%)",
+                          borderBottomRightRadius: "12px",
+                        }}
+                        aria-label="リサイズ"
+                      />
                     </div>
                   </foreignObject>
                 );
               })}
+            </g>
+          )}
+
+          {/* ワークスペースタイトルオーバーレイ */}
+          {workspaceTitleDisplayMode === "show" && workspaceTitle && (
+            <g className="workspace-title-overlay">
+              {(() => {
+                const defaultTitleWidth = width * 0.6;
+                const defaultTitleHeight = 80;
+                const savedTitleSize = layoutSettings?.workspaceTitleSize as { width: number; height: number } | undefined;
+                const titleWidth = resizePreviewSize && resizing?.target === "__workspace_title__"
+                  ? resizePreviewSize.width
+                  : (savedTitleSize != null && typeof savedTitleSize.width === "number" ? savedTitleSize.width : defaultTitleWidth);
+                const titleHeight = resizePreviewSize && resizing?.target === "__workspace_title__"
+                  ? resizePreviewSize.height
+                  : (savedTitleSize != null && typeof savedTitleSize.height === "number" ? savedTitleSize.height : defaultTitleHeight);
+                const defaultPos = graphBounds
+                  ? { x: graphBounds.minX + 20, y: graphBounds.minY - defaultTitleHeight - 20 }
+                  : { x: 50, y: 30 };
+                let titlePosX: number;
+                let titlePosY: number;
+                if (workspaceTitleDragPosition) {
+                  titlePosX = workspaceTitleDragPosition.x;
+                  titlePosY = workspaceTitleDragPosition.y;
+                } else {
+                  const saved = layoutSettings?.workspaceTitlePosition as { x: number; y: number } | undefined;
+                  if (saved != null && typeof saved.x === "number" && typeof saved.y === "number") {
+                    titlePosX = saved.x;
+                    titlePosY = saved.y;
+                  } else {
+                    titlePosX = defaultPos.x;
+                    titlePosY = defaultPos.y;
+                  }
+                }
+                const titlePos = { x: titlePosX, y: titlePosY };
+                const workspaceTitleFontSize = ((v: unknown) => (typeof v === "number" && !Number.isNaN(v) ? v : 21))(layoutSettings?.fontSize?.workspaceTitle);
+
+                const handleWorkspaceTitleMouseDown = (e: React.MouseEvent<SVGForeignObjectElement>) => {
+                  e.preventDefault();
+                  if (!svgRef.current) return;
+
+                  const svgRect = svgRef.current.getBoundingClientRect();
+                  const viewBox = svgRef.current.viewBox.baseVal;
+                  const scaleX = svgRef.current.clientWidth / viewBox.width;
+                  const scaleY = svgRef.current.clientHeight / viewBox.height;
+                  const svgX = (e.clientX - svgRect.left) / scaleX + viewBox.x;
+                  const svgY = (e.clientY - svgRect.top) / scaleY + viewBox.y;
+
+                  setDragging({
+                    communityId: "__workspace_title__",
+                    startX: svgX,
+                    startY: svgY,
+                    offsetX: svgX - titlePos.x,
+                    offsetY: svgY - titlePos.y,
+                  });
+                };
+
+                const handleWorkspaceTitleResizeMouseDown = (e: React.MouseEvent) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!svgRef.current) return;
+
+                  const svgRect = svgRef.current.getBoundingClientRect();
+                  const viewBox = svgRef.current.viewBox.baseVal;
+                  const scaleX = svgRef.current.clientWidth / viewBox.width;
+                  const scaleY = svgRef.current.clientHeight / viewBox.height;
+                  const svgX = (e.clientX - svgRect.left) / scaleX + viewBox.x;
+                  const svgY = (e.clientY - svgRect.top) / scaleY + viewBox.y;
+
+                  setResizing({
+                    target: "__workspace_title__",
+                    elemX: titlePos.x,
+                    elemY: titlePos.y,
+                    startWidth: titleWidth,
+                    startHeight: titleHeight,
+                    startSvgX: svgX,
+                    startSvgY: svgY,
+                  });
+                  setResizePreviewSize({ width: titleWidth, height: titleHeight });
+                };
+
+                return (
+                  <foreignObject
+                    x={titlePos.x}
+                    y={titlePos.y}
+                    width={titleWidth}
+                    height={titleHeight}
+                    onMouseDown={handleWorkspaceTitleMouseDown}
+                    style={{
+                      cursor: dragging?.communityId === "__workspace_title__" ? "grabbing" : "grab",
+                      userSelect: "none",
+                    }}
+                  >
+                    <div
+                      className="print-workspace-title"
+                      style={{
+                        position: "relative",
+                        width: "100%",
+                        height: "100%",
+                        fontSize: `${workspaceTitleFontSize}pt`,
+                        fontWeight: "bold",
+                        color: "#111827",
+                        fontFamily: "system-ui, -apple-system, sans-serif",
+                        backgroundColor: "rgba(255, 255, 255, 0.5)",
+                        backdropFilter: "blur(4px)",
+                        WebkitBackdropFilter: "blur(4px)",
+                        padding: "12px 20px",
+                        borderRadius: "12px",
+                        border: "1px solid rgba(0,0,0,0.08)",
+                      }}
+                    >
+                      {workspaceTitle}
+                      {/* 右下リサイズハンドル */}
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onMouseDown={handleWorkspaceTitleResizeMouseDown}
+                        style={{
+                          position: "absolute",
+                          right: 0,
+                          bottom: 0,
+                          width: 16,
+                          height: 16,
+                          cursor: "nwse-resize",
+                          background: "linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.2) 50%)",
+                          borderBottomRightRadius: "12px",
+                        }}
+                        aria-label="リサイズ"
+                      />
+                    </div>
+                  </foreignObject>
+                );
+              })()}
             </g>
           )}
         </g>

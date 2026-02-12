@@ -31,6 +31,10 @@ interface PrintPreviewContentProps {
   originalGraphData: GraphDocumentForFrontend;
   layoutSettings: PrintLayoutSettings;
   workspaceId?: string;
+  workspaceTitle?: string;
+  onWorkspaceTitlePositionChange?: (pos: { x: number; y: number }) => void;
+  onWorkspaceTitleSizeChange?: (size: { width: number; height: number }) => void;
+  onSectionSizeChange?: (communityId: string, size: { width: number; height: number }) => void;
 }
 
 export function PrintPreviewContent({
@@ -38,6 +42,10 @@ export function PrintPreviewContent({
   originalGraphData,
   layoutSettings,
   workspaceId,
+  workspaceTitle,
+  onWorkspaceTitlePositionChange,
+  onWorkspaceTitleSizeChange,
+  onSectionSizeChange,
 }: PrintPreviewContentProps) {
   const [communityCenters, setCommunityCenters] = useState<
     Map<string, { x: number; y: number }>
@@ -45,7 +53,8 @@ export function PrintPreviewContent({
   const graphViewRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 2000 });
-  const [previewSize, setPreviewSize] = useState<{ width: number; height: number } | null>(null);
+  const [basePreviewSize, setBasePreviewSize] = useState<{ width: number; height: number } | null>(null);
+  const [zoomLevel, setZoomLevel] = useState(1);
 
   // 保存されたフィルタがある場合はグラフを絞り込む
   const graphDataForView = useMemo(() => {
@@ -135,7 +144,7 @@ export function PrintPreviewContent({
       // スケールを適用（最小0.1、最大1.0）
       scale = Math.max(0.05, Math.min(1.0, scale));
 
-      setPreviewSize({
+      setBasePreviewSize({
         width: pageWidthPx * scale,
         height: pageHeightPx * scale,
       });
@@ -145,6 +154,15 @@ export function PrintPreviewContent({
     window.addEventListener("resize", calculatePreviewSize);
     return () => window.removeEventListener("resize", calculatePreviewSize);
   }, [pageSizeInMm]);
+
+  // ズームを適用した表示サイズ
+  const previewSize = useMemo(() => {
+    if (!basePreviewSize) return null;
+    return {
+      width: basePreviewSize.width * zoomLevel,
+      height: basePreviewSize.height * zoomLevel,
+    };
+  }, [basePreviewSize, zoomLevel]);
 
   // CSS変数を設定
   const pageStyle = useMemo(() => {
@@ -164,14 +182,61 @@ export function PrintPreviewContent({
     } as React.CSSProperties;
   }, [pageSizeInMm, layoutSettings.margins, aspectRatio]);
 
+  const ZOOM_MIN = 0.5;
+  const ZOOM_MAX = 2.5;
+  const ZOOM_STEP = 0.25;
+
+  const handleWheelZoom = (e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+      setZoomLevel((z) => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z + delta)));
+    }
+  };
+
   return (
-    <div className="print-preview-container" style={pageStyle}>
+    <div
+      className="print-preview-container"
+      style={{
+        ...pageStyle,
+        ...(zoomLevel > 1 && previewSize
+          ? { width: "fit-content", minWidth: "100%", alignSelf: "flex-start" }
+          : {}),
+      }}
+      onWheel={handleWheelZoom}
+      role="application"
+      aria-label="プリントプレビュー"
+    >
       {/* ヘッダー（印刷時は非表示） */}
-      {workspaceId && (
-        <div className="absolute top-4 right-4 z-10">
-          <PdfExportButton layoutSettings={layoutSettings} workspaceId={workspaceId} />
+      <div className="absolute top-4 right-4 z-10 flex items-center gap-3">
+        {/* ズームコントロール */}
+        <div className="flex items-center gap-2 rounded-lg bg-white/90 px-3 py-2 shadow-md no-print">
+          <button
+            type="button"
+            onClick={() => setZoomLevel((z) => Math.max(ZOOM_MIN, z - ZOOM_STEP))}
+            disabled={zoomLevel <= ZOOM_MIN}
+            className="flex h-8 w-8 items-center justify-center rounded bg-slate-200 text-slate-700 hover:bg-slate-300 disabled:opacity-40 disabled:cursor-not-allowed"
+            aria-label="縮小"
+          >
+            −
+          </button>
+          <span className="min-w-[4rem] text-center text-sm font-medium text-slate-700">
+            {Math.round(zoomLevel * 100)}%
+          </span>
+          <button
+            type="button"
+            onClick={() => setZoomLevel((z) => Math.min(ZOOM_MAX, z + ZOOM_STEP))}
+            disabled={zoomLevel >= ZOOM_MAX}
+            className="flex h-8 w-8 items-center justify-center rounded bg-slate-200 text-slate-700 hover:bg-slate-300 disabled:opacity-40 disabled:cursor-not-allowed"
+            aria-label="拡大"
+          >
+            +
+          </button>
         </div>
-      )}
+        {workspaceId && (
+          <PdfExportButton layoutSettings={layoutSettings} workspaceId={workspaceId} />
+        )}
+      </div>
 
       {/* プレビューコンテンツ（用紙の枠） */}
       <div
@@ -179,11 +244,13 @@ export function PrintPreviewContent({
         className="print-content"
         style={{
           width: previewSize ? `${previewSize.width}px` : undefined,
+          height: previewSize ? `${previewSize.height}px` : undefined,
+          minWidth: previewSize ? `${previewSize.width}px` : undefined,
           aspectRatio: aspectRatio.toString(),
-          maxWidth: "100%",
-          maxHeight: "90vh",
+          maxWidth: zoomLevel > 1 ? "none" : "100%",
+          maxHeight: zoomLevel > 1 ? "none" : "90vh",
           overflow: "hidden",
-          margin: "0 auto",
+          margin: zoomLevel <= 1 ? "0 auto" : undefined,
         }}
       >
         {storyItems.length === 0 ? (
@@ -198,6 +265,10 @@ export function PrintPreviewContent({
               layoutSettings={layoutSettings}
               storyItems={storyItems}
               previewSize={previewSize}
+              workspaceTitle={workspaceTitle}
+              onWorkspaceTitlePositionChange={onWorkspaceTitlePositionChange}
+              onWorkspaceTitleSizeChange={onWorkspaceTitleSizeChange}
+              onSectionSizeChange={onSectionSizeChange}
               onCommunityPositionsCalculated={(centers) => {
                 setCommunityCenters(centers);
                 // キャンバスサイズを計算

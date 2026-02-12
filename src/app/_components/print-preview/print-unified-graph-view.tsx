@@ -21,6 +21,10 @@ interface PrintUnifiedGraphViewProps {
   onCommunityPositionsCalculated?: (positions: Map<string, { x: number; y: number }>) => void;
   storyItems?: StoryItem[];
   previewSize?: { width: number; height: number } | null;
+  workspaceTitle?: string;
+  onWorkspaceTitlePositionChange?: (pos: { x: number; y: number }) => void;
+  onWorkspaceTitleSizeChange?: (size: { width: number; height: number }) => void;
+  onSectionSizeChange?: (communityId: string, size: { width: number; height: number }) => void;
 }
 
 export function PrintUnifiedGraphView({
@@ -30,6 +34,10 @@ export function PrintUnifiedGraphView({
   onCommunityPositionsCalculated,
   storyItems = [],
   previewSize,
+  workspaceTitle,
+  onWorkspaceTitlePositionChange,
+  onWorkspaceTitleSizeChange,
+  onSectionSizeChange,
 }: PrintUnifiedGraphViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -167,6 +175,10 @@ export function PrintUnifiedGraphView({
         }}
         storyItems={storyItems}
         layoutSettings={layoutSettings}
+              workspaceTitle={workspaceTitle}
+              onWorkspaceTitlePositionChange={onWorkspaceTitlePositionChange}
+              onWorkspaceTitleSizeChange={onWorkspaceTitleSizeChange}
+              onSectionSizeChange={onSectionSizeChange}
       />
     </div>
   );

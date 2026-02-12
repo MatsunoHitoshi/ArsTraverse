@@ -76,7 +76,17 @@ export function ScrollStorytellingViewerUnified({
     const el = topSentinelRef.current;
     if (!el) return;
     const io = new IntersectionObserver(
-      ([entry]) => setTopSentinelInView(entry?.isIntersecting ?? false),
+      ([entry]) => {
+        const intersecting = entry?.isIntersecting ?? false;
+        if (!intersecting) {
+          setTopSentinelInView(false);
+          return;
+        }
+        // ヘッダ非表示時のレイアウト変化で IO が spurious に true を返し、
+        // graphIndex が 0 に戻ってカメラが戻る現象を防ぐ。 scrollY>=100 なら無視。
+        const scrollY = typeof window !== "undefined" ? window.scrollY : 0;
+        setTopSentinelInView(scrollY < 100);
+      },
       { threshold: 0, rootMargin: "-1px 0px 0px 0px" },
     );
     io.observe(el);

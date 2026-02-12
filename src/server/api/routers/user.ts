@@ -63,4 +63,30 @@ export const userRouter = createTRPCRouter({
         select: PUBLIC_USER_SELECT,
       });
     }),
+
+  // ユーザーIDまたはメールアドレスでユーザーを検索（招待用）
+  // 完全一致のみ。部分一致は列挙攻撃につながるため許可しない
+  searchByUserIdOrEmail: protectedProcedure
+    .input(z.object({ query: z.string().min(1).max(200) }))
+    .query(async ({ ctx, input }) => {
+      const trimmed = input.query.trim();
+      if (!trimmed) return [];
+
+      const user = await ctx.db.user.findFirst({
+        where: {
+          OR: [
+            { id: trimmed },
+            { email: { equals: trimmed, mode: "insensitive" } },
+          ],
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+        },
+      });
+
+      return user ? [user] : [];
+    }),
 });
