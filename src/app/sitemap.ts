@@ -5,11 +5,12 @@ import { WorkspaceStatus } from "@prisma/client";
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://arstraverse.com";
 
-  // 公開済みの全ワークスペース（記事）を取得
+  // 公開済みかつ検索エンジン公開が有効なワークスペース（記事）のみ取得
   const publishedWorkspaces = await db.workspace.findMany({
     where: {
       status: WorkspaceStatus.PUBLISHED,
       isDeleted: false,
+      isSearchable: true,
     },
     select: {
       id: true,

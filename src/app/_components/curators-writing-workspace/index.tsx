@@ -1066,6 +1066,7 @@ const CuratorsWritingWorkspace = ({
         workspaceId={workspace.id}
         workspaceStatus={workspace.status}
         workspaceName={workspace.name}
+        isSearchable={workspace.isSearchable}
         hasStories={
           (metaGraphStory.metaGraphData?.narrativeFlow?.length ?? 0) > 0
         }

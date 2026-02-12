@@ -18,6 +18,7 @@ async function getWorkspaceForMeta(workspaceId: string) {
       name: true,
       description: true,
       content: true,
+      isSearchable: true,
       createdAt: true,
       updatedAt: true,
       user: {
@@ -43,6 +44,7 @@ export async function generateMetadata({
     return {
       title: "記事が見つかりません | ArsTraverse",
       description: "指定された記事は存在しないか、公開されていません。",
+      robots: { index: false, follow: false },
     };
   }
 
@@ -54,9 +56,15 @@ export async function generateMetadata({
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://arstraverse.com";
   const articleUrl = `${baseUrl}/articles/${workspace.id}`;
 
+  // isSearchable が false の場合は検索エンジンにインデックスさせない
+  const robotsDirective = workspace.isSearchable
+    ? { index: true, follow: true }
+    : { index: false, follow: false };
+
   return {
     title: `${workspace.name} | ArsTraverse`,
     description,
+    robots: robotsDirective,
     openGraph: {
       title: workspace.name,
       description,
@@ -79,7 +87,7 @@ export async function generateMetadata({
   };
 }
 
-/** JSON-LD 構造化データ（Article スキーマ） */
+/** JSON-LD 構造化データ（Article スキーマ） – isSearchable が true の場合のみ出力 */
 function ArticleJsonLd({
   workspace,
   baseUrl,
@@ -129,11 +137,13 @@ export default async function ArticlePage({
 
   return (
     <>
-      {/* JSON-LD 構造化データ: 検索結果でのリッチスニペット表示に利用 */}
-      {workspace && <ArticleJsonLd workspace={workspace} baseUrl={baseUrl} />}
+      {/* JSON-LD 構造化データ: isSearchable の場合のみ検索結果でのリッチスニペット表示に利用 */}
+      {workspace?.isSearchable && (
+        <ArticleJsonLd workspace={workspace} baseUrl={baseUrl} />
+      )}
 
-      {/* SEO 用の非表示テキスト: クローラーがコンテンツを読み取れるようにする */}
-      {workspace && (
+      {/* SEO 用の非表示テキスト: isSearchable の場合のみクローラーがコンテンツを読み取れるようにする */}
+      {workspace?.isSearchable && (
         <div className="sr-only" aria-hidden="false">
           <h1>{workspace.name}</h1>
           {workspace.user.name && <p>著者: {workspace.user.name}</p>}

@@ -389,6 +389,9 @@ model Workspace {
   // ストーリー（1対1）
   story     Story?
 
+  // 検索エンジンへの公開設定（trueの場合、サイトマップに含まれ、検索エンジンにインデックスされる）
+  isSearchable Boolean @default(false)
+
   // 作成・更新日時
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

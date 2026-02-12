@@ -953,9 +953,14 @@ export const workspaceRouter = createTRPCRouter({
   //   }),
 
   publish: protectedProcedure
-    .input(z.object({ workspaceId: z.string() }))
+    .input(
+      z.object({
+        workspaceId: z.string(),
+        isSearchable: z.boolean().optional().default(false),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
-      const { workspaceId } = input;
+      const { workspaceId, isSearchable } = input;
 
       // ワークスペースの存在確認とアクセス権限チェック
       const workspace = await ctx.db.workspace.findFirst({
@@ -973,11 +978,12 @@ export const workspaceRouter = createTRPCRouter({
         throw new Error("Workspace not found or access denied");
       }
 
-      // Workspace.statusをPUBLISHEDに更新
+      // Workspace.statusをPUBLISHEDに更新（検索エンジン公開設定も同時に保存）
       const updatedWorkspace = await ctx.db.workspace.update({
         where: { id: workspaceId },
         data: {
           status: WorkspaceStatus.PUBLISHED,
+          isSearchable,
         },
         include: {
           referencedTopicSpaces: {
@@ -998,6 +1004,40 @@ export const workspaceRouter = createTRPCRouter({
             select: PUBLIC_USER_SELECT,
           },
         },
+      });
+
+      return updatedWorkspace;
+    }),
+
+  updateSearchable: protectedProcedure
+    .input(
+      z.object({
+        workspaceId: z.string(),
+        isSearchable: z.boolean(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { workspaceId, isSearchable } = input;
+
+      // ワークスペースの存在確認とアクセス権限チェック
+      const workspace = await ctx.db.workspace.findFirst({
+        where: {
+          id: workspaceId,
+          isDeleted: false,
+          OR: [
+            { userId: ctx.session.user.id },
+            { collaborators: { some: { id: ctx.session.user.id } } },
+          ],
+        },
+      });
+
+      if (!workspace) {
+        throw new Error("Workspace not found or access denied");
+      }
+
+      const updatedWorkspace = await ctx.db.workspace.update({
+        where: { id: workspaceId },
+        data: { isSearchable },
       });
 
       return updatedWorkspace;
