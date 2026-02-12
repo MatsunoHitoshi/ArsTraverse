@@ -517,6 +517,31 @@ export const topicSpaceRouter = createTRPCRouter({
       return topicSpace;
     }),
 
+  update: protectedProcedure
+    .input(z.object({ id: z.string(), name: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const topicSpace = await ctx.db.topicSpace.findFirst({
+        where: {
+          id: input.id,
+          isDeleted: false,
+        },
+        include: {
+          admins: true,
+        },
+      });
+
+      if (
+        !topicSpace?.admins.some((admin) => admin.id === ctx.session.user.id)
+      ) {
+        throw new Error("TopicSpace not found");
+      }
+
+      return ctx.db.topicSpace.update({
+        where: { id: input.id },
+        data: { name: input.name },
+      });
+    }),
+
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {

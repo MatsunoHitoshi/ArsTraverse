@@ -6,7 +6,8 @@ import type { TopicSpaceResponse } from "@/app/const/types";
 import { TopicSpaceList } from "../list/topic-space-list";
 import { useState } from "react";
 import { TopicSpaceCreateModal } from "./topic-space-create-modal";
-import { TrashIcon } from "../icons";
+import { TopicSpaceRenameModal } from "./topic-space-rename-modal";
+import { TrashIcon, Pencil2Icon } from "../icons";
 import { DeleteRecordModal } from "../modal/delete-record-modal";
 
 export const TopicSpaces = () => {
@@ -17,6 +18,9 @@ export const TopicSpaces = () => {
     useState<boolean>(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState<boolean>(false);
   const [deleteIntentId, setDeleteIntentId] = useState<string>();
+  const [renameModalOpen, setRenameModalOpen] = useState<boolean>(false);
+  const [renameIntentTopicSpace, setRenameIntentTopicSpace] =
+    useState<TopicSpaceResponse | null>(null);
 
   if (!session) return null;
   return (
@@ -33,7 +37,27 @@ export const TopicSpaces = () => {
                     <div className="flex min-w-[150px] flex-col">
                       <button
                         className="w-full px-2 py-1 hover:bg-slate-50/10"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setRenameIntentTopicSpace(topicSpace);
+                          setRenameModalOpen(true);
+                        }}
+                      >
+                        <div className="flex flex-row items-center gap-1">
+                          <div className="h-4 w-4">
+                            <Pencil2Icon
+                              width={16}
+                              height={16}
+                              color="white"
+                            />
+                          </div>
+                          <div>名称変更</div>
+                        </div>
+                      </button>
+                      <button
+                        className="w-full px-2 py-1 hover:bg-slate-50/10"
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setDeleteIntentId(topicSpace.id);
                           setDeleteModalOpen(true);
                         }}
@@ -60,6 +84,13 @@ export const TopicSpaces = () => {
           setIsOpen={setTopicSpaceCreateModalOpen}
         />
       )}
+
+      <TopicSpaceRenameModal
+        isOpen={renameModalOpen}
+        setIsOpen={setRenameModalOpen}
+        topicSpace={renameIntentTopicSpace ?? null}
+        onSuccess={() => refetch()}
+      />
 
       {deleteIntentId && (
         <DeleteRecordModal
