@@ -89,6 +89,8 @@ export const SnapshotStoryboard = ({
     removeFromNarrative: (communityId: string) => void;
     moveNarrativeItem: (fromIndex: number, toIndex: number) => void;
     regenerateTransitions: () => void;
+    /** 並べ替え終了時に現在の順序でトランジションのみ再生成する */
+    regenerateTransitionsOnly?: () => void;
   };
   isRegeneratingTransitions?: boolean;
   currentContent?: JSONContent | null;
@@ -781,7 +783,12 @@ export const SnapshotStoryboard = ({
             <>
               <Button
                 size="small"
-                onClick={() => setIsEditMode(!isEditMode)}
+                onClick={() => {
+                  if (isEditMode) {
+                    narrativeActions.regenerateTransitionsOnly?.();
+                  }
+                  setIsEditMode(!isEditMode);
+                }}
                 className={`flex items-center gap-2 ${isEditMode ? "bg-blue-600 hover:bg-blue-700" : "bg-slate-700 hover:bg-slate-600"}`}
               >
                 <ListNumberIcon width={14} height={14} />

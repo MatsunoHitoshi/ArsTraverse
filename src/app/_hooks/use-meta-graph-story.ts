@@ -89,14 +89,7 @@ export function useMetaGraphStory(
   const generateCommunityStory = api.kg.generateCommunityStory.useMutation();
   const regenerateNarrativeFlow = api.kg.regenerateNarrativeFlow.useMutation();
 
-  // 構造変更時の自動トランジション再生成用: debounce と重複防止
-  const autoRegenerateDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
-  const pendingSnapshotRef = useRef<MetaGraphStoryData | null>(null);
   const isRegeneratingTransitionsRef = useRef(false);
-
-  const AUTO_REGENERATE_DEBOUNCE_MS = 400;
 
   // トランジションのみ再生成（本文は触らない）。snapshot の order で API を呼び、narrativeFlow だけ更新する。
   const runAutoRegenerateTransitionsOnly = useCallback(
@@ -147,32 +140,6 @@ export function useMetaGraphStory(
     },
     [workspace, regenerateNarrativeFlow],
   );
-
-  // 構造変更後に呼ぶ。debounce してからトランジションのみ再生成する。
-  const scheduleAutoRegenerateTransitions = useCallback(
-    (snapshot: MetaGraphStoryData) => {
-      pendingSnapshotRef.current = snapshot;
-
-      if (autoRegenerateDebounceRef.current != null) {
-        clearTimeout(autoRegenerateDebounceRef.current);
-      }
-
-      autoRegenerateDebounceRef.current = setTimeout(() => {
-        autoRegenerateDebounceRef.current = null;
-        const target = pendingSnapshotRef.current;
-        if (target) runAutoRegenerateTransitionsOnly(target);
-      }, AUTO_REGENERATE_DEBOUNCE_MS);
-    },
-    [runAutoRegenerateTransitionsOnly],
-  );
-
-  useEffect(() => {
-    return () => {
-      if (autoRegenerateDebounceRef.current != null) {
-        clearTimeout(autoRegenerateDebounceRef.current);
-      }
-    };
-  }, []);
 
   // 保存済みStoryデータを取得
   const { data: savedStoryData, isLoading: isLoadingStory } =
@@ -465,11 +432,10 @@ export function useMetaGraphStory(
             },
           ],
         };
-        scheduleAutoRegenerateTransitions(next);
         return next;
       });
     },
-    [scheduleAutoRegenerateTransitions],
+    [],
   );
 
   // ストーリーからコミュニティを削除
@@ -481,11 +447,10 @@ export function useMetaGraphStory(
           .filter((n) => n.communityId !== communityId)
           .map((n, idx) => ({ ...n, order: idx + 1 })); // 順序を再割り当て
         const next = { ...prev, narrativeFlow: newFlow };
-        scheduleAutoRegenerateTransitions(next);
         return next;
       });
     },
-    [scheduleAutoRegenerateTransitions],
+    [],
   );
 
   // ストーリーの順序を入れ替え
@@ -507,12 +472,18 @@ export function useMetaGraphStory(
         }));
 
         const next = { ...prev, narrativeFlow: reorderedFlow };
-        scheduleAutoRegenerateTransitions(next);
         return next;
       });
     },
-    [scheduleAutoRegenerateTransitions],
+    [],
   );
+
+  // 並べ替え終了時など、現在の順序でトランジションのみ再生成（本文は触らない）
+  const regenerateTransitionsOnly = useCallback(() => {
+    if (metaGraphData && workspace) {
+      runAutoRegenerateTransitionsOnly(metaGraphData);
+    }
+  }, [metaGraphData, workspace, runAutoRegenerateTransitionsOnly]);
 
   // トランジションテキストを再生成
   const regenerateTransitions = useCallback(() => {
@@ -694,6 +665,7 @@ export function useMetaGraphStory(
       removeFromNarrative,
       moveNarrativeItem,
       regenerateTransitions,
+      regenerateTransitionsOnly,
     },
   };
 }
