@@ -24,6 +24,8 @@ import { getNodeByIdForFrontend } from "@/app/_utils/kg/filter";
 import { D3ZoomProvider } from "../zoom";
 
 const NODE_RADIUS = 3;
+/** 探索モードでズームしすぎたときの表示用ノード半径の下限（ビュー座標・px） */
+const MIN_DISPLAY_NODE_RADIUS = 3;
 const LINK_DISTANCE = 80;
 /** フォーカスが1点のとき scale が暴れないよう cap する */
 const MAX_VIEW_SCALE = 3;
@@ -71,6 +73,13 @@ function easeOutCubic(t: number): number {
 /** 最初と最後をゆるく、中間を速く（カメラ遷移用） */
 function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+}
+
+/** 同一ノード対のエッジをグループ化するキー（ソース・ターゲットの順序を正規化） */
+function getNodePairKey(link: CustomLinkType): string {
+  const a = (link.source as CustomNodeType).id;
+  const b = (link.target as CustomNodeType).id;
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
 
 export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
@@ -1035,6 +1044,44 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     [links, communityMap],
   );
 
+  /** 同一ノード対ごとのエッジグループ（代表ラベル＋クリック展開用） */
+  const linksByNodePair = useMemo(() => {
+    const map = new Map<string, CustomLinkType[]>();
+    linksToRender.forEach((link) => {
+      const key = getNodePairKey(link);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(link);
+    });
+    return map;
+  }, [linksToRender]);
+
+  /** クリックでラベルを垂直展開したノード対キー（null で閉じる） */
+  const [expandedEdgePairKey, setExpandedEdgePairKey] = useState<string | null>(
+    null,
+  );
+
+  /** 冒頭の全体グラフ表示時のエッジ描画アニメーション進捗（0→1）。showFullGraph 時に再生 */
+  const [overviewEdgeProgress, setOverviewEdgeProgress] = useState(0);
+  useEffect(() => {
+    if (!showFullGraph) {
+      setOverviewEdgeProgress(0);
+      return;
+    }
+    const durationMs = FOCUS_TRANSITION_MS;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const elapsed = now - start;
+      const t = Math.min(1, elapsed / durationMs);
+      setOverviewEdgeProgress(easeOutCubic(t));
+      if (t < 1) rafIdRef.current = requestAnimationFrame(tick);
+    };
+    const rafIdRef = { current: 0 };
+    rafIdRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+    };
+  }, [showFullGraph]);
+
   /** ストーリーに含まれるコミュニティID（order が付いているもの） */
   const storyCommunityIdSet = useMemo(
     () =>
@@ -1276,6 +1323,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
           })}
         </>
       )}
+      {/* 1. エッジのパスをすべて先に描画 */}
       {linksToRender.map((link, i) => {
         const source = link.source as CustomNodeType;
         const target = link.target as CustomNodeType;
@@ -1292,23 +1340,14 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         const key = getEdgeCompositeKeyFromLink(link);
         const pathD = `M ${sx} ${sy} L ${tx} ${ty}`;
         const isFocusEdge = focusEdgeIdSet.has(key);
-        const dx = tx - sx;
-        const dy = ty - sy;
-        const len = Math.sqrt(dx * dx + dy * dy) || 1;
-        /** エッジの垂直上方向（画面で上＝マイナスY）に8pxずらす */
-        const labelOffsetPx = 5;
-        const perpX = (dy / len) * labelOffsetPx;
-        const perpY = (-dx / len) * labelOffsetPx;
-        let angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-        if (angle > 90) angle -= 180;
-        else if (angle < -90) angle += 180;
-        const labelX = (sx + tx) / 2 + perpX;
-        const labelY = (sy + ty) / 2 + perpY;
-        const labelTransform = `rotate(${angle}, ${labelX}, ${labelY})`;
-
         const edgeProgress = fadeProgress < 1 ? fadeProgress : effectiveProgress;
-        /** 探索モード時はスケールやアニメーションに依存せず常に完全表示 */
-        const effectiveEdgeProgress = freeExploreMode ? 1 : edgeProgress;
+        /** 冒頭の全体グラフ表示時は overviewEdgeProgress でエッジを描くアニメーションを再生 */
+        const effectiveEdgeProgress =
+          freeExploreMode
+            ? 1
+            : showFullGraph && isFocusEdge
+              ? overviewEdgeProgress
+              : edgeProgress;
 
         if (hasExplicitEdges && isFocusEdge) {
           const focusStrokeOpacity =
@@ -1332,7 +1371,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
           const useFlowGrad =
             shouldRunSteadyAnim && edgeFlowStops != null;
           return (
-            <g key={`${key}-${i}`}>
+            <g key={`path-${key}-${i}`}>
               {useFlowGrad ? (
                 <path
                   d={pathD}
@@ -1353,20 +1392,6 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
                   strokeOpacity={focusStrokeOpacity}
                   strokeWidth={edgeStrokeWidthFocus}
                 />
-              )}
-              {link.type && showEdgeLabels && (
-                <text
-                  x={labelX}
-                  y={labelY}
-                  textAnchor="middle"
-                  fill="#94a3b8"
-                  fontSize={getEdgeLabelFontSize(true)}
-                  className="pointer-events-none"
-                  transform={labelTransform}
-                  opacity={Math.max(0, Math.min(1, effectiveEdgeProgress * 2 - 0.5))}
-                >
-                  {link.type}
-                </text>
               )}
             </g>
           );
@@ -1398,7 +1423,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
               })()
               : baseEdgeOpacity;
         return (
-          <g key={`${key}-${i}`}>
+          <g key={`path-${key}-${i}`}>
             <path
               d={pathD}
               fill="none"
@@ -1406,21 +1431,162 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
               strokeWidth={edgeStrokeWidthNormal}
               strokeOpacity={edgeOpacity}
             />
-            {link.type && showEdgeLabels && (
+          </g>
+        );
+      })}
+      {/* 2. ラベルをパスの前面に描画（ノード対ごとに1つだけ） */}
+      {Array.from(linksByNodePair.entries()).map(([pairKey, linksInPair]) => {
+        const link = linksInPair[0];
+        if (!link) return null;
+        const source = link.source as CustomNodeType;
+        const target = link.target as CustomNodeType;
+        if (
+          source.x == null ||
+          source.y == null ||
+          target.x == null ||
+          target.y == null
+        ) {
+          return null;
+        }
+        const pairCount = linksInPair.length;
+        const typesInPair = linksInPair.map((l) => l.type ?? "").filter(Boolean);
+        if (!showEdgeLabels || typesInPair.length === 0) {
+          return null;
+        }
+
+        const [sx, sy] = toView(source.x, source.y);
+        const [tx, ty] = toView(target.x, target.y);
+        const isFocusEdge = linksInPair.some((l) =>
+          focusEdgeIdSet.has(getEdgeCompositeKeyFromLink(l)),
+        );
+        const dx = tx - sx;
+        const dy = ty - sy;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        /** ラベルをエッジにかぶらないよう法線方向に十分離す（フォーカス時はフォントが大きいので多めに） */
+        const labelOffsetPx = hasExplicitEdges && isFocusEdge ? 8 : 4;
+        const rawAngleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
+        /** 90°超〜270°以下では法線を反転し、ラベルをエッジの反対側に置く */
+        const perpSign =
+          rawAngleDeg > 90 && rawAngleDeg <= 270 ? -1 : 1;
+        /** 90°〜180°では回転したテキストがまだ被りやすいため、この範囲だけオフセットを追加 */
+        const is90To180 = rawAngleDeg > -180 && rawAngleDeg <= -90;
+        const extraOffsetPx = is90To180 ? (hasExplicitEdges && isFocusEdge ? 8 : 4) : 0;
+        const effectiveOffsetPx = labelOffsetPx + extraOffsetPx;
+        const perpX = (dy / len) * effectiveOffsetPx * perpSign;
+        const perpY = (-dx / len) * effectiveOffsetPx * perpSign;
+        let angle = rawAngleDeg;
+        if (angle > 90) angle -= 180;
+        else if (angle < -90) angle += 180;
+        const labelX = (sx + tx) / 2 + perpX;
+        const labelY = (sy + ty) / 2 + perpY;
+        const labelTransform = `rotate(${angle}, ${labelX}, ${labelY})`;
+        const effectiveEdgeProgress = freeExploreMode ? 1 : (fadeProgress < 1 ? fadeProgress : effectiveProgress);
+
+        const handleLabelClick =
+          pairCount > 1
+            ? (e: React.MouseEvent) => {
+                e.stopPropagation();
+                setExpandedEdgePairKey((prev) =>
+                  prev === pairKey ? null : pairKey,
+                );
+              }
+            : undefined;
+
+        if (hasExplicitEdges && isFocusEdge) {
+          return (
+            <g key={`label-${pairKey}`}>
               <text
                 x={labelX}
                 y={labelY}
                 textAnchor="middle"
                 fill="#94a3b8"
                 fontSize={getEdgeLabelFontSize(false)}
-                className="pointer-events-none"
+                className={
+                  pairCount > 1 ? "cursor-pointer" : "pointer-events-none"
+                }
                 transform={labelTransform}
-                style={{ opacity: edgeOpacity }}
-                opacity={effectiveEdgeProgress}
+                opacity={Math.max(0, Math.min(1, effectiveEdgeProgress * 2 - 0.5))}
+                onClick={handleLabelClick}
               >
-                {link.type}
+                {expandedEdgePairKey === pairKey && pairCount > 1 ? (
+                  typesInPair.map((t, j) => (
+                    <tspan
+                      key={`${t}-${j}`}
+                      x={labelX}
+                      y={labelY}
+                      dy={j === 0 ? 0 : "1.2em"}
+                    >
+                      {t}
+                    </tspan>
+                  ))
+                ) : pairCount > 1 ? (
+                  `${typesInPair[0]} …`
+                ) : (
+                  typesInPair[0]
+                )}
               </text>
-            )}
+            </g>
+          );
+        }
+        const sourceNode = link.source as CustomNodeType;
+        const targetNode = link.target as CustomNodeType;
+        const isNeighborEdge =
+          neighborNodeIdSet.has(sourceNode.id) ||
+          neighborNodeIdSet.has(targetNode.id);
+        const baseEdgeOpacity = isNeighborEdge
+          ? NEIGHBOR_EDGE_OPACITY
+          : DIM_EDGE_OPACITY;
+        const edgeOpacity =
+          freeExploreMode
+            ? FOCUS_EDGE_OPACITY
+            : showFullGraph
+              ? (() => {
+                const layoutDx = target.x - source.x;
+                const layoutDy = target.y - source.y;
+                const distance = Math.sqrt(
+                  layoutDx * layoutDx + layoutDy * layoutDy,
+                );
+                const normalizedDistance =
+                  linkDistanceRange.distanceRange > 0
+                    ? (distance - linkDistanceRange.minDistance) /
+                    linkDistanceRange.distanceRange
+                    : 0;
+                return 0.6 - normalizedDistance * 0.59;
+              })()
+              : baseEdgeOpacity;
+        return (
+          <g key={`label-${pairKey}`}>
+            <text
+              x={labelX}
+              y={labelY}
+              textAnchor="middle"
+              fill="#646368"
+              fontSize={8}
+              className={
+                pairCount > 1 ? "cursor-pointer" : "pointer-events-none"
+              }
+              transform={labelTransform}
+              style={{ opacity: edgeOpacity }}
+              opacity={effectiveEdgeProgress}
+              onClick={handleLabelClick}
+            >
+              {expandedEdgePairKey === pairKey && pairCount > 1 ? (
+                typesInPair.map((t, j) => (
+                  <tspan
+                    key={`${t}-${j}`}
+                    x={labelX}
+                    y={labelY}
+                    dy={j === 0 ? 0 : "1.2em"}
+                  >
+                    {t}
+                  </tspan>
+                ))
+              ) : pairCount > 1 ? (
+                `${typesInPair[0]} …`
+              ) : (
+                typesInPair[0]
+              )}
+            </text>
           </g>
         );
       })}
@@ -1429,7 +1595,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         const isFocusNode = focusNodeIdSet.has(node.id);
         const [vx, vy] = toView(node.x, node.y);
         const opacity = getNodeOpacity(node);
-        const r = getNodeRadius(node) * (0.8 / Math.max(1, scaleForSize));
+        const baseR = getNodeRadius(node) * (0.8 / Math.max(1, scaleForSize));
         const pulseScale = focusNodeIdSet.has(node.id)
           ? nodePulseScale
           : 1;
@@ -1437,6 +1603,13 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         const showImage =
           imageUrl &&
           !failedImageNodeIds.has(node.id);
+        /** 画像が入っているノードは通常の2倍の大きさで表示 */
+        const rRaw = imageUrl ? baseR * 2.5 : baseR;
+        /** 探索モードでズームイン時のみ下限を適用（引きの俯瞰時はノードを適切に小さく表示する） */
+        const r =
+          freeExploreMode && scaleForSize > 1
+            ? Math.max(MIN_DISPLAY_NODE_RADIUS, rRaw)
+            : rRaw;
 
         return (
           <g
@@ -1485,7 +1658,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
                   r={r}
                   fill="#e2e8f0"
                   stroke="#94a3b8"
-                  strokeWidth={nodeStrokeWidth}
+                  strokeWidth={nodeStrokeWidth / 2}
                 />
               )}
               {getNodeLabelFontSize(isFocusNode) > 0 && (
@@ -1494,7 +1667,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
                   textAnchor="middle"
                   fill="#e2e8f0"
                   fontSize={getNodeLabelFontSize(isFocusNode)}
-                  fontWeight={forRecording ? "bold" : "normal"}
+                  fontWeight={focusNodeIdSet.has(node.id) ? "bold" : "normal"}
                   className="pointer-events-none select-none"
                 >
                   {node.name}

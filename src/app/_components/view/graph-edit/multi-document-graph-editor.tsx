@@ -125,7 +125,7 @@ export const MultiDocumentGraphEditor = ({
         dataJson: localGraphDocument,
       },
       {
-        onSuccess: (res) => {
+        onSuccess: () => {
           void refetch();
           resetGraphUpdated();
           setIsEditor(false);
@@ -154,6 +154,13 @@ export const MultiDocumentGraphEditor = ({
                 refetch={refetch}
                 isClustered={isClustered}
                 nodeSearchQuery={nodeSearchQuery}
+                onEditNode={(node) => {
+                  setFocusedNode(node);
+                  setIsNodePropertyEditModalOpen(true);
+                }}
+                isGraphUpdated={isGraphUpdated}
+                onGraphUpdate={onRecordUpdate}
+                isGraphUpdatePending={updateGraph.isPending}
               />
             )}
           </div>
@@ -228,7 +235,7 @@ export const MultiDocumentGraphEditor = ({
 
                     <div className="absolute mt-12 flex flex-col items-start gap-2">
                       <div className="flex flex-row items-center gap-2">
-                        <div className="text-sm">編集モード</div>
+                        <div className="text-sm">直接編集</div>
                         <Switch
                           checked={isEditor}
                           onChange={setIsEditor}
@@ -251,34 +258,35 @@ export const MultiDocumentGraphEditor = ({
                 }
               />
 
-              {isEditor && (
-                <>
-                  <NodePropertyEditModal
-                    isOpen={isNodePropertyEditModalOpen}
-                    setIsOpen={setIsNodePropertyEditModalOpen}
-                    graphDocument={localGraphDocument}
-                    setGraphDocument={setLocalGraphDocument}
-                    graphNode={focusedNode}
-                  />
-                  <LinkPropertyEditModal
-                    isOpen={isLinkPropertyEditModalOpen}
-                    setIsOpen={setIsLinkPropertyEditModalOpen}
-                    graphDocument={localGraphDocument}
-                    setGraphDocument={setLocalGraphDocument}
-                    graphLink={focusedLink}
-                  />
-                  <NodeLinkEditModal
-                    isOpen={isNodeLinkAttachModalOpen}
-                    setIsOpen={setIsNodeLinkAttachModalOpen}
-                    graphDocument={localGraphDocument}
-                    setGraphDocument={setLocalGraphDocument}
-                    additionalGraph={additionalGraph}
-                    setAdditionalGraph={setAdditionalGraph}
-                  />
-                </>
-              )}
             </>
           )}
+        </>
+      )}
+      {/* リスト表示時は isEditor が false でもモーダルを出せるようにする（直接編集スイッチはグラフ表示時のみのため） */}
+      {(isEditor || isList) && localGraphDocument && (
+        <>
+          <NodePropertyEditModal
+            isOpen={isNodePropertyEditModalOpen}
+            setIsOpen={setIsNodePropertyEditModalOpen}
+            graphDocument={localGraphDocument}
+            setGraphDocument={setLocalGraphDocument}
+            graphNode={focusedNode}
+          />
+          <LinkPropertyEditModal
+            isOpen={isLinkPropertyEditModalOpen}
+            setIsOpen={setIsLinkPropertyEditModalOpen}
+            graphDocument={localGraphDocument}
+            setGraphDocument={setLocalGraphDocument}
+            graphLink={focusedLink}
+          />
+          <NodeLinkEditModal
+            isOpen={isNodeLinkAttachModalOpen}
+            setIsOpen={setIsNodeLinkAttachModalOpen}
+            graphDocument={localGraphDocument}
+            setGraphDocument={setLocalGraphDocument}
+            additionalGraph={additionalGraph}
+            setAdditionalGraph={setAdditionalGraph}
+          />
         </>
       )}
     </>

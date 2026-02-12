@@ -5,6 +5,7 @@ import {
   ChevronRightIcon,
   TriangleRightIcon,
   ClipboardIcon,
+  Pencil2Icon,
 } from "../../icons";
 import type { CustomLinkType, CustomNodeType } from "@/app/const/types";
 import {
@@ -371,11 +372,14 @@ export const PropertiesSummaryPanel = ({
   contextId,
   contextType,
   withDetail = false,
+  onEditNode,
 }: {
   node: CustomNodeType;
   contextId: string;
   contextType: "topicSpace" | "document";
   withDetail?: boolean;
+  /** リストからノード編集モーダルを開く場合に指定（「詳細」と同様のボタンで編集を開く） */
+  onEditNode?: (node: CustomNodeType) => void;
 }) => {
   const router = useRouter();
   const pathname = usePathname();
@@ -393,6 +397,24 @@ export const PropertiesSummaryPanel = ({
           >
             詳細
           </Button>
+        )}
+        {onEditNode && (
+          <button
+            type="button"
+            className="rounded-md bg-slate-700 px-2 py-1.5 text-sm text-slate-50 hover:bg-slate-600 focus:outline-none focus:ring-1 focus:ring-white/50"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onEditNode(node);
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onEditNode(node);
+            }}
+          >
+            <Pencil2Icon width={16} height={16} color="white" />
+          </button>
         )}
       </div>
 
@@ -460,9 +482,9 @@ export const PropertiesDetailPanel = ({
               </a>
             ) : (
               <>
-                  {key == "tag" && contextType === "topicSpace" ? (
-                    <a
-                      href={`/topic-spaces/${contextId}/tags/${value}?cut-off=2`}
+                {key == "tag" && contextType === "topicSpace" ? (
+                  <a
+                    href={`/topic-spaces/${contextId}/tags/${value}?cut-off=2`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="underline hover:no-underline"

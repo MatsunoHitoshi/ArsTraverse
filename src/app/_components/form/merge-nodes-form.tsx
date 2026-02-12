@@ -3,6 +3,7 @@ import { Button } from "../button/button";
 import type { CustomNodeType } from "@/app/const/types";
 import { Modal } from "../modal/modal";
 import { PropertiesSummaryPanel } from "../d3/force/graph-info-panel";
+import { useState } from "react";
 
 export const MergeNodesForm = ({
   isOpen,
@@ -23,9 +24,12 @@ export const MergeNodesForm = ({
   refetch: () => void;
   setIsNodeMergeMode: React.Dispatch<React.SetStateAction<boolean>>;
 }) => {
+
+  const [isMerging, setIsMerging] = useState(false);
   const mergeGraphNodes = api.topicSpaces.mergeGraphNodes.useMutation();
 
   const submitMergeNodes = () => {
+    setIsMerging(true);
     mergeGraphNodes.mutate(
       {
         nodes: mergeNodes,
@@ -37,9 +41,11 @@ export const MergeNodesForm = ({
           setMergeNodes(undefined);
           setIsNodeMergeMode(false);
           refetch();
+          setIsMerging(false);
         },
         onError: (error) => {
           console.error(error);
+          setIsMerging(false);
         },
       },
     );
@@ -104,6 +110,8 @@ export const MergeNodesForm = ({
             type="button"
             className="text-sm"
             onClick={() => submitMergeNodes()}
+            isLoading={isMerging}
+            disabled={isMerging}
           >
             統合する
           </Button>

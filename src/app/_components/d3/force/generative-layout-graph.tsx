@@ -56,6 +56,8 @@ const GenerativeGraphNode = memo(function GenerativeGraphNode({
   storyOrder?: number;
   isEditMode?: boolean;
 }) {
+  const [imageFailed, setImageFailed] = useState(false);
+
   // 座標が未定義またはNaNの場合は描画しない
   if (
     node.x === undefined ||
@@ -80,6 +82,14 @@ const GenerativeGraphNode = memo(function GenerativeGraphNode({
   // MetaNode用のグラデーションID（各ノードで一意）
   const gradientId = isMetaNode ? `metaNodeGradient-${node.id}` : undefined;
 
+  // 通常ノードで画像がある場合は円を大きくして画像を表示
+  const imageUrl = !isMetaNode
+    ? (node.properties?.imageUrl as string | undefined)
+    : undefined;
+  const showImage =
+    !!imageUrl && !imageFailed;
+  const r = showImage ? baseRadius * 1.25 : baseRadius;
+
   return (
     <g
       key={node.id}
@@ -95,13 +105,40 @@ const GenerativeGraphNode = memo(function GenerativeGraphNode({
         onClick?.(node);
       }}
     >
-      <circle
-        r={baseRadius}
-        fill={isMetaNode && gradientId ? `url(#${gradientId})` : fillColor}
-        opacity={isMetaNode ? 1 : 0.9} // グラデーションを使う場合はopacityは1にする
-        stroke={isMetaNode ? undefined : strokeColor} // グラデーションの場合はストロークなし
-        strokeWidth={isMetaNode ? 0 : queryFiltered ? 2.5 : 0} // グラデーションの場合はストロークなし
-      />
+      {showImage ? (
+        <>
+          <defs>
+            <clipPath id={`gen-node-image-clip-${node.id}`}>
+              <circle r={r} />
+            </clipPath>
+          </defs>
+          <g clipPath={`url(#gen-node-image-clip-${node.id})`}>
+            <image
+              x={-r}
+              y={-r}
+              width={r * 2}
+              height={r * 2}
+              href={imageUrl}
+              preserveAspectRatio="xMidYMid slice"
+              onError={() => setImageFailed(true)}
+            />
+          </g>
+          <circle
+            r={r}
+            fill="none"
+            stroke={fillColor}
+            strokeWidth={queryFiltered ? 2.5 : 1}
+          />
+        </>
+      ) : (
+        <circle
+          r={r}
+          fill={isMetaNode && gradientId ? `url(#${gradientId})` : fillColor}
+          opacity={isMetaNode ? 1 : 0.9}
+          stroke={isMetaNode ? undefined : strokeColor}
+          strokeWidth={isMetaNode ? 0 : queryFiltered ? 2.5 : 0}
+        />
+      )}
       {currentScale > 0.7 && (
         <text
           y={-10}
@@ -171,6 +208,9 @@ export const GenerativeLayoutGraph = ({
   metaNodeData,
   focusedCommunityId,
   focusedSegmentRef = null,
+  segmentSelectionEdit = null,
+  onSegmentNodeToggle,
+  onSegmentEdgeToggle,
   communityMap,
   originalGraphDocument,
   expandZoomThreshold = 0.35,
@@ -196,6 +236,15 @@ export const GenerativeLayoutGraph = ({
   }>;
   focusedCommunityId?: string | null;
   focusedSegmentRef?: FocusedSegmentRef | null; // 段落クリック時の局所ハイライト
+  /** セグメントのノード・エッジを手動選択中（クリックでトグル） */
+  segmentSelectionEdit?: {
+    communityId: string;
+    paragraphIndex: number;
+    nodeIds: string[];
+    edgeIds: string[];
+  } | null;
+  onSegmentNodeToggle?: (nodeId: string) => void;
+  onSegmentEdgeToggle?: (edgeKey: string) => void;
   communityMap?: Record<string, string>; // nodeId -> communityId
   originalGraphDocument?: GraphDocumentForFrontend; // 元のグラフデータ
   expandZoomThreshold?: number; // 展開するズームレベル
@@ -204,6 +253,14 @@ export const GenerativeLayoutGraph = ({
   layoutOrientation?: "vertical" | "horizontal"; // レイアウト方向
   isEditMode?: boolean; // ストーリー編集モード
 }) => {
+  // ハイライト用: 手動選択中は segmentSelectionEdit、それ以外は focusedSegmentRef
+  const segmentHighlightNodeIds =
+    segmentSelectionEdit?.nodeIds ?? focusedSegmentRef?.nodeIds ?? [];
+  const segmentHighlightEdgeIds =
+    segmentSelectionEdit?.edgeIds ?? focusedSegmentRef?.edgeIds ?? [];
+  const isSegmentHighlightActive =
+    segmentSelectionEdit != null || focusedSegmentRef != null;
+
   const svgRef = useRef<SVGSVGElement>(null);
   const [currentScale, setCurrentScale] = useState<number>(1);
   const [currentTransformX, setCurrentTransformX] = useState<number>(0);
@@ -1068,7 +1125,7 @@ export const GenerativeLayoutGraph = ({
     ? 1.0
     : calculateOpacity(currentScale);
   const detailedGraphOpacity =
-    focusedSegmentRef != null
+    isSegmentHighlightActive
       ? Math.max(rawDetailedOpacity, 0.85)
       : rawDetailedOpacity;
   // メタグラフの透明度は詳細グラフと逆相関（詳細が見える時はメタグラフを透明に）
@@ -1078,20 +1135,22 @@ export const GenerativeLayoutGraph = ({
 
   // メタグラフON時: セグメントフォーカス時に該当コミュニティへズームして詳細を見せる
   const segmentFocusZoomScale = 0.55;
+  const segmentFocusCommunityId =
+    focusedSegmentRef?.communityId ?? segmentSelectionEdit?.communityId;
   useEffect(() => {
     if (
       viewMode !== "meta" ||
-      !focusedSegmentRef?.communityId ||
+      !segmentFocusCommunityId ||
       !communityCenters.size
     ) {
       return;
     }
-    const center = communityCenters.get(focusedSegmentRef.communityId);
+    const center = communityCenters.get(segmentFocusCommunityId);
     if (!center) return;
     setCurrentScale(segmentFocusZoomScale);
     setCurrentTransformX(width / 2 - center.x * segmentFocusZoomScale);
     setCurrentTransformY(height / 2 - center.y * segmentFocusZoomScale);
-  }, [viewMode, focusedSegmentRef?.communityId, communityCenters, width, height]);
+  }, [viewMode, segmentFocusCommunityId, communityCenters, width, height]);
 
   // シミュレーション再実行ハンドラー
   const handleRerunSimulation = () => {
@@ -1295,16 +1354,30 @@ export const GenerativeLayoutGraph = ({
                       // セグメントフォーカス時: 該当エッジを黄色でハイライト、それ以外は暗くする
                       const edgeKey = getEdgeCompositeKeyFromLink(link);
                       const isSegmentEdge =
-                        focusedSegmentRef?.edgeIds?.includes(edgeKey) ?? false;
+                        segmentHighlightEdgeIds.includes(edgeKey);
                       const linkStroke = isSegmentEdge ? "#fbbf24" : "#60a5fa";
                       const linkStrokeWidth = isSegmentEdge ? 2.5 : 1.5;
                       const effectiveOpacity =
-                        focusedSegmentRef && !isSegmentEdge
+                        isSegmentHighlightActive && !isSegmentEdge
                           ? opacity * 0.35
                           : opacity;
+                      const isEdgeClickable =
+                        !!segmentSelectionEdit && !!onSegmentEdgeToggle;
 
                       return (
-                        <g key={`detailed-${i}`}>
+                        <g
+                          key={`detailed-${i}`}
+                          onClick={
+                            isEdgeClickable
+                              ? () => onSegmentEdgeToggle(edgeKey)
+                              : undefined
+                          }
+                          style={
+                            isEdgeClickable
+                              ? { cursor: "pointer" }
+                              : undefined
+                          }
+                        >
                           <line
                             x1={source.x}
                             y1={source.y}
@@ -1477,12 +1550,26 @@ export const GenerativeLayoutGraph = ({
                   // 詳細ビューでもセグメントフォーカス時は該当エッジをハイライト
                   const edgeKey = getEdgeCompositeKeyFromLink(link);
                   const isSegmentEdge =
-                    focusedSegmentRef?.edgeIds?.includes(edgeKey) ?? false;
+                    segmentHighlightEdgeIds.includes(edgeKey);
                   const stroke = isSegmentEdge ? "#fbbf24" : "#999";
                   const strokeWidth = isSegmentEdge ? 2.5 : 1;
+                  const isEdgeClickableNormal =
+                    !!segmentSelectionEdit && !!onSegmentEdgeToggle;
 
                   return (
-                    <g key={`normal-${i}`}>
+                    <g
+                      key={`normal-${i}`}
+                      onClick={
+                        isEdgeClickableNormal
+                          ? () => onSegmentEdgeToggle(edgeKey)
+                          : undefined
+                      }
+                      style={
+                        isEdgeClickableNormal
+                          ? { cursor: "pointer" }
+                          : undefined
+                      }
+                    >
                       <line
                         x1={source.x}
                         y1={source.y}
@@ -1571,7 +1658,7 @@ export const GenerativeLayoutGraph = ({
                     // ノードの色をコミュニティの状態に基づいて決定
                     let nodeColor: string | undefined = undefined;
                     // セグメントフォーカス時: 該当ノード（nodeIds）を黄色（communityMap に無くてもハイライト）
-                    if (focusedSegmentRef?.nodeIds?.includes(node.id)) {
+                    if (segmentHighlightNodeIds.includes(node.id)) {
                       nodeColor = "#fbbf24";
                     } else if (nodeCommunityId) {
                       // コミュニティ全体フォーカス時: フォーカス中のコミュニティに属するノードは黄色
@@ -1602,10 +1689,17 @@ export const GenerativeLayoutGraph = ({
 
                     // セグメントフォーカス時: 該当ノード以外は暗くしてハイライトを強調
                     const isSegmentFocusedNode =
-                      focusedSegmentRef?.nodeIds?.includes(node.id) ?? false;
+                      segmentHighlightNodeIds.includes(node.id);
 
                     const nodeWrapperOpacity =
-                      focusedSegmentRef && !isSegmentFocusedNode ? 0.4 : 1;
+                      isSegmentHighlightActive && !isSegmentFocusedNode
+                        ? 0.4
+                        : 1;
+
+                    const handleNodeClick =
+                      segmentSelectionEdit && onSegmentNodeToggle
+                        ? () => onSegmentNodeToggle(node.id)
+                        : onNodeClick;
 
                     return (
                       <g
@@ -1616,7 +1710,7 @@ export const GenerativeLayoutGraph = ({
                         <GenerativeGraphNode
                           node={node}
                           currentScale={currentScale}
-                          onClick={onNodeClick}
+                          onClick={handleNodeClick}
                           queryFiltered={queryFiltered}
                           nodeColor={nodeColor}
                           isMetaNode={false}
@@ -1716,17 +1810,22 @@ export const GenerativeLayoutGraph = ({
                 // メタグラフ OFF 時のみここが使われる。ON のときは「詳細グラフのノード」側でハイライト
                 if (
                   !nodeColor &&
-                  focusedSegmentRef?.nodeIds?.includes(node.id)
+                  segmentHighlightNodeIds.includes(node.id)
                 ) {
                   nodeColor = "#fbbf24";
                 }
+
+                const handleNormalNodeClick =
+                  segmentSelectionEdit && onSegmentNodeToggle
+                    ? () => onSegmentNodeToggle(node.id)
+                    : onNodeClick;
 
                 return (
                   <GenerativeGraphNode
                     key={node.id}
                     node={node}
                     currentScale={currentScale}
-                    onClick={onNodeClick}
+                    onClick={handleNormalNodeClick}
                     queryFiltered={queryFiltered}
                     nodeColor={nodeColor}
                     isMetaNode={false}

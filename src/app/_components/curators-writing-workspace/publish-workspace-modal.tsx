@@ -1,10 +1,25 @@
 import { useState, useEffect } from "react";
 import { Modal } from "../modal/modal";
 import { Button } from "../button/button";
+import { LinkButton } from "../button/link-button";
 import { api } from "@/trpc/react";
 import { WorkspaceStatus } from "@prisma/client";
-import { Link2Icon } from "../icons";
+import { Link2Icon, PaperRollIcon } from "../icons";
 import Link from "next/link";
+
+const PrintOutputButton: React.FC<{ workspaceId: string }> = ({
+  workspaceId,
+}) => (
+  <LinkButton
+    target="_blank"
+    size="small"
+    href={`/workspaces/${workspaceId}/print-preview`}
+    className="inline-flex w-max items-center gap-2 text-sm text-slate-400 hover:text-slate-300"
+  >
+    <PaperRollIcon width={14} height={14} />
+    <span>印刷出力</span>
+  </LinkButton>
+);
 
 interface PublishWorkspaceModalProps {
   isOpen: boolean;
@@ -12,6 +27,8 @@ interface PublishWorkspaceModalProps {
   workspaceId: string;
   workspaceStatus: WorkspaceStatus;
   workspaceName: string;
+  /** ストーリーが生成されている場合のみ出力ボタンを表示する */
+  hasStories?: boolean;
   onSuccess?: () => void;
 }
 
@@ -21,6 +38,7 @@ export const PublishWorkspaceModal: React.FC<PublishWorkspaceModalProps> = ({
   workspaceId,
   workspaceStatus,
   workspaceName,
+  hasStories = false,
   onSuccess,
 }) => {
   const [isPublished, setIsPublished] = useState(false);
@@ -114,6 +132,12 @@ export const PublishWorkspaceModal: React.FC<PublishWorkspaceModalProps> = ({
                 </p>
               </div>
             )}
+
+            {hasStories && (
+              <div className="pt-2">
+                <PrintOutputButton workspaceId={workspaceId} />
+              </div>
+            )}
           </div>
 
           <div className="flex flex-row justify-end gap-2">
@@ -161,6 +185,12 @@ export const PublishWorkspaceModal: React.FC<PublishWorkspaceModalProps> = ({
               </div>
             )}
 
+            {hasStories && (
+              <div className="pt-2">
+                <PrintOutputButton workspaceId={workspaceId} />
+              </div>
+            )}
+
             <div className="flex flex-row justify-end gap-2">
               <Button
                 type="button"
@@ -196,9 +226,15 @@ export const PublishWorkspaceModal: React.FC<PublishWorkspaceModalProps> = ({
                   {workspaceName}
                 </Link>
               </div>
+
+              {hasStories && (
+                <div className="pt-2">
+                  <PrintOutputButton workspaceId={workspaceId} />
+                </div>
+              )}
             </div>
 
-            <div className="flex flex-row justify-end">
+            <div className="flex flex-row justify-end gap-2">
               <Button type="button" onClick={handleClose}>
                 閉じる
               </Button>
@@ -212,6 +248,12 @@ export const PublishWorkspaceModal: React.FC<PublishWorkspaceModalProps> = ({
                 {publishWorkspace.error?.message ?? "不明なエラー"}
               </p>
             </div>
+
+            {hasStories && (
+              <div className="pt-2">
+                <PrintOutputButton workspaceId={workspaceId} />
+              </div>
+            )}
 
             <div className="flex flex-row justify-end gap-2">
               <Button

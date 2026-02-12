@@ -39,6 +39,15 @@ interface GraphViewContainerProps {
   }>;
   focusedCommunityId?: string | null;
   focusedSegmentRef?: FocusedSegmentRef | null;
+  /** セグメントのノード・エッジを手動選択中（クリックでトグル） */
+  segmentSelectionEdit?: {
+    communityId: string;
+    paragraphIndex: number;
+    nodeIds: string[];
+    edgeIds: string[];
+  } | null;
+  onSegmentNodeToggle?: (nodeId: string) => void;
+  onSegmentEdgeToggle?: (edgeKey: string) => void;
   graphSize: { width: number; height: number };
   svgRef: React.RefObject<SVGSVGElement>;
   currentScale: number;
@@ -87,6 +96,9 @@ export const GraphViewContainer = ({
   narrativeFlow,
   focusedCommunityId,
   focusedSegmentRef = null,
+  segmentSelectionEdit = null,
+  onSegmentNodeToggle,
+  onSegmentEdgeToggle,
   graphSize,
   svgRef,
   currentScale,
@@ -168,6 +180,9 @@ export const GraphViewContainer = ({
         })}
         focusedCommunityId={focusedCommunityId}
         focusedSegmentRef={focusedSegmentRef}
+        segmentSelectionEdit={segmentSelectionEdit}
+        onSegmentNodeToggle={onSegmentNodeToggle}
+        onSegmentEdgeToggle={onSegmentEdgeToggle}
         communityMap={isMetaGraphMode ? metaGraphData?.communityMap : undefined}
         // 詳細グラフ（ノードレベル）のレイアウト計算用グラフ
         // - ストーリーモードでフィルタが適用されていれば storyFilteredGraph

@@ -1,6 +1,7 @@
 import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { Button } from "../../button/button";
 import { ChevronRightIcon, Pencil2Icon } from "../../icons";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { api } from "@/trpc/react";
 import { useEffect, useState } from "react";
@@ -93,11 +94,15 @@ export const NodePropertiesDetail = ({
 
           {node.properties?.imageUrl && (
             <div className="flex flex-col gap-1">
-              <img
-                src={node.properties.imageUrl}
-                alt={node.properties.imageAlt ?? node.name}
-                className="max-h-64 w-full max-w-md rounded object-contain bg-slate-800"
-              />
+              <div className="relative aspect-video max-h-64 w-full max-w-md overflow-hidden rounded bg-slate-800">
+                <Image
+                  src={node.properties.imageUrl}
+                  alt={node.properties.imageAlt ?? node.name}
+                  fill
+                  className="object-contain"
+                  sizes="(max-width: 448px) 100vw, 448px"
+                />
+              </div>
               {node.properties.imageCaption && (
                 <p className="text-sm text-slate-400">
                   {node.properties.imageCaption}
@@ -197,7 +202,7 @@ export const NodePropertiesDetail = ({
               newGraphDocument &&
               isGraphEditorMode && (
                 <AdditionalGraphViewer
-                  graphDocument={newGraphDocument}
+                  newGraphDocument={newGraphDocument}
                   setGraphDocument={setNewGraphDocument}
                   topicSpaceId={contextId}
                   refetch={refetch}

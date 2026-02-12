@@ -38,13 +38,12 @@ export const Toolbar = ({
         {!!setMagnifierMode && magnifierMode !== undefined && (
           <button
             onClick={() => setMagnifierMode((prev) => (prev + 1) % 3)}
-            className={`flex items-center rounded-lg p-2 backdrop-blur-sm ${
-              magnifierMode === 1
+            className={`flex items-center rounded-lg p-2 backdrop-blur-sm ${magnifierMode === 1
                 ? "bg-orange-500/40"
                 : magnifierMode === 2
                   ? "bg-orange-700/40"
                   : "bg-black/20"
-            }`}
+              }`}
           >
             <ZoomInIcon
               height={16}
@@ -55,7 +54,7 @@ export const Toolbar = ({
         )}
         {!!setIsEditing && (
           <div className="flex flex-row items-center gap-2">
-            <div className="text-sm">編集モード</div>
+            <div className="text-sm">直接編集</div>
             <div>
               <Switch
                 checked={isEditor}
