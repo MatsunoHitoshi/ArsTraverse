@@ -1,139 +1,154 @@
-"use client";
+import type { Metadata } from "next";
+import { db } from "@/server/db";
+import { WorkspaceStatus } from "@prisma/client";
+import { PUBLIC_USER_SELECT } from "@/server/lib/user-select";
+import { extractTextFromTiptap } from "@/app/_utils/text/extract-text-from-tiptap";
+import ArticlePageClient from "./article-page-client";
 
-import { useParams, useSearchParams } from "next/navigation";
-import { api } from "@/trpc/react";
-import { PublicArticleViewer } from "@/app/_components/article/public-article-viewer";
-import { ScrollStorytellingViewer } from "@/app/_components/article/scroll-storytelling-viewer";
-import { ScrollStorytellingViewerUnified } from "@/app/_components/article/scroll-storytelling-viewer-unified";
-import type { JSONContent } from "@tiptap/react";
-import { ArticleFooter } from "@/app/_components/article/article-footer";
-import { ProfileCard } from "@/app/_components/article/profile-card";
-
-export default function ArticlePage() {
-  const params = useParams();
-  const searchParams = useSearchParams();
-  const workspaceId = params.workspaceId as string;
-  /** デフォルトは unified。?graph=legacy で従来のグラフビューを表示 */
-  const useUnifiedGraph = searchParams.get("graph") !== "legacy";
-
-  const {
-    data: workspaceData,
-    isLoading,
-    error,
-  } = api.workspace.getPublishedWithStory.useQuery(
-    { id: workspaceId },
-    {
-      enabled: !!workspaceId,
+/** サーバーサイドでワークスペースの基本情報を取得（メタデータ用） */
+async function getWorkspaceForMeta(workspaceId: string) {
+  const workspace = await db.workspace.findFirst({
+    where: {
+      id: workspaceId,
+      status: WorkspaceStatus.PUBLISHED,
+      isDeleted: false,
     },
-  );
-
-  if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-900">
-        <div className="flex flex-col items-center text-center text-white">
-          <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600"></div>
-          <div>記事を読み込み中...</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-900">
-        <div className="text-center text-white">
-          <h1 className="mb-4 text-2xl font-bold">エラー</h1>
-          <p className="text-red-400">{error.message}</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!workspaceData) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-900">
-        <div className="text-center text-white">
-          <h1 className="mb-4 text-2xl font-bold">記事が見つかりません</h1>
-          <p className="text-gray-400">
-            指定された記事は存在しないか、公開されていません
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  const content = (workspaceData.content as JSONContent) ?? {
-    type: "doc",
-    content: [
-      {
-        type: "paragraph",
-        content: [
-          {
-            type: "text",
-            text: "",
-          },
-        ],
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      content: true,
+      createdAt: true,
+      updatedAt: true,
+      user: {
+        select: PUBLIC_USER_SELECT,
       },
-    ],
+      tags: {
+        select: { name: true },
+      },
+    },
+  });
+  return workspace;
+}
+
+/** 動的メタデータ生成 – 検索エンジンと SNS シェアに必要な情報を返す */
+export async function generateMetadata({
+  params,
+}: {
+  params: { workspaceId: string };
+}): Promise<Metadata> {
+  const workspace = await getWorkspaceForMeta(params.workspaceId);
+
+  if (!workspace) {
+    return {
+      title: "記事が見つかりません | ArsTraverse",
+      description: "指定された記事は存在しないか、公開されていません。",
+    };
+  }
+
+  const description =
+    workspace.description ??
+    (extractTextFromTiptap(workspace.content, 160) ||
+      `${workspace.name} – ArsTraverse で公開された記事`);
+
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://arstraverse.com";
+  const articleUrl = `${baseUrl}/articles/${workspace.id}`;
+
+  return {
+    title: `${workspace.name} | ArsTraverse`,
+    description,
+    openGraph: {
+      title: workspace.name,
+      description,
+      url: articleUrl,
+      siteName: "ArsTraverse",
+      type: "article",
+      publishedTime: workspace.createdAt.toISOString(),
+      modifiedTime: workspace.updatedAt.toISOString(),
+      authors: workspace.user.name ? [workspace.user.name] : undefined,
+      tags: workspace.tags.map((t) => t.name),
+    },
+    twitter: {
+      card: "summary",
+      title: workspace.name,
+      description,
+    },
+    alternates: {
+      canonical: articleUrl,
+    },
+  };
+}
+
+/** JSON-LD 構造化データ（Article スキーマ） */
+function ArticleJsonLd({
+  workspace,
+  baseUrl,
+}: {
+  workspace: NonNullable<Awaited<ReturnType<typeof getWorkspaceForMeta>>>;
+  baseUrl: string;
+}) {
+  const description =
+    workspace.description ??
+    (extractTextFromTiptap(workspace.content, 160) ||
+      `${workspace.name} – ArsTraverse で公開された記事`);
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: workspace.name,
+    description,
+    url: `${baseUrl}/articles/${workspace.id}`,
+    datePublished: workspace.createdAt.toISOString(),
+    dateModified: workspace.updatedAt.toISOString(),
+    author: {
+      "@type": "Person",
+      name: workspace.user.name ?? "Unknown",
+    },
+    publisher: {
+      "@type": "Organization",
+      name: "ArsTraverse",
+    },
+    keywords: workspace.tags.map((t) => t.name),
   };
 
-  const topicSpaceId = workspaceData.referencedTopicSpaces[0]?.id ?? "";
-  const metaGraphData = workspaceData.metaGraphData ?? null;
-  const useScrollStorytelling =
-    metaGraphData != null &&
-    Array.isArray(metaGraphData.narrativeFlow) &&
-    metaGraphData.narrativeFlow.length > 0;
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+    />
+  );
+}
 
-  if (!topicSpaceId && !useScrollStorytelling) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-900">
-        <div className="text-center text-white">
-          <h1 className="mb-4 text-2xl font-bold">エラー</h1>
-          <p className="text-gray-400">
-            この記事には参照されているリポジトリがありません
-          </p>
-        </div>
-      </div>
-    );
-  }
+export default async function ArticlePage({
+  params,
+}: {
+  params: { workspaceId: string };
+}) {
+  const workspace = await getWorkspaceForMeta(params.workspaceId);
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://arstraverse.com";
 
   return (
-    <main className="z-0 flex min-h-screen flex-col items-center justify-center bg-slate-900 pb-16 xl:pb-0">
-      <div className="flex w-full flex-col items-center justify-center pt-12">
-        <div className="flex flex-col gap-1 xl:flex-row">
+    <>
+      {/* JSON-LD 構造化データ: 検索結果でのリッチスニペット表示に利用 */}
+      {workspace && <ArticleJsonLd workspace={workspace} baseUrl={baseUrl} />}
 
-          {useScrollStorytelling && metaGraphData ? (
-            useUnifiedGraph ? (
-              <ScrollStorytellingViewerUnified
-                graphDocument={workspaceData.graphDocument}
-                metaGraphData={metaGraphData}
-                workspaceTitle={workspaceData.name}
-              />
-            ) : (
-              <ScrollStorytellingViewer
-                graphDocument={workspaceData.graphDocument}
-                metaGraphData={metaGraphData}
-              />
-            )
-          ) : (
-            <PublicArticleViewer
-              content={content}
-              graphDocument={workspaceData.graphDocument}
-              topicSpaceId={topicSpaceId}
-              workspaceName={workspaceData.name}
-              userName={workspaceData.user.name ?? ""}
-              userImage={workspaceData.user.image ?? ""}
-            />
+      {/* SEO 用の非表示テキスト: クローラーがコンテンツを読み取れるようにする */}
+      {workspace && (
+        <div className="sr-only" aria-hidden="false">
+          <h1>{workspace.name}</h1>
+          {workspace.user.name && <p>著者: {workspace.user.name}</p>}
+          {workspace.description && <p>{workspace.description}</p>}
+          {workspace.content && (
+            <p>{extractTextFromTiptap(workspace.content, 1000)}</p>
           )}
-          <div className="flex w-full flex-col gap-1 p-4 xl:hidden">
-            <ProfileCard userId={workspaceData.userId} />
-          </div>
+          {workspace.tags.length > 0 && (
+            <p>タグ: {workspace.tags.map((t) => t.name).join(", ")}</p>
+          )}
         </div>
+      )}
 
-        <div className="w-full text-white">
-          <ArticleFooter />
-        </div>
-      </div>
-    </main>
+      {/* インタラクティブなクライアントコンポーネント */}
+      <ArticlePageClient />
+    </>
   );
 }
