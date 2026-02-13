@@ -1582,7 +1582,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
                       key={`${t}-${j}`}
                       x={labelX}
                       y={labelY}
-                      dy={j === 0 ? 0 : "1.2em"}
+                      dy={j === 0 ? 0 : `${j * 1.2}em`}
                     >
                       {t}
                     </tspan>
@@ -1648,7 +1648,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
                     key={`${t}-${j}`}
                     x={labelX}
                     y={labelY}
-                    dy={j === 0 ? 0 : "1.2em"}
+                    dy={j === 0 ? 0 : `${j * 1.2}em`}
                   >
                     {t}
                   </tspan>

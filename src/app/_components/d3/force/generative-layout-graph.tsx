@@ -24,6 +24,13 @@ import { getNodeByIdForFrontend } from "@/app/_utils/kg/filter";
 import { Button } from "../../button/button";
 import { GraphIcon, ReloadIcon } from "../../icons";
 
+/** 同一ノード対のエッジをグループ化するキー（ソース・ターゲットの順序を正規化） */
+function getNodePairKey(link: CustomLinkType): string {
+  const a = (link.source as CustomNodeType).id;
+  const b = (link.target as CustomNodeType).id;
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
+
 // リンクがないノードを除外するフィルタ
 const linkFilter = (nodes: CustomNodeType[], links: CustomLinkType[]) => {
   const filteredNodes = nodes.filter((node) => {
@@ -279,6 +286,10 @@ export const GenerativeLayoutGraph = ({
     useState<boolean>(false);
   // 前回のmetaNodeDataのorder情報を保存（変更検知用）
   const prevMetaNodeDataOrderRef = useRef<string>("");
+  /** クリックでラベルを垂直展開したノード対キー（null で閉じる） */
+  const [expandedEdgePairKey, setExpandedEdgePairKey] = useState<string | null>(
+    null,
+  );
   // originalGraphDocument が変わったら詳細レイアウトを再計算するためリセット
   const prevOriginalGraphDocumentRef = useRef<GraphDocumentForFrontend | undefined>(originalGraphDocument);
   useEffect(() => {
@@ -1311,12 +1322,21 @@ export const GenerativeLayoutGraph = ({
                   linkDistances.length > 0 ? Math.max(...linkDistances) : 1;
                 const distanceRange = maxDistance - minDistance || 1;
 
+                /** 同一ノード対ごとのエッジグループ（代表ラベル＋クリック展開用） */
+                const linksByNodePair = new Map<string, CustomLinkType[]>();
+                linksToRender.forEach((link) => {
+                  const key = getNodePairKey(link);
+                  if (!linksByNodePair.has(key)) linksByNodePair.set(key, []);
+                  linksByNodePair.get(key)!.push(link);
+                });
+
                 return (
-                  <g
-                    className="detailed-graph-links"
-                    opacity={detailedGraphOpacity}
-                  >
-                    {linksToRender.map((link, i) => {
+                  <>
+                    <g
+                      className="detailed-graph-links"
+                      opacity={detailedGraphOpacity}
+                    >
+                      {linksToRender.map((link, i) => {
                       const source = link.source as CustomNodeType;
                       const target = link.target as CustomNodeType;
                       if (
@@ -1336,12 +1356,6 @@ export const GenerativeLayoutGraph = ({
                       const dx = target.x - source.x;
                       const dy = target.y - source.y;
                       const distance = Math.sqrt(dx * dx + dy * dy);
-
-                      // エッジの角度（テキスト配置用）
-                      const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-                      // ラベルをエッジ中点に配置
-                      const labelX = (source.x + target.x) / 2;
-                      const labelY = (source.y + target.y) / 2;
 
                       // 距離に応じて透明度を計算（距離が長いほど透明に）
                       // 最小距離: opacity 0.6, 最大距離: opacity 0.01
@@ -1413,23 +1427,102 @@ export const GenerativeLayoutGraph = ({
                               />
                             </line>
                           )}
-                          {link.type && currentScale > 1.4 && (
-                            <text
-                              x={labelX}
-                              y={labelY}
-                              textAnchor="middle"
-                              fill="#93b0c7"
-                              fontSize={5}
-                              className="pointer-events-none select-none"
-                              transform={`rotate(${angle}, ${labelX}, ${labelY})`}
-                            >
-                              {link.type}
-                            </text>
-                          )}
                         </g>
                       );
                     })}
-                  </g>
+                    </g>
+                    {/* エッジラベル（ノード対ごとに1つにまとめる） */}
+                    {currentScale > 1.4 && (
+                      <g
+                        className="detailed-graph-edge-labels"
+                        opacity={detailedGraphOpacity}
+                      >
+                        {Array.from(linksByNodePair.entries()).map(
+                          ([pairKey, linksInPair]) => {
+                            const link = linksInPair[0];
+                            if (!link) return null;
+                            const source = link.source as CustomNodeType;
+                            const target = link.target as CustomNodeType;
+                            if (
+                              source.x === undefined ||
+                              source.y === undefined ||
+                              target.x === undefined ||
+                              target.y === undefined ||
+                              isNaN(source.x) ||
+                              isNaN(source.y) ||
+                              isNaN(target.x) ||
+                              isNaN(target.y)
+                            ) {
+                              return null;
+                            }
+                            const typesInPair = linksInPair
+                              .map((l) => l.type ?? "")
+                              .filter(Boolean);
+                            if (typesInPair.length === 0) return null;
+
+                            const pairCount = linksInPair.length;
+                            const dx = target.x - source.x;
+                            const dy = target.y - source.y;
+                            const rawAngleDeg =
+                              (Math.atan2(dy, dx) * 180) / Math.PI;
+                            /** ラベルが反転（上下逆）にならないよう角度を -90°〜90° にクランプ */
+                            let angle = rawAngleDeg;
+                            if (angle > 90) angle -= 180;
+                            else if (angle < -90) angle += 180;
+                            const labelX = (source.x + target.x) / 2;
+                            const labelY = (source.y + target.y) / 2;
+                            const labelTransform = `rotate(${angle}, ${labelX}, ${labelY})`;
+
+                            const handleLabelClick =
+                              pairCount > 1
+                                ? (e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                    setExpandedEdgePairKey((prev) =>
+                                      prev === pairKey ? null : pairKey,
+                                    );
+                                  }
+                                : undefined;
+
+                            return (
+                              <text
+                                key={`label-${pairKey}`}
+                                x={labelX}
+                                y={labelY}
+                                textAnchor="middle"
+                                fill="#93b0c7"
+                                fontSize={5}
+                                className={
+                                  pairCount > 1
+                                    ? "cursor-pointer select-none"
+                                    : "pointer-events-none select-none"
+                                }
+                                transform={labelTransform}
+                                onClick={handleLabelClick}
+                              >
+                                {expandedEdgePairKey === pairKey &&
+                                pairCount > 1 ? (
+                                  typesInPair.map((t, j) => (
+                                    <tspan
+                                      key={`${t}-${j}`}
+                                      x={labelX}
+                                      y={labelY}
+                                      dy={j === 0 ? 0 : `${j * 1.2}em`}
+                                    >
+                                      {t}
+                                    </tspan>
+                                  ))
+                                ) : pairCount > 1 ? (
+                                  `${typesInPair[0]} …`
+                                ) : (
+                                  typesInPair[0]
+                                )}
+                              </text>
+                            );
+                          },
+                        )}
+                      </g>
+                    )}
+                  </>
                 );
               })()}
             {/* メタグラフのリンク（詳細グラフが見える時は透明に） */}
@@ -1518,7 +1611,21 @@ export const GenerativeLayoutGraph = ({
                   linkDistances.length > 0 ? Math.max(...linkDistances) : 1;
                 const distanceRange = maxDistance - minDistance || 1;
 
-                return graphLinks.map((link, i) => {
+                /** 同一ノード対ごとのエッジグループ（代表ラベル＋クリック展開用） */
+                const linksByNodePairNormal = new Map<
+                  string,
+                  CustomLinkType[]
+                >();
+                graphLinks.forEach((link) => {
+                  const key = getNodePairKey(link);
+                  if (!linksByNodePairNormal.has(key))
+                    linksByNodePairNormal.set(key, []);
+                  linksByNodePairNormal.get(key)!.push(link);
+                });
+
+                return (
+                  <g className="normal-graph-links-wrapper">
+                    {graphLinks.map((link, i) => {
                   const source = link.source as CustomNodeType;
                   const target = link.target as CustomNodeType;
                   if (
@@ -1607,7 +1714,97 @@ export const GenerativeLayoutGraph = ({
                       )}
                     </g>
                   );
-                });
+                })}
+                    {/* 通常モードのエッジラベル（ノード対ごとに1つにまとめる） */}
+                    {currentScale > 1.4 && (
+                      <g className="normal-graph-edge-labels">
+                        {Array.from(linksByNodePairNormal.entries()).map(
+                          ([pairKey, linksInPair]) => {
+                            const link = linksInPair[0];
+                            if (!link) return null;
+                            const source = link.source as CustomNodeType;
+                            const target = link.target as CustomNodeType;
+                            if (
+                              source.x === undefined ||
+                              source.y === undefined ||
+                              target.x === undefined ||
+                              target.y === undefined ||
+                              isNaN(source.x) ||
+                              isNaN(source.y) ||
+                              isNaN(target.x) ||
+                              isNaN(target.y)
+                            ) {
+                              return null;
+                            }
+                            const typesInPair = linksInPair
+                              .map((l) => l.type ?? "")
+                              .filter(Boolean);
+                            if (typesInPair.length === 0) return null;
+
+                            const pairCount = linksInPair.length;
+                            const dx = target.x - source.x;
+                            const dy = target.y - source.y;
+                            const rawAngleDeg =
+                              (Math.atan2(dy, dx) * 180) / Math.PI;
+                            /** ラベルが反転（上下逆）にならないよう角度を -90°〜90° にクランプ */
+                            let angle = rawAngleDeg;
+                            if (angle > 90) angle -= 180;
+                            else if (angle < -90) angle += 180;
+                            const labelX = (source.x + target.x) / 2;
+                            const labelY = (source.y + target.y) / 2;
+                            const labelTransform = `rotate(${angle}, ${labelX}, ${labelY})`;
+
+                            const handleLabelClick =
+                              pairCount > 1
+                                ? (e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                    setExpandedEdgePairKey((prev) =>
+                                      prev === pairKey ? null : pairKey,
+                                    );
+                                  }
+                                : undefined;
+
+                            return (
+                              <text
+                                key={`label-normal-${pairKey}`}
+                                x={labelX}
+                                y={labelY}
+                                textAnchor="middle"
+                                fill="#93b0c7"
+                                fontSize={5}
+                                className={
+                                  pairCount > 1
+                                    ? "cursor-pointer select-none"
+                                    : "pointer-events-none select-none"
+                                }
+                                transform={labelTransform}
+                                onClick={handleLabelClick}
+                              >
+                                {expandedEdgePairKey === pairKey &&
+                                pairCount > 1 ? (
+                                  typesInPair.map((t, j) => (
+                                    <tspan
+                                      key={`${t}-${j}`}
+                                      x={labelX}
+                                      y={labelY}
+                                      dy={j === 0 ? 0 : `${j * 1.2}em`}
+                                    >
+                                      {t}
+                                    </tspan>
+                                  ))
+                                ) : pairCount > 1 ? (
+                                  `${typesInPair[0]} …`
+                                ) : (
+                                  typesInPair[0]
+                                )}
+                              </text>
+                            );
+                          },
+                        )}
+                      </g>
+                    )}
+                  </g>
+                );
               })()}
           </g>
 
