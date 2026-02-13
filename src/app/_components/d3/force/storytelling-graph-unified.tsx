@@ -98,6 +98,10 @@ function getDirectionalKey(link: CustomLinkType): string {
   return `${src}|${tgt}`;
 }
 
+function isCustomNodeType(x: unknown): x is CustomNodeType {
+  return typeof x === "object" && x !== null && "id" in x && typeof (x as { id: unknown }).id === "string";
+}
+
 export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   graphDocument,
   focusNodeIds,
@@ -205,15 +209,27 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
 
   const initLinks = useMemo((): CustomLinkType[] => {
     if (!baseGraph?.relationships?.length || !initNodes.length) return [];
-    return baseGraph.relationships.map((rel) => {
-      const source = getNodeByIdForFrontend(rel.sourceId, initNodes);
-      const target = getNodeByIdForFrontend(rel.targetId, initNodes);
-      return {
-        ...rel,
-        source: source ?? initNodes[0],
-        target: target ?? initNodes[0],
-      };
-    }) as CustomLinkType[];
+    return baseGraph.relationships
+      .map((rel) => {
+        const source = getNodeByIdForFrontend(rel.sourceId, initNodes);
+        const target = getNodeByIdForFrontend(rel.targetId, initNodes);
+        if (!source || !target) {
+          console.warn("[StorytellingGraphUnified] initLinks: 存在しないノードへの参照を除外", {
+            linkId: rel.id,
+            sourceId: rel.sourceId,
+            targetId: rel.targetId,
+            missingSource: !source,
+            missingTarget: !target,
+          });
+          return null;
+        }
+        return {
+          ...rel,
+          source,
+          target,
+        };
+      })
+      .filter((link): link is NonNullable<typeof link> => link != null) as CustomLinkType[];
   }, [baseGraph?.relationships, initNodes]);
 
   /** フォーカスノード＋フォーカスエッジの両端ノード（エッジのみ指定時も端点をハイライト） */
@@ -406,13 +422,33 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     })) as CustomNodeType[];
 
     // リンクの source/target を allNodes の参照に揃える（描画時に x,y が一致するように）
-    const allLinks = initLinks.map((link) => {
-      const src = link.source as CustomNodeType;
-      const tgt = link.target as CustomNodeType;
-      const sourceNode = allNodes.find((n) => n.id === src.id) ?? allNodes[0];
-      const targetNode = allNodes.find((n) => n.id === tgt.id) ?? allNodes[0];
-      return { ...link, source: sourceNode, target: targetNode } as CustomLinkType;
-    });
+    const allLinks = initLinks
+      .map((link) => {
+        const src = link.source;
+        const tgt = link.target;
+        if (!isCustomNodeType(src) || !isCustomNodeType(tgt)) {
+          console.warn("[StorytellingGraphUnified] allLinks: source/target が undefined", {
+            linkId: link.id,
+            sourceId: isCustomNodeType(src) ? src.id : "(undefined)",
+            targetId: isCustomNodeType(tgt) ? tgt.id : "(undefined)",
+          });
+          return null;
+        }
+        const sourceNode = allNodes.find((n) => n.id === src.id);
+        const targetNode = allNodes.find((n) => n.id === tgt.id);
+        if (!sourceNode || !targetNode) {
+          console.warn("[StorytellingGraphUnified] allLinks: 参照先ノードが存在しない", {
+            linkId: link.id,
+            sourceId: src.id,
+            targetId: tgt.id,
+            missingSourceNode: !sourceNode,
+            missingTargetNode: !targetNode,
+          });
+          return null;
+        }
+        return { ...link, source: sourceNode, target: targetNode };
+      })
+      .filter((link): link is NonNullable<typeof link> => link != null) as CustomLinkType[];
 
     if (useCommunityLayout && communityMap && narrativeFlow) {
       // コミュニティごとにY軸順・X軸ジグザク配置（print-generative-layout-graph の horizontal 相当）

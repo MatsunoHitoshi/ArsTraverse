@@ -88,15 +88,27 @@ export const StorytellingGraph = memo(function StorytellingGraph({
 
   const initLinks = useMemo((): CustomLinkType[] => {
     if (!subGraph?.relationships?.length || !initNodes.length) return [];
-    return subGraph.relationships.map((rel) => {
-      const source = getNodeByIdForFrontend(rel.sourceId, initNodes);
-      const target = getNodeByIdForFrontend(rel.targetId, initNodes);
-      return {
-        ...rel,
-        source: source ?? initNodes[0],
-        target: target ?? initNodes[0],
-      };
-    }) as CustomLinkType[];
+    return subGraph.relationships
+      .map((rel) => {
+        const source = getNodeByIdForFrontend(rel.sourceId, initNodes);
+        const target = getNodeByIdForFrontend(rel.targetId, initNodes);
+        if (!source || !target) {
+          console.warn("[StorytellingGraph] initLinks: 存在しないノードへの参照を除外", {
+            linkId: rel.id,
+            sourceId: rel.sourceId,
+            targetId: rel.targetId,
+            missingSource: !source,
+            missingTarget: !target,
+          });
+          return null;
+        }
+        return {
+          ...rel,
+          source,
+          target,
+        };
+      })
+      .filter((link): link is NonNullable<typeof link> => link != null) as CustomLinkType[];
   }, [subGraph?.relationships, initNodes]);
 
   const [nodes, setNodes] = useState<CustomNodeType[]>(initNodes);

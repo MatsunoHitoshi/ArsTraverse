@@ -334,22 +334,34 @@ export const GenerativeLayoutGraph = ({
     isLinkFiltered,
   ]);
 
-  const initLinks = useMemo(() => {
-    return displayGraph.relationships.map((l) => {
-      const source = getNodeByIdForFrontend(
-        l.sourceId,
-        initNodes,
-      ) as CustomNodeType;
-      const target = getNodeByIdForFrontend(
-        l.targetId,
-        initNodes,
-      ) as CustomNodeType;
-      return {
-        ...l,
-        source: source,
-        target: target,
-      };
-    }) as CustomLinkType[];
+  const initLinks = useMemo((): CustomLinkType[] => {
+    return displayGraph.relationships
+      .map((l) => {
+        const source = getNodeByIdForFrontend(
+          l.sourceId,
+          initNodes,
+        ) as CustomNodeType | undefined;
+        const target = getNodeByIdForFrontend(
+          l.targetId,
+          initNodes,
+        ) as CustomNodeType | undefined;
+        if (!source || !target) {
+          console.warn("[GenerativeLayoutGraph] initLinks: 存在しないノードへの参照を除外", {
+            linkId: l.id,
+            sourceId: l.sourceId,
+            targetId: l.targetId,
+            missingSource: !source,
+            missingTarget: !target,
+          });
+          return null;
+        }
+        return {
+          ...l,
+          source,
+          target,
+        };
+      })
+      .filter((link): link is NonNullable<typeof link> => link != null) as CustomLinkType[];
   }, [displayGraph.relationships, initNodes]);
 
   const [graphNodes, setGraphNodes] = useState<CustomNodeType[]>(initNodes);
@@ -723,15 +735,27 @@ export const GenerativeLayoutGraph = ({
       y: height / 2 + (Math.random() - 0.5) * 100,
     })) as CustomNodeType[];
 
-    const allLinks = originalGraphDocument.relationships.map((l) => {
-      const source = allNodes.find((n) => n.id === l.sourceId);
-      const target = allNodes.find((n) => n.id === l.targetId);
-      return {
-        ...l,
-        source: source,
-        target: target,
-      };
-    }) as CustomLinkType[];
+    const allLinks = originalGraphDocument.relationships
+      .map((l) => {
+        const source = allNodes.find((n) => n.id === l.sourceId);
+        const target = allNodes.find((n) => n.id === l.targetId);
+        if (!source || !target) {
+          console.warn("[GenerativeLayoutGraph] allLinks(詳細レイアウト): 存在しないノードへの参照を除外", {
+            linkId: l.id,
+            sourceId: l.sourceId,
+            targetId: l.targetId,
+            missingSource: !source,
+            missingTarget: !target,
+          });
+          return null;
+        }
+        return {
+          ...l,
+          source,
+          target,
+        };
+      })
+      .filter((link): link is NonNullable<typeof link> => link != null) as CustomLinkType[];
 
     // コミュニティごとにノードをグループ化
     const communityGroups = new Map<string, CustomNodeType[]>();
