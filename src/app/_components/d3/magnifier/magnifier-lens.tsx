@@ -127,6 +127,8 @@ export const MagnifierLens = ({
         const source = link.source as CustomNodeType;
         const target = link.target as CustomNodeType;
         if (
+          !source ||
+          !target ||
           source.x === undefined ||
           source.y === undefined ||
           target.x === undefined ||

@@ -1323,6 +1323,8 @@ export const GenerativeLayoutGraph = ({
                     const source = link.source as CustomNodeType;
                     const target = link.target as CustomNodeType;
                     if (
+                      !source ||
+                      !target ||
                       source.x === undefined ||
                       source.y === undefined ||
                       target.x === undefined ||
@@ -1349,6 +1351,7 @@ export const GenerativeLayoutGraph = ({
                 /** 同一ノード対ごとのエッジグループ（代表ラベル＋クリック展開用） */
                 const linksByNodePair = new Map<string, CustomLinkType[]>();
                 linksToRender.forEach((link) => {
+                  if (!link.source || !link.target) return;
                   const key = getNodePairKey(link);
                   if (!linksByNodePair.has(key)) linksByNodePair.set(key, []);
                   linksByNodePair.get(key)!.push(link);
@@ -1364,6 +1367,8 @@ export const GenerativeLayoutGraph = ({
                       const source = link.source as CustomNodeType;
                       const target = link.target as CustomNodeType;
                       if (
+                        !source ||
+                        !target ||
                         source.x === undefined ||
                         source.y === undefined ||
                         target.x === undefined ||
@@ -1468,6 +1473,8 @@ export const GenerativeLayoutGraph = ({
                             const source = link.source as CustomNodeType;
                             const target = link.target as CustomNodeType;
                             if (
+                              !source ||
+                              !target ||
                               source.x === undefined ||
                               source.y === undefined ||
                               target.x === undefined ||
@@ -1556,6 +1563,8 @@ export const GenerativeLayoutGraph = ({
                   const source = link.source as CustomNodeType;
                   const target = link.target as CustomNodeType;
                   if (
+                    !source ||
+                    !target ||
                     source.x === undefined ||
                     source.y === undefined ||
                     target.x === undefined ||
@@ -1612,6 +1621,8 @@ export const GenerativeLayoutGraph = ({
                     const source = link.source as CustomNodeType;
                     const target = link.target as CustomNodeType;
                     if (
+                      !source ||
+                      !target ||
                       source.x === undefined ||
                       source.y === undefined ||
                       target.x === undefined ||
@@ -1641,6 +1652,7 @@ export const GenerativeLayoutGraph = ({
                   CustomLinkType[]
                 >();
                 graphLinks.forEach((link) => {
+                  if (!link.source || !link.target) return;
                   const key = getNodePairKey(link);
                   if (!linksByNodePairNormal.has(key))
                     linksByNodePairNormal.set(key, []);
@@ -1653,6 +1665,8 @@ export const GenerativeLayoutGraph = ({
                   const source = link.source as CustomNodeType;
                   const target = link.target as CustomNodeType;
                   if (
+                    !source ||
+                    !target ||
                     source.x === undefined ||
                     source.y === undefined ||
                     target.x === undefined ||
@@ -1749,6 +1763,8 @@ export const GenerativeLayoutGraph = ({
                             const source = link.source as CustomNodeType;
                             const target = link.target as CustomNodeType;
                             if (
+                              !source ||
+                              !target ||
                               source.x === undefined ||
                               source.y === undefined ||
                               target.x === undefined ||

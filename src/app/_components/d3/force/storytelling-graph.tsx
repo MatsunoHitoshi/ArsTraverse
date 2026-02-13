@@ -234,6 +234,8 @@ export const StorytellingGraph = memo(function StorytellingGraph({
           const source = link.source as CustomNodeType;
           const target = link.target as CustomNodeType;
           if (
+            !source ||
+            !target ||
             source.x == null ||
             source.y == null ||
             target.x == null ||

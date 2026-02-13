@@ -1112,6 +1112,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   const linksByNodePair = useMemo(() => {
     const map = new Map<string, CustomLinkType[]>();
     linksToRender.forEach((link) => {
+      if (!link.source || !link.target) return;
       const key = getNodePairKey(link);
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(link);
@@ -1237,6 +1238,8 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         const src = link.source as CustomNodeType;
         const tgt = link.target as CustomNodeType;
         if (
+          !src ||
+          !tgt ||
           src.x == null ||
           src.y == null ||
           tgt.x == null ||
@@ -1330,6 +1333,8 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
               const src = link.source as CustomNodeType;
               const tgt = link.target as CustomNodeType;
               if (
+                !src ||
+                !tgt ||
                 src.x == null ||
                 src.y == null ||
                 tgt.x == null ||
@@ -1428,6 +1433,8 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         const source = link.source as CustomNodeType;
         const target = link.target as CustomNodeType;
         if (
+          !source ||
+          !target ||
           source.x == null ||
           source.y == null ||
           target.x == null ||
@@ -1545,6 +1552,8 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         const source = link.source as CustomNodeType;
         const target = link.target as CustomNodeType;
         if (
+          !source ||
+          !target ||
           source.x == null ||
           source.y == null ||
           target.x == null ||
