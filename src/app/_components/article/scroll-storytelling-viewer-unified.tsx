@@ -11,8 +11,16 @@ import {
   buildScrollStepsFromMetaGraphStoryData,
   type ScrollStep,
 } from "@/app/_utils/story-scroll-utils";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useWindowSize } from "@/app/_hooks/use-window-size";
-import { DownArrowIcon, ResetIcon, UpArrowIcon, ZoomInIcon } from "../icons/icons";
+import {
+  CheckIcon,
+  DownArrowIcon,
+  Link2Icon,
+  ResetIcon,
+  UpArrowIcon,
+  ZoomInIcon,
+} from "../icons/icons";
 import { getEdgeCompositeKeyFromLink } from "@/app/const/story-segment";
 import { StoryStepContent } from "./story-step-content";
 
@@ -43,7 +51,10 @@ export function ScrollStorytellingViewerUnified({
   metaGraphData,
   workspaceTitle,
 }: ScrollStorytellingViewerUnifiedProps) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [innerWidth] = useWindowSize();
+  const [copiedCommunityId, setCopiedCommunityId] = useState<string | null>(null);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [progressStepIndex, setProgressStepIndex] = useState(0);
   const [stepProgress, setStepProgress] = useState(0);
@@ -216,26 +227,53 @@ export function ScrollStorytellingViewerUnified({
   }, [isFreeExploreMode, graphIndex]);
 
   const goToFirstSegmentOfCommunity = useCallback(
-    (communityId: string) => {
+    (communityId: string, options?: { instant?: boolean }) => {
       const index = steps.findIndex(
         (s) => s.communityId === communityId && s.id !== "__overview__",
       );
+      console.log("[scroll-storytelling] goToFirstSegmentOfCommunity:", { communityId, index, communityIds: steps.map((s) => s.communityId) });
       if (index < 0) return;
-      // 1つ手前の要素にスクロールすると scroll-snap で先頭セグメントに収まる
-      const targetIndex = Math.max(0, index - 1);
+      const targetIndex = index;
       const selector = `[data-story-step-index="${targetIndex}"]`;
       setUseNormalHeightForScroll(true);
-      // 高さを通常にしたうえでレイアウトが更新されてからスクロールする（スナップ目標が正しく計算される）
+      const behavior = options?.instant ? ("instant" as const) : ("smooth" as const);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           const el = document.querySelector(selector);
-          el?.scrollIntoView({ behavior: "smooth", block: "start" });
+          console.log("[scroll-storytelling] scroll target:", { selector, found: !!el, el });
+          if (el) {
+            el.scrollIntoView({ behavior, block: "start" });
+            console.log("[scroll-storytelling] scrollIntoView called");
+          }
           window.setTimeout(() => setUseNormalHeightForScroll(false), 500);
         });
       });
     },
     [steps],
   );
+
+  /** ページロード時: ?community=xxx があればコミュニティラベルクリックと同様に先頭セグメントへスクロール */
+  const initialCommunityIdRef = useRef<string | null | undefined>(undefined);
+  const communityFromUrlRef = useRef<string | null>(null);
+  if (initialCommunityIdRef.current === undefined && typeof window !== "undefined") {
+    const p = new URLSearchParams(window.location.search);
+    initialCommunityIdRef.current = p.get("community") ?? p.get("section");
+    console.log("[scroll-storytelling] initialCommunityIdRef:", initialCommunityIdRef.current, "search:", window.location.search);
+  }
+  useEffect(() => {
+    const communityId = initialCommunityIdRef.current ?? searchParams.get("community") ?? searchParams.get("section");
+    console.log("[scroll-storytelling] useEffect run:", { communityId, stepsLength: steps.length, alreadyProcessed: communityFromUrlRef.current });
+    if (!communityId || !steps.length || communityFromUrlRef.current !== null) return;
+
+    const timer = setTimeout(() => {
+      communityFromUrlRef.current = communityId;
+      console.log("[scroll-storytelling] timer fired, calling goToFirstSegmentOfCommunity:", communityId);
+      goToFirstSegmentOfCommunity(communityId, { instant: true });
+    }, 1000);
+    return () => clearTimeout(timer);
+    // searchParams を依存に含めると effect が再実行されタイマーがキャンセルされるため意図的に除外
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [steps.length, goToFirstSegmentOfCommunity]);
 
   const scrollToTop = useCallback(() => {
     setUseNormalHeightForScroll(true);
@@ -261,6 +299,24 @@ export function ScrollStorytellingViewerUnified({
       });
     });
   }, [steps.length]);
+
+  const copySectionLink = useCallback(
+    (communityId: string) => {
+      if (typeof window === "undefined") return;
+      const base = `${window.location.origin}${pathname ?? ""}`;
+      const url =
+        communityId === ""
+          ? base
+          : `${base}${base.includes("?") ? "&" : "?"}community=${encodeURIComponent(communityId)}`;
+      void navigator.clipboard.writeText(url).then(
+        () => {
+          setCopiedCommunityId(communityId);
+          window.setTimeout(() => setCopiedCommunityId(null), 1500);
+        },
+      ).catch(() => undefined);
+    },
+    [pathname],
+  );
 
   if (steps.length === 0) {
     return (
@@ -389,9 +445,22 @@ export function ScrollStorytellingViewerUnified({
               <div className="relative min-w-0 flex-1 w-1/3">
                 {progressStep?.communityTitle != null && progressStep.communityTitle !== "" && (
                   <div
-                    className={`sticky top-72 z-10 w-full pb-2 pt-0 font-semibold text-white ${progressStep?.id === "__overview__" ? "text-4xl" : "text-xl"}`}
+                    className={`sticky top-72 z-10 flex w-full items-center gap-2 pb-2 pt-0 font-semibold text-white ${progressStep?.id === "__overview__" ? "text-4xl" : "text-xl"}`}
                   >
-                    {progressStep.communityTitle}
+                    <span className="min-w-0 flex-1">{progressStep.communityTitle}</span>
+                    <button
+                      type="button"
+                      onClick={() => copySectionLink(progressStep?.communityId ?? "")}
+                      className="flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded text-slate-400 transition-colors hover:text-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                      aria-label="セクション冒頭へのリンクをコピー"
+                      title="リンクをコピー"
+                    >
+                      {copiedCommunityId === (progressStep?.communityId ?? "") ? (
+                        <CheckIcon width={14} height={14} color="#22c55e" />
+                      ) : (
+                        <Link2Icon width={14} height={14} color="currentColor" />
+                      )}
+                    </button>
                   </div>
                 )}
                 {/* PC版: 本文が入ってくる・出ていく時のフェード用グラデーション（上下） */}
@@ -441,11 +510,26 @@ export function ScrollStorytellingViewerUnified({
                   <div
                     className={
                       progressStep?.id === "__overview__"
-                        ? "fixed bottom-24 left-4 right-4 z-10 font-semibold text-white text-3xl text-center"
-                        : "fixed -mt-20 z-10 pb-2 pt-0 font-semibold text-white text-lg"
+                        ? "fixed bottom-24 left-4 right-4 z-10 flex items-center justify-center gap-2 font-semibold text-white text-3xl"
+                        : "fixed -mt-20 z-10 flex items-center gap-2 pb-2 pt-0 font-semibold text-white text-lg"
                     }
                   >
-                    {progressStep.communityTitle}
+                    <span className={progressStep?.id === "__overview__" ? "" : "min-w-0 flex-1"}>
+                      {progressStep.communityTitle}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => copySectionLink(progressStep?.communityId ?? "")}
+                      className="flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded text-slate-400 transition-colors hover:text-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                      aria-label="セクション冒頭へのリンクをコピー"
+                      title="リンクをコピー"
+                    >
+                      {copiedCommunityId === (progressStep?.communityId ?? "") ? (
+                        <CheckIcon width={14} height={14} color="#22c55e" />
+                      ) : (
+                        <Link2Icon width={14} height={14} color="currentColor" />
+                      )}
+                    </button>
                   </div>
                 )}
                 {progressStep?.id === "__overview__" && (
