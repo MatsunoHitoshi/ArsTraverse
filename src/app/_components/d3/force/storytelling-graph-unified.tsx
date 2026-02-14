@@ -102,6 +102,28 @@ function isCustomNodeType(x: unknown): x is CustomNodeType {
   return typeof x === "object" && x !== null && "id" in x && typeof (x as { id: unknown }).id === "string";
 }
 
+/** スケールからノードラベルフォントサイズの基準値を推定（nodeLabelFontSizeBase と同等の logic） */
+function estimateNodeLabelFontSizeFromScale(scale: number, forRecording: boolean): number {
+  if (forRecording) return Math.max(6, scale) * 0.7;
+  const base =
+    scale > 4 ? 3 : scale > 3 ? 4 : scale > 2 ? 5 : scale > 1.5 ? 6 : scale > 1 ? 7 : scale > 0.9 ? 8 : 9;
+  return base * 1.5;
+}
+
+/** ラベルがノードからはみ出す量をレイアウト座標で推定（ビューpx を scale で割って layout 座標に） */
+function estimateLabelMarginLayout(
+  scale: number,
+  fontSize: number,
+  textLength: number,
+): { halfWidth: number; heightAbove: number } {
+  const halfWidthView = (textLength * fontSize) / 1.5;
+  const heightAboveView = 10 + fontSize;
+  return {
+    halfWidth: halfWidthView / scale,
+    heightAbove: heightAboveView / scale,
+  };
+}
+
 export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   graphDocument,
   focusNodeIds,
@@ -797,14 +819,43 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     if (minX === Infinity) return { scale: 0.75, centerX: 0, centerY: 0 };
     const paddingX = isPc ? forRecording ? 128 : 64 : 32;
     const paddingY = 128; // 上下のみ 128
-    const rangeX = maxX - minX || 1;
-    const rangeY = maxY - minY || 1;
-    const rawScale = Math.min(
+    let rangeX = maxX - minX || 1;
+    let rangeY = maxY - minY || 1;
+    let rawScale = Math.min(
       (width - 2 * paddingX) / rangeX,
       (height - 2 * paddingY) / rangeY,
     );
     const maxScale = forRecording ? 8 : MAX_VIEW_SCALE;
-    const scale = Math.min(rawScale, maxScale);
+    let scale = Math.min(rawScale, maxScale);
+
+    // ラベルを画面内に収めるため、フォーカスノードのラベル範囲で bounds を拡張（2パスでスケールと相互依存を解消）
+    const focusNodesWithLabel = nodes.filter(
+      (n) => focusIds.has(n.id) && n.x != null && n.y != null && typeof n.name === "string" && n.name.length > 0,
+    );
+    if (focusNodesWithLabel.length > 0 && scale > 0.7) {
+      const fontSizeBase = estimateNodeLabelFontSizeFromScale(scale, forRecording) * (isPc ? 1 : 0.75);
+      const fontSize = fontSizeBase * 2; // フォーカス時は2倍になるため保守的に
+      let marginX = 0;
+      let marginY = 0;
+      for (const n of focusNodesWithLabel) {
+        const name = n.name ?? "";
+        const { halfWidth, heightAbove } = estimateLabelMarginLayout(scale, fontSize, name.length);
+        marginX = Math.max(marginX, halfWidth);
+        marginY = Math.max(marginY, heightAbove);
+      }
+      minX -= marginX;
+      maxX += marginX;
+      minY -= marginY;
+      maxY += marginY;
+      rangeX = maxX - minX || 1;
+      rangeY = maxY - minY || 1;
+      rawScale = Math.min(
+        (width - 2 * paddingX) / rangeX,
+        (height - 2 * paddingY) / rangeY,
+      );
+      scale = Math.min(rawScale, maxScale);
+    }
+
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
     return { scale, centerX, centerY };
@@ -886,7 +937,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   /** ノードラベルを表示する閾値（generative-layout-graph と同様、引きで表示する時は非表示。自由探索時はズームに応じて表示） */
   const showNodeLabels = effectiveScaleForLabels > 0.7;
   /** ノードラベルフォントサイズの基準値。録画時はスケールに比例（係数と下限で引きのサイズを確保）、通常時は graph.tsx に倣い小刻みに */
-  const nodeLabelFontSizeBase = forRecording
+  const nodeLabelFontSizeBaseRaw = forRecording
     ? Math.max(6, effectiveScaleForLabels) * 0.7
     : (effectiveScaleForLabels > 4
       ? 3
@@ -901,6 +952,8 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
               : effectiveScaleForLabels > 0.9
                 ? 8
                 : 9) * 1.5;
+  /** SP版ではノードラベルをPC版の3/4サイズにする */
+  const nodeLabelFontSizeBase = nodeLabelFontSizeBaseRaw * (isPc ? 1 : 0.75);
   const getNodeLabelFontSize = useCallback(
     (isFocusNode: boolean) =>
       showNodeLabels
