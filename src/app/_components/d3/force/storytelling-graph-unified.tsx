@@ -110,6 +110,12 @@ function estimateNodeLabelFontSizeFromScale(scale: number, forRecording: boolean
   return base * 1.5;
 }
 
+/** エッジラベルがエッジ長の80%を超えないフォントサイズの上限を算出（文字幅 ≈ fontSize * 0.6） */
+function getMaxEdgeLabelFontSizeByLength(edgeLengthPx: number, textLength: number): number {
+  if (edgeLengthPx <= 0 || textLength <= 0) return 999;
+  return (edgeLengthPx * 0.8) / (Math.max(1, textLength) * 0.6);
+}
+
 /** ラベルがノードからはみ出す量をレイアウト座標で推定（ビューpx を scale で割って layout 座標に） */
 function estimateLabelMarginLayout(
   scale: number,
@@ -934,24 +940,35 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     },
     [scaleForSize],
   );
-  /** ノードラベルを表示する閾値（generative-layout-graph と同様、引きで表示する時は非表示。自由探索時はズームに応じて表示） */
-  const showNodeLabels = effectiveScaleForLabels > 0.7;
-  /** ノードラベルフォントサイズの基準値。録画時はスケールに比例（係数と下限で引きのサイズを確保）、通常時は graph.tsx に倣い小刻みに */
+  /** ノードラベルを表示する閾値。スクロール表示時は常に表示、探索モード・冒頭グラフ時はズームに応じて表示 */
+  const showNodeLabels =
+    freeExploreMode || showFullGraph ? effectiveScaleForLabels > 0.7 : true;
+  /** ノードラベルフォントサイズの基準値。録画時はスケールに比例、通常時は段階的に。引きのときはスケールに比例して縮小し他ノードとの被りを防ぐ */
   const nodeLabelFontSizeBaseRaw = forRecording
     ? Math.max(6, effectiveScaleForLabels) * 0.7
-    : (effectiveScaleForLabels > 4
-      ? 3
-      : effectiveScaleForLabels > 3
-        ? 4
-        : effectiveScaleForLabels > 2
-          ? 5
-          : effectiveScaleForLabels > 1.5
-            ? 6
-            : effectiveScaleForLabels > 1
-              ? 7
-              : effectiveScaleForLabels > 0.9
-                ? 8
-                : 9) * 1.5;
+    : (() => {
+      const stepped =
+        effectiveScaleForLabels > 4
+          ? 3
+          : effectiveScaleForLabels > 3
+            ? 4
+            : effectiveScaleForLabels > 2
+              ? 5
+              : effectiveScaleForLabels > 1.5
+                ? 6
+                : effectiveScaleForLabels > 1
+                  ? 7
+                  : effectiveScaleForLabels > 0.9
+                    ? 8
+                    : 9;
+      const base = stepped * 1.5;
+      /** 引きのとき（scale < 1）はスケールに比例して縮小し、ラベル同士の被りを防ぐ。最低 0.4 で極端に小さくならないように */
+      const zoomOutFactor =
+        effectiveScaleForLabels < 1
+          ? Math.max(0.4, effectiveScaleForLabels)
+          : 1;
+      return base * zoomOutFactor;
+    })();
   /** SP版ではノードラベルをPC版の3/4サイズにする */
   const nodeLabelFontSizeBase = nodeLabelFontSizeBaseRaw * (isPc ? 1 : 0.75);
   const getNodeLabelFontSize = useCallback(
@@ -962,23 +979,27 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         : 0,
     [showNodeLabels, nodeLabelFontSizeBase, forRecording],
   );
-  /** エッジラベルを表示する閾値（generative では currentScale > 1.4） */
-  const showEdgeLabels = effectiveScaleForLabels > 1.4;
-  /** スケールに応じたエッジラベルのフォントサイズ基準値（graph.tsx に倣いスケールで小刻みに） */
-  const edgeLabelFontSizeBase =
+  /** エッジラベルを表示する閾値。スクロール表示時は常に表示、探索モード・冒頭グラフ時はズームに応じて表示 */
+  const showEdgeLabels =
+    freeExploreMode || showFullGraph ? effectiveScaleForLabels > 1.4 : true;
+  /** スケールに応じたエッジラベルのフォントサイズ基準値。引きのときはノードラベル同様スケールに比例して縮小 */
+  const edgeLabelFontSizeBaseRaw =
     effectiveScaleForLabels > 4
-      ? 5
+      ? 4
       : effectiveScaleForLabels > 3
-        ? 6
+        ? 5
         : effectiveScaleForLabels > 2
-          ? 7
+          ? 6
           : effectiveScaleForLabels > 1.5
-            ? 8
+            ? 7
             : effectiveScaleForLabels > 1
-              ? 9
+              ? 7
               : effectiveScaleForLabels > 0.9
-                ? 10
-                : 12;
+                ? 7
+                : 7;
+  const edgeLabelZoomOutFactor =
+    effectiveScaleForLabels < 1 ? Math.max(0.4, effectiveScaleForLabels) : 1;
+  const edgeLabelFontSizeBase = edgeLabelFontSizeBaseRaw * edgeLabelZoomOutFactor;
   /** エッジラベルフォントサイズ（getNodeLabelFontSize と同様にフォーカス有無で倍率を切り替え） */
   const getEdgeLabelFontSize = useCallback(
     (isFocusEdge: boolean) =>
@@ -1616,15 +1637,19 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         }
         const pairCount = linksInPair.length;
         const typesInPair = linksInPair.map((l) => l.type ?? "").filter(Boolean);
-        if (!showEdgeLabels || typesInPair.length === 0) {
+        const isFocusEdge = linksInPair.some((l) =>
+          focusEdgeIdSet.has(getEdgeCompositeKeyFromLink(l)),
+        );
+        /** 探索時でないときはフォーカスエッジのラベルをScaleによらず常に表示 */
+        const showThisEdgeLabel =
+          typesInPair.length > 0 &&
+          (showEdgeLabels || (isFocusEdge && !freeExploreMode));
+        if (!showThisEdgeLabel) {
           return null;
         }
 
         const [sx, sy] = toView(source.x, source.y);
         const [tx, ty] = toView(target.x, target.y);
-        const isFocusEdge = linksInPair.some((l) =>
-          focusEdgeIdSet.has(getEdgeCompositeKeyFromLink(l)),
-        );
         const dx = tx - sx;
         const dy = ty - sy;
         const len = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -1647,6 +1672,19 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         const labelY = (sy + ty) / 2 + perpY;
         const labelTransform = `rotate(${angle}, ${labelX}, ${labelY})`;
         const effectiveEdgeProgress = freeExploreMode ? 1 : (fadeProgress < 1 ? fadeProgress : effectiveProgress);
+        /** スクロール時・引きのときはエッジ長を超えないようフォントサイズ上限を動的計算 */
+        const labelTextLength =
+          expandedEdgePairKey === pairKey && pairCount > 1
+            ? Math.max(...typesInPair.map((t) => t.length))
+            : pairCount > 1
+              ? (typesInPair[0]?.length ?? 0) + 3
+              : typesInPair[0]?.length ?? 1;
+        const baseEdgeLabelFontSize = getEdgeLabelFontSize(isFocusEdge);
+        const maxFontSizeByEdge = getMaxEdgeLabelFontSizeByLength(len, labelTextLength);
+        const effectiveEdgeLabelFontSize =
+          !freeExploreMode
+            ? Math.max(4, Math.min(baseEdgeLabelFontSize, maxFontSizeByEdge))
+            : baseEdgeLabelFontSize;
 
         const handleLabelClick =
           pairCount > 1
@@ -1666,7 +1704,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
                 y={labelY}
                 textAnchor="middle"
                 fill="#94a3b8"
-                fontSize={getEdgeLabelFontSize(true)}
+                fontSize={effectiveEdgeLabelFontSize}
                 className={
                   pairCount > 1 ? "cursor-pointer" : "pointer-events-none"
                 }
@@ -1731,7 +1769,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
               y={labelY}
               textAnchor="middle"
               fill="#646368"
-              fontSize={8}
+              fontSize={effectiveEdgeLabelFontSize}
               className={
                 pairCount > 1 ? "cursor-pointer" : "pointer-events-none"
               }
