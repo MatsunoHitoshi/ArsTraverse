@@ -1640,10 +1640,10 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         const isFocusEdge = linksInPair.some((l) =>
           focusEdgeIdSet.has(getEdgeCompositeKeyFromLink(l)),
         );
-        /** 探索時でないときはフォーカスエッジのラベルをScaleによらず常に表示 */
+        /** 探索時でない・冒頭グラフでないときはフォーカスエッジのラベルをScaleによらず常に表示。冒頭グラフでは引きで非表示 */
         const showThisEdgeLabel =
           typesInPair.length > 0 &&
-          (showEdgeLabels || (isFocusEdge && !freeExploreMode));
+          (showEdgeLabels || (isFocusEdge && !freeExploreMode && !showFullGraph));
         if (!showThisEdgeLabel) {
           return null;
         }

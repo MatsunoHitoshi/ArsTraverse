@@ -314,8 +314,8 @@ export function ScrollStorytellingViewerUnified({
         </div>
       )}
 
-      <div className="fixed bottom-4 right-4 z-10 flex items-center gap-2">
-        {displayStep?.id !== "__overview__" && (
+      {displayStep?.id !== "__overview__" && (
+        <div className="fixed bottom-4 right-4 z-10 flex items-center gap-2">
           <button
             type="button"
             onClick={scrollToTop}
@@ -325,21 +325,21 @@ export function ScrollStorytellingViewerUnified({
           >
             <UpArrowIcon width={18} height={18} color="currentColor" />
           </button>
-        )}
-        <button
-          type="button"
-          onClick={toggleFreeExplore}
-          className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-700/90 text-slate-200 shadow hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-400"
-          aria-label={isFreeExploreMode ? "自由探索を終了" : "自由探索モード"}
-          title={isFreeExploreMode ? "自由探索を終了" : "グラフを自由にズーム・移動"}
-        >
-          {isFreeExploreMode ? (
-            <ResetIcon width={18} height={18} color="currentColor" />
-          ) : (
-            <ZoomInIcon width={18} height={18} color="currentColor" />
-          )}
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={toggleFreeExplore}
+            className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-700/90 text-slate-200 shadow hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-400"
+            aria-label={isFreeExploreMode ? "自由探索を終了" : "自由探索モード"}
+            title={isFreeExploreMode ? "自由探索を終了" : "グラフを自由にズーム・移動"}
+          >
+            {isFreeExploreMode ? (
+              <ResetIcon width={18} height={18} color="currentColor" />
+            ) : (
+              <ZoomInIcon width={18} height={18} color="currentColor" />
+            )}
+          </button>
+        </div>
+      )}
 
     </div>
   );
@@ -449,17 +449,19 @@ export function ScrollStorytellingViewerUnified({
                   </div>
                 )}
                 {progressStep?.id === "__overview__" && (
-                  <button
-                    type="button"
-                    onClick={scrollToNextSegment}
-                    className="fixed bottom-6 left-4 right-4 z-10 flex flex-col items-center gap-1.5 text-slate-300/75 transition-opacity hover:opacity-100 hover:text-slate-200 cursor-pointer"
-                    aria-label="次のセグメントへスクロール"
-                  >
-                    <span className="text-xs font-medium">スクロールして続きを見る</span>
-                    <span className="animate-bounce">
-                      <DownArrowIcon width={24} height={24} color="currentColor" />
-                    </span>
-                  </button>
+                  <div className="fixed bottom-6 left-4 right-4 z-10 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={scrollToNextSegment}
+                      className="flex flex-col items-center gap-1.5 text-slate-300/75 transition-opacity hover:opacity-100 hover:text-slate-200 cursor-pointer w-max p-4"
+                      aria-label="次のセグメントへスクロール"
+                    >
+                      <span className="text-xs font-medium">スクロールして続きを見る</span>
+                      <span className="animate-bounce">
+                        <DownArrowIcon width={24} height={24} color="currentColor" />
+                      </span>
+                    </button>
+                  </div>
                 )}
                 <Scrollama
                   offset={SCROLLAMA_OFFSET}
