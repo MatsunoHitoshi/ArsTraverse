@@ -1197,9 +1197,19 @@ Community ${idx + 1} (ID: ${c.communityId}):
           visible: true,
         }));
 
-        // メタグラフのエッジを作成
-        const metaGraphRelationships = Array.from(metaEdgesMap.entries()).map(
-          ([edgeKey, edgeData], index) => {
+        // メタグラフのエッジを作成（filteredMetaNodes に存在するコミュニティ間のエッジのみ）
+        const validCommunityIds = new Set(
+          filteredMetaNodes.map((n) => n.communityId),
+        );
+        const metaGraphRelationships = Array.from(metaEdgesMap.entries())
+          .filter(([edgeKey]) => {
+            const [sourceCommunity, targetCommunity] = edgeKey.split("-");
+            return (
+              validCommunityIds.has(sourceCommunity ?? "") &&
+              validCommunityIds.has(targetCommunity ?? "")
+            );
+          })
+          .map(([edgeKey, edgeData], index) => {
             const [sourceCommunity, targetCommunity] = edgeKey.split("-");
             return {
               id: `meta-edge-${index}`,
@@ -1213,8 +1223,7 @@ Community ${idx + 1} (ID: ${c.communityId}):
               topicSpaceId: undefined,
               documentGraphId: undefined,
             };
-          },
-        );
+          });
 
         const metaGraph: GraphDocumentForFrontend = {
           nodes: metaGraphNodes,
