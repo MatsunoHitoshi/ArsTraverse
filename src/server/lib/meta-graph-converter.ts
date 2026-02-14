@@ -107,16 +107,23 @@ export function convertToDatabase(
     };
   });
 
-  // MetaGraphRelationshipを作成
-  const metaEdges = data.metaGraph.relationships.map((rel) => {
-    return {
-      type: rel.type,
-      properties: convertPropertiesFromInput(rel.properties),
-      storyId: "", // 後で設定
-      fromCommunityId: rel.sourceId,
-      toCommunityId: rel.targetId,
-    };
-  });
+  // MetaGraphRelationshipを作成（無効な参照を除外: source/target が metaGraph.nodes に存在するエッジのみ）
+  const validCommunityIds = new Set(data.metaGraph.nodes.map((n) => n.id));
+  const metaEdges = data.metaGraph.relationships
+    .filter(
+      (rel) =>
+        validCommunityIds.has(rel.sourceId) &&
+        validCommunityIds.has(rel.targetId),
+    )
+    .map((rel) => {
+      return {
+        type: rel.type,
+        properties: convertPropertiesFromInput(rel.properties),
+        storyId: "", // 後で設定
+        fromCommunityId: rel.sourceId,
+        toCommunityId: rel.targetId,
+      };
+    });
 
   // CommunitySummaryを作成（communityIdを保持）
   const summaries = data.summaries.map((summary) => {
