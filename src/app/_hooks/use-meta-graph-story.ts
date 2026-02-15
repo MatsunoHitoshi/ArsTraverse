@@ -12,6 +12,8 @@ import {
 import type { JSONContent } from "@tiptap/react";
 import type { StorySegment } from "@/app/const/story-segment";
 
+export type StoryGenerationMode = "graph" | "text";
+
 export interface MetaGraphStoryData {
   metaGraph: GraphDocumentForFrontend;
   metaNodes: Array<{
@@ -34,6 +36,7 @@ export interface MetaGraphStoryData {
   detailedStories: Record<string, string | JSONContent>; // communityId -> story (string or Tiptap doc with segment attrs)
   preparedCommunities: PreparedCommunity[];
   filter?: LayoutInstruction["filter"]; // グラフフィルタリング設定
+  generationMode?: StoryGenerationMode; // 初回選択: グラフから生成 / テキストから生成
 }
 
 /** segments から Tiptap doc（段落に segmentNodeIds/segmentEdgeIds/segmentSource 付き）を組み立てる */
@@ -83,8 +86,13 @@ export function useMetaGraphStory(
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRegeneratingTransitions, setIsRegeneratingTransitions] =
     useState(false);
+  /** 初回ストーリー生成時の選択（null = 未選択でモーダル表示待ち） */
+  const [generationMode, setGenerationMode] = useState<StoryGenerationMode | null>(
+    null,
+  );
 
   const generateMetaGraph = api.kg.generateMetaGraph.useMutation();
+  const generateMetaGraphFromText = api.kg.generateMetaGraphFromText.useMutation();
   const summarizeCommunities = api.kg.summarizeCommunities.useMutation();
   const generateCommunityStory = api.kg.generateCommunityStory.useMutation();
   const regenerateNarrativeFlow = api.kg.regenerateNarrativeFlow.useMutation();
@@ -163,11 +171,15 @@ export function useMetaGraphStory(
       return;
     }
 
+    const saved = savedStoryData.metaGraphData;
+    if (saved?.generationMode) {
+      setGenerationMode(saved.generationMode);
+    }
     setMetaGraphData((prev) => {
-      const savedDataString = JSON.stringify(savedStoryData.metaGraphData);
+      const savedDataString = JSON.stringify(saved);
       const currentDataString = JSON.stringify(prev);
       if (currentDataString === savedDataString) return prev;
-      return savedStoryData.metaGraphData;
+      return saved;
     });
   }, [
     isMetaGraphMode,
@@ -176,7 +188,7 @@ export function useMetaGraphStory(
     savedStoryData?.metaGraphData,
   ]);
 
-  // メタグラフ生成と要約生成
+  // メタグラフ生成と要約生成（generationMode が選択されるまで待機）
   useEffect(() => {
     // まず、保存済みデータの読み込みが完了するまで待つ
     if (isLoadingStory) {
@@ -185,6 +197,11 @@ export function useMetaGraphStory(
 
     // 保存済みデータがある場合は生成をスキップ
     if (savedStoryData?.metaGraphData) {
+      return;
+    }
+
+    // 初回選択がまだの場合は何もしない（モーダルで選択を待つ）
+    if (generationMode === null) {
       return;
     }
 
@@ -203,9 +220,63 @@ export function useMetaGraphStory(
 
     const targetGraph = filteredGraphData ?? graphDocument;
 
+    if (generationMode === "text") {
+      setIsGenerating(true);
+      const workspaceContent =
+        workspace.content && typeof workspace.content === "object"
+          ? (workspace.content as JSONContent)
+          : { type: "doc" as const, content: [] };
+      generateMetaGraphFromText.mutate(
+        {
+          graphDocument: targetGraph,
+          workspaceContent,
+          minCommunitySize: 3,
+          workspaceId: workspace.id,
+        },
+        {
+          onSuccess: (result) => {
+            if (
+              !result.preparedCommunities ||
+              result.preparedCommunities.length === 0
+            ) {
+              setIsGenerating(false);
+              return;
+            }
+            const updatedMetaGraph = {
+              ...result.metaGraph,
+              nodes: result.metaGraph.nodes.map((node) => {
+                const summary = result.summaries?.find(
+                  (s) => s.communityId === node.id,
+                );
+                return {
+                  ...node,
+                  name: summary?.title ?? node.name,
+                };
+              }),
+            };
+            setMetaGraphData({
+              metaGraph: updatedMetaGraph,
+              metaNodes: result.metaNodes,
+              communityMap: result.communityMap,
+              summaries: result.summaries ?? [],
+              narrativeFlow: result.narrativeFlow ?? [],
+              detailedStories: result.detailedStories ?? {},
+              preparedCommunities: result.preparedCommunities,
+              generationMode: "text",
+            });
+            setIsGenerating(false);
+          },
+          onError: () => {
+            setIsGenerating(false);
+          },
+        },
+      );
+      return;
+    }
+
     setIsGenerating(true);
 
-    // 1. メタグラフを生成
+    // 1. メタグラフを生成（graph モード）
     generateMetaGraph.mutate(
       {
         graphDocument: targetGraph,
@@ -268,6 +339,7 @@ export function useMetaGraphStory(
                   narrativeFlow: summaryResult.narrativeFlow,
                   detailedStories: {},
                   preparedCommunities: metaGraphResult.preparedCommunities,
+                  generationMode: "graph",
                 });
 
                 // 各コミュニティのストーリー生成を並列実行
@@ -392,12 +464,14 @@ export function useMetaGraphStory(
     );
   }, [
     isMetaGraphMode,
+    generationMode,
     graphDocument,
     filteredGraphData,
     metaGraphData,
     isGenerating,
     workspace,
     generateMetaGraph,
+    generateMetaGraphFromText,
     summarizeCommunities,
     generateCommunityStory,
     isLoadingStory,
@@ -409,6 +483,7 @@ export function useMetaGraphStory(
     if (!isMetaGraphMode) {
       setMetaGraphData(null);
       setIsGenerating(false);
+      setGenerationMode(null);
     }
   }, [isMetaGraphMode]);
 
@@ -650,9 +725,12 @@ export function useMetaGraphStory(
 
   return {
     metaGraphData,
+    generationMode,
+    setGenerationMode,
     isLoading:
       isGenerating ||
       generateMetaGraph.isPending ||
+      generateMetaGraphFromText.isPending ||
       summarizeCommunities.isPending ||
       isLoadingStory,
     isGeneratingStories:

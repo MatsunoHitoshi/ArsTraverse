@@ -53,6 +53,7 @@ import { NodeLinkEditModal } from "../modal/node-link-edit-modal";
 import { ProposalCreateModal } from "./proposal-create-modal";
 import { ShareTopicSpaceModal } from "./share-topic-space-modal";
 import { PublishWorkspaceModal } from "./publish-workspace-modal";
+import { StoryGenerationModeModal } from "./story-generation-mode-modal";
 import { AdditionalGraphExtractionModal } from "./tiptap/tools/additional-graph-extraction-modal";
 import { DirectedLinksToggleButton } from "../view/graph-view/directed-links-toggle-button";
 import { SnapshotStoryboard } from "./artifact/snapshot-storyboard";
@@ -181,19 +182,20 @@ const CuratorsWritingWorkspace = ({
     }
   }, [searchParams]);
 
-  // ストーリーテリングモード変更時にURLを更新（リロードで復元できるようにする）
   const setStorytellingModeWithUrl: React.Dispatch<
     React.SetStateAction<boolean>
   > = (value) => {
     setIsStorytellingMode((prev) => {
       const next = typeof value === "function" ? value(prev) : value;
-      const params = new URLSearchParams(searchParams.toString());
-      if (next) {
-        params.set("storytelling", "1");
-      } else {
-        params.delete("storytelling");
-      }
-      router.push(`?${params.toString()}`, { scroll: false });
+      queueMicrotask(() => {
+        const params = new URLSearchParams(searchParams.toString());
+        if (next) {
+          params.set("storytelling", "1");
+        } else {
+          params.delete("storytelling");
+        }
+        router.push(`?${params.toString()}`, { scroll: false });
+      });
       return next;
     });
   };
@@ -541,6 +543,25 @@ const CuratorsWritingWorkspace = ({
           }`}
       >
         <div className="flex h-full flex-col bg-slate-900">
+          {/* 初回ストーリー生成時: グラフから生成 / テキストから生成の選択モーダル */}
+          {isStorytellingMode &&
+            metaGraphStory.generationMode === null &&
+            !metaGraphStory.isLoading &&
+            !metaGraphStory.metaGraphData && (
+              <StoryGenerationModeModal
+                isOpen={true}
+                onClose={() => {
+                  setStorytellingModeWithUrl(false);
+                  setIsMetaGraphMode(false);
+                }}
+                onModeSelected={(mode) => {
+                  // eslint-disable-next-line @typescript-eslint/no-unsafe-call -- setGenerationMode from useMetaGraphStory
+                  metaGraphStory.setGenerationMode(mode);
+                }}
+                workspaceContent={editorContent}
+              />
+            )}
+
           <WorkspaceToolbar
             workspace={workspace}
             displayTitle={displayTitle}

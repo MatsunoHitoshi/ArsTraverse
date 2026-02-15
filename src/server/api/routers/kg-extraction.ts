@@ -1,8 +1,14 @@
+import fs from "fs/promises";
+import os from "os";
+import path from "path";
 import { publicProcedure } from "../trpc";
 import { writeLocalFileFromUrl } from "@/app/_utils/sys/file";
 import { textInspect } from "@/app/_utils/text/text-inspector";
 import { dataDisambiguation } from "@/app/_utils/kg/data-disambiguation";
-import type { Extractor } from "@/server/lib/extractors/base";
+import type {
+  CustomMappingRules,
+  Extractor,
+} from "@/server/lib/extractors/base";
 import { AssistantsApiExtractor } from "@/server/lib/extractors/assistants";
 import { LangChainExtractor } from "@/server/lib/extractors/langchain";
 import { IterativeGraphExtractor } from "@/server/lib/extractors/iterative";
@@ -13,6 +19,7 @@ import { HumanMessage } from "@langchain/core/messages";
 import type { TextChunk } from "@/server/lib/extractors/base";
 import {
   ExtractInputSchema,
+  ExtractKGFromPlainTextInputSchema,
   AnalyzeTextStructureInputSchema,
   ConvertToEdgeTypeInputSchema,
   TestInspectInputSchema,
@@ -398,6 +405,82 @@ Output:`;
       }
     }),
 
+  extractKGFromPlainText: publicProcedure
+    .input(ExtractKGFromPlainTextInputSchema)
+    .mutation(async ({ input }) => {
+      const { plainText, customMappingRules } = input;
+      if (!plainText.trim()) {
+        return {
+          data: { graph: { nodes: [], relationships: [] }, error: null },
+        };
+      }
+      const schema = {
+        allowedNodes: [],
+        allowedRelationships: [],
+      };
+      const tmpPath = path.join(
+        os.tmpdir(),
+        `kg-plain-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`,
+      );
+      await fs.writeFile(tmpPath, plainText.trim(), "utf-8");
+      try {
+        const extractor = new IterativeGraphExtractor();
+        const nodesAndRelationships = await extractor.extract({
+          localFilePath: tmpPath,
+          isPlaneTextMode: true,
+          schema,
+          customMappingRules,
+        });
+        if (!nodesAndRelationships) {
+          return { data: { graph: null, error: "グラフ抽出エラー" } };
+        }
+        const normalizedNodesAndRelationships = {
+          ...nodesAndRelationships,
+          nodes: nodesAndRelationships.nodes.map((n) => ({
+            id: n.id,
+            name: n.name,
+            label: n.label,
+            properties: n.properties ?? {},
+            documentGraphId: null,
+            topicSpaceId: null,
+            createdAt: null,
+            updatedAt: null,
+            deletedAt: null,
+          })),
+          relationships: nodesAndRelationships.relationships.map((r) => ({
+            id: r.id,
+            type: r.type,
+            properties: r.properties ?? {},
+            fromNodeId: r.sourceId,
+            toNodeId: r.targetId,
+            documentGraphId: null,
+            topicSpaceId: null,
+            createdAt: null,
+            updatedAt: null,
+            deletedAt: null,
+          })),
+        };
+        const disambiguatedNodesAndRelationships = dataDisambiguation(
+          normalizedNodesAndRelationships,
+        );
+        const graphDocument = await completeTranslateProperties(
+          disambiguatedNodesAndRelationships,
+        );
+        return {
+          data: {
+            graph: formGraphDataForFrontend(graphDocument),
+          },
+        };
+      } catch (error) {
+        console.error("extractKGFromPlainText failed:", error);
+        return {
+          data: { graph: null, error: `グラフ抽出エラー: ${String(error)}` },
+        };
+      } finally {
+        await fs.unlink(tmpPath).catch(() => undefined);
+      }
+    }),
+
   textInspect: publicProcedure
     .input(TestInspectInputSchema)
     .mutation(async ({ input }) => {
@@ -424,3 +507,77 @@ Output:`;
       }
     }),
 };
+
+/**
+ * プレーンテキストからKGを抽出するサーバ用ヘルパー。
+ * generateMetaGraphFromText などから直接呼ぶ。
+ */
+export async function runExtractKGFromPlainText(
+  plainText: string,
+  customMappingRules?: CustomMappingRules,
+): Promise<{
+  nodes: Array<{
+    id: string;
+    name: string;
+    label: string;
+    properties: Record<string, unknown>;
+  }>;
+  relationships: Array<{
+    id: string;
+    type: string;
+    sourceId: string;
+    targetId: string;
+    properties: Record<string, unknown>;
+  }>;
+} | null> {
+  if (!plainText.trim()) return { nodes: [], relationships: [] };
+  const schema = {
+    allowedNodes: [] as string[],
+    allowedRelationships: [] as string[],
+  };
+  const tmpPath = path.join(
+    os.tmpdir(),
+    `kg-plain-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`,
+  );
+  await fs.writeFile(tmpPath, plainText.trim(), "utf-8");
+  try {
+    const extractor = new IterativeGraphExtractor();
+    const nodesAndRelationships = await extractor.extract({
+      localFilePath: tmpPath,
+      isPlaneTextMode: true,
+      schema,
+      customMappingRules,
+    });
+    if (!nodesAndRelationships) return null;
+    const normalized = {
+      nodes: nodesAndRelationships.nodes.map((n) => ({
+        id: n.id,
+        name: n.name,
+        label: n.label,
+        properties: n.properties ?? {},
+        documentGraphId: null,
+        topicSpaceId: null,
+        createdAt: null,
+        updatedAt: null,
+        deletedAt: null,
+      })),
+      relationships: nodesAndRelationships.relationships.map((r) => ({
+        id: r.id,
+        type: r.type,
+        properties: r.properties ?? {},
+        fromNodeId: r.sourceId,
+        toNodeId: r.targetId,
+        documentGraphId: null,
+        topicSpaceId: null,
+        createdAt: null,
+        updatedAt: null,
+        deletedAt: null,
+      })),
+    };
+    const disambiguated = dataDisambiguation(normalized);
+    const graphDocument = await completeTranslateProperties(disambiguated);
+    return formGraphDataForFrontend(graphDocument);
+  } finally {
+    await fs.unlink(tmpPath).catch(() => undefined);
+  }
+}

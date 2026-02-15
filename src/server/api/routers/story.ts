@@ -81,6 +81,14 @@ export const storyRouter = createTRPCRouter({
       // トランザクションで一括保存
       const result = await ctx.db.$transaction(async (tx) => {
         // Storyをupsert（同一workspaceIdの既存があればupdateで復元、なければcreate）
+        const filterPayload =
+          data.filter != null
+            ? (data.filter as Record<string, unknown>)
+            : {};
+        const filterWithMode =
+          data.generationMode != null
+            ? { ...filterPayload, generationMode: data.generationMode }
+            : filterPayload;
         const story = existingStory
           ? await tx.story.update({
               where: { id: existingStory.id },
@@ -88,18 +96,20 @@ export const storyRouter = createTRPCRouter({
                 referencedTopicSpaceId,
                 updatedAt: new Date(),
                 deletedAt: null, // 復元する場合に備えてnullに設定
-                filter: data.filter
-                  ? (data.filter as Prisma.InputJsonValue)
-                  : undefined,
+                filter:
+                  Object.keys(filterWithMode).length > 0
+                    ? (filterWithMode as Prisma.InputJsonValue)
+                    : undefined,
               },
             })
           : await tx.story.create({
               data: {
                 workspaceId,
                 referencedTopicSpaceId,
-                filter: data.filter
-                  ? (data.filter as Prisma.InputJsonValue)
-                  : undefined,
+                filter:
+                  Object.keys(filterWithMode).length > 0
+                    ? (filterWithMode as Prisma.InputJsonValue)
+                    : undefined,
               },
             });
 

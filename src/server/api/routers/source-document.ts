@@ -32,6 +32,125 @@ const SourceDocumentWithGraphSchema = z.object({
   dataJson: KnowledgeGraphInputSchema,
 });
 
+export type CreateSourceDocumentWithGraphInput = z.infer<
+  typeof SourceDocumentWithGraphSchema
+>;
+
+type CreateWithGraphCtx = {
+  db: PrismaClient;
+  session: { user: { id: string } };
+};
+
+/**
+ * SourceDocument + DocumentGraph + nodes/relationships を1トランザクションで作成。
+ * kg-copilot の本文KG統合など、ルーター外から呼ぶ用。
+ */
+export async function runCreateSourceDocumentWithGraphData(
+  ctx: CreateWithGraphCtx,
+  input: CreateSourceDocumentWithGraphInput,
+) {
+  const docFileType = await inspectFileTypeFromUrl(input.url);
+  if (!docFileType) {
+    throw new Error("ファイルタイプを判定できませんでした");
+  }
+
+  const nodes = input.dataJson.nodes as NodeTypeForFrontend[];
+  const existingNodeIds = await ctx.db.graphNode.findMany({
+    where: { id: { in: nodes.map((n) => n.id) } },
+    select: { id: true },
+  });
+  const existingNodeIdSet = new Set(existingNodeIds.map((n) => n.id));
+  const nodesToCreate = nodes.filter((node) => !existingNodeIdSet.has(node.id));
+
+  if (nodesToCreate.length !== nodes.length) {
+    const skippedCount = nodes.length - nodesToCreate.length;
+    const skippedIds = nodes
+      .filter((node) => existingNodeIdSet.has(node.id))
+      .map((node) => node.id);
+    console.warn(
+      `Skipping ${skippedCount} node(s) that already exist in database:`,
+      skippedIds.slice(0, 10),
+    );
+  }
+
+  const relationships = input.dataJson
+    .relationships as RelationshipTypeForFrontend[];
+  const existingRelationshipIds = await ctx.db.graphRelationship.findMany({
+    where: { id: { in: relationships.map((r) => r.id) } },
+    select: { id: true },
+  });
+  const existingRelationshipIdSet = new Set(
+    existingRelationshipIds.map((r) => r.id),
+  );
+  const relationshipsToCreate = relationships.filter(
+    (relationship) => !existingRelationshipIdSet.has(relationship.id),
+  );
+
+  if (relationshipsToCreate.length !== relationships.length) {
+    const skippedCount = relationships.length - relationshipsToCreate.length;
+    const skippedIds = relationships
+      .filter((relationship) =>
+        existingRelationshipIdSet.has(relationship.id),
+      )
+      .map((relationship) => relationship.id);
+    console.warn(
+      `Skipping ${skippedCount} relationship(s) that already exist in database:`,
+      skippedIds.slice(0, 10),
+    );
+  }
+
+  return ctx.db.$transaction(async (tx) => {
+    const document = await tx.sourceDocument.create({
+      data: {
+        name: input.name,
+        url: input.url,
+        documentType:
+          docFileType === "pdf"
+            ? DocumentType.INPUT_PDF
+            : DocumentType.INPUT_TXT,
+        user: { connect: { id: ctx.session.user.id } },
+      },
+    });
+
+    const documentGraph = await tx.documentGraph.create({
+      data: {
+        user: { connect: { id: ctx.session.user.id } },
+        sourceDocument: { connect: { id: document.id } },
+        dataJson: {},
+      },
+    });
+
+    if (nodesToCreate.length > 0) {
+      await tx.graphNode.createMany({
+        data: nodesToCreate.map((node: NodeTypeForFrontend) => ({
+          id: node.id,
+          name: node.name,
+          label: node.label,
+          properties: node.properties ?? {},
+          documentGraphId: documentGraph.id,
+        })),
+      });
+    }
+
+    if (relationshipsToCreate.length > 0) {
+      await tx.graphRelationship.createMany({
+        data: relationshipsToCreate.map(
+          (relationship: RelationshipTypeForFrontend) => ({
+            id: relationship.id,
+            fromNodeId: relationship.sourceId,
+            toNodeId: relationship.targetId,
+            type: relationship.type,
+            properties: relationship.properties ?? {},
+            documentGraphId: documentGraph.id,
+          }),
+        ),
+      });
+    }
+
+    return { documentGraph, sourceDocument: document };
+  });
+}
+
 export const getTextReference = async (
   ctx: { db: PrismaClient },
   documentId: string,
@@ -217,138 +336,7 @@ export const sourceDocumentRouter = createTRPCRouter({
   createWithGraphData: protectedProcedure
     .input(SourceDocumentWithGraphSchema)
     .mutation(async ({ ctx, input }) => {
-      const docFileType = await inspectFileTypeFromUrl(input.url);
-
-      if (!docFileType) {
-        throw new Error("ファイルタイプを判定できませんでした");
-      }
-
-      // 既存のノードIDをチェック（GraphNode.idはグローバルにユニーク）
-      // すべての既存ノードとの重複をチェック
-      const nodes = input.dataJson.nodes as NodeTypeForFrontend[];
-      const existingNodeIds = await ctx.db.graphNode.findMany({
-        where: {
-          id: {
-            in: nodes.map((n) => n.id),
-          },
-        },
-        select: { id: true },
-      });
-      const existingNodeIdSet = new Set(existingNodeIds.map((n) => n.id));
-
-      // 既存のIDと重複しないノードのみをフィルタリング
-      const nodesToCreate = nodes.filter(
-        (node) => !existingNodeIdSet.has(node.id),
-      );
-
-      if (nodesToCreate.length !== nodes.length) {
-        const skippedCount = nodes.length - nodesToCreate.length;
-        const skippedIds = nodes
-          .filter((node) => existingNodeIdSet.has(node.id))
-          .map((node) => node.id);
-        console.warn(
-          `Skipping ${skippedCount} node(s) that already exist in database:`,
-          skippedIds.slice(0, 10), // 最初の10個だけ表示
-        );
-      }
-
-      // 既存のリレーションシップIDをチェック（GraphRelationship.idはグローバルにユニーク）
-      // すべての既存リレーションシップとの重複をチェック
-      const relationships = input.dataJson
-        .relationships as RelationshipTypeForFrontend[];
-      const existingRelationshipIds = await ctx.db.graphRelationship.findMany({
-        where: {
-          id: {
-            in: relationships.map((r) => r.id),
-          },
-        },
-        select: { id: true },
-      });
-      const existingRelationshipIdSet = new Set(
-        existingRelationshipIds.map((r) => r.id),
-      );
-
-      // 既存のIDと重複しないリレーションシップのみをフィルタリング
-      const relationshipsToCreate = relationships.filter(
-        (relationship) => !existingRelationshipIdSet.has(relationship.id),
-      );
-
-      if (relationshipsToCreate.length !== relationships.length) {
-        const skippedCount =
-          relationships.length - relationshipsToCreate.length;
-        const skippedIds = relationships
-          .filter((relationship) =>
-            existingRelationshipIdSet.has(relationship.id),
-          )
-          .map((relationship) => relationship.id);
-        console.warn(
-          `Skipping ${skippedCount} relationship(s) that already exist in database:`,
-          skippedIds.slice(0, 10), // 最初の10個だけ表示
-        );
-      }
-
-      // 重複チェック完了後、トランザクション内でsourceDocumentとdocumentGraphを作成
-      // エラーが発生した場合、すべての変更がロールバックされる
-      const result = await ctx.db.$transaction(async (tx) => {
-        // sourceDocumentを作成
-        const document = await tx.sourceDocument.create({
-          data: {
-            name: input.name,
-            url: input.url,
-            documentType:
-              docFileType === "pdf"
-                ? DocumentType.INPUT_PDF
-                : DocumentType.INPUT_TXT,
-            user: { connect: { id: ctx.session.user.id } },
-          },
-        });
-
-        // documentGraphを作成
-        const documentGraph = await tx.documentGraph.create({
-          data: {
-            user: { connect: { id: ctx.session.user.id } },
-            sourceDocument: { connect: { id: document.id } },
-            // 後ほどカラムが消える
-            dataJson: {},
-          },
-        });
-
-        // ノードを保存
-        if (nodesToCreate.length > 0) {
-          await tx.graphNode.createMany({
-            data: nodesToCreate.map((node: NodeTypeForFrontend) => ({
-              id: node.id,
-              name: node.name,
-              label: node.label,
-              properties: node.properties ?? {},
-              documentGraphId: documentGraph.id,
-            })),
-          });
-        }
-
-        // リレーションシップを保存
-        if (relationshipsToCreate.length > 0) {
-          await tx.graphRelationship.createMany({
-            data: relationshipsToCreate.map(
-              (relationship: RelationshipTypeForFrontend) => ({
-                id: relationship.id,
-                fromNodeId: relationship.sourceId,
-                toNodeId: relationship.targetId,
-                type: relationship.type,
-                properties: relationship.properties ?? {},
-                documentGraphId: documentGraph.id,
-              }),
-            ),
-          });
-        }
-
-        return {
-          documentGraph,
-          sourceDocument: document,
-        };
-      });
-
-      return result;
+      return runCreateSourceDocumentWithGraphData(ctx, input);
     }),
 
   update: protectedProcedure
