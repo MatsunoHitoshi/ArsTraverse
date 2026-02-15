@@ -289,6 +289,11 @@ export const TestInspectInputSchema = z.object({
   isPlaneTextMode: z.boolean(),
 });
 
+export const ExtractKGFromPlainTextInputSchema = z.object({
+  plainText: z.string(),
+  customMappingRules: ExtractInputSchema.shape.customMappingRules,
+});
+
 export const IntegrateGraphInputSchema = z.object({
   topicSpaceId: z.string(),
   graphDocument: KnowledgeGraphInputSchema,

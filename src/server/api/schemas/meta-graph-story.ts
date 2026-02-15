@@ -90,6 +90,8 @@ export const MetaGraphStoryDataSchema = z.object({
   ),
   // グラフフィルタリング設定（LayoutInstruction["filter"]）
   filter: LayoutInstructionFilterSchema.optional(),
+  // 初回選択: グラフから生成 / テキストから生成（保存・復元用）
+  generationMode: z.enum(["graph", "text"]).optional(),
 });
 
 export type MetaGraphStoryDataInput = z.infer<typeof MetaGraphStoryDataSchema>;

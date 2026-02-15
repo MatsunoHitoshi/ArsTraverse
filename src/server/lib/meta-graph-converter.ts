@@ -340,6 +340,22 @@ export function convertFromDatabase(
       };
     });
 
+  const filterObj = storyData.filter as Record<string, unknown> | null;
+  const generationMode =
+    filterObj && typeof filterObj.generationMode === "string"
+      ? (filterObj.generationMode as "graph" | "text")
+      : undefined;
+  const filterOnly =
+    filterObj != null
+      ? Object.fromEntries(
+          Object.entries(filterObj).filter(([k]) => k !== "generationMode"),
+        )
+      : {};
+  const filter =
+    Object.keys(filterOnly).length > 0
+      ? (filterOnly as LayoutInstruction["filter"])
+      : undefined;
+
   return {
     metaGraph: {
       nodes,
@@ -351,8 +367,7 @@ export function convertFromDatabase(
     narrativeFlow,
     detailedStories,
     preparedCommunities,
-    filter: storyData.filter
-      ? (storyData.filter as LayoutInstruction["filter"])
-      : undefined,
+    filter,
+    generationMode,
   };
 }
