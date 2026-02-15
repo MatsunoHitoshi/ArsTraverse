@@ -3,7 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/trpc/react";
 import { GenerativeLayoutGraph } from "@/app/_components/d3/force/generative-layout-graph";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type {
   GraphDocumentForFrontend,
   LayoutInstruction,
@@ -42,14 +42,15 @@ export default function LayoutEditPage() {
   const topicSpaceId = workspaceData?.referencedTopicSpaces[0]?.id;
 
   // TopicSpaceのグラフデータを取得
-  const { data: topicSpace } = api.topicSpaces.getByIdPublic.useQuery(
-    {
-      id: topicSpaceId ?? ""
-    },
-    {
-      enabled: !!topicSpaceId,
-    },
-  );
+  const { data: topicSpace, refetch: refetchTopicSpace } =
+    api.topicSpaces.getByIdPublic.useQuery(
+      {
+        id: topicSpaceId ?? "",
+      },
+      {
+        enabled: !!topicSpaceId,
+      },
+    );
 
   const [graphData, setGraphData] = useState<GraphDocumentForFrontend | null>(
     null,
@@ -93,6 +94,9 @@ export default function LayoutEditPage() {
     filteredGraphData,
     workspaceData ?? null,
     isMetaGraphMode,
+    useCallback(() => {
+      void refetchTopicSpace();
+    }, [refetchTopicSpace]),
   );
 
   if (isLoading) {

@@ -793,7 +793,7 @@ export const D3ForceGraph = ({
               currentTransformX={currentTransformX}
               currentTransformY={currentTransformY}
             >
-              {graphLinks.map((graphLink) => {
+              {graphLinks.map((graphLink, linkIndex) => {
                 const { source, target, type } = graphLink;
                 const modSource = source as CustomNodeType;
                 const modTarget = target as CustomNodeType;
@@ -852,7 +852,7 @@ export const D3ForceGraph = ({
                   return (
                     <g
                       className="link cursor-pointer"
-                      key={`${modSource.id}-${type}-${modTarget.id}`}
+                      key={`link-${linkIndex}-${graphLink.id ?? `${modSource.id}-${type}-${modTarget.id}`}`}
                       onClick={() => {
                         if (graphLink.id === focusedLink?.id) {
                           setFocusedLink(undefined);

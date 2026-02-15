@@ -100,8 +100,22 @@ export const useGraphEditor = ({
       setGraphDocument(defaultGraphDocument);
       setInitialGraphDocument(defaultGraphDocument);
       setIsInitialized(true);
+      return;
     }
-  }, [defaultGraphDocument, isInitialized]);
+    // 既に初期化済みの場合: サーバー側でグラフが更新された（ノード・エッジが増えた）ときは同期
+    // 例: テキストからグラフ抽出→TopicSpace統合後の refetch
+    if (
+      isInitialized &&
+      defaultGraphDocument &&
+      graphDocument &&
+      (defaultGraphDocument.nodes.length > graphDocument.nodes.length ||
+        defaultGraphDocument.relationships.length >
+          graphDocument.relationships.length)
+    ) {
+      setGraphDocument(defaultGraphDocument);
+      setInitialGraphDocument(defaultGraphDocument);
+    }
+  }, [defaultGraphDocument, isInitialized, graphDocument]);
 
   // グラフの変更を検知して更新フラグを設定
   useEffect(() => {

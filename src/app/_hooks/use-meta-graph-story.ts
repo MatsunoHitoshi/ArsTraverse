@@ -79,6 +79,8 @@ export function useMetaGraphStory(
   filteredGraphData: GraphDocumentForFrontend | null,
   workspace: Workspace | null | undefined,
   isMetaGraphMode: boolean,
+  /** テキストモードでグラフ抽出・TopicSpace統合が完了したときに呼ぶ（統合後のグラフを表示するため refetch など） */
+  onTextGraphIntegrated?: () => void,
 ) {
   const [metaGraphData, setMetaGraphData] = useState<MetaGraphStoryData | null>(
     null,
@@ -265,6 +267,8 @@ export function useMetaGraphStory(
               generationMode: "text",
             });
             setIsGenerating(false);
+            // TopicSpace に統合されたグラフを表示するため refetch を促す
+            onTextGraphIntegrated?.();
           },
           onError: () => {
             setIsGenerating(false);
@@ -476,6 +480,7 @@ export function useMetaGraphStory(
     generateCommunityStory,
     isLoadingStory,
     savedStoryData?.metaGraphData,
+    onTextGraphIntegrated,
   ]);
 
   // メタグラフモードが無効化されたらデータをクリア
@@ -733,6 +738,9 @@ export function useMetaGraphStory(
       generateMetaGraphFromText.isPending ||
       summarizeCommunities.isPending ||
       isLoadingStory,
+    /** テキストモードでグラフ抽出・統合・クラスタリングの処理中（処理状況インジケータ表示用） */
+    isTextModeProcessing:
+      generationMode === "text" && generateMetaGraphFromText.isPending,
     isGeneratingStories:
       Object.keys(metaGraphData?.detailedStories ?? {}).length <
       (metaGraphData?.narrativeFlow.length ?? 0),

@@ -228,9 +228,10 @@ const CuratorsWritingWorkspace = ({
   const [activeEntity, setActiveEntity] = useState<CustomNodeType | undefined>(
     undefined,
   );
-  const { data: topicSpace } = api.topicSpaces.getByIdPublic.useQuery({
-    id: topicSpaceId ?? "",
-  });
+  const { data: topicSpace, refetch: refetchTopicSpace } =
+    api.topicSpaces.getByIdPublic.useQuery({
+      id: topicSpaceId ?? "",
+    });
 
   const isAdmin = topicSpace?.admins?.some(
     (admin) => admin.id === session?.user?.id,
@@ -340,6 +341,9 @@ const CuratorsWritingWorkspace = ({
     filteredGraphData,
     workspace,
     isMetaGraphMode,
+    useCallback(() => {
+      void refetchTopicSpace();
+    }, [refetchTopicSpace]),
   );
 
   // ストーリーモード初期表示時など、保存済みフィルタがあれば一度だけ storyFilter に反映する
@@ -543,11 +547,12 @@ const CuratorsWritingWorkspace = ({
           }`}
       >
         <div className="flex h-full flex-col bg-slate-900">
-          {/* 初回ストーリー生成時: グラフから生成 / テキストから生成の選択モーダル */}
+          {/* 初回ストーリー生成時: グラフから生成 / テキストから生成の選択モーダル（処理中も表示） */}
           {isStorytellingMode &&
-            metaGraphStory.generationMode === null &&
-            !metaGraphStory.isLoading &&
-            !metaGraphStory.metaGraphData && (
+            !metaGraphStory.metaGraphData &&
+            (metaGraphStory.generationMode === null
+              ? !metaGraphStory.isLoading
+              : metaGraphStory.isTextModeProcessing) && (
               <StoryGenerationModeModal
                 isOpen={true}
                 onClose={() => {
@@ -559,6 +564,8 @@ const CuratorsWritingWorkspace = ({
                   metaGraphStory.setGenerationMode(mode);
                 }}
                 workspaceContent={editorContent}
+                isProcessing={metaGraphStory.isTextModeProcessing}
+                processingMode={metaGraphStory.generationMode}
               />
             )}
 
