@@ -7,6 +7,7 @@ import type {
 import OpenAI from "openai";
 import { storageUtils } from "@/app/_utils/supabase/supabase";
 import { BUCKETS } from "@/app/_utils/supabase/const";
+import { computeTextHash } from "@/app/_utils/tts/text-hash";
 import { KnowledgeGraphInputSchema } from "../schemas/knowledge-graph";
 
 const GenerateGraphSummarySchema = z.object({
@@ -17,6 +18,7 @@ const GenerateGraphSummarySchema = z.object({
 
 const TextToSpeechSchema = z.object({
   text: z.string(),
+  speed: z.number().min(0.25).max(4.0).default(1.15),
 });
 
 export const assistantRouter = createTRPCRouter({
@@ -180,27 +182,76 @@ export const assistantRouter = createTRPCRouter({
   textToSpeech: protectedProcedure
     .input(TextToSpeechSchema)
     .mutation(async ({ input }) => {
-      const openai = new OpenAI();
+      const trimmed = input.text.trim();
+      if (!trimmed) {
+        return { error: "音声を生成するテキストが empty です" };
+      }
+
+      const bucket = BUCKETS.PATH_TO_SPEECH_AUDIO_FILE;
+      const textHash = computeTextHash(input.text);
+      const ttsModel = "gpt-4o-mini-tts";
+      const speed = input.speed ?? 1;
+      const path = `${textHash}-${ttsModel}-s${speed}.mp3`;
 
       try {
-        const mp3 = await openai.audio.speech.create({
-          model: "tts-1",
-          voice: "nova",
-          input: input.text,
-        });
+        /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call -- Supabase Storage API の戻り型が error を含む union のため偽陽性 */
+        let cachedExists = false;
+        try {
+          cachedExists = await storageUtils.exists(bucket, path);
+        } catch (existsErr) {
+          console.warn(
+            "[textToSpeech] cache exists check failed, proceeding to generate:",
+            existsErr instanceof Error ? existsErr.message : String(existsErr),
+          );
+        }
+
+        if (cachedExists) {
+          const url = storageUtils.getPublicUrl(bucket, path);
+          return { url };
+        }
+
+        const openai = new OpenAI();
+        let mp3;
+        try {
+          mp3 = await openai.audio.speech.create({
+            model: ttsModel,
+            voice: "nova",
+            input: trimmed,
+            speed,
+            instructions:
+              "自然な日本語で、流暢に読み上げてください。専門用語や固有名詞は適切な読み方で発音してください。アルファベットやローマ字の部分も日本語の文脈に合わせて、日本語風の発音で読み上げてください。英語の発音に切り替えないでください。「Studio HAUSU」は「スタジオ ハースー」と発音してください。",
+          });
+        } catch (openaiErr) {
+          console.error(
+            "[textToSpeech] OpenAI TTS failed:",
+            openaiErr instanceof Error ? openaiErr : openaiErr,
+          );
+          throw openaiErr;
+        }
+
         const buffer = Buffer.from(await mp3.arrayBuffer());
         const blob = new Blob([buffer], { type: "audio/mpeg" });
-        const fileUrl = await storageUtils.uploadFromBlob(
-          blob,
-          BUCKETS.PATH_TO_SPEECH_AUDIO_FILE,
-        );
-        return {
-          url: fileUrl,
-        };
-      } catch (error) {
-        console.log("error: ", error);
+
+        try {
+          const fileUrl = await storageUtils.uploadWithPath(blob, bucket, path);
+          return { url: fileUrl };
+        } catch (uploadErr) {
+          console.error(
+            "[textToSpeech] Supabase Storage upload failed:",
+            uploadErr instanceof Error ? uploadErr : uploadErr,
+          );
+          throw uploadErr;
+        }
+      } catch (err) {
+        const errMessage = err instanceof Error ? err.message : String(err);
+        const errStack = err instanceof Error ? err.stack : undefined;
+        console.error("[textToSpeech] error:", errMessage, errStack ?? "");
+
+        const errorDetail =
+          process.env.NODE_ENV === "development" ? errMessage : undefined;
         return {
           error: "音声を生成できませんでした",
+          ...(errorDetail && { errorDetail }),
         };
       }
     }),

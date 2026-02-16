@@ -9,14 +9,43 @@ export const supabase = createClient(
 
 export const storageUtils = {
   upload: async (file: File | Blob, bucket: string) => {
-    const { data } = await supabase.storage
+    const { data, error } = await supabase.storage
       .from(bucket)
       .upload(createId(), file);
+    if (error) throw error;
     const { data: uploaded } = supabase.storage
       .from(bucket)
       .getPublicUrl(data?.path ?? "");
     return uploaded.publicUrl;
   },
+
+  /** 指定パスにファイルをアップロード。既存なら上書き（upsert）。 */
+  uploadWithPath: async (
+    file: File | Blob,
+    bucket: string,
+    path: string,
+  ): Promise<string> => {
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .upload(path, file, { upsert: true });
+    if (error) throw error;
+    const pathUsed = data?.path ?? path;
+    const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(pathUsed);
+    return urlData.publicUrl;
+  },
+
+  /** 指定パスのファイルが存在するか確認。 */
+  exists: async (bucket: string, path: string): Promise<boolean> => {
+    const result = await supabase.storage.from(bucket).exists(path);
+    return result.data === true;
+  },
+
+  /** 指定パスの公開 URL を取得（存在チェックは行わない）。 */
+  getPublicUrl: (bucket: string, path: string): string => {
+    const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+    return data.publicUrl;
+  },
+
   uploadFromDataURL: async (dataURL: string, bucket: string) => {
     const blob = await fetch(dataURL).then((r) => r.blob());
     return storageUtils.upload(blob, bucket);

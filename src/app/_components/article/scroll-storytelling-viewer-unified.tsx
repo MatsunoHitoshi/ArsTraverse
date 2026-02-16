@@ -22,6 +22,7 @@ import {
   UpArrowIcon,
   ZoomInIcon,
 } from "../icons/icons";
+// import { TextToSpeech } from "../summary-generator/text-to-speech";
 import { getEdgeCompositeKeyFromLink } from "@/app/const/story-segment";
 import { StoryStepContent } from "./story-step-content";
 
@@ -375,6 +376,10 @@ export function ScrollStorytellingViewerUnified({
 
       {displayStep?.id !== "__overview__" && (
         <div className="fixed bottom-4 right-4 z-10 flex items-center gap-2">
+          {/* <TextToSpeech
+            text={progressStep?.text ?? ""}
+            className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-700/90 text-slate-200 shadow hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-50"
+          /> */}
           <button
             type="button"
             onClick={scrollToTop}
