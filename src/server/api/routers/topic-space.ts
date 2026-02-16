@@ -24,6 +24,7 @@ import type {
   NodeDiffType,
   RelationshipDiffType,
 } from "@/app/_utils/kg/get-nodes-and-relationships-from-result";
+import type { Prisma } from "@prisma/client";
 import {
   GraphChangeEntityType,
   GraphChangeRecordType,
@@ -119,11 +120,20 @@ const attachTopicSpaceGraphData = async (
   },
   additionalGraphIds: (string | undefined)[],
   ctx: { db: PrismaClient },
-) => {
+  documentIdsByGraphId?: Map<string, string>,
+): Promise<{
+  nodes: GraphNode[];
+  relationships: GraphRelationship[];
+  provenance: Array<{ sourceDocumentId: string; relationshipIds: string[] }>;
+}> => {
   let newGraphNodes: GraphNode[] = topicSpace.graphNodes;
   let newGraphRelationships: GraphRelationship[] =
     topicSpace.graphRelationships;
   const labelCheck = true;
+  const provenance: Array<{
+    sourceDocumentId: string;
+    relationshipIds: string[];
+  }> = [];
 
   if (additionalGraphIds.length > 0) {
     for (const graphId of additionalGraphIds) {
@@ -157,6 +167,20 @@ const attachTopicSpaceGraphData = async (
         },
         labelCheck,
       });
+
+      if (documentIdsByGraphId && graphId) {
+        const sourceDocumentId = documentIdsByGraphId.get(graphId);
+        const addedRelationshipIds = fusedGraph.relationships
+          .filter(
+            (r) =>
+              !newGraphRelationships.some((prev) => prev.id === r.id),
+          )
+          .map((r) => r.id);
+        if (sourceDocumentId && addedRelationshipIds.length > 0) {
+          provenance.push({ sourceDocumentId, relationshipIds: addedRelationshipIds });
+        }
+      }
+
       newGraphNodes = fusedGraph.nodes;
       newGraphRelationships = fusedGraph.relationships;
     }
@@ -175,7 +199,10 @@ const attachTopicSpaceGraphData = async (
     labelCheck,
   );
 
-  return newGraphWithProperties;
+  return {
+    ...newGraphWithProperties,
+    provenance,
+  };
 };
 
 const detachTopicSpaceGraphData = async (
@@ -268,15 +295,23 @@ export async function runAttachDocuments(
     where: { id: { in: input.documentIds }, isDeleted: false },
     include: { graph: true },
   });
-  const additionalGraphIds = attachDocuments
+  const attachDocumentsWithGraphs = attachDocuments
     .filter((doc) => doc.graph !== null)
     .filter(
       (doc) =>
         !topicSpace.sourceDocuments.some(
           (d) => d.graph?.id === doc.graph?.id,
         ),
-    )
-    .map((doc) => doc.graph?.id);
+    );
+  const additionalGraphIds = attachDocumentsWithGraphs.map(
+    (doc) => doc.graph?.id,
+  );
+  const documentIdsByGraphId = new Map(
+    attachDocumentsWithGraphs.map((d) => [
+      (d.graph as { id: string }).id,
+      d.id,
+    ]),
+  );
 
   const prevNodes = topicSpace.graphNodes;
   const prevRelationships = topicSpace.graphRelationships;
@@ -285,85 +320,104 @@ export async function runAttachDocuments(
     topicSpace,
     additionalGraphIds,
     ctx,
+    documentIdsByGraphId,
   );
 
-  const documentAttachedTopicSpace = await ctx.db.topicSpace.update({
-    where: { id: input.id },
-    data: {
-      sourceDocuments: {
-        connect: attachDocuments.map((doc) => ({ id: doc.id })),
+  return await ctx.db.$transaction(async (tx: Prisma.TransactionClient) => {
+    const db = tx;
+    const documentAttachedTopicSpace = await tx.topicSpace.update({
+      where: { id: input.id },
+      data: {
+        sourceDocuments: {
+          connect: attachDocuments.map((doc) => ({ id: doc.id })),
+        },
       },
-    },
-    include: { sourceDocuments: { include: { graph: true } } },
-  });
+      include: { sourceDocuments: { include: { graph: true } } },
+    });
 
-  const graphChangeHistory = await ctx.db.graphChangeHistory.create({
-    data: {
-      recordType: GraphChangeRecordType.TOPIC_SPACE,
-      recordId: documentAttachedTopicSpace.id,
-      description: "ドキュメントを追加しました",
-      user: { connect: { id: ctx.session.user.id } },
-    },
-  });
+    const graphChangeHistory = await tx.graphChangeHistory.create({
+      data: {
+        recordType: GraphChangeRecordType.TOPIC_SPACE,
+        recordId: documentAttachedTopicSpace.id,
+        description: "ドキュメントを追加しました",
+        user: { connect: { id: ctx.session.user.id } },
+      },
+    });
 
-  const nodeDiffs = diffNodes(
-    prevNodes.map((node) => formNodeDataForFrontend(node)),
-    updatedGraphData.nodes.map((n) => formNodeDataForFrontend(n)),
-  );
-  const addedNodesData = nodeDiffs
-    .filter((diff) => diff.type === GraphChangeType.ADD)
-    .map((node) => ({
-      id: node.updated?.id,
-      name: node.updated?.name ?? "",
-      label: node.updated?.label ?? "",
-      properties: node.updated?.properties ?? {},
-      topicSpaceId: input.id,
-    }));
-  await ctx.db.graphNode.createMany({ data: addedNodesData });
+    const nodeDiffs = diffNodes(
+      prevNodes.map((node) => formNodeDataForFrontend(node)),
+      updatedGraphData.nodes.map((n) => formNodeDataForFrontend(n)),
+    );
+    const addedNodesData = nodeDiffs
+      .filter((diff) => diff.type === GraphChangeType.ADD)
+      .map((node) => ({
+        id: node.updated?.id,
+        name: node.updated?.name ?? "",
+        label: node.updated?.label ?? "",
+        properties: node.updated?.properties ?? {},
+        topicSpaceId: input.id,
+      }));
+    await tx.graphNode.createMany({ data: addedNodesData });
 
-  const relationshipDiffs = diffRelationships(
-    prevRelationships.map((r) => formRelationshipDataForFrontend(r)),
-    updatedGraphData.relationships.map((r) =>
-      formRelationshipDataForFrontend(r),
-    ),
-  );
-  const addedRelationshipsData = relationshipDiffs
-    .filter((diff) => diff.type === GraphChangeType.ADD)
-    .map((relationship) => ({
-      id: relationship.updated?.id,
-      type: relationship.updated?.type ?? "",
-      properties: relationship.updated?.properties ?? {},
-      fromNodeId: relationship.updated?.sourceId ?? "",
-      toNodeId: relationship.updated?.targetId ?? "",
-      topicSpaceId: input.id,
-    }));
-  await ctx.db.graphRelationship.createMany({
-    data: addedRelationshipsData,
-  });
+    const relationshipDiffs = diffRelationships(
+      prevRelationships.map((r) => formRelationshipDataForFrontend(r)),
+      updatedGraphData.relationships.map((r) =>
+        formRelationshipDataForFrontend(r),
+      ),
+    );
+    const addedRelationshipsData = relationshipDiffs
+      .filter((diff) => diff.type === GraphChangeType.ADD)
+      .map((relationship) => ({
+        id: relationship.updated?.id,
+        type: relationship.updated?.type ?? "",
+        properties: relationship.updated?.properties ?? {},
+        fromNodeId: relationship.updated?.sourceId ?? "",
+        toNodeId: relationship.updated?.targetId ?? "",
+        topicSpaceId: input.id,
+      }));
+    await tx.graphRelationship.createMany({
+      data: addedRelationshipsData,
+    });
 
-  const nodeChangeHistories = nodeDiffs.map((diff: NodeDiffType) => ({
-    changeType: diff.type,
-    changeEntityType: GraphChangeEntityType.NODE,
-    changeEntityId: String(diff.original?.id ?? diff.updated?.id),
-    previousState: diff.original ?? {},
-    nextState: diff.updated ?? {},
-    graphChangeHistoryId: graphChangeHistory.id,
-  }));
-  const relationshipChangeHistories = relationshipDiffs.map(
-    (diff: RelationshipDiffType) => ({
+    const nodeChangeHistories = nodeDiffs.map((diff: NodeDiffType) => ({
       changeType: diff.type,
-      changeEntityType: GraphChangeEntityType.EDGE,
+      changeEntityType: GraphChangeEntityType.NODE,
       changeEntityId: String(diff.original?.id ?? diff.updated?.id),
       previousState: diff.original ?? {},
       nextState: diff.updated ?? {},
       graphChangeHistoryId: graphChangeHistory.id,
-    }),
-  );
-  await ctx.db.nodeLinkChangeHistory.createMany({
-    data: [...nodeChangeHistories, ...relationshipChangeHistories],
-  });
+    }));
+    const relationshipChangeHistories = relationshipDiffs.map(
+      (diff: RelationshipDiffType) => ({
+        changeType: diff.type,
+        changeEntityType: GraphChangeEntityType.EDGE,
+        changeEntityId: String(diff.original?.id ?? diff.updated?.id),
+        previousState: diff.original ?? {},
+        nextState: diff.updated ?? {},
+        graphChangeHistoryId: graphChangeHistory.id,
+      }),
+    );
+    await tx.nodeLinkChangeHistory.createMany({
+      data: [...nodeChangeHistories, ...relationshipChangeHistories],
+    });
 
-  return documentAttachedTopicSpace;
+    const provenanceData = updatedGraphData.provenance.flatMap((p) =>
+      p.relationshipIds.map((relId) => ({
+        topicSpaceId: input.id,
+        sourceDocumentId: p.sourceDocumentId,
+        graphRelationshipId: relId,
+      })),
+    );
+    if (provenanceData.length > 0) {
+      /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- TopicSpaceDocumentEdgeProvenance exists in schema; Prisma.TransactionClient type may lag */
+      await (db as PrismaClient).topicSpaceDocumentEdgeProvenance.createMany({
+        data: provenanceData,
+      });
+      /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+    }
+
+    return documentAttachedTopicSpace;
+  });
 }
 
 /** detachDocument と同じ処理をルーター外から実行（kg-copilot の本文KG統合など） */
@@ -384,16 +438,6 @@ export async function runDetachDocument(
   ) {
     throw new Error("TopicSpace not found");
   }
-
-  const documentDetachedTopicSpace = await ctx.db.topicSpace.update({
-    where: { id: input.id },
-    data: {
-      sourceDocuments: {
-        disconnect: { id: input.documentId },
-      },
-    },
-    include: { sourceDocuments: { include: { graph: true } } },
-  });
 
   const prevNodes = await ctx.db.graphNode.findMany({
     where: { topicSpaceId: input.id },
@@ -424,72 +468,105 @@ export async function runDetachDocument(
     ctx,
   );
 
-  await ctx.db.graphNode.updateMany({
-    where: {
-      id: { in: detachedGraphData.deletedNodes.map((node) => node.id) },
-    },
-    data: { topicSpaceId: null, deletedAt: new Date() },
-  });
-  await ctx.db.graphRelationship.updateMany({
-    where: {
-      id: {
-        in: detachedGraphData.deletedRelationships.map((rel) => rel.id),
+  return await ctx.db.$transaction(async (tx: Prisma.TransactionClient) => {
+    const db = tx;
+    const documentDetachedTopicSpace = await tx.topicSpace.update({
+      where: { id: input.id },
+      data: {
+        sourceDocuments: {
+          disconnect: { id: input.documentId },
+        },
       },
-    },
-    data: { topicSpaceId: null, deletedAt: new Date() },
-  });
+      include: { sourceDocuments: { include: { graph: true } } },
+    });
 
-  const graphChangeHistory = await ctx.db.graphChangeHistory.create({
-    data: {
-      recordType: GraphChangeRecordType.TOPIC_SPACE,
-      recordId: documentDetachedTopicSpace.id,
-      description: "ドキュメントを削除しました",
-      user: { connect: { id: ctx.session.user.id } },
-    },
-  });
+    /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return -- TopicSpaceDocumentEdgeProvenance exists in schema; Prisma.TransactionClient type may lag */
+    const provenanceEdges =
+      await (db as PrismaClient).topicSpaceDocumentEdgeProvenance.findMany({
+        where: {
+          topicSpaceId: input.id,
+          sourceDocumentId: input.documentId,
+        },
+      });
+    const allEdgeIdsToRemove = [
+      ...detachedGraphData.deletedRelationships.map((r) => r.id),
+      ...provenanceEdges.map((p) => p.graphRelationshipId),
+    ];
+    /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
+    const uniqueEdgeIds = [...new Set(allEdgeIdsToRemove)];
 
-  const updatedGraphData = {
-    nodes: await ctx.db.graphNode.findMany({
-      where: { topicSpaceId: input.id },
-    }),
-    relationships: await ctx.db.graphRelationship.findMany({
-      where: { topicSpaceId: input.id },
-    }),
-  };
+    await tx.graphNode.updateMany({
+      where: {
+        id: { in: detachedGraphData.deletedNodes.map((node) => node.id) },
+      },
+      data: { topicSpaceId: null, deletedAt: new Date() },
+    });
+    await tx.graphRelationship.updateMany({
+      where: { id: { in: uniqueEdgeIds } },
+      data: { topicSpaceId: null, deletedAt: new Date() },
+    });
 
-  const nodeDiffs = diffNodes(
-    prevNodes.map((node) => formNodeDataForFrontend(node)),
-    updatedGraphData.nodes.map((node) => formNodeDataForFrontend(node)),
-  );
-  const relationshipDiffs = diffRelationships(
-    prevRelationships.map((r) => formRelationshipDataForFrontend(r)),
-    updatedGraphData.relationships.map((r) =>
-      formRelationshipDataForFrontend(r),
-    ),
-  );
-  const nodeChangeHistories = nodeDiffs.map((diff: NodeDiffType) => ({
-    changeType: diff.type,
-    changeEntityType: GraphChangeEntityType.NODE,
-    changeEntityId: String(diff.original?.id ?? diff.updated?.id),
-    previousState: diff.original ?? {},
-    nextState: diff.updated ?? {},
-    graphChangeHistoryId: graphChangeHistory.id,
-  }));
-  const relationshipChangeHistories = relationshipDiffs.map(
-    (diff: RelationshipDiffType) => ({
+    /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- TopicSpaceDocumentEdgeProvenance exists in schema */
+    await (db as PrismaClient).topicSpaceDocumentEdgeProvenance.deleteMany({
+      where: {
+        topicSpaceId: input.id,
+        sourceDocumentId: input.documentId,
+      },
+    });
+    /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+
+    const graphChangeHistory = await tx.graphChangeHistory.create({
+      data: {
+        recordType: GraphChangeRecordType.TOPIC_SPACE,
+        recordId: documentDetachedTopicSpace.id,
+        description: "ドキュメントを削除しました",
+        user: { connect: { id: ctx.session.user.id } },
+      },
+    });
+
+    const updatedGraphData = {
+      nodes: await tx.graphNode.findMany({
+        where: { topicSpaceId: input.id },
+      }),
+      relationships: await tx.graphRelationship.findMany({
+        where: { topicSpaceId: input.id },
+      }),
+    };
+
+    const nodeDiffs = diffNodes(
+      prevNodes.map((node) => formNodeDataForFrontend(node)),
+      updatedGraphData.nodes.map((node) => formNodeDataForFrontend(node)),
+    );
+    const relationshipDiffs = diffRelationships(
+      prevRelationships.map((r) => formRelationshipDataForFrontend(r)),
+      updatedGraphData.relationships.map((r) =>
+        formRelationshipDataForFrontend(r),
+      ),
+    );
+    const nodeChangeHistories = nodeDiffs.map((diff: NodeDiffType) => ({
       changeType: diff.type,
-      changeEntityType: GraphChangeEntityType.EDGE,
+      changeEntityType: GraphChangeEntityType.NODE,
       changeEntityId: String(diff.original?.id ?? diff.updated?.id),
       previousState: diff.original ?? {},
       nextState: diff.updated ?? {},
       graphChangeHistoryId: graphChangeHistory.id,
-    }),
-  );
-  await ctx.db.nodeLinkChangeHistory.createMany({
-    data: [...nodeChangeHistories, ...relationshipChangeHistories],
-  });
+    }));
+    const relationshipChangeHistories = relationshipDiffs.map(
+      (diff: RelationshipDiffType) => ({
+        changeType: diff.type,
+        changeEntityType: GraphChangeEntityType.EDGE,
+        changeEntityId: String(diff.original?.id ?? diff.updated?.id),
+        previousState: diff.original ?? {},
+        nextState: diff.updated ?? {},
+        graphChangeHistoryId: graphChangeHistory.id,
+      }),
+    );
+    await tx.nodeLinkChangeHistory.createMany({
+      data: [...nodeChangeHistories, ...relationshipChangeHistories],
+    });
 
-  return documentDetachedTopicSpace;
+    return documentDetachedTopicSpace;
+  });
 }
 
 const adminGuard = (

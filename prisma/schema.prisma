@@ -221,6 +221,23 @@ model TopicSpace {
   
   // ストーリーから参照される（複数、1つのTopicSpaceは複数のStoryから参照され得る）
   referencedByStories Story[] @relation("StoryReferencedTopicSpace")
+
+  // ドキュメントアタッチ時に追加されたエッジの出所（detach 時に完全復元するため）
+  edgeProvenances TopicSpaceDocumentEdgeProvenance[]
+}
+
+model TopicSpaceDocumentEdgeProvenance {
+  id                  String   @id @default(cuid())
+  topicSpaceId        String
+  sourceDocumentId    String // FK にしない（ドキュメント削除時の扱いを単純化）
+  graphRelationshipId String
+
+  topicSpace TopicSpace @relation(fields: [topicSpaceId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([topicSpaceId, sourceDocumentId, graphRelationshipId])
+  @@index([topicSpaceId, sourceDocumentId])
 }
 
 enum GraphDataStatus {
