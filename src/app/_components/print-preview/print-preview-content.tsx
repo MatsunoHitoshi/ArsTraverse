@@ -12,6 +12,7 @@ import { PrintUnifiedGraphView } from "./print-unified-graph-view";
 import { PdfExportButton } from "./pdf-export-button";
 import { convertUnit, PAGE_SIZE_TEMPLATES } from "./types";
 import { filterGraphByLayoutInstruction } from "@/app/_utils/kg/filter-graph-by-layout-instruction";
+import { getSegmentNodeIdsFromMetaGraphStoryData } from "@/app/_utils/story-scroll-utils";
 import "./print-styles.css";
 
 /** detailedStories の1件から表示用テキストを取得（string | JSONContent を string に正規化） */
@@ -64,8 +65,11 @@ export function PrintPreviewContent({
   const graphDataForView = useMemo(() => {
     const filter = metaGraphData.filter;
     if (!filter || !originalGraphData) return originalGraphData;
-    return filterGraphByLayoutInstruction(originalGraphData, filter);
-  }, [originalGraphData, metaGraphData.filter]);
+    const segmentNodeIds = getSegmentNodeIdsFromMetaGraphStoryData(metaGraphData);
+    return filterGraphByLayoutInstruction(originalGraphData, filter, {
+      segmentNodeIds: segmentNodeIds.length ? segmentNodeIds : undefined,
+    });
+  }, [originalGraphData, metaGraphData]);
 
   // ナラティブフローに従ってストーリーアイテムをソート
   const storyItems = useMemo(() => {

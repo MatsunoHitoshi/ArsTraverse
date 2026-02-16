@@ -9,6 +9,7 @@ import type { ScrollamaStepCallbackArg, ScrollamaProgressCallbackArg } from "rea
 import { StorytellingGraphUnified } from "../d3/force/storytelling-graph-unified";
 import {
   buildScrollStepsFromMetaGraphStoryData,
+  getSegmentNodeIdsFromMetaGraphStoryData,
   type ScrollStep,
 } from "@/app/_utils/story-scroll-utils";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -351,6 +352,7 @@ export function ScrollStorytellingViewerUnified({
         width={graphSize.width}
         height={graphSize.height}
         filter={metaGraphData.filter}
+        segmentNodeIds={getSegmentNodeIdsFromMetaGraphStoryData(metaGraphData)}
         freeExploreMode={isFreeExploreMode}
         isPc={isPc}
         communityMap={metaGraphData.communityMap}

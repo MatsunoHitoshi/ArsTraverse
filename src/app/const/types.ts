@@ -390,6 +390,12 @@ export type LayoutInstruction = {
      * デフォルト: true
      */
     includeNeighbors?: boolean;
+    /** セグメントでハイライトされているノードを含めるかどうか（ストーリーテリング時）
+     * true: フィルタで除外されても、セグメント参照ノードは残す
+     * false: フィルタに従いセグメントノードも除外する
+     * デフォルト: true
+     */
+    includeSegmentNodes?: boolean;
   };
 };
 

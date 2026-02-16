@@ -16,6 +16,8 @@ interface FilterSectionProps {
   /** ルートのフィルタ条件（単一条件またはグループ、再帰的） */
   rootCondition: FilterCondition | undefined;
   showCenterNodesSettings?: boolean;
+  /** セグメントノードオプションを表示（ストーリーテリング時のみ） */
+  showSegmentNodesOption?: boolean;
   onRootConditionChange: (condition: FilterCondition | undefined) => void;
   onUpdateFilter: (updates: Partial<LayoutInstruction["filter"]>) => void;
   onApplyConditions: () => void;
@@ -27,7 +29,8 @@ export const FilterSection = ({
   onRootConditionChange,
   onUpdateFilter,
   onApplyConditions,
-  showCenterNodesSettings = true
+  showCenterNodesSettings = true,
+  showSegmentNodesOption = false,
 }: FilterSectionProps) => {
   const handleAddCondition = () => {
     if (!rootCondition) {
@@ -113,7 +116,7 @@ export const FilterSection = ({
               </Button>
             </div>
           </div>
-          <div className="border-b border-slate-600 pb-4">
+          <div className="space-y-3 border-b border-slate-600 pb-4">
             <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-400">
               <input
                 type="checkbox"
@@ -125,6 +128,19 @@ export const FilterSection = ({
               />
               フィルタ結果の隣接ノードを含める
             </label>
+            {showSegmentNodesOption && (
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-400">
+                <input
+                  type="checkbox"
+                  checked={filter?.includeSegmentNodes !== false}
+                  onChange={(e) =>
+                    onUpdateFilter({ includeSegmentNodes: e.target.checked })
+                  }
+                  className="rounded border-slate-600 bg-slate-900"
+                />
+                セグメントでハイライトされているノードを残す
+              </label>
+            )}
           </div>
           {!rootCondition ? (
             <div className="py-4 text-center text-xs text-slate-400">

@@ -171,6 +171,7 @@ export const LayoutInstructionSchema: z.ZodType<LayoutInstruction> = z.object({
       maxHops: z.number().optional(),
       condition: FilterConditionSchema.optional(),
       includeNeighbors: z.boolean().optional(),
+      includeSegmentNodes: z.boolean().optional(),
     })
     .optional(),
 });
@@ -182,6 +183,7 @@ export const LayoutInstructionFilterSchema = z
     maxHops: z.number().optional(),
     condition: FilterConditionSchema.optional(),
     includeNeighbors: z.boolean().optional(),
+    includeSegmentNodes: z.boolean().optional(),
   })
   .optional();
 

@@ -939,6 +939,7 @@ export const SnapshotStoryboard = ({
               onUpdateFilter={handleUpdateFilter}
               onApplyConditions={handleApplyFilterConditions}
               showCenterNodesSettings={false}
+              showSegmentNodesOption={true}
             />
           </div>
         ) : (
