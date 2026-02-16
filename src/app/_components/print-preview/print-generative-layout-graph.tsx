@@ -1791,6 +1791,18 @@ export const PrintGenerativeLayoutGraph = ({
                       })()
                       : effectiveDetailedGraphLayout.nodes;
 
+                  // リンクのない単体ノードは表示しない
+                  const linkedNodeIds = new Set<string>();
+                  effectiveDetailedGraphLayout.links.forEach((link) => {
+                    const src = link.source as CustomNodeType;
+                    const tgt = link.target as CustomNodeType;
+                    if (src?.id) linkedNodeIds.add(src.id);
+                    if (tgt?.id) linkedNodeIds.add(tgt.id);
+                  });
+                  nodesToRender = nodesToRender.filter((node) =>
+                    linkedNodeIds.has(node.id),
+                  );
+
                   // ストーリーコミュニティのみ表示する場合、フィルタリング
                   if (storyCommunityNodeIds) {
                     nodesToRender = nodesToRender.filter((node) =>

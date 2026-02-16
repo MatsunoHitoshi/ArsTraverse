@@ -114,6 +114,14 @@
     width: 100% !important;
     height: auto !important;
     display: block !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* SVG内のグラデーション・半透明要素を印刷時に確実に出力する（MetaGraphノードなど） */
+  .print-unified-graph-view svg * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   /* 色の調整（グレースケールモード用） */
