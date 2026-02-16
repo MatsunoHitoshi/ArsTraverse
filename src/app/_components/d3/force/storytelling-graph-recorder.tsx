@@ -151,6 +151,11 @@ export const StorytellingGraphRecorder = forwardRef<
     [metaGraphData.summaries],
   );
 
+  const segmentNodeIds = useMemo(
+    () => getSegmentNodeIdsFromMetaGraphStoryData(metaGraphData),
+    [metaGraphData],
+  );
+
   // 実際の録画処理（SVGがマウントされた後に呼ばれる）
   const executeRecording = useCallback(
     async (config: RecordingConfig) => {
@@ -341,7 +346,7 @@ export const StorytellingGraphRecorder = forwardRef<
             width={RECORDING_WIDTH}
             height={RECORDING_HEIGHT}
             filter={metaGraphData.filter}
-            segmentNodeIds={getSegmentNodeIdsFromMetaGraphStoryData(metaGraphData)}
+            segmentNodeIds={segmentNodeIds}
             freeExploreMode={false}
             isPc={true}
             communityMap={metaGraphData.communityMap}

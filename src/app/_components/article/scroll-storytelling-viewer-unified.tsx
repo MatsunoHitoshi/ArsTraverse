@@ -209,6 +209,11 @@ export function ScrollStorytellingViewerUnified({
     [metaGraphData.summaries],
   );
 
+  const allSegmentNodeIds = useMemo(
+    () => getSegmentNodeIdsFromMetaGraphStoryData(metaGraphData),
+    [metaGraphData],
+  );
+
   const animationProgress =
     isFreeExploreMode
       ? 1
@@ -352,7 +357,7 @@ export function ScrollStorytellingViewerUnified({
         width={graphSize.width}
         height={graphSize.height}
         filter={metaGraphData.filter}
-        segmentNodeIds={getSegmentNodeIdsFromMetaGraphStoryData(metaGraphData)}
+        segmentNodeIds={allSegmentNodeIds}
         freeExploreMode={isFreeExploreMode}
         isPc={isPc}
         communityMap={metaGraphData.communityMap}
