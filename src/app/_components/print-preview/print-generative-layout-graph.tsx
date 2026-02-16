@@ -1630,7 +1630,11 @@ export const PrintGenerativeLayoutGraph = ({
                           const dx = target.x - source.x;
                           const dy = target.y - source.y;
                           const distance = Math.sqrt(dx * dx + dy * dy);
-                          const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+                          /** ラベルが逆さまにならないよう角度を [-90, 90] に制限（storytelling-graph-unified と同様） */
+                          const rawAngleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
+                          let angle = rawAngleDeg;
+                          if (angle > 90) angle -= 180;
+                          else if (angle < -90) angle += 180;
                           const labelX = (source.x + target.x) / 2;
                           const labelY = (source.y + target.y) / 2;
 
@@ -1652,13 +1656,18 @@ export const PrintGenerativeLayoutGraph = ({
                               ? DIM_EDGE_OPACITY
                               : 1;
 
+                          const labelFill =
+                            hasFocusMode && hasFocusInGroup
+                              ? darkenHexColor(edgeFocusColor, 0.5)
+                              : "#a3b0c7";
+
                           return (
                             <text
                               key={`label-${groupKey}`}
                               x={labelX}
                               y={labelY}
                               textAnchor="middle"
-                              fill="#a3b0c7"
+                              fill={labelFill}
                               fontSize={effectiveFontSize}
                               fontWeight={
                                 hasFocusMode && hasFocusInGroup ? "bold" : "normal"
