@@ -21,8 +21,10 @@ import type { Simulation, ForceLink } from "d3";
 import { useEffect, useMemo, useRef, useState, memo } from "react";
 import { D3ZoomProvider } from "../zoom";
 import { getNodeByIdForFrontend } from "@/app/_utils/kg/filter";
+import { Input } from "@headlessui/react";
 import { Button } from "../../button/button";
 import { GraphIcon, ReloadIcon } from "../../icons";
+import clsx from "clsx";
 
 /** 同一ノード対のエッジをグループ化するキー（ソース・ターゲットの順序を正規化） */
 function getNodePairKey(link: CustomLinkType): string {
@@ -133,7 +135,7 @@ const GenerativeGraphNode = memo(function GenerativeGraphNode({
           <circle
             r={r}
             fill="none"
-            stroke={fillColor}
+            stroke={queryFiltered ? "#ef4444" : fillColor}
             strokeWidth={queryFiltered ? 2.5 : 1}
           />
         </>
@@ -142,8 +144,14 @@ const GenerativeGraphNode = memo(function GenerativeGraphNode({
           r={r}
           fill={isMetaNode && gradientId ? `url(#${gradientId})` : fillColor}
           opacity={isMetaNode ? 1 : 0.9}
-          stroke={isMetaNode ? undefined : strokeColor}
-          strokeWidth={isMetaNode ? 0 : queryFiltered ? 2.5 : 0}
+          stroke={
+            isMetaNode
+              ? (queryFiltered ? "#ef4444" : undefined)
+              : queryFiltered
+                ? "#ef4444"
+                : strokeColor
+          }
+          strokeWidth={isMetaNode ? (queryFiltered ? 2.5 : 0) : queryFiltered ? 2.5 : 0}
         />
       )}
       {currentScale > 0.7 && (
@@ -210,7 +218,8 @@ export const GenerativeLayoutGraph = ({
   layoutInstruction,
   onNodeClick,
   isLinkFiltered,
-  nodeSearchQuery,
+  nodeSearchQuery: nodeSearchQueryProp,
+  onNodeSearchQueryChange,
   viewMode = "detailed",
   metaNodeData,
   focusedCommunityId,
@@ -234,6 +243,7 @@ export const GenerativeLayoutGraph = ({
   onNodeClick?: (node: CustomNodeType) => void;
   isLinkFiltered?: boolean;
   nodeSearchQuery?: string;
+  onNodeSearchQueryChange?: (query: string) => void;
   viewMode?: "detailed" | "meta";
   metaNodeData?: Array<{
     communityId: string;
@@ -267,6 +277,13 @@ export const GenerativeLayoutGraph = ({
     segmentSelectionEdit?.edgeIds ?? focusedSegmentRef?.edgeIds ?? [];
   const isSegmentHighlightActive =
     segmentSelectionEdit != null || focusedSegmentRef != null;
+
+  // 検索クエリ: 親から渡された場合はそれを使い、そうでなければ内部状態
+  const [internalSearchQuery, setInternalSearchQuery] = useState("");
+  const nodeSearchQuery =
+    nodeSearchQueryProp ?? internalSearchQuery;
+  const setNodeSearchQuery =
+    onNodeSearchQueryChange ?? setInternalSearchQuery;
 
   const svgRef = useRef<SVGSVGElement>(null);
   const [currentScale, setCurrentScale] = useState<number>(1);
@@ -1220,26 +1237,38 @@ export const GenerativeLayoutGraph = ({
 
   return (
     <div className="relative h-full w-full">
-      {/* シミュレーション再実行ボタン（メタグラフモードの時のみ表示） */}
-      {viewMode === "meta" && (
-        <>
-          <Button
-            onClick={() => setAlwaysShowDetailedGraph(!alwaysShowDetailedGraph)}
-            className={`absolute right-14 top-4 z-10 !h-8 !w-8 !p-2 text-sm transition-colors ${alwaysShowDetailedGraph
-              ? "bg-blue-600/50 hover:bg-blue-600/70"
-              : "bg-transparent hover:bg-slate-50/10"
-              }`}
-          >
-            <GraphIcon width={16} height={16} color="white" />
-          </Button>
-          <Button
-            onClick={handleRerunSimulation}
-            className="absolute right-4 top-4 z-10 !h-8 !w-8 bg-transparent !p-2 text-sm hover:bg-slate-50/10"
-          >
-            <ReloadIcon width={16} height={16} color="white" />
-          </Button>
-        </>
-      )}
+      {/* 検索欄とシミュレーション再実行ボタン（メタグラフモードの時のみボタン表示） */}
+      <div className="absolute right-4 top-4 z-10 flex items-center gap-2">
+        <Input
+          type="text"
+          placeholder="ノードを検索"
+          value={nodeSearchQuery}
+          onChange={(e) => setNodeSearchQuery(e.target.value)}
+          className={clsx(
+            "block w-40 rounded-lg border-none bg-white/10 px-3 py-1.5 text-sm text-white placeholder:text-white/60",
+            "focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:ring-offset-1 focus:ring-offset-slate-900",
+          )}
+        />
+        {viewMode === "meta" && (
+          <>
+            <Button
+              onClick={() => setAlwaysShowDetailedGraph(!alwaysShowDetailedGraph)}
+              className={`!h-8 !w-8 !p-2 text-sm transition-colors ${alwaysShowDetailedGraph
+                ? "bg-blue-600/50 hover:bg-blue-600/70"
+                : "bg-transparent hover:bg-slate-50/10"
+                }`}
+            >
+              <GraphIcon width={16} height={16} color="white" />
+            </Button>
+            <Button
+              onClick={handleRerunSimulation}
+              className="!h-8 !w-8 bg-transparent !p-2 text-sm hover:bg-slate-50/10"
+            >
+              <ReloadIcon width={16} height={16} color="white" />
+            </Button>
+          </>
+        )}
+      </div>
       <svg ref={svgRef} width={width} height={height} className="block">
         {/* グラデーション定義（MetaNode用） */}
         <defs>

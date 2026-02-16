@@ -204,6 +204,7 @@ export default function LayoutEditPage() {
                   layoutInstruction={layoutInstruction}
                   isLinkFiltered={isLinkFiltered}
                   nodeSearchQuery={nodeSearchQuery}
+                  onNodeSearchQueryChange={setNodeSearchQuery}
                   onNodeClick={(node) => setSelectedNode(node)}
                   viewMode={
                     isMetaGraphMode || isStorytellingMode ? "meta" : "detailed"
