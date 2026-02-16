@@ -133,6 +133,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   width,
   height,
   filter,
+  segmentNodeIds,
   freeExploreMode = false,
   isPc = false,
   communityMap,
@@ -151,6 +152,8 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   width: number;
   height: number;
   filter?: LayoutInstruction["filter"];
+  /** セグメントで参照されているノードID（includeSegmentNodes が true のときにフィルタ結果に追加） */
+  segmentNodeIds?: string[];
   freeExploreMode?: boolean;
   /** 親で判定したPC/SP。padding・端グラデーションなどに使用 */
   isPc?: boolean;
@@ -216,10 +219,12 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   }, [freeExploreMode]);
   const baseGraph = useMemo(() => {
     if (filter) {
-      return filterGraphByLayoutInstruction(graphDocument, filter);
+      return filterGraphByLayoutInstruction(graphDocument, filter, {
+        segmentNodeIds: segmentNodeIds?.length ? segmentNodeIds : undefined,
+      });
     }
     return graphDocument;
-  }, [graphDocument, filter]);
+  }, [graphDocument, filter, segmentNodeIds]);
 
   const initNodes = useMemo((): CustomNodeType[] => {
     if (!baseGraph?.nodes?.length) return [];

@@ -45,6 +45,7 @@ import { useGraphEditor } from "@/app/_hooks/use-graph-editor";
 import { createSubgraphFromSelectedNodes } from "@/app/_utils/kg/create-subgraph-from-selected-nodes";
 import { filterGraphByEntityNames } from "@/app/_utils/kg/filter-graph-by-entity-names";
 import { filterGraphByLayoutInstruction } from "@/app/_utils/kg/filter-graph-by-layout-instruction";
+import { getSegmentNodeIdsFromMetaGraphStoryData } from "@/app/_utils/story-scroll-utils";
 import {
   LinkPropertyEditModal,
   NodePropertyEditModal,
@@ -393,8 +394,13 @@ const CuratorsWritingWorkspace = ({
   /** ストーリーボード「反映」で絞り込んだグラフ（右パネル表示用） */
   const storyFilteredGraph = useMemo(() => {
     if (!graphDocument || !storyFilter) return null;
-    return filterGraphByLayoutInstruction(graphDocument, storyFilter);
-  }, [graphDocument, storyFilter]);
+    const segmentNodeIds = metaGraphStory.metaGraphData
+      ? getSegmentNodeIdsFromMetaGraphStoryData(metaGraphStory.metaGraphData)
+      : undefined;
+    return filterGraphByLayoutInstruction(graphDocument, storyFilter, {
+      segmentNodeIds: segmentNodeIds?.length ? segmentNodeIds : undefined,
+    });
+  }, [graphDocument, storyFilter, metaGraphStory.metaGraphData]);
 
   const tiptapSelectedGraphDocument = useMemo(() => {
     if (!graphDocument) return null;

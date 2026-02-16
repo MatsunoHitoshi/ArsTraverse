@@ -44,6 +44,7 @@ export const StorytellingGraph = memo(function StorytellingGraph({
   width,
   height,
   filter,
+  segmentNodeIds,
 }: {
   graphDocument: GraphDocumentForFrontend;
   focusNodeIds: string[];
@@ -52,13 +53,17 @@ export const StorytellingGraph = memo(function StorytellingGraph({
   width: number;
   height: number;
   filter?: LayoutInstruction["filter"];
+  /** セグメントで参照されているノードID（includeSegmentNodes が true のときにフィルタ結果に追加） */
+  segmentNodeIds?: string[];
 }) {
   const baseGraph = useMemo(() => {
     if (filter) {
-      return filterGraphByLayoutInstruction(graphDocument, filter);
+      return filterGraphByLayoutInstruction(graphDocument, filter, {
+        segmentNodeIds: segmentNodeIds?.length ? segmentNodeIds : undefined,
+      });
     }
     return graphDocument;
-  }, [graphDocument, filter]);
+  }, [graphDocument, filter, segmentNodeIds]);
 
   const subGraph = useMemo((): GraphDocumentForFrontend | undefined => {
     /* getSubgraphForStep is typed GraphDocumentForFrontend | undefined; eslint mis-infers as error */

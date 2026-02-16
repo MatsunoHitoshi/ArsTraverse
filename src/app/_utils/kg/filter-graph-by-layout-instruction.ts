@@ -102,12 +102,18 @@ function buildAdjacencyList(
   return adj;
 }
 
+export interface FilterGraphOptions {
+  /** セグメントで参照されているノードID（includeSegmentNodes が true のときにフィルタ結果に追加） */
+  segmentNodeIds?: string[];
+}
+
 /**
  * LayoutInstructionのfilterに基づいてグラフをフィルタリング（クライアント用）
  */
 export function filterGraphByLayoutInstruction(
   graph: GraphDocumentForFrontend,
   filter: NonNullable<LayoutInstruction["filter"]>,
+  options?: FilterGraphOptions,
 ): GraphDocumentForFrontend {
   if (!filter) return graph;
   let candidateNodes: NodeTypeForFrontend[] = [];
@@ -143,6 +149,24 @@ export function filterGraphByLayoutInstruction(
         ),
     );
     finalNodes = [...candidateNodes, ...neighborNodes];
+  }
+  // セグメント参照ノードを追加（includeSegmentNodes が true のとき）
+  if (filter.includeSegmentNodes !== false && options?.segmentNodeIds?.length) {
+    const currentNodeIds = new Set(finalNodes.map((n) => n.id));
+    const nodeById = new Map(graph.nodes.map((n) => [n.id, n]));
+    const segmentNodesToAdd: NodeTypeForFrontend[] = [];
+    for (const nodeId of options.segmentNodeIds) {
+      if (!currentNodeIds.has(nodeId)) {
+        const node = nodeById.get(nodeId);
+        if (node) {
+          segmentNodesToAdd.push(node);
+          currentNodeIds.add(nodeId);
+        }
+      }
+    }
+    if (segmentNodesToAdd.length > 0) {
+      finalNodes = [...finalNodes, ...segmentNodesToAdd];
+    }
   }
   const finalNodeIds = new Set(finalNodes.map((n) => n.id));
   const filteredRelationships = graph.relationships.filter(

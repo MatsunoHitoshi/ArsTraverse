@@ -136,3 +136,16 @@ export function buildScrollStepsFromMetaGraphStoryData(
 
   return steps;
 }
+
+/**
+ * MetaGraphStoryData から全セグメントで参照されているノードIDの重複排除セットを取得。
+ * フィルタで「セグメントノードを残す」オプション用。
+ */
+export function getSegmentNodeIdsFromMetaGraphStoryData(
+  metaGraphData: MetaGraphStoryData,
+): string[] {
+  const steps = buildScrollStepsFromMetaGraphStoryData(metaGraphData);
+  const ids = new Set<string>();
+  steps.forEach((s) => s.nodeIds.forEach((id) => ids.add(id)));
+  return Array.from(ids);
+}

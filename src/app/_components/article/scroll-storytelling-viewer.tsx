@@ -9,6 +9,7 @@ import type { ScrollamaStepCallbackArg, ScrollamaProgressCallbackArg } from "rea
 import { StorytellingGraph } from "../d3/force/storytelling-graph";
 import {
   buildScrollStepsFromMetaGraphStoryData,
+  getSegmentNodeIdsFromMetaGraphStoryData,
 } from "@/app/_utils/story-scroll-utils";
 import { useWindowSize } from "@/app/_hooks/use-window-size";
 
@@ -182,6 +183,7 @@ export function ScrollStorytellingViewer({
         width={graphSize.width}
         height={graphSize.height}
         filter={metaGraphData.filter}
+        segmentNodeIds={getSegmentNodeIdsFromMetaGraphStoryData(metaGraphData)}
       />
     </div>
   );

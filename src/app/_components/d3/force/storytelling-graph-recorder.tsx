@@ -11,7 +11,7 @@ import React, {
 import type { GraphDocumentForFrontend } from "@/app/const/types";
 import type { MetaGraphStoryData } from "@/app/_hooks/use-meta-graph-story";
 import { StorytellingGraphUnified } from "./storytelling-graph-unified";
-import { buildScrollStepsFromMetaGraphStoryData } from "@/app/_utils/story-scroll-utils";
+import { buildScrollStepsFromMetaGraphStoryData, getSegmentNodeIdsFromMetaGraphStoryData } from "@/app/_utils/story-scroll-utils";
 import { getEdgeCompositeKeyFromLink } from "@/app/const/story-segment";
 import { createSvgToCanvasRenderer } from "@/app/_utils/video/svg-to-canvas";
 import type { SvgToCanvasRenderer as SvgToCanvasRendererType } from "@/app/_utils/video/svg-to-canvas";
@@ -341,6 +341,7 @@ export const StorytellingGraphRecorder = forwardRef<
             width={RECORDING_WIDTH}
             height={RECORDING_HEIGHT}
             filter={metaGraphData.filter}
+            segmentNodeIds={getSegmentNodeIdsFromMetaGraphStoryData(metaGraphData)}
             freeExploreMode={false}
             isPc={true}
             communityMap={metaGraphData.communityMap}
