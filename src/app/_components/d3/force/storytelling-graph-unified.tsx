@@ -52,7 +52,7 @@ const EXPLORE_DIM_EDGE_OPACITY = 0.4;
 const EXPLORE_NEIGHBOR_EDGE_OPACITY = 0.8;
 
 /** スクロール表示時、scale がこの値を下回るとハイライト＋1ホップ以外のノードラベルを非表示にする */
-const LABEL_RESTRICT_SCALE_THRESHOLD = 2.0;
+const LABEL_RESTRICT_SCALE_THRESHOLD = 1.0;
 
 /** フォーカス遷移アニメーションの所要時間（ms） */
 const FOCUS_TRANSITION_MS = 1200;
@@ -1824,8 +1824,6 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
             : effectiveScaleForLabels >= LABEL_RESTRICT_SCALE_THRESHOLD
               ? true
               : neighborNodeIdSet.has(node.id);
-
-        console.log("effectiveScaleForLabels: ", effectiveScaleForLabels);
 
         return (
           <g
