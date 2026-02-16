@@ -39,10 +39,7 @@ import {
   type CreateSourceDocumentWithGraphInput,
   runCreateSourceDocumentWithGraphData,
 } from "./source-document";
-import {
-  runAttachDocuments,
-  runDetachDocument,
-} from "./topic-space";
+import { runAttachDocuments, runDetachDocument } from "./topic-space";
 
 // ---------------------------------------------------------------------------
 // generateMetaGraphFromText 用ヘルパー関数
@@ -54,7 +51,12 @@ type GraphDoc = z.infer<typeof GraphDocumentFrontendSchema>;
 async function runAnnotateStorySegments(
   communityId: string,
   segmentsToAnnotate: Array<{ text: string }>,
-  memberNodes: Array<{ id: string; name: string; label: string; properties?: Record<string, unknown> }>,
+  memberNodes: Array<{
+    id: string;
+    name: string;
+    label: string;
+    properties?: Record<string, unknown>;
+  }>,
   internalEdgesDetailed: Array<{
     sourceId: string;
     targetId: string;
@@ -138,30 +140,28 @@ Output JSON with segments array (same order, same text, add nodeIds and edgeIds 
       }>;
     };
     const raw = Array.isArray(parsed.segments) ? parsed.segments : [];
-    const segments: StorySegment[] = segmentsToAnnotate.map(
-      (inputSeg, idx) => {
-        const r = raw[idx];
-        const text = inputSeg.text;
-        if (!r) {
-          return {
-            text,
-            nodeIds: [],
-            edgeIds: [],
-            source: "auto_annotated" as const,
-          };
-        }
+    const segments: StorySegment[] = segmentsToAnnotate.map((inputSeg, idx) => {
+      const r = raw[idx];
+      const text = inputSeg.text;
+      if (!r) {
         return {
           text,
-          nodeIds: Array.isArray(r.nodeIds)
-            ? r.nodeIds.filter((id) => validNodeIds.has(id))
-            : [],
-          edgeIds: Array.isArray(r.edgeIds)
-            ? r.edgeIds.filter((id) => validEdgeIds.has(id))
-            : [],
+          nodeIds: [],
+          edgeIds: [],
           source: "auto_annotated" as const,
         };
-      },
-    );
+      }
+      return {
+        text,
+        nodeIds: Array.isArray(r.nodeIds)
+          ? r.nodeIds.filter((id) => validNodeIds.has(id))
+          : [],
+        edgeIds: Array.isArray(r.edgeIds)
+          ? r.edgeIds.filter((id) => validEdgeIds.has(id))
+          : [],
+        source: "auto_annotated" as const,
+      };
+    });
     return { communityId, segments };
   } catch (e) {
     console.warn("runAnnotateStorySegments: JSON parse failed", e);
@@ -292,9 +292,7 @@ function assignCommunitiesToSections(
   graphDocument: GraphDoc,
   sections: SectionWithSegments[],
 ): CommunityAssignmentResult {
-  const nameToNode = new Map(
-    graphDocument.nodes.map((n) => [n.name, n]),
-  );
+  const nameToNode = new Map(graphDocument.nodes.map((n) => [n.name, n]));
   const communityIdBySectionIndex = (i: number) => `text-${i}` as const;
 
   const sectionSeedIds = sections.map(() => new Set<string>());
@@ -365,7 +363,7 @@ function assignCommunitiesToSections(
     const num = louvainLabels[node.id];
     const cid =
       num !== undefined
-        ? numericToSectionOrNonStory.get(num) ?? "louvain-0"
+        ? (numericToSectionOrNonStory.get(num) ?? "louvain-0")
         : "louvain-0";
     nodeToCommunity.set(node.id, cid);
   });
@@ -472,16 +470,13 @@ async function buildMetaGraphFromTextSections(
       const memberNodes = memberNodeIds
         .map((id) => graphDocument.nodes.find((n) => n.id === id))
         .filter((n): n is (typeof graphDocument.nodes)[0] => n !== undefined);
-      const externalConnMap =
-        communityExternalConnections.get(communityId);
+      const externalConnMap = communityExternalConnections.get(communityId);
       const externalConnections = externalConnMap
-        ? Array.from(externalConnMap.entries()).map(
-            ([targetCommId, data]) => ({
-              targetCommunityId: targetCommId,
-              edgeCount: data.count,
-              edgeTypes: Array.from(data.types),
-            }),
-          )
+        ? Array.from(externalConnMap.entries()).map(([targetCommId, data]) => ({
+            targetCommunityId: targetCommId,
+            edgeCount: data.count,
+            edgeTypes: Array.from(data.types),
+          }))
         : [];
       return {
         communityId,
@@ -499,10 +494,7 @@ async function buildMetaGraphFromTextSections(
       return metaNode.size >= minCommunitySize;
     });
 
-  const metaEdgesMap = new Map<
-    string,
-    { count: number; types: Set<string> }
-  >();
+  const metaEdgesMap = new Map<string, { count: number; types: Set<string> }>();
   graphDocument.relationships.forEach((rel) => {
     const sourceCommunity = nodeToCommunity.get(rel.sourceId);
     const targetCommunity = nodeToCommunity.get(rel.targetId);
@@ -532,7 +524,7 @@ async function buildMetaGraphFromTextSections(
     id: metaNode.communityId,
     name: metaNode.communityId.startsWith("text-")
       ? (sections[Number(metaNode.communityId.replace("text-", ""))]?.title ??
-          metaNode.communityId)
+        metaNode.communityId)
       : `Community ${metaNode.communityId}`,
     label: "Community",
     properties: {
@@ -545,12 +537,30 @@ async function buildMetaGraphFromTextSections(
     neighborLinkCount: metaNode.externalConnections.length,
     visible: true,
   }));
+
+  // h2 で区切られたセクションのうち、フィルタで除外されたものを metaGraph に追加（保存時に MetaGraphNode が必要）
+  for (const section of sections) {
+    const cid = `text-${section.sectionIndex}`;
+    if (validCommunityIds.has(cid)) continue;
+    metaGraphNodes.push({
+      id: cid,
+      name: section.title,
+      label: "Community",
+      properties: {
+        size: "0",
+        memberCount: "0",
+        memberNames: "",
+      },
+      topicSpaceId: undefined,
+      documentGraphId: undefined,
+      neighborLinkCount: 0,
+      visible: true,
+    });
+  }
   const metaGraphRelationships = Array.from(metaEdgesMap.entries())
     .filter(([edgeKey]) => {
       const [a, b] = edgeKey.split("-");
-      return (
-        validCommunityIds.has(a ?? "") && validCommunityIds.has(b ?? "")
-      );
+      return validCommunityIds.has(a ?? "") && validCommunityIds.has(b ?? "");
     })
     .map(([edgeKey, edgeData], index) => {
       const [sourceCommunity, targetCommunity] = edgeKey.split("-");
@@ -622,9 +632,7 @@ async function buildMetaGraphFromTextSections(
       : "";
     const internalEdgesText = internalEdges
       .slice(0, 10)
-      .map(
-        (e) => `${e.sourceName} --[${e.type}]--> ${e.targetName}`,
-      )
+      .map((e) => `${e.sourceName} --[${e.type}]--> ${e.targetName}`)
       .join(", ");
     return {
       communityId: metaNode.communityId,
@@ -642,29 +650,36 @@ async function buildMetaGraphFromTextSections(
     };
   });
 
-  const narrativeFlow = sections
-    .map((section) => `text-${section.sectionIndex}` as const)
-    .filter((cid) => validCommunityIds.has(cid) && cid.startsWith("text-"))
-    .map((cid, idx) => ({
+  // h2 で区切られたセクションのうち、フィルタで除外されたもの用のプレースホルダを追加
+  const existingCids = new Set(preparedCommunities.map((p) => p.communityId));
+  for (const section of sections) {
+    const cid = `text-${section.sectionIndex}`;
+    if (existingCids.has(cid)) continue;
+    preparedCommunities.push({
       communityId: cid,
-      order: idx + 1,
-      transitionText: "",
-    }));
+      memberNodeNames: [],
+      memberNodeLabels: [],
+      internalEdges: undefined,
+      externalConnections: undefined,
+      memberNodes: [],
+      internalEdgesDetailed: [],
+    });
+  }
 
-  const summaries = filteredMetaNodes.map((metaNode) => {
-    const sectionIndex = metaNode.communityId.startsWith("text-")
-      ? Number(metaNode.communityId.replace("text-", ""))
-      : -1;
-    const section =
-      sectionIndex >= 0 ? sections[sectionIndex] : undefined;
-    const title =
-      section?.title ?? `Community ${metaNode.communityId}`;
-    const summary =
-      section?.segments[0]?.text?.slice(0, 200) ?? "";
+  // h2 で区切られたセクションはすべて narrativeFlow に含める（Louvain/ノード数に依存しない）
+  const narrativeFlow = sections.map((section, idx) => ({
+    communityId: `text-${section.sectionIndex}` as const,
+    order: idx + 1,
+    transitionText: "",
+  }));
+
+  // h2 で区切られたセクションはすべて summaries に含める
+  const summaries = sections.map((section) => {
+    const cid = `text-${section.sectionIndex}`;
     return {
-      communityId: metaNode.communityId,
-      title,
-      summary,
+      communityId: cid,
+      title: section.title,
+      summary: section.segments[0]?.text?.slice(0, 200) ?? "",
     };
   });
 
@@ -672,21 +687,21 @@ async function buildMetaGraphFromTextSections(
   const preparedByCid = new Map(
     preparedCommunities.map((p) => [p.communityId, p]),
   );
+  // h2 で区切られたセクションはすべて detailedStories に含める
   const detailedStories: Record<string, string | JSONContent> = {};
-  const sectionPromises = sections
-    .filter((s) => validCommunityIds.has(`text-${s.sectionIndex}`))
-    .map(async (section) => {
-      const cid = `text-${section.sectionIndex}` as const;
-      const prepared = preparedByCid.get(cid);
-      if (!prepared) return { cid, segments: null as StorySegment[] | null };
-      const result = await runAnnotateStorySegments(
-        cid,
-        section.segments.map((s) => ({ text: s.text })),
-        prepared.memberNodes ?? [],
-        prepared.internalEdgesDetailed ?? [],
-      );
-      return { cid, segments: result.segments };
-    });
+  const sectionPromises = sections.map(async (section) => {
+    const cid = `text-${section.sectionIndex}` as const;
+    const prepared = preparedByCid.get(cid);
+    const memberNodes = prepared?.memberNodes ?? [];
+    const internalEdgesDetailed = prepared?.internalEdgesDetailed ?? [];
+    const result = await runAnnotateStorySegments(
+      cid,
+      section.segments.map((s) => ({ text: s.text })),
+      memberNodes,
+      internalEdgesDetailed,
+    );
+    return { cid, segments: result.segments };
+  });
   const annotationResults = await Promise.all(sectionPromises);
   for (const { cid, segments } of annotationResults) {
     if (segments) {
@@ -703,8 +718,24 @@ async function buildMetaGraphFromTextSections(
     }
   }
 
+  // 保存時に MetaGraphNode が必要なため、フィルタで除外されたセクションも metaNodes に含める
+  const allMetaNodes = [...filteredMetaNodes];
+  for (const section of sections) {
+    const cid = `text-${section.sectionIndex}`;
+    if (filteredMetaNodes.some((n) => n.communityId === cid)) continue;
+    allMetaNodes.push({
+      communityId: cid,
+      memberNodeIds: [],
+      memberNodeNames: [],
+      size: 0,
+      internalEdges: [],
+      externalConnections: [],
+      hasExternalConnections: false,
+    });
+  }
+
   return {
-    metaNodes: filteredMetaNodes,
+    metaNodes: allMetaNodes,
     metaGraph,
     communityMap,
     preparedCommunities,
@@ -2354,7 +2385,8 @@ ${narrativeContext.transitionTextAfter?.trim() ? `- Transition after this commun
       // 詳細情報がある場合はそれを使用、なければ簡易版を使用
       // memberNodes があればセグメント構造化ストーリーを生成（internalEdgesDetailed はオプション）
       const hasDetailedInfo = !!memberNodes && memberNodes.length > 0;
-      const hasEdgeInfo = !!internalEdgesDetailed && internalEdgesDetailed.length > 0;
+      const hasEdgeInfo =
+        !!internalEdgesDetailed && internalEdgesDetailed.length > 0;
       const validNodeIds = new Set(memberNodes?.map((n) => n.id) ?? []);
       const validEdgeIds = new Set(
         internalEdgesDetailed?.map((e) =>
@@ -2391,7 +2423,7 @@ ${hasEdgeInfo ? "- Explain HOW they are connected (use internal edge information
 
 [Output Format]
 You MUST output a valid JSON object only, no markdown or extra text:
-{"segments":[{"text":"...","nodeIds":["id1","id2"],"edgeIds":${hasEdgeInfo ? '["sourceId|targetId|type"]' : '[]'}},{"text":"...","nodeIds":[],"edgeIds":[]},...]}
+{"segments":[{"text":"...","nodeIds":["id1","id2"],"edgeIds":${hasEdgeInfo ? '["sourceId|targetId|type"]' : "[]"}},{"text":"...","nodeIds":[],"edgeIds":[]},...]}
 
 - "nodeIds" must contain ONLY ids from the [Members] list below.
 ${hasEdgeInfo ? '- "edgeIds" must contain ONLY keys from the [Edge IDs for output] list below.' : '- "edgeIds" must always be an empty array [] (no edge data available).'}`
@@ -2445,7 +2477,9 @@ ${(memberNodes ?? [])
       }`,
   )
   .join("\n")}
-${hasEdgeInfo ? `
+${
+  hasEdgeInfo
+    ? `
 [Internal Relationships (${internalEdgesDetailed?.length ?? 0} edges)]
 ${(internalEdgesDetailed ?? [])
   .map(
@@ -2461,10 +2495,12 @@ ${(internalEdgesDetailed ?? [])
 [Edge IDs for output] - use EXACTLY these strings in edgeIds
 ${(internalEdgesDetailed ?? [])
   .map((e) => toEdgeCompositeKey(e.sourceId, e.targetId, e.type))
-  .join("\n")}` : `
+  .join("\n")}`
+    : `
 [Internal Relationships]
 ${internalEdges ?? "No detailed edge data available"}
-`}
+`
+}
 
 [External Connections]
 ${externalConnections ?? "None (isolated community)"}

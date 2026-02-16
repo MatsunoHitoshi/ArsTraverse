@@ -235,13 +235,19 @@ export function convertFromDatabase(
       summary: metaNode.summary!.summary,
     }));
 
-  // narrativeFlow配列を構築（orderがnullでないもの）
+  // narrativeFlow配列を構築（summaryが存在しorderがnullでないもの）
   const narrativeFlow = storyData.metaNodes
-    .filter((metaNode) => metaNode.summary?.order !== null)
+    .filter(
+      (
+        metaNode,
+      ): metaNode is typeof metaNode & {
+        summary: NonNullable<typeof metaNode.summary> & { order: number };
+      } => metaNode.summary?.order != null,
+    )
     .map((metaNode) => ({
       communityId: metaNode.communityId,
-      order: metaNode.summary!.order!,
-      transitionText: metaNode.summary!.transitionText ?? "",
+      order: metaNode.summary.order,
+      transitionText: metaNode.summary.transitionText ?? "",
     }))
     .sort((a, b) => a.order - b.order);
 
@@ -268,7 +274,8 @@ export function convertFromDatabase(
         id: node.id,
         name: node.name,
         label: node.label,
-        properties: (typeof node.properties === "object" && node.properties !== null
+        properties: (typeof node.properties === "object" &&
+        node.properties !== null
           ? node.properties
           : {}) as Record<string, unknown>,
       }));
@@ -290,26 +297,32 @@ export function convertFromDatabase(
 
       // memberNodes に relationshipsFrom が含まれている場合、内部エッジを抽出
       for (const node of metaNode.memberNodes) {
-        const rels = (node as unknown as {
-          relationshipsFrom?: Array<{
-            id: string;
-            type: string;
-            properties: unknown;
-            fromNodeId: string;
-            toNodeId: string;
-          }>;
-        }).relationshipsFrom;
+        const rels = (
+          node as unknown as {
+            relationshipsFrom?: Array<{
+              id: string;
+              type: string;
+              properties: unknown;
+              fromNodeId: string;
+              toNodeId: string;
+            }>;
+          }
+        ).relationshipsFrom;
         if (rels) {
           for (const rel of rels) {
             // 両端が同じコミュニティ内にあるもののみ
-            if (memberNodeIds.has(rel.fromNodeId) && memberNodeIds.has(rel.toNodeId)) {
+            if (
+              memberNodeIds.has(rel.fromNodeId) &&
+              memberNodeIds.has(rel.toNodeId)
+            ) {
               internalEdgesDetailed.push({
                 sourceId: rel.fromNodeId,
                 sourceName: nodeIdToName.get(rel.fromNodeId) ?? "",
                 targetId: rel.toNodeId,
                 targetName: nodeIdToName.get(rel.toNodeId) ?? "",
                 type: rel.type,
-                properties: (typeof rel.properties === "object" && rel.properties !== null
+                properties: (typeof rel.properties === "object" &&
+                rel.properties !== null
                   ? rel.properties
                   : {}) as Record<string, unknown>,
               });
@@ -323,20 +336,20 @@ export function convertFromDatabase(
         memberNodeNames: metaNode.memberNodes.map((node) => node.name),
         memberNodeLabels: metaNode.memberNodes.map((node) => node.label),
         // 簡易版（summarizeCommunities用）
-        internalEdges: internalEdgesDetailed.length > 0
-          ? internalEdgesDetailed
-              .slice(0, 10)
-              .map((e) => `${e.sourceName} --[${e.type}]--> ${e.targetName}`)
-              .join(", ")
-          : undefined,
+        internalEdges:
+          internalEdgesDetailed.length > 0
+            ? internalEdgesDetailed
+                .slice(0, 10)
+                .map((e) => `${e.sourceName} --[${e.type}]--> ${e.targetName}`)
+                .join(", ")
+            : undefined,
         externalConnections: metaNode.hasExternalConnections
           ? "Has external connections"
           : undefined,
         // 詳細版（generateCommunityStory でセグメント構造化ストーリーを生成するために必要）
         memberNodes: memberNodesDetailed,
-        internalEdgesDetailed: internalEdgesDetailed.length > 0
-          ? internalEdgesDetailed
-          : undefined,
+        internalEdgesDetailed:
+          internalEdgesDetailed.length > 0 ? internalEdgesDetailed : undefined,
       };
     });
 

@@ -22,6 +22,20 @@ import {
 import type { CustomNodeType, CustomLinkType } from "@/app/const/types";
 import { getNodeByIdForFrontend } from "@/app/_utils/kg/filter";
 import { MagnifierLens } from "../magnifier/magnifier-lens";
+import { getMaxEdgeLabelFontSizeByLength } from "@/app/_utils/graph-label-utils";
+
+/** 同一ノード対のエッジをグループ化するキー（ソース・ターゲットの順序を正規化） */
+function getNodePairKey(link: CustomLinkType): string {
+  const a =
+    typeof link.source === "object" && link.source !== null && "id" in link.source
+      ? link.source.id
+      : link.sourceId;
+  const b =
+    typeof link.target === "object" && link.target !== null && "id" in link.target
+      ? link.target.id
+      : link.targetId;
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
 
 const isNodeFiltered = (
   node: CustomNodeType,
@@ -389,6 +403,10 @@ export const D3ForceGraph = ({
 
   const [nodesInMagnifier, setNodesInMagnifier] = useState<string[]>([]);
   const [linksInMagnifier, setLinksInMagnifier] = useState<string[]>([]);
+  /** クリックでラベルを垂直展開したノード対キー（null で閉じる） */
+  const [expandedEdgePairKey, setExpandedEdgePairKey] = useState<string | null>(
+    null,
+  );
   const [nodeMagnifications, setNodeMagnifications] = useState<
     Map<string, number>
   >(new Map());
@@ -493,6 +511,17 @@ export const D3ForceGraph = ({
     });
     return map;
   }, [graphLinks, linksInMagnifier, linkMagnifications]);
+
+  /** 同一ノード対ごとのエッジグループ（代表ラベル＋クリック展開用） */
+  const linksByNodePair = useMemo(() => {
+    const map = new Map<string, CustomLinkType[]>();
+    graphLinks.forEach((link) => {
+      const key = getNodePairKey(link);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(link);
+    });
+    return map;
+  }, [graphLinks]);
 
   // アニメーションフレームのスロットリング用
   const animationFrameRef = useRef<number | null>(null);
@@ -960,21 +989,106 @@ export const D3ForceGraph = ({
                         />
                       </linearGradient>
                     </defs> */}
-                      {currentScale > 3.5 && (
-                        <text
-                          x={(modSource.x + modTarget.x) / 2}
-                          y={(modSource.y + modTarget.y) / 2}
-                          textAnchor="middle"
-                          fill={"darkgray"}
-                          fontSize={2.5}
-                        >
-                          {graphLink.type}
-                        </text>
-                      )}
                     </g>
                   );
                 }
               })}
+              {/* エッジラベル（ノード対ごとに1つ、展開・縮小可能） */}
+              {currentScale > 3.5 &&
+                Array.from(linksByNodePair.entries()).map(
+                  ([pairKey, linksInPair]) => {
+                    const link = linksInPair[0];
+                    if (!link) return null;
+                    const modSource = link.source as CustomNodeType;
+                    const modTarget = link.target as CustomNodeType;
+                    if (
+                      modSource.x == null ||
+                      modTarget.x == null ||
+                      modSource.y == null ||
+                      modTarget.y == null
+                    ) {
+                      return null;
+                    }
+                    const sourceNode = nodeMap.get(modSource.id);
+                    const targetNode = nodeMap.get(modTarget.id);
+                    const sourceNodeVisible = sourceNode?.visible ?? false;
+                    const targetNodeVisible = targetNode?.visible ?? false;
+                    if (!sourceNodeVisible && !targetNodeVisible) return null;
+
+                    const pairCount = linksInPair.length;
+                    const typesInPair = linksInPair
+                      .map((l) => l.type ?? "")
+                      .filter(Boolean);
+                    if (typesInPair.length === 0) return null;
+
+                    const labelX = (modSource.x + modTarget.x) / 2;
+                    const labelY = (modSource.y + modTarget.y) / 2;
+                    const dx = modTarget.x - modSource.x;
+                    const dy = modTarget.y - modSource.y;
+                    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                    const labelTextLength =
+                      expandedEdgePairKey === pairKey && pairCount > 1
+                        ? Math.max(...typesInPair.map((t) => t.length))
+                        : pairCount > 1
+                          ? (typesInPair[0]?.length ?? 0) + 3
+                          : typesInPair[0]?.length ?? 1;
+                    const baseFontSize = 2.5;
+                    const maxFontSizeByEdge = getMaxEdgeLabelFontSizeByLength(
+                      len,
+                      labelTextLength,
+                    );
+                    const effectiveFontSize = Math.max(
+                      2,
+                      Math.min(baseFontSize, maxFontSizeByEdge),
+                    );
+
+                    const handleLabelClick =
+                      pairCount > 1
+                        ? (e: React.MouseEvent) => {
+                          e.stopPropagation();
+                          setExpandedEdgePairKey((prev) =>
+                            prev === pairKey ? null : pairKey,
+                          );
+                        }
+                        : undefined;
+
+                    return (
+                      <g
+                        key={`edge-label-${pairKey}`}
+                        className={
+                          pairCount > 1 ? "cursor-pointer" : "pointer-events-none"
+                        }
+                        onClick={handleLabelClick}
+                      >
+                        <text
+                          x={labelX}
+                          y={labelY}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          fill="darkgray"
+                          fontSize={effectiveFontSize}
+                        >
+                          {expandedEdgePairKey === pairKey && pairCount > 1 ? (
+                            typesInPair.map((t, j) => (
+                              <tspan
+                                key={`${t}-${j}`}
+                                x={labelX}
+                                y={labelY}
+                                dy={j === 0 ? 0 : `${j * 1.2}em`}
+                              >
+                                {t}
+                              </tspan>
+                            ))
+                          ) : pairCount > 1 ? (
+                            `${typesInPair[0]} …`
+                          ) : (
+                            typesInPair[0]
+                          )}
+                        </text>
+                      </g>
+                    );
+                  },
+                )}
               {/* 通常のノードを描画 */}
               {graphNodes
                 .filter((graphNode) => {
