@@ -55,7 +55,7 @@ export const MultiDocumentGraphDetailViewer = ({
 
   const [focusedNode, setFocusedNode] = useState<CustomNodeType>();
   const [focusedLink, setFocusedLink] = useState<CustomLinkType>();
-  const [isDirectedLinks, setIsDirectedLinks] = useState(true);
+  const [isDirectedLinks, setIsDirectedLinks] = useState(false);
   const [tags, setTags] = useState<TagOption>();
   const nodeLabels = Array.from(
     new Set(graphDocument.nodes.map((n) => n.label)),
@@ -284,8 +284,8 @@ export const MultiDocumentGraphDetailViewer = ({
                         )
                       }
                       className={`rounded-lg px-3 py-2 text-xs backdrop-blur-sm ${layoutMode === "layered"
-                          ? "bg-blue-500/40 text-white"
-                          : "bg-black/20 text-white"
+                        ? "bg-blue-500/40 text-white"
+                        : "bg-black/20 text-white"
                         }`}
                       title={
                         layoutMode === "unified"

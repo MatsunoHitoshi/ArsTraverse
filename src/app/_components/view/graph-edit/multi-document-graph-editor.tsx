@@ -95,7 +95,7 @@ export const MultiDocumentGraphEditor = ({
   const graphAreaWidth =
     (2 * (innerWidth ?? 100)) / (isGraphFullScreen ? 2 : 3) - 22;
   const graphAreaHeight = (innerHeight ?? 300) - 128;
-  const [isDirectedLinks, setIsDirectedLinks] = useState(true);
+  const [isDirectedLinks, setIsDirectedLinks] = useState(false);
 
   const searchParams = useSearchParams();
   const isList = searchParams.get("list") === "true";

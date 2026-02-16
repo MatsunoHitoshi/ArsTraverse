@@ -42,7 +42,7 @@ export const MultiDocumentGraphViewer = ({
 
   const [focusedNode, setFocusedNode] = useState<CustomNodeType>();
   const [focusedLink, setFocusedLink] = useState<CustomLinkType>();
-  const [isDirectedLinks, setIsDirectedLinks] = useState(true);
+  const [isDirectedLinks, setIsDirectedLinks] = useState(false);
   const [magnifierMode, setMagnifierMode] = useState(0);
   //   const [tags, setTags] = useState<TagOption>();
   //   const nodeLabels = Array.from(

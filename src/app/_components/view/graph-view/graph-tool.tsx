@@ -21,7 +21,7 @@ export const GraphTool = ({
   isLargeGraph,
   isGraphFullScreen = false,
   setIsGraphFullScreen,
-  isDirectedLinks = true,
+  isDirectedLinks = false,
   setIsDirectedLinks,
   magnifierMode = 0,
   setMagnifierMode,
@@ -93,13 +93,12 @@ export const GraphTool = ({
             onClick={() => {
               setMagnifierMode((prev) => (prev + 1) % 3);
             }}
-            className={`rounded-lg p-2 backdrop-blur-sm ${
-              magnifierMode === 1
-                ? "bg-orange-500/40"
-                : magnifierMode === 2
-                  ? "bg-orange-700/40"
-                  : "bg-black/20"
-            }`}
+            className={`rounded-lg p-2 backdrop-blur-sm ${magnifierMode === 1
+              ? "bg-orange-500/40"
+              : magnifierMode === 2
+                ? "bg-orange-700/40"
+                : "bg-black/20"
+              }`}
           >
             <ZoomInIcon
               height={16}
@@ -112,10 +111,10 @@ export const GraphTool = ({
         )}
         <ExportGraphButton svgRef={svgRef} currentScale={currentScale} />
         {hasTagFilter &&
-        !!setTags &&
-        !!tagOptions &&
-        !!tagFilterOption &&
-        !!tags ? (
+          !!setTags &&
+          !!tagOptions &&
+          !!tagFilterOption &&
+          !!tags ? (
           <div className="rounded-lg bg-black/20 p-2 text-sm backdrop-blur-sm">
             <TagsInput
               selected={tags}
@@ -125,10 +124,10 @@ export const GraphTool = ({
               defaultOption={
                 tagFilterOption?.value && tagFilterOption?.type
                   ? {
-                      id: "0",
-                      label: tagFilterOption.value,
-                      type: tagFilterOption.type,
-                    }
+                    id: "0",
+                    label: tagFilterOption.value,
+                    type: tagFilterOption.type,
+                  }
                   : undefined
               }
             />

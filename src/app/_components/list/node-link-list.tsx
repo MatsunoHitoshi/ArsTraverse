@@ -1,6 +1,6 @@
 import { GraphIcon } from "@/app/_components/icons";
 import type { CustomNodeType } from "@/app/const/types";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../button/button";
 import { CheckboxInput } from "../input/checkbox-input";
 import { MergeNodesForm } from "../form/merge-nodes-form";
@@ -67,6 +67,48 @@ export const NodeLinkList = ({
       return graphNodes;
     }
   }, [sortType, graphDocument]);
+
+  const highlightedNodes = useMemo(() => {
+    if (!nodeSearchQuery || nodeSearchQuery === "") return [];
+    const q = nodeSearchQuery.toLowerCase();
+    return sortedGraphNodes.filter((n) =>
+      n.name.toLowerCase().includes(q),
+    );
+  }, [nodeSearchQuery, sortedGraphNodes]);
+
+  const [matchIndex, setMatchIndex] = useState(0);
+  const scrollTargetRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMatchIndex(0);
+  }, [nodeSearchQuery]);
+
+  const currentMatchNode = highlightedNodes[matchIndex] ?? null;
+
+  useEffect(() => {
+    if (currentMatchNode && scrollTargetRef.current) {
+      scrollTargetRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    }
+  }, [nodeSearchQuery, matchIndex, currentMatchNode?.id]);
+
+  const goToPrevMatch = () => {
+    setMatchIndex((i) =>
+      highlightedNodes.length <= 1
+        ? 0
+        : (i - 1 + highlightedNodes.length) % highlightedNodes.length,
+    );
+  };
+  const goToNextMatch = () => {
+    setMatchIndex((i) =>
+      highlightedNodes.length <= 1
+        ? 0
+        : (i + 1) % highlightedNodes.length,
+    );
+  };
+
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -125,6 +167,28 @@ export const NodeLinkList = ({
           {sortType === "none" && "並び替え"}
         </Button>
 
+        {highlightedNodes.length > 0 && (
+          <div className="flex flex-row items-center gap-1">
+            <Button
+              className="!min-w-0 !px-2 !text-xs"
+              onClick={goToPrevMatch}
+              aria-label="前のハイライトへ"
+            >
+              ‹
+            </Button>
+            <span className="min-w-[3rem] text-center text-xs text-slate-300">
+              {matchIndex + 1} / {highlightedNodes.length}
+            </span>
+            <Button
+              className="!min-w-0 !px-2 !text-xs"
+              onClick={goToNextMatch}
+              aria-label="次のハイライトへ"
+            >
+              ›
+            </Button>
+          </div>
+        )}
+
         {isGraphUpdated && onGraphUpdate && (
           <Button
             className="!text-xs !text-orange-500"
@@ -142,16 +206,19 @@ export const NodeLinkList = ({
             !!nodeSearchQuery &&
             nodeSearchQuery !== "" &&
             node.name.toLowerCase().includes(nodeSearchQuery.toLowerCase());
+          const isCurrentMatch = currentMatchNode?.id === node.id;
           return (
             <div
               key={node.id}
-              className={`flex w-full flex-row items-center p-2 ${
-                focusedNode?.id === node.id
+              ref={isCurrentMatch ? scrollTargetRef : undefined}
+              className={`flex w-full flex-row items-center p-2 ${focusedNode?.id === node.id
                   ? "bg-slate-600"
                   : queryFiltered
-                    ? "bg-slate-700"
+                    ? isCurrentMatch
+                      ? "bg-slate-700 ring-2 ring-inset ring-orange-400"
+                      : "bg-slate-700"
                     : ""
-              }`}
+                }`}
             >
               {isNodeMergeMode && (
                 <MergeCheck
