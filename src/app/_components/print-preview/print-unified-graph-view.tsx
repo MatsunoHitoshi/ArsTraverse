@@ -6,6 +6,7 @@ import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { PrintGenerativeLayoutGraph } from "./print-generative-layout-graph";
 import type { PrintLayoutSettings } from "./types";
 import { convertUnit, PAGE_SIZE_TEMPLATES } from "./types";
+import { buildScrollStepsFromMetaGraphStoryData } from "@/app/_utils/story-scroll-utils";
 
 interface StoryItem {
   communityId: string;
@@ -25,6 +26,8 @@ interface PrintUnifiedGraphViewProps {
   onWorkspaceTitlePositionChange?: (pos: { x: number; y: number }) => void;
   onWorkspaceTitleSizeChange?: (size: { width: number; height: number }) => void;
   onSectionSizeChange?: (communityId: string, size: { width: number; height: number }) => void;
+  onCommunityPositionChange?: (communityId: string, pos: { x: number; y: number }) => void;
+  onNodePositionChange?: (nodeId: string, pos: { x: number; y: number }) => void;
 }
 
 export function PrintUnifiedGraphView({
@@ -38,6 +41,8 @@ export function PrintUnifiedGraphView({
   onWorkspaceTitlePositionChange,
   onWorkspaceTitleSizeChange,
   onSectionSizeChange,
+  onCommunityPositionChange,
+  onNodePositionChange,
 }: PrintUnifiedGraphViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -130,6 +135,21 @@ export function PrintUnifiedGraphView({
       });
   }, [metaGraphData]);
 
+  // ストーリー全セグメントで参照されているノード・エッジ（デフォルトで不透明度を分ける対象）
+  const storyReferencedNodeIds = useMemo(() => {
+    const steps = buildScrollStepsFromMetaGraphStoryData(metaGraphData);
+    const ids = new Set<string>();
+    steps.forEach((s) => s.nodeIds.forEach((id) => ids.add(id)));
+    return ids.size > 0 ? ids : null;
+  }, [metaGraphData]);
+
+  const storyReferencedEdgeIds = useMemo(() => {
+    const steps = buildScrollStepsFromMetaGraphStoryData(metaGraphData);
+    const ids = new Set<string>();
+    steps.forEach((s) => s.edgeIds.forEach((id) => ids.add(id)));
+    return ids.size > 0 ? ids : null;
+  }, [metaGraphData]);
+
   return (
     <div
       ref={containerRef}
@@ -175,10 +195,14 @@ export function PrintUnifiedGraphView({
         }}
         storyItems={storyItems}
         layoutSettings={layoutSettings}
-              workspaceTitle={workspaceTitle}
+        storyReferencedNodeIds={storyReferencedNodeIds}
+        storyReferencedEdgeIds={storyReferencedEdgeIds}
+        workspaceTitle={workspaceTitle}
               onWorkspaceTitlePositionChange={onWorkspaceTitlePositionChange}
               onWorkspaceTitleSizeChange={onWorkspaceTitleSizeChange}
               onSectionSizeChange={onSectionSizeChange}
+              onCommunityPositionChange={onCommunityPositionChange}
+              onNodePositionChange={onNodePositionChange}
       />
     </div>
   );

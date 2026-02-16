@@ -33,10 +33,12 @@ const MarginSettingsSchema = z.object({
 });
 
 const FontSizeSettingsSchema = z.object({
-  title: z.number(),
-  body: z.number(),
-  graph: z.number(),
-});
+  workspaceTitle: z.number().optional(),
+  sectionTitle: z.number().optional(),
+  title: z.number().optional(),
+  body: z.number().optional(),
+  graph: z.number().optional(),
+}).passthrough();
 
 const GraphSizeSettingsSchema = z.object({
   width: z.number(),
@@ -55,7 +57,13 @@ const PrintLayoutSettingsSchema = z.object({
   layoutOrientation: LayoutOrientationSchema.optional(),
   detailedGraphDisplay: DetailedGraphDisplayModeSchema.optional(),
   showEdgeLabels: z.boolean().optional(),
-});
+  edgeColor: z.string().optional(),
+  workspaceTitleDisplay: z.enum(["none", "show"]).optional(),
+  workspaceTitlePosition: z.object({ x: z.number(), y: z.number() }).optional(),
+  workspaceTitleSize: z.object({ width: z.number(), height: z.number() }).optional(),
+  sectionSizes: z.record(z.object({ width: z.number(), height: z.number() })).optional(),
+  pdfFilename: z.string().optional(),
+}).passthrough();
 
 const GeneratePdfSchema = z.object({
   workspaceId: z.string(),

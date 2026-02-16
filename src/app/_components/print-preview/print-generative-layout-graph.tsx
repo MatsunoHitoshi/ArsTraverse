@@ -16,6 +16,13 @@ import {
 } from "d3";
 import type { ForceLink } from "d3";
 import { useEffect, useMemo, useRef, useState, memo } from "react";
+import { getEdgeCompositeKeyFromLink } from "@/app/const/story-segment";
+import { darkenHexColor } from "@/app/_utils/color-utils";
+import { getMaxEdgeLabelFontSizeByLength } from "@/app/_utils/graph-label-utils";
+
+const FOCUS_NODE_OPACITY = 1;
+const DIM_NODE_OPACITY = 0.75;
+const DIM_EDGE_OPACITY = 0.75;
 
 // ノード描画用コンポーネント（印刷用：クリック無効）
 const PrintGraphNode = memo(function PrintGraphNode({
@@ -24,12 +31,20 @@ const PrintGraphNode = memo(function PrintGraphNode({
   queryFiltered,
   isMetaNode = false,
   metaNodeSize,
+  isFocused = false,
+  isLabelEmphasized = false,
+  graphFontSize = 12,
 }: {
   node: CustomNodeType;
   nodeColor?: string;
   queryFiltered?: boolean;
   isMetaNode?: boolean;
   metaNodeSize?: number;
+  isFocused?: boolean;
+  /** ラベルを太字・1.5倍で表示（フォーカスモードかつフォーカス時のみ） */
+  isLabelEmphasized?: boolean;
+  /** ノードラベルの基本フォントサイズ（デフォルト12） */
+  graphFontSize?: number;
 }) {
   // 座標が未定義またはNaNの場合は描画しない
   if (
@@ -44,7 +59,7 @@ const PrintGraphNode = memo(function PrintGraphNode({
   // Metaノードの場合はサイズを大きく、色を変える
   const baseRadius = isMetaNode
     ? Math.max(35, Math.min(250, (metaNodeSize ?? 10) * 20))
-    : 1.6 * ((node.neighborLinkCount ?? 0) * 0.1 + 3.6) * (nodeColor ? 1.2 : 1);
+    : ((node.neighborLinkCount ?? 0) * 0.1 + 3.6) * (nodeColor ? 1.2 : 1);
 
   // 印刷用：白背景に合う濃い灰色
   const fillColor = (nodeColor ?? "#4a5568")
@@ -52,25 +67,63 @@ const PrintGraphNode = memo(function PrintGraphNode({
   // MetaNode用のグラデーションID（各ノードで一意）
   const gradientId = isMetaNode ? `metaNodeGradient-${node.id}` : undefined;
 
+  const imageUrl = node.properties?.imageUrl as string | undefined;
+  const showImage = !!imageUrl;
+
+  const r = showImage ? baseRadius * 3 : baseRadius;
+
+  // フォーカスモードでない場合（isFocusedが未指定のときも含む）は全ノードを通常表示
+  const nodeOpacity = isMetaNode ? 1 : (isFocused !== false ? FOCUS_NODE_OPACITY : DIM_NODE_OPACITY);
+
+  const baseFontSize = graphFontSize;
+  const labelFontSize = isLabelEmphasized ? baseFontSize * 1.5 : baseFontSize;
+
   return (
     <g
       key={node.id}
       transform={`translate(${node.x}, ${node.y})`}
+      style={{ opacity: nodeOpacity }}
     >
-      <circle
-        r={baseRadius}
-        fill={isMetaNode && gradientId ? `url(#${gradientId})` : fillColor}
-        opacity={isMetaNode ? 1 : 0.9} // グラデーションを使う場合はopacityは1にする
-        strokeWidth={isMetaNode ? 0 : queryFiltered ? 2.5 : 0} // グラデーションの場合はストロークなし
-      />
+      {showImage ? (
+        <>
+          <defs>
+            <clipPath id={`print-node-image-clip-${node.id}`}>
+              <circle r={r} />
+            </clipPath>
+          </defs>
+          <g clipPath={`url(#print-node-image-clip-${node.id})`}>
+            <image
+              x={-r}
+              y={-r}
+              width={r * 2}
+              height={r * 2}
+              href={imageUrl}
+              preserveAspectRatio="xMidYMid slice"
+            />
+          </g>
+          <circle
+            r={r}
+            fill="none"
+            stroke={fillColor}
+            strokeWidth={queryFiltered ? 2.5 : 1.5}
+          />
+        </>
+      ) : (
+        <circle
+          r={baseRadius}
+          fill={isMetaNode && gradientId ? `url(#${gradientId})` : fillColor}
+          opacity={isMetaNode ? 1 : 0.9}
+          strokeWidth={isMetaNode ? 0 : queryFiltered ? 2.5 : 0}
+        />
+      )}
       {/* 印刷用：常にテキストを表示（ズームレベルに関係なく）ただしメタノードはラベルなし */}
       {!isMetaNode && (
         <text
           y={-10}
           textAnchor="middle"
-          fill={queryFiltered ? "#eab000" : "#1f2937"} // 濃い灰色のテキスト
-          fontSize={6 * 1.5}
-          fontWeight="normal"
+          fill={isLabelEmphasized ? darkenHexColor(fillColor, 0.5) : (queryFiltered ? "#eab000" : "#1f2937")}
+          fontSize={labelFontSize}
+          fontWeight={isLabelEmphasized ? "bold" : "normal"}
           className="pointer-events-none select-none"
         >
           {node.name}
@@ -107,10 +160,16 @@ interface PrintGenerativeLayoutGraphProps {
   onCommunityPositionsCalculated?: (positions: Map<string, { x: number; y: number }>) => void; // コミュニティの位置情報を外部に公開
   storyItems?: StoryItem[]; // ストーリーアイテム
   layoutSettings?: PrintLayoutSettings; // レイアウト設定
+  /** ストーリーで参照されているノードID（デフォルトで不透明度を分ける） */
+  storyReferencedNodeIds?: Set<string> | null;
+  /** ストーリーで参照されているエッジ複合キー（デフォルトで不透明度を分ける） */
+  storyReferencedEdgeIds?: Set<string> | null;
   workspaceTitle?: string; // ワークスペース名
   onWorkspaceTitlePositionChange?: (pos: { x: number; y: number }) => void; // タイトル位置変更時
   onWorkspaceTitleSizeChange?: (size: { width: number; height: number }) => void; // タイトル表示範囲変更時
   onSectionSizeChange?: (communityId: string, size: { width: number; height: number }) => void; // セクション表示範囲変更時（communityIdごと）
+  onCommunityPositionChange?: (communityId: string, pos: { x: number; y: number }) => void; // コミュニティ中心座標のDnD微調整時
+  onNodePositionChange?: (nodeId: string, pos: { x: number; y: number }) => void; // ノード座標のDnD微調整時（metaGraphDisplay=none 時のみ）
 }
 
 export const PrintGenerativeLayoutGraph = ({
@@ -126,10 +185,14 @@ export const PrintGenerativeLayoutGraph = ({
   onCommunityPositionsCalculated,
   storyItems = [],
   layoutSettings,
+  storyReferencedNodeIds,
+  storyReferencedEdgeIds,
   workspaceTitle,
   onWorkspaceTitlePositionChange,
   onWorkspaceTitleSizeChange,
   onSectionSizeChange,
+  onCommunityPositionChange,
+  onNodePositionChange,
 }: PrintGenerativeLayoutGraphProps) => {
   const svgRef = useRef<SVGSVGElement>(null);
   // 詳細グラフ全体のレイアウト（一度だけ計算）
@@ -172,6 +235,10 @@ export const PrintGenerativeLayoutGraph = ({
     layoutSettings?.workspaceTitleDisplay === "show" ? "show" : "none";
   // ワークスペースタイトルのドラッグ中位置（ドラッグ中のみ使用）
   const [workspaceTitleDragPosition, setWorkspaceTitleDragPosition] = useState<{ x: number; y: number } | null>(null);
+  // コミュニティ中心のドラッグ中位置（MetaGraph表示時のみDnD可）
+  const [communityCenterDragPosition, setCommunityCenterDragPosition] = useState<{ communityId: string; x: number; y: number } | null>(null);
+  // ノードのドラッグ中位置（metaGraphDisplay=none 時に詳細グラフノードをDnD可）
+  const [nodeDragPosition, setNodeDragPosition] = useState<{ nodeId: string; x: number; y: number } | null>(null);
   // リサイズ中の状態（右下ハンドルDnD用）
   const [resizing, setResizing] = useState<{
     target: string;
@@ -188,6 +255,55 @@ export const PrintGenerativeLayoutGraph = ({
   const layoutOrientation = layoutSettings?.layoutOrientation ?? "vertical";
   // 詳細グラフの表示モード（layoutSettingsから取得）
   const detailedGraphDisplayMode: DetailedGraphDisplayMode = layoutSettings?.detailedGraphDisplay ?? "all";
+
+  // ストーリーで参照されているノード・エッジ（デフォルトで不透明度を分ける）
+  const focusedNodeIds = storyReferencedNodeIds ?? null;
+  const focusedEdgeIds = storyReferencedEdgeIds ?? null;
+  // 参照あり時は不透明度を分ける
+  const hasFocusMode = (focusedNodeIds != null && focusedNodeIds.size > 0) ||
+    (focusedEdgeIds != null && focusedEdgeIds.size > 0);
+
+  // フォーカスノード＋フォーカスエッジの両端ノード（storytelling-graph-unified と同様）
+  const effectiveFocusedNodeIds = useMemo(() => {
+    const set = new Set<string>();
+    if (focusedNodeIds) focusedNodeIds.forEach((id) => set.add(id));
+    if (focusedEdgeIds?.size && originalGraphDocument?.relationships) {
+      originalGraphDocument.relationships.forEach((rel) => {
+        const key = getEdgeCompositeKeyFromLink({
+          sourceId: rel.sourceId,
+          targetId: rel.targetId,
+          type: rel.type ?? "",
+        });
+        if (focusedEdgeIds.has(key)) {
+          set.add(rel.sourceId);
+          set.add(rel.targetId);
+        }
+      });
+    }
+    return set;
+  }, [focusedNodeIds, focusedEdgeIds, originalGraphDocument?.relationships]);
+
+  // エッジの色（layoutSettingsから取得）
+  const edgeBaseColor = layoutSettings?.edgeColor ?? "#60a5fa";
+  const edgeFocusColor =
+    (typeof layoutSettings?.edgeFocusColor === "string" && layoutSettings.edgeFocusColor) ||
+    darkenHexColor(edgeBaseColor, 0.7);
+
+  // ノードの色（layoutSettingsから取得、詳細グラフのノードに適用）
+  const nodeBaseColor = layoutSettings?.nodeColor ?? "#4a5568";
+  const nodeFocusColor =
+    (typeof layoutSettings?.nodeFocusColor === "string" && layoutSettings.nodeFocusColor) ||
+    "#2563eb";
+
+  // グラフのノードラベル・エッジラベルのフォントサイズ
+  const graphFontSize = (() => {
+    const v = layoutSettings?.fontSize?.node;
+    return typeof v === "number" && !Number.isNaN(v) ? Math.max(8, Math.min(24, v)) : 12;
+  })();
+  const edgeLabelBaseSize = (() => {
+    const v = layoutSettings?.fontSize?.edge;
+    return typeof v === "number" && !Number.isNaN(v) ? Math.max(4, Math.min(20, v)) : 6;
+  })();
 
   // ストーリーコミュニティのノードIDセットを作成（detailedGraphDisplayModeが"story"の場合）
   const storyCommunityNodeIds = useMemo(() => {
@@ -412,7 +528,7 @@ export const PrintGenerativeLayoutGraph = ({
         "link",
         forceLink<CustomNodeType, CustomLinkType>(allLinks)
           .id((d) => d.id)
-          .distance(30) // コミュニティ内のノードは近くに配置
+          .distance(50) // コミュニティ内のノードは近くに配置（generative-layout-graph に合わせる）
           .strength((link) => {
             // エッジのsourceとtargetのコミュニティIDを取得
             const source = link.source as CustomNodeType;
@@ -422,15 +538,15 @@ export const PrintGenerativeLayoutGraph = ({
 
             // コミュニティ間のエッジ（異なるコミュニティに属するノード間）の強度を下げる
             if (sourceCommunityId && targetCommunityId && sourceCommunityId !== targetCommunityId) {
-              return 0.01; // コミュニティ間のエッジは弱い強度
+              return 0.001; // コミュニティ間のエッジは弱い強度
             }
 
             // 同じコミュニティ内のエッジは通常の強度
-            return 0.2;
+            return 0.1;
           }),
       )
-      .force("charge", forceManyBody().strength(-200)) // 弱い反発力
-      .force("collide", forceCollide(20)) // 小さい衝突半径
+      .force("charge", forceManyBody().strength(-300)) // 弱い反発力（generative-layout-graph に合わせる）
+      .force("collide", forceCollide(30)) // 衝突半径（generative-layout-graph に合わせる）
       .force("center", forceCenter(width / 2, height / 2).strength(0.05)); // 中心への引力を弱める
 
     // コミュニティごとに目標位置への引力を追加（forceX/forceYを使用）
@@ -542,6 +658,84 @@ export const PrintGenerativeLayoutGraph = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detailedGraphLayout, communityMap]);
 
+  // DnD終了時に communityPositions が更新されたら、詳細グラフのノード位置をシフト
+  // ドラッグ中は communityCenterDragPosition で表示のみ更新、ここでは更新しない
+  useEffect(() => {
+    if (
+      !detailedGraphLayout ||
+      !communityMap ||
+      !layoutSettings?.communityPositions ||
+      Object.keys(layoutSettings.communityPositions).length === 0
+    ) {
+      return;
+    }
+
+    const overrides = layoutSettings.communityPositions;
+
+    // コミュニティごとにノードをグループ化
+    const communityGroups = new Map<string, CustomNodeType[]>();
+    detailedGraphLayout.nodes.forEach((node) => {
+      const communityId = communityMap[node.id];
+      if (communityId) {
+        if (!communityGroups.has(communityId)) {
+          communityGroups.set(communityId, []);
+        }
+        communityGroups.get(communityId)!.push(node);
+      }
+    });
+
+    let hasChanges = false;
+    communityGroups.forEach((nodes, communityId) => {
+      const targetPos = overrides[communityId];
+      if (!targetPos || typeof targetPos.x !== "number" || typeof targetPos.y !== "number") {
+        return;
+      }
+
+      const validNodes = nodes.filter((n) => n.x !== undefined && n.y !== undefined);
+      if (validNodes.length === 0) return;
+
+      const currentCenterX =
+        validNodes.reduce((sum, n) => sum + (n.x ?? 0), 0) / validNodes.length;
+      const currentCenterY =
+        validNodes.reduce((sum, n) => sum + (n.y ?? 0), 0) / validNodes.length;
+
+      const deltaX = targetPos.x - currentCenterX;
+      const deltaY = targetPos.y - currentCenterY;
+
+      if (Math.abs(deltaX) < 0.01 && Math.abs(deltaY) < 0.01) return;
+
+      hasChanges = true;
+      validNodes.forEach((node) => {
+        node.x = (node.x ?? 0) + deltaX;
+        node.y = (node.y ?? 0) + deltaY;
+      });
+    });
+
+    if (hasChanges) {
+      // 不変更新: 新しいノードオブジェクトを作成し、リンクの参照も更新する
+      // （PrintGraphNode の memo が参照変更を検知して再描画するため）
+      setDetailedGraphLayout((prev) => {
+        if (!prev) return null;
+        const nodeById = new Map<string, CustomNodeType>();
+        const newNodes = prev.nodes.map((node) => {
+          const updated = { ...node } as CustomNodeType;
+          nodeById.set(node.id, updated);
+          return updated;
+        });
+        const newLinks = prev.links.map((link) => {
+          const src = link.source as CustomNodeType;
+          const tgt = link.target as CustomNodeType;
+          return {
+            ...link,
+            source: nodeById.get(src.id) ?? src,
+            target: nodeById.get(tgt.id) ?? tgt,
+          };
+        }) as CustomLinkType[];
+        return { nodes: newNodes, links: newLinks };
+      });
+    }
+  }, [layoutSettings?.communityPositions, detailedGraphLayout, communityMap]);
+
   // textPositionsの内容をシリアライズして比較用のキーを生成
   const textPositionsKey = useMemo(() => {
     return Array.from(textPositions.entries())
@@ -550,12 +744,55 @@ export const PrintGenerativeLayoutGraph = ({
       .join("|");
   }, [textPositions]);
 
+  // コミュニティ中心座標の実効値（DnD調整・保存済みオーバーライドをマージ）
+  const effectiveCommunityCenters = useMemo(() => {
+    const result = new Map<string, { x: number; y: number }>();
+    const allIds = new Set<string>([
+      ...communityCenters.keys(),
+      ...Object.keys(layoutSettings?.communityPositions ?? {}),
+      ...(communityCenterDragPosition ? [communityCenterDragPosition.communityId] : []),
+    ]);
+    allIds.forEach((id) => {
+      if (communityCenterDragPosition?.communityId === id) {
+        result.set(id, { x: communityCenterDragPosition.x, y: communityCenterDragPosition.y });
+      } else {
+        const override = layoutSettings?.communityPositions?.[id];
+        if (override && typeof override.x === "number" && typeof override.y === "number") {
+          result.set(id, override);
+        } else {
+          const base = communityCenters.get(id);
+          if (base) result.set(id, base);
+        }
+      }
+    });
+    return result;
+  }, [communityCenters, layoutSettings?.communityPositions, communityCenterDragPosition]);
+
+  // 詳細グラフのノードオフセット計算用：communityCenterDragPosition を除外し DnD 終了後にのみ座標更新
+  const stableCommunityCenters = useMemo(() => {
+    const result = new Map<string, { x: number; y: number }>();
+    const allIds = new Set<string>([
+      ...communityCenters.keys(),
+      ...Object.keys(layoutSettings?.communityPositions ?? {}),
+    ]);
+    allIds.forEach((id) => {
+      const override = layoutSettings?.communityPositions?.[id];
+      if (override && typeof override.x === "number" && typeof override.y === "number") {
+        result.set(id, override);
+      } else {
+        const base = communityCenters.get(id);
+        if (base) result.set(id, base);
+      }
+    });
+    return result;
+  }, [communityCenters, layoutSettings?.communityPositions]);
+
   // グラフのバウンディングボックス計算（コミュニティ中心座標とテキスト位置に依存）
   // textPositionsの変更を追跡するためのref
   const prevGraphBoundsKeyRef = useRef<string>("");
 
   useEffect(() => {
-    if (!detailedGraphLayout || !communityMap || communityCenters.size === 0) return;
+    if (!detailedGraphLayout || !communityMap || effectiveCommunityCenters.size === 0) return;
 
     // コミュニティに属するノードのみをフィルタリング
     const validNodes = detailedGraphLayout.nodes.filter((n) => {
@@ -599,9 +836,9 @@ export const PrintGenerativeLayoutGraph = ({
         };
       };
 
-      if (storyItems && storyItems.length > 0 && communityCenters.size > 0 && textOverlayDisplayMode !== "none") {
+      if (storyItems && storyItems.length > 0 && effectiveCommunityCenters.size > 0 && textOverlayDisplayMode !== "none") {
         storyItems.forEach((item) => {
-          const center = communityCenters.get(item.communityId);
+          const center = effectiveCommunityCenters.get(item.communityId);
           if (!center) return;
 
           const { w: sw, h: sh } = getSectionSize(item.communityId);
@@ -691,11 +928,11 @@ export const PrintGenerativeLayoutGraph = ({
       // バウンディングボックスが実際に変更されたかチェック
       const sectionSizeKey = textOverlayDisplayMode !== "none" && storyItems
         ? storyItems
-            .map((it) => {
-              const { w, h } = getSectionSize(it.communityId);
-              return `${it.communityId}:${w},${h}`;
-            })
-            .join("|")
+          .map((it) => {
+            const { w, h } = getSectionSize(it.communityId);
+            return `${it.communityId}:${w},${h}`;
+          })
+          .join("|")
         : "";
       const boundsKey = `${newBounds.minX.toFixed(2)},${newBounds.minY.toFixed(2)},${newBounds.maxX.toFixed(2)},${newBounds.maxY.toFixed(2)}`;
       const combinedKey = `${boundsKey}|${textPositionsKey}|${workspaceTitleKey}|${sectionSizeKey}`;
@@ -708,7 +945,7 @@ export const PrintGenerativeLayoutGraph = ({
       prevGraphBoundsKeyRef.current = combinedKey;
       setGraphBounds(newBounds);
     }
-  }, [detailedGraphLayout, communityMap, communityCenters, storyItems, width, height, textPositionsKey, textOverlayDisplayMode, workspaceTitleDisplayMode, workspaceTitle, workspaceTitleDragPosition, layoutSettings?.workspaceTitlePosition, layoutSettings?.workspaceTitleSize, layoutSettings?.sectionSizes, layoutOrientation, resizing, resizePreviewSize]);
+  }, [detailedGraphLayout, communityMap, effectiveCommunityCenters, storyItems, width, height, textPositionsKey, textOverlayDisplayMode, workspaceTitleDisplayMode, workspaceTitle, workspaceTitleDragPosition, layoutSettings?.workspaceTitlePosition, layoutSettings?.workspaceTitleSize, layoutSettings?.sectionSizes, layoutOrientation, resizing, resizePreviewSize]);
 
   // テキスト位置の初期値を計算（コミュニティ中心座標が計算された後）
   // 初期位置を追跡するためのref（ドラッグで調整された位置と区別するため）
@@ -720,10 +957,10 @@ export const PrintGenerativeLayoutGraph = ({
 
   useEffect(() => {
     // 表示モードが"none"の場合はテキスト位置を計算しない
-    if (textOverlayDisplayMode === "none" || !communityCenters.size || !storyItems || storyItems.length === 0) return;
+    if (textOverlayDisplayMode === "none" || !effectiveCommunityCenters.size || !storyItems || storyItems.length === 0) return;
 
-    // communityCentersの内容が実際に変更されたかチェック（シリアライズして比較）
-    const centersKey = Array.from(communityCenters.entries())
+    // effectiveCommunityCentersの内容が実際に変更されたかチェック（シリアライズして比較）
+    const centersKey = Array.from(effectiveCommunityCenters.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([id, pos]) => `${id}:${pos.x.toFixed(2)},${pos.y.toFixed(2)}`)
       .join("|");
@@ -738,7 +975,7 @@ export const PrintGenerativeLayoutGraph = ({
 
     prevCommunityCentersRef.current = centersKey;
     // 現在のコミュニティ中心座標を保存（次回の比較用）
-    prevCommunityCentersMapRef.current = new Map(communityCenters);
+    prevCommunityCentersMapRef.current = new Map(effectiveCommunityCenters);
 
     setTextPositions((prev) => {
       const updated = new Map(prev);
@@ -746,7 +983,7 @@ export const PrintGenerativeLayoutGraph = ({
       let hasChanges = false;
 
       storyItems.forEach((item) => {
-        const center = communityCenters.get(item.communityId);
+        const center = effectiveCommunityCenters.get(item.communityId);
         if (!center) return;
 
         let expectedX: number;
@@ -810,7 +1047,7 @@ export const PrintGenerativeLayoutGraph = ({
       return hasChanges ? updated : prev;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [communityCenters, storyItems, width, height, textOverlayDisplayMode, layoutOrientation]);
+  }, [effectiveCommunityCenters, storyItems, width, height, textOverlayDisplayMode, layoutOrientation]);
 
   // ワークスペースタイトルの初期位置を設定（初回表示時のみ）
   useEffect(() => {
@@ -820,11 +1057,11 @@ export const PrintGenerativeLayoutGraph = ({
     onWorkspaceTitlePositionChange(defaultPos);
   }, [workspaceTitleDisplayMode, workspaceTitle, onWorkspaceTitlePositionChange, layoutSettings?.workspaceTitlePosition, graphBounds]);
 
-  // メタグラフノードの生成（コミュニティ中心に固定）
+  // メタグラフノードの生成（コミュニティ中心に固定、effectiveCommunityCentersを使用）
   useEffect(() => {
     if (
       !filteredGraphDocument ||
-      communityCenters.size === 0
+      effectiveCommunityCenters.size === 0
     ) {
       setMetaGraphNodes([]);
       setMetaGraphLinks([]);
@@ -834,7 +1071,7 @@ export const PrintGenerativeLayoutGraph = ({
     // メタグラフノードをコミュニティ中心座標に配置
     const metaNodes: CustomNodeType[] = filteredGraphDocument.nodes.map(
       (node) => {
-        const center = communityCenters.get(node.id);
+        const center = effectiveCommunityCenters.get(node.id);
         if (center) {
           return {
             ...node,
@@ -867,11 +1104,63 @@ export const PrintGenerativeLayoutGraph = ({
 
     setMetaGraphNodes(metaNodes);
     setMetaGraphLinks(metaLinks);
-  }, [filteredGraphDocument, communityCenters, width, height]);
+  }, [filteredGraphDocument, effectiveCommunityCenters, width, height]);
 
   // 印刷用：常に詳細グラフを表示（透明度1.0固定）
   const detailedGraphOpacity = 1.0;
   const metaGraphOpacity = metaGraphDisplayMode !== "none" ? 0.6 : 0.0; // メタグラフの表示/非表示
+
+  // 詳細グラフ用：nodePositions（コミュニティ中心からのオフセット）を常に適用し、表示モードに関わらず一貫した描画位置に
+  const effectiveDetailedGraphLayout = useMemo(() => {
+    if (!detailedGraphLayout) return null;
+
+    const nodePositionOffsets = layoutSettings?.nodePositions ?? {};
+    if (Object.keys(nodePositionOffsets).length === 0 && !nodeDragPosition) {
+      return detailedGraphLayout;
+    }
+
+    const nodeById = new Map<string, CustomNodeType>();
+    const newNodes = detailedGraphLayout.nodes.map((node) => {
+      let x: number;
+      let y: number;
+
+      if (nodeDragPosition?.nodeId === node.id) {
+        x = nodeDragPosition.x;
+        y = nodeDragPosition.y;
+      } else {
+        const communityId = communityMap?.[node.id];
+        const center = communityId ? stableCommunityCenters.get(communityId) : null;
+        const offset = nodePositionOffsets[node.id];
+
+        if (offset) {
+          if (center) {
+            x = center.x + offset.x;
+            y = center.y + offset.y;
+          } else {
+            x = offset.x;
+            y = offset.y;
+          }
+        } else {
+          x = node.x ?? 0;
+          y = node.y ?? 0;
+        }
+      }
+
+      const updated = { ...node, x, y } as CustomNodeType;
+      nodeById.set(node.id, updated);
+      return updated;
+    });
+    const newLinks = detailedGraphLayout.links.map((link) => {
+      const src = link.source as CustomNodeType;
+      const tgt = link.target as CustomNodeType;
+      return {
+        ...link,
+        source: nodeById.get(src.id) ?? link.source,
+        target: nodeById.get(tgt.id) ?? link.target,
+      };
+    }) as CustomLinkType[];
+    return { nodes: newNodes, links: newLinks };
+  }, [detailedGraphLayout, layoutSettings?.nodePositions, nodeDragPosition, communityMap, stableCommunityCenters]);
 
   // 表示するメタグラフノードをフィルタリング
   const visibleMetaGraphNodes = useMemo(() => {
@@ -917,12 +1206,35 @@ export const PrintGenerativeLayoutGraph = ({
       return { x: svgX - dragging.offsetX, y: svgY - dragging.offsetY };
     };
 
+    const isCommunityCenterDrag =
+      metaGraphDisplayMode !== "none" &&
+      dragging.communityId !== "__workspace_title__" &&
+      !dragging.communityId.startsWith("node:") &&
+      visibleMetaGraphNodes.some((n) => n.id === dragging.communityId);
+
+    const isNodeDrag =
+      metaGraphDisplayMode === "none" &&
+      dragging.communityId.startsWith("node:") &&
+      onNodePositionChange;
+
     const handleMouseMove = (e: MouseEvent) => {
       const coords = getSvgCoords(e);
       if (!coords) return;
 
       if (isWorkspaceTitleDrag) {
         setWorkspaceTitleDragPosition(coords);
+      } else if (isCommunityCenterDrag) {
+        setCommunityCenterDragPosition({
+          communityId: dragging.communityId,
+          x: coords.x,
+          y: coords.y,
+        });
+      } else if (isNodeDrag) {
+        setNodeDragPosition({
+          nodeId: dragging.communityId.replace(/^node:/, ""),
+          x: coords.x,
+          y: coords.y,
+        });
       } else {
         setTextPositions((prev) => {
           const updated = new Map(prev);
@@ -937,6 +1249,26 @@ export const PrintGenerativeLayoutGraph = ({
         const coords = getSvgCoords(e);
         if (coords) onWorkspaceTitlePositionChange(coords);
         setWorkspaceTitleDragPosition(null);
+      } else if (isCommunityCenterDrag && onCommunityPositionChange) {
+        const coords = getSvgCoords(e);
+        if (coords) onCommunityPositionChange(dragging.communityId, coords);
+        setCommunityCenterDragPosition(null);
+      } else if (isNodeDrag && onNodePositionChange) {
+        const coords = getSvgCoords(e);
+        const nodeId = dragging.communityId.replace(/^node:/, "");
+        if (coords && nodeId) {
+          const communityId = communityMap?.[nodeId];
+          const center = communityId ? effectiveCommunityCenters.get(communityId) : null;
+          if (center) {
+            onNodePositionChange(nodeId, {
+              x: coords.x - center.x,
+              y: coords.y - center.y,
+            });
+          } else {
+            onNodePositionChange(nodeId, coords);
+          }
+        }
+        setNodeDragPosition(null);
       }
       setDragging(null);
     };
@@ -948,7 +1280,57 @@ export const PrintGenerativeLayoutGraph = ({
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [dragging, onWorkspaceTitlePositionChange]);
+  }, [dragging, onWorkspaceTitlePositionChange, onCommunityPositionChange, onNodePositionChange, metaGraphDisplayMode, visibleMetaGraphNodes, communityMap, effectiveCommunityCenters]);
+
+  // metaGraphDisplay=none 時: 詳細グラフノードのDnD開始（storytelling-graph-unified 探索モードと同様）
+  useEffect(() => {
+    if (metaGraphDisplayMode !== "none" || !onNodePositionChange || !svgRef.current) return;
+    const svg = svgRef.current;
+
+    const startNodeDrag = (e: MouseEvent | TouchEvent, clientX: number, clientY: number) => {
+      const el = (e.target as Element)?.closest?.("[data-node-id]");
+      if (!el) return;
+      if (e.cancelable) e.preventDefault();
+      e.stopPropagation();
+
+      const nodeId = el.getAttribute("data-node-id");
+      if (!nodeId) return;
+      const node = effectiveDetailedGraphLayout?.nodes.find((n) => n.id === nodeId);
+      if (node?.x === undefined || node.y === undefined) return;
+
+      const svgRect = svg.getBoundingClientRect();
+      const viewBox = svg.viewBox.baseVal;
+      const scaleX = svg.clientWidth / viewBox.width;
+      const scaleY = svg.clientHeight / viewBox.height;
+      const svgX = (clientX - svgRect.left) / scaleX + viewBox.x;
+      const svgY = (clientY - svgRect.top) / scaleY + viewBox.y;
+
+      setDragging({
+        communityId: `node:${nodeId}`,
+        startX: svgX,
+        startY: svgY,
+        offsetX: svgX - node.x,
+        offsetY: svgY - node.y,
+      });
+    };
+
+    const onMouseDown = (e: MouseEvent) => {
+      startNodeDrag(e, e.clientX, e.clientY);
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      if (touch) startNodeDrag(e, touch.clientX, touch.clientY);
+    };
+
+    svg.addEventListener("mousedown", onMouseDown, true);
+    svg.addEventListener("touchstart", onTouchStart, { capture: true, passive: false });
+
+    return () => {
+      svg.removeEventListener("mousedown", onMouseDown, true);
+      svg.removeEventListener("touchstart", onTouchStart, { capture: true });
+    };
+  }, [metaGraphDisplayMode, onNodePositionChange, effectiveDetailedGraphLayout]);
 
   // リサイズ用グローバルマウスイベントハンドラー
   useEffect(() => {
@@ -1018,15 +1400,15 @@ export const PrintGenerativeLayoutGraph = ({
         {/* グラデーション定義（MetaNode用） */}
         <defs>
           {visibleMetaGraphNodes.map((node) => {
-            let nodeColor: string | undefined = undefined;
+            let nodeColor: string;
             if (
               metaNodeData?.some(
                 (m) => m.communityId === node.id && m.order !== undefined,
               )
             ) {
-              nodeColor = "#004df7"; // ストーリーに含まれるコミュニティは青
+              nodeColor = nodeFocusColor; // ストーリーに含まれるコミュニティはフォーカスノード色
             } else {
-              nodeColor = "#224185"; // その他のコミュニティはグレー
+              nodeColor = darkenHexColor(nodeFocusColor, 0.55); // その他のコミュニティはフォーカスノード色を暗く
             }
             const gradientId = `metaNodeGradient-${node.id}`;
             return (
@@ -1043,7 +1425,7 @@ export const PrintGenerativeLayoutGraph = ({
           {/* Links */}
           <g className="links">
             {/* 詳細グラフのリンク */}
-            {detailedGraphLayout && (
+            {effectiveDetailedGraphLayout && (
               <g
                 className="detailed-graph-links"
                 opacity={detailedGraphOpacity}
@@ -1052,7 +1434,7 @@ export const PrintGenerativeLayoutGraph = ({
                   // リンクフィルタが有効な場合、フィルタリングされたリンクのみを使用
                   let linksToRender =
                     isLinkFiltered && originalGraphDocument
-                      ? detailedGraphLayout.links.filter((link) => {
+                      ? effectiveDetailedGraphLayout.links.filter((link) => {
                         const source = link.source as CustomNodeType;
                         const target = link.target as CustomNodeType;
                         // originalGraphDocumentのrelationshipsに含まれるリンクのみを表示
@@ -1064,7 +1446,7 @@ export const PrintGenerativeLayoutGraph = ({
                               rel.targetId === source.id),
                         );
                       })
-                      : detailedGraphLayout.links;
+                      : effectiveDetailedGraphLayout.links;
 
                   // ストーリーコミュニティのみ表示する場合、フィルタリング
                   if (storyCommunityNodeIds) {
@@ -1112,7 +1494,6 @@ export const PrintGenerativeLayoutGraph = ({
                   linksToRender.forEach((link) => {
                     const source = link.source as CustomNodeType;
                     const target = link.target as CustomNodeType;
-                    // ノードIDをソートして一意のキーを作成（双方向のエッジを同じグループに）
                     const nodeIds = [source.id, target.id].sort();
                     const key = `${nodeIds[0]}-${nodeIds[1]}`;
                     if (!edgeGroups.has(key)) {
@@ -1123,6 +1504,7 @@ export const PrintGenerativeLayoutGraph = ({
 
                   return (
                     <>
+                      {/* 1. エッジの線（リンクごとに描画） */}
                       {linksToRender.map((link, i) => {
                         const source = link.source as CustomNodeType;
                         const target = link.target as CustomNodeType;
@@ -1139,93 +1521,139 @@ export const PrintGenerativeLayoutGraph = ({
                           return null;
                         }
 
-                        // リンクの距離を計算
                         const dx = target.x - source.x;
                         const dy = target.y - source.y;
                         const distance = Math.sqrt(dx * dx + dy * dy);
-
-                        // 距離に応じて透明度と線の太さを計算（距離が長いほど薄く細く）
-                        // 正規化された距離（0: 最短, 1: 最長）
                         const normalizedDistance =
                           distanceRange > 0
                             ? (distance - minDistance) / distanceRange
                             : 0;
-
-                        // 正規分布のような形状で、0.5を頂点とする関数
-                        // 0.5から離れるほど値が小さくなる（0.5で1、0と1で0）
-                        const centeredDistance = normalizedDistance - 0.5; // -0.5から0.5
+                        const centeredDistance = normalizedDistance - 0.5;
                         const bellCurve = Math.max(0, 1 - 4 * centeredDistance * centeredDistance);
-
-                        // 0.5付近で変化量を大きくする変換を適用
-                        // bellCurveを使って、0.5付近でnormalizedDistanceの変化を強調
-                        // 0.5を中心に拡張するような変換（0.5付近で変化が大きくなる）
-                        const changeIntensity = 0.5; // 変化の強度
+                        const changeIntensity = 0.5;
                         const transformedDistance = Math.min(1, Math.max(0,
                           normalizedDistance + bellCurve * changeIntensity * (normalizedDistance - 0.5)
                         ));
 
-                        // 透明度: 短い距離ほど濃い（基本原則を維持）、0.5付近で変化量が大きい
-                        const opacity = 0.8 - transformedDistance * 0.77; // 0.8から0.03まで
-
-                        // 線の太さ: 短い距離ほど太い（基本原則を維持）、0.5付近で変化量が大きい
-                        const strokeWidth = 1.8 - transformedDistance * 1.7; // 1.8から0.1まで
-
-                        // 同じノード間のエッジグループを取得
-                        const nodeIds = [source.id, target.id].sort();
-                        const groupKey = `${nodeIds[0]}-${nodeIds[1]}`;
-                        const edgeGroup = edgeGroups.get(groupKey) ?? [link];
-                        const edgeIndex = edgeGroup.findIndex((l) => l.id === link.id);
-                        const totalEdges = edgeGroup.length;
-
-                        // エッジの角度を計算（度単位）
-                        const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-
-                        // ラベルの位置（エッジの中点）
-                        const labelX = (source.x + target.x) / 2;
-                        const labelY = (source.y + target.y) / 2;
-
-                        // 複数エッジの場合、上下にオフセットを付ける
-                        // エッジに垂直な方向にオフセット
-                        const offsetDistance = 8; // オフセット距離（ピクセル）
-                        const perpendicularAngle = angle + 90; // エッジに垂直な角度
-                        const offsetX = Math.cos((perpendicularAngle * Math.PI) / 180) * offsetDistance;
-                        const offsetY = Math.sin((perpendicularAngle * Math.PI) / 180) * offsetDistance;
-
-                        // 中央から上下に分散（インデックスに応じて）
-                        const offsetMultiplier = totalEdges > 1
-                          ? (edgeIndex - (totalEdges - 1) / 2)
-                          : 0;
-                        const finalOffsetX = offsetX * offsetMultiplier;
-                        const finalOffsetY = offsetY * offsetMultiplier;
+                        const baseOpacity = 0.8 - transformedDistance * 0.77;
+                        const edgeKey = getEdgeCompositeKeyFromLink({
+                          sourceId: link.sourceId ?? source.id,
+                          targetId: link.targetId ?? target.id,
+                          type: link.type ?? "",
+                        });
+                        const isFocusEdge =
+                          (focusedEdgeIds?.has(edgeKey)) ??
+                          (focusedNodeIds != null && focusedNodeIds.has(source.id) && focusedNodeIds.has(target.id));
+                        const opacity = hasFocusMode
+                          ? (isFocusEdge ? baseOpacity : DIM_EDGE_OPACITY)
+                          : baseOpacity;
+                        const strokeWidth = 1.8 - transformedDistance * 1.7;
 
                         return (
-                          <g key={`detailed-${i}`}>
+                          <g key={`detailed-line-${i}`}>
                             <line
                               x1={source.x}
                               y1={source.y}
                               x2={target.x}
                               y2={target.y}
-                              stroke="#60a5fa"
+                              stroke={hasFocusMode && isFocusEdge ? edgeFocusColor : edgeBaseColor}
                               strokeOpacity={opacity}
                               strokeWidth={strokeWidth}
                             />
-                            {/* エッジラベル（設定で表示/非表示を切り替え可能） */}
-                            {layoutSettings?.showEdgeLabels && link.type && (
-                              <text
-                                x={labelX + finalOffsetX}
-                                y={labelY + finalOffsetY}
-                                textAnchor="middle"
-                                fill="#a3b0c7"
-                                fontSize={6}
-                                className="pointer-events-none select-none"
-                                transform={`rotate(${angle}, ${labelX + finalOffsetX}, ${labelY + finalOffsetY})`}
-                              >
-                                {link.type}
-                              </text>
-                            )}
                           </g>
                         );
                       })}
+
+                      {/* 2. エッジラベル（ノード対ごとに1つ、フォーカスエッジを優先・複数時は「…」） */}
+                      {layoutSettings?.showEdgeLabels &&
+                        Array.from(edgeGroups.entries()).map(([groupKey, linksInPair]) => {
+                          const link = linksInPair[0];
+                          if (!link?.type) return null;
+                          const source = link.source as CustomNodeType;
+                          const target = link.target as CustomNodeType;
+                          if (
+                            source.x === undefined ||
+                            source.y === undefined ||
+                            target.x === undefined ||
+                            target.y === undefined
+                          ) {
+                            return null;
+                          }
+
+                          const typesInPair = linksInPair
+                            .map((l) => l.type ?? "")
+                            .filter(Boolean);
+                          if (typesInPair.length === 0) return null;
+
+                          // フォーカスエッジを優先：グループ内にフォーカスエッジがあればそのタイプを表示
+                          const focusLinks = linksInPair.filter((l) => {
+                            const s = l.source as CustomNodeType;
+                            const t = l.target as CustomNodeType;
+                            const k = getEdgeCompositeKeyFromLink({
+                              sourceId: l.sourceId ?? s.id,
+                              targetId: l.targetId ?? t.id,
+                              type: l.type ?? "",
+                            });
+                            return (
+                              focusedEdgeIds?.has(k) ??
+                              (focusedNodeIds != null && focusedNodeIds.has(s.id) && focusedNodeIds.has(t.id))
+                            );
+                          });
+                          const hasFocusInGroup = focusLinks.length > 0;
+                          const displayType =
+                            hasFocusInGroup && focusLinks[0]?.type
+                              ? focusLinks[0].type ?? typesInPair[0]
+                              : typesInPair[0];
+                          const labelText: string =
+                            linksInPair.length > 1
+                              ? `${displayType ?? ""} …`
+                              : (displayType ?? "");
+                          if (!labelText) return null;
+
+                          const dx = target.x - source.x;
+                          const dy = target.y - source.y;
+                          const distance = Math.sqrt(dx * dx + dy * dy);
+                          const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+                          const labelX = (source.x + target.x) / 2;
+                          const labelY = (source.y + target.y) / 2;
+
+                          const baseSize =
+                            hasFocusMode && hasFocusInGroup
+                              ? edgeLabelBaseSize * 1.2
+                              : edgeLabelBaseSize;
+                          const maxByEdge = getMaxEdgeLabelFontSizeByLength(
+                            distance,
+                            labelText.length,
+                          );
+                          const effectiveFontSize = Math.max(
+                            4,
+                            Math.min(baseSize, maxByEdge),
+                          );
+
+                          const labelOpacity =
+                            hasFocusMode && !hasFocusInGroup
+                              ? DIM_EDGE_OPACITY
+                              : 1;
+
+                          return (
+                            <text
+                              key={`label-${groupKey}`}
+                              x={labelX}
+                              y={labelY}
+                              textAnchor="middle"
+                              fill="#a3b0c7"
+                              fontSize={effectiveFontSize}
+                              fontWeight={
+                                hasFocusMode && hasFocusInGroup ? "bold" : "normal"
+                              }
+                              className="pointer-events-none select-none"
+                              transform={`rotate(${angle}, ${labelX}, ${labelY})`}
+                              style={{ opacity: labelOpacity }}
+                            >
+                              {labelText}
+                            </text>
+                          );
+                        })}
                     </>
                   );
                 })()}
@@ -1244,34 +1672,71 @@ export const PrintGenerativeLayoutGraph = ({
                     node.properties?.size ?? node.properties?.memberCount ?? 0,
                   );
 
-                  // ノードの色を決定
-                  let nodeColor: string | undefined = undefined;
+                  // ノードの色を決定（フォーカスノード色に合わせる）
+                  let nodeColor: string;
                   if (
                     metaNodeData?.some(
                       (m) => m.communityId === node.id && m.order !== undefined,
                     )
                   ) {
-                    nodeColor = "#2563eb"; // ストーリーに含まれるコミュニティは青
+                    nodeColor = nodeFocusColor; // ストーリーに含まれるコミュニティはフォーカスノード色
                   } else {
-                    nodeColor = "#a1a1a1"; // その他のコミュニティは灰色
+                    nodeColor = darkenHexColor(nodeFocusColor, 0.55); // その他のコミュニティはフォーカスノード色を暗く
                   }
 
+                  const handleMetaNodeMouseDown =
+                    metaGraphDisplayMode !== "none" && onCommunityPositionChange
+                      ? (e: React.MouseEvent) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!svgRef.current) return;
+
+                        const svgRect = svgRef.current.getBoundingClientRect();
+                        const viewBox = svgRef.current.viewBox.baseVal;
+                        const scaleX = svgRef.current.clientWidth / viewBox.width;
+                        const scaleY = svgRef.current.clientHeight / viewBox.height;
+                        const svgX = (e.clientX - svgRect.left) / scaleX + viewBox.x;
+                        const svgY = (e.clientY - svgRect.top) / scaleY + viewBox.y;
+
+                        setDragging({
+                          communityId: node.id,
+                          startX: svgX,
+                          startY: svgY,
+                          offsetX: svgX - (node.x ?? 0),
+                          offsetY: svgY - (node.y ?? 0),
+                        });
+                      }
+                      : undefined;
+
                   return (
-                    <PrintGraphNode
+                    <g
                       key={`meta-${node.id}`}
-                      node={node}
-                      queryFiltered={false}
-                      nodeColor={nodeColor}
-                      isMetaNode={true}
-                      metaNodeSize={metaNodeSize}
-                    />
+                      style={{
+                        cursor:
+                          metaGraphDisplayMode !== "none" && onCommunityPositionChange
+                            ? dragging?.communityId === node.id
+                              ? "grabbing"
+                              : "grab"
+                            : undefined,
+                      }}
+                      onMouseDown={handleMetaNodeMouseDown}
+                    >
+                      <PrintGraphNode
+                        node={node}
+                        queryFiltered={false}
+                        nodeColor={nodeColor}
+                        isMetaNode={true}
+                        metaNodeSize={metaNodeSize}
+                        graphFontSize={graphFontSize}
+                      />
+                    </g>
                   );
                 })}
               </g>
             )}
 
             {/* 詳細グラフのノード */}
-            {detailedGraphLayout && (
+            {effectiveDetailedGraphLayout && (
               <g
                 className="detailed-graph-nodes"
                 opacity={detailedGraphOpacity}
@@ -1292,13 +1757,13 @@ export const PrintGenerativeLayoutGraph = ({
                           linkedNodeIds.add(rel.targetId);
                         });
                         // フィルタリングされたノードで、かつリンクを持つノードのみを表示
-                        return detailedGraphLayout.nodes.filter(
+                        return effectiveDetailedGraphLayout.nodes.filter(
                           (node) =>
                             filteredNodeIds.has(node.id) &&
                             linkedNodeIds.has(node.id),
                         );
                       })()
-                      : detailedGraphLayout.nodes;
+                      : effectiveDetailedGraphLayout.nodes;
 
                   // ストーリーコミュニティのみ表示する場合、フィルタリング
                   if (storyCommunityNodeIds) {
@@ -1315,40 +1780,40 @@ export const PrintGenerativeLayoutGraph = ({
                         .toLowerCase()
                         .includes(nodeSearchQuery.toLowerCase());
 
-                    // ノードが属するコミュニティを取得
-                    const nodeCommunityId = communityMap?.[node.id];
+                    const isFocused = !hasFocusMode || effectiveFocusedNodeIds.has(node.id);
+                    // ノードの色：フォーカス状態で切り替え（layoutSettingsから取得）
+                    const nodeColor = isFocused ? nodeFocusColor : nodeBaseColor;
+                    const isLabelEmphasized = hasFocusMode && effectiveFocusedNodeIds.has(node.id);
 
-                    // ノードの色をコミュニティの状態に基づいて決定（印刷用：濃い灰色）
-                    let nodeColor: string | undefined = undefined;
+                    const isNodeDraggable =
+                      metaGraphDisplayMode === "none" && onNodePositionChange;
+                    const isDraggingThisNode =
+                      dragging?.communityId === `node:${node.id}`;
 
-                    if (nodeCommunityId) {
-                      // ストーリーに含まれるコミュニティに属するノードは濃い灰色（orderがあるコミュニティ）
-                      if (
-                        metaNodeData?.some(
-                          (m) =>
-                            m.communityId === nodeCommunityId &&
-                            m.order !== undefined,
-                        )
-                      ) {
-                        nodeColor = "#4a5568"; // 濃い灰色
-                      }
-                      // その他のコミュニティに属するノードも濃い灰色
-                      else {
-                        nodeColor = "#4a5568"; // 濃い灰色
-                      }
-                    } else {
-                      // コミュニティに属していないノードも濃い灰色
-                      nodeColor = "#4a5568"; // 濃い灰色
-                    }
-
-                    return (
+                    const inner = (
                       <PrintGraphNode
-                        key={`detailed-${node.id}`}
                         node={node}
                         queryFiltered={queryFiltered}
                         nodeColor={nodeColor}
                         isMetaNode={false}
+                        isFocused={isFocused}
+                        isLabelEmphasized={isLabelEmphasized}
+                        graphFontSize={graphFontSize}
                       />
+                    );
+
+                    return isNodeDraggable ? (
+                      <g
+                        key={`detailed-${node.id}`}
+                        data-node-id={node.id}
+                        style={{
+                          cursor: isDraggingThisNode ? "grabbing" : "grab",
+                        }}
+                      >
+                        {inner}
+                      </g>
+                    ) : (
+                      <g key={`detailed-${node.id}`}>{inner}</g>
                     );
                   });
                 })()}
@@ -1358,10 +1823,10 @@ export const PrintGenerativeLayoutGraph = ({
 
           {/* Story Text Overlay (SVG内で描画) - ノードの後に描画して前面に表示 */}
           {/* 表示モードが"show"の場合のみ表示 */}
-          {textOverlayDisplayMode === "show" && storyItems.length > 0 && communityCenters.size > 0 && (
+          {textOverlayDisplayMode === "show" && storyItems.length > 0 && effectiveCommunityCenters.size > 0 && (
             <g className="story-text-overlay">
               {storyItems.map((item) => {
-                const center = communityCenters.get(item.communityId);
+                const center = effectiveCommunityCenters.get(item.communityId);
                 if (!center) return null;
 
                 // セクションの表示範囲（communityIdごとに個別設定）

@@ -1,17 +1,23 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/app/_components/button/button";
+import { api, type RouterInputs, type RouterOutputs } from "@/trpc/react";
 import type { PrintLayoutSettings } from "./types";
 import { convertUnit, PAGE_SIZE_TEMPLATES } from "./types";
+import { downloadBlob } from "@/app/_utils/video/video-recorder";
 
 interface PdfExportButtonProps {
   layoutSettings: PrintLayoutSettings;
   workspaceId: string;
+  workspaceTitle?: string;
 }
 
-export function PdfExportButton({ layoutSettings, workspaceId }: PdfExportButtonProps) {
+export function PdfExportButton({ layoutSettings, workspaceId, workspaceTitle }: PdfExportButtonProps) {
   const styleRef = useRef<HTMLStyleElement | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const generatePdfMutation = api.print.generatePdf.useMutation();
 
   useEffect(() => {
     // 動的に@pageルールを生成して追加
@@ -73,9 +79,58 @@ export function PdfExportButton({ layoutSettings, workspaceId }: PdfExportButton
     }
   };
 
+  // const handleDownload = async () => {
+  //   if (isDownloading) return;
+  //   setIsDownloading(true);
+  //   try {
+  //     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- tRPC mutateAsync returns any for Buffer output
+  //     const pdf: RouterOutputs["print"]["generatePdf"] =
+  //       await generatePdfMutation.mutateAsync({
+  //         workspaceId,
+  //         layoutSettings:
+  //           layoutSettings,
+  //       });
+  //     let bytes: Uint8Array;
+  //     if (pdf instanceof Uint8Array) {
+  //       bytes = pdf;
+  //     } else if (pdf instanceof ArrayBuffer) {
+  //       bytes = new Uint8Array(pdf);
+  //     } else if (
+  //       typeof pdf === "object" &&
+  //       pdf !== null &&
+  //       "data" in pdf &&
+  //       Array.isArray((pdf as { data: number[] }).data)
+  //     ) {
+  //       bytes = new Uint8Array((pdf as { data: number[] }).data);
+  //     } else {
+  //       bytes = new Uint8Array(pdf as ArrayBuffer | number[]);
+  //     }
+  //     const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
+  //     const baseName = layoutSettings.pdfFilename?.trim() ?? workspaceTitle ?? "document";
+  //     const filename = baseName.endsWith(".pdf") ? baseName : `${baseName}.pdf`;
+  //     downloadBlob(blob, filename);
+  //   } catch (err) {
+  //     console.error("PDF download failed:", err);
+  //     alert(
+  //       err instanceof Error ? err.message : "PDFのダウンロードに失敗しました"
+  //     );
+  //   } finally {
+  //     setIsDownloading(false);
+  //   }
+  // };
+
   return (
-    <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700">
-      PDF出力
-    </Button>
+    <div className="flex items-center gap-2">
+      {/* <Button
+        onClick={handleDownload}
+        disabled={isDownloading}
+        className="bg-green-600 hover:bg-green-700 disabled:opacity-50"
+      >
+        {isDownloading ? "生成中..." : "PDFダウンロード"}
+      </Button> */}
+      <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700">
+        PDF出力
+      </Button>
+    </div>
   );
 }

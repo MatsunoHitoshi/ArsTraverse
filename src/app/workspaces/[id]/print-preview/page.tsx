@@ -55,10 +55,10 @@ export default function PrintPreviewPage() {
     pageSize: {
       mode: "template",
       template: "A0",
-      customWidth: 1116,
-      customHeight: 2500,
+      customWidth: 2000,
+      customHeight: 1116,
       unit: "mm",
-      orientation: "portrait",
+      orientation: "landscape",
     },
     margins: {
       top: 0,
@@ -70,7 +70,8 @@ export default function PrintPreviewPage() {
       workspaceTitle: 21,
       sectionTitle: 14,
       body: 7,
-      graph: 12,
+      node: 12,
+      edge: 6,
     },
     graphSize: {
       width: 800,
@@ -81,6 +82,7 @@ export default function PrintPreviewPage() {
     metaGraphDisplay: "none",
     layoutOrientation: "vertical",
     workspaceTitleDisplay: "none",
+    showEdgeLabels: true,
   });
 
   useEffect(() => {
@@ -205,6 +207,28 @@ export default function PrintPreviewPage() {
                       return {
                         ...prev,
                         sectionSizes: { ...current, [communityId]: { width: w, height: h } },
+                      };
+                    })
+                  }
+                  onCommunityPositionChange={(communityId, pos) =>
+                    setLayoutSettings((prev) => {
+                      const toRecord = (v: unknown): Record<string, { x: number; y: number }> =>
+                        v != null && typeof v === "object" && !Array.isArray(v) ? { ...(v as Record<string, { x: number; y: number }>) } : {};
+                      const current = toRecord(prev.communityPositions);
+                      return {
+                        ...prev,
+                        communityPositions: { ...current, [communityId]: pos },
+                      };
+                    })
+                  }
+                  onNodePositionChange={(nodeId, pos) =>
+                    setLayoutSettings((prev) => {
+                      const toRecord = (v: unknown): Record<string, { x: number; y: number }> =>
+                        v != null && typeof v === "object" && !Array.isArray(v) ? { ...(v as Record<string, { x: number; y: number }>) } : {};
+                      const current = toRecord(prev.nodePositions);
+                      return {
+                        ...prev,
+                        nodePositions: { ...current, [nodeId]: pos },
                       };
                     })
                   }

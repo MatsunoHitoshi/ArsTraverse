@@ -487,20 +487,38 @@ export function LayoutSettingsPanel({
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm">グラフ</label>
+              <label className="mb-2 block text-sm">ノード</label>
               <input
                 type="number"
-                value={settings.fontSize.graph}
+                value={settings.fontSize.node}
                 onChange={(e) =>
                   updateSettings({
                     fontSize: {
                       ...settings.fontSize,
-                      graph: parseFloat(e.target.value) || 12,
+                      node: parseFloat(e.target.value) || 12,
                     },
                   })
                 }
                 min={8}
                 max={24}
+                className="w-full rounded border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm">エッジ</label>
+              <input
+                type="number"
+                value={((v: unknown) => (typeof v === "number" && !Number.isNaN(v) ? v : 6))(settings.fontSize?.edge)}
+                onChange={(e) =>
+                  updateSettings({
+                    fontSize: {
+                      ...settings.fontSize,
+                      edge: parseFloat(e.target.value) || 6,
+                    },
+                  })
+                }
+                min={4}
+                max={20}
                 className="w-full rounded border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
               />
             </div>
@@ -742,6 +760,142 @@ export function LayoutSettingsPanel({
           </Switch>
         </div>
       </div>
+
+      {/* エッジ色設定 */}
+      <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+        <h3 className="mb-3 font-semibold">エッジ色</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="mb-2 block text-sm text-slate-400">通常エッジ</label>
+            <div className="flex items-center gap-3">
+              {(() => {
+                const raw = settings.edgeColor;
+                const edgeColor: string =
+                  typeof raw === "string" ? raw : "#60a5fa";
+                return (
+                  <>
+                    <input
+                      type="color"
+                      value={edgeColor}
+                      onChange={(e) => updateSettings({ edgeColor: e.currentTarget.value })}
+                      className="h-10 w-14 cursor-pointer rounded border border-slate-600 bg-transparent p-1"
+                    />
+                    <input
+                      type="text"
+                      value={edgeColor}
+                      onChange={(e) => updateSettings({ edgeColor: e.currentTarget.value })}
+                      className="w-24 rounded border border-slate-600 bg-slate-800 px-2 py-1.5 font-mono text-sm"
+                    />
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+          <div>
+            <label className="mb-2 block text-sm text-slate-400">フォーカスエッジ</label>
+            <div className="flex items-center gap-3">
+              {(() => {
+                const raw = settings.edgeFocusColor;
+                const edgeFocusColor: string =
+                  typeof raw === "string" ? raw : "#2563eb";
+                return (
+                  <>
+                    <input
+                      type="color"
+                      value={edgeFocusColor}
+                      onChange={(e) => updateSettings({ edgeFocusColor: e.currentTarget.value })}
+                      className="h-10 w-14 cursor-pointer rounded border border-slate-600 bg-transparent p-1"
+                    />
+                    <input
+                      type="text"
+                      value={edgeFocusColor}
+                      onChange={(e) => updateSettings({ edgeFocusColor: e.currentTarget.value })}
+                      className="w-24 rounded border border-slate-600 bg-slate-800 px-2 py-1.5 font-mono text-sm"
+                    />
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ノード色設定 */}
+      <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+        <h3 className="mb-3 font-semibold">ノード色</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="mb-2 block text-sm text-slate-400">通常ノード</label>
+            <div className="flex items-center gap-3">
+              {(() => {
+                const raw = settings.nodeColor;
+                const nodeColor: string =
+                  typeof raw === "string" ? raw : "#4a5568";
+                return (
+                  <>
+                    <input
+                      type="color"
+                      value={nodeColor}
+                      onChange={(e) => updateSettings({ nodeColor: e.currentTarget.value })}
+                      className="h-10 w-14 cursor-pointer rounded border border-slate-600 bg-transparent p-1"
+                    />
+                    <input
+                      type="text"
+                      value={nodeColor}
+                      onChange={(e) => updateSettings({ nodeColor: e.currentTarget.value })}
+                      className="w-24 rounded border border-slate-600 bg-slate-800 px-2 py-1.5 font-mono text-sm"
+                    />
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+          <div>
+            <label className="mb-2 block text-sm text-slate-400">フォーカスノード</label>
+            <div className="flex items-center gap-3">
+              {(() => {
+                const raw = settings.nodeFocusColor;
+                const nodeFocusColor: string =
+                  typeof raw === "string" ? raw : "#2563eb";
+                return (
+                  <>
+                    <input
+                      type="color"
+                      value={nodeFocusColor}
+                      onChange={(e) => updateSettings({ nodeFocusColor: e.currentTarget.value })}
+                      className="h-10 w-14 cursor-pointer rounded border border-slate-600 bg-transparent p-1"
+                    />
+                    <input
+                      type="text"
+                      value={nodeFocusColor}
+                      onChange={(e) => updateSettings({ nodeFocusColor: e.currentTarget.value })}
+                      className="w-24 rounded border border-slate-600 bg-slate-800 px-2 py-1.5 font-mono text-sm"
+                    />
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* PDFファイル名設定 */}
+      {/* <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+        <h3 className="mb-3 font-semibold">PDFダウンロード</h3>
+        <div>
+          <label className="mb-2 block text-sm text-slate-400">
+            ファイル名（拡張子なし・未入力時はワークスペース名を使用）
+          </label>
+          <input
+            type="text"
+            value={settings.pdfFilename ?? ""}
+            onChange={(e) => updateSettings({ pdfFilename: e.target.value || undefined })}
+            placeholder="例: ストーリーグラフ"
+            className="w-full rounded border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500"
+          />
+        </div>
+      </div> */}
+
     </div>
   );
 }

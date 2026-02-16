@@ -35,6 +35,8 @@ interface PrintPreviewContentProps {
   onWorkspaceTitlePositionChange?: (pos: { x: number; y: number }) => void;
   onWorkspaceTitleSizeChange?: (size: { width: number; height: number }) => void;
   onSectionSizeChange?: (communityId: string, size: { width: number; height: number }) => void;
+  onCommunityPositionChange?: (communityId: string, pos: { x: number; y: number }) => void;
+  onNodePositionChange?: (nodeId: string, pos: { x: number; y: number }) => void;
 }
 
 export function PrintPreviewContent({
@@ -46,6 +48,8 @@ export function PrintPreviewContent({
   onWorkspaceTitlePositionChange,
   onWorkspaceTitleSizeChange,
   onSectionSizeChange,
+  onCommunityPositionChange,
+  onNodePositionChange,
 }: PrintPreviewContentProps) {
   const [communityCenters, setCommunityCenters] = useState<
     Map<string, { x: number; y: number }>
@@ -183,7 +187,7 @@ export function PrintPreviewContent({
   }, [pageSizeInMm, layoutSettings.margins, aspectRatio]);
 
   const ZOOM_MIN = 0.5;
-  const ZOOM_MAX = 2.5;
+  const ZOOM_MAX = 4;
   const ZOOM_STEP = 0.25;
 
   const handleWheelZoom = (e: React.WheelEvent) => {
@@ -234,7 +238,11 @@ export function PrintPreviewContent({
           </button>
         </div>
         {workspaceId && (
-          <PdfExportButton layoutSettings={layoutSettings} workspaceId={workspaceId} />
+          <PdfExportButton
+            layoutSettings={layoutSettings}
+            workspaceId={workspaceId}
+            workspaceTitle={workspaceTitle}
+          />
         )}
       </div>
 
@@ -266,9 +274,11 @@ export function PrintPreviewContent({
               storyItems={storyItems}
               previewSize={previewSize}
               workspaceTitle={workspaceTitle}
-              onWorkspaceTitlePositionChange={onWorkspaceTitlePositionChange}
-              onWorkspaceTitleSizeChange={onWorkspaceTitleSizeChange}
-              onSectionSizeChange={onSectionSizeChange}
+                  onWorkspaceTitlePositionChange={onWorkspaceTitlePositionChange}
+                  onWorkspaceTitleSizeChange={onWorkspaceTitleSizeChange}
+                  onSectionSizeChange={onSectionSizeChange}
+                  onCommunityPositionChange={onCommunityPositionChange}
+                  onNodePositionChange={onNodePositionChange}
               onCommunityPositionsCalculated={(centers) => {
                 setCommunityCenters(centers);
                 // キャンバスサイズを計算

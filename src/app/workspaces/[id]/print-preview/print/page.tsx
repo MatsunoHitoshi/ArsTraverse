@@ -96,7 +96,8 @@ export default function PrintPage() {
       workspaceTitle: 21,
       sectionTitle: 14,
       body: 7,
-      graph: 12,
+      node: 12,
+      edge: 6,
     },
     graphSize: {
       width: 800,

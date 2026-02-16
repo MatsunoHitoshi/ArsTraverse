@@ -19,6 +19,7 @@ import {
 import { select } from "d3";
 import type { Simulation } from "d3";
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
+import { getMaxEdgeLabelFontSizeByLength } from "@/app/_utils/graph-label-utils";
 import { filterGraphByLayoutInstruction } from "@/app/_utils/kg/filter-graph-by-layout-instruction";
 import { getNodeByIdForFrontend } from "@/app/_utils/kg/filter";
 import { D3ZoomProvider } from "../zoom";
@@ -108,12 +109,6 @@ function estimateNodeLabelFontSizeFromScale(scale: number, forRecording: boolean
   const base =
     scale > 4 ? 3 : scale > 3 ? 4 : scale > 2 ? 5 : scale > 1.5 ? 6 : scale > 1 ? 7 : scale > 0.9 ? 8 : 9;
   return base * 1.5;
-}
-
-/** エッジラベルがエッジ長の80%を超えないフォントサイズの上限を算出（文字幅 ≈ fontSize * 0.6） */
-function getMaxEdgeLabelFontSizeByLength(edgeLengthPx: number, textLength: number): number {
-  if (edgeLengthPx <= 0 || textLength <= 0) return 999;
-  return (edgeLengthPx * 0.8) / (Math.max(1, textLength) * 0.6);
 }
 
 /** ラベルがノードからはみ出す量をレイアウト座標で推定（ビューpx を scale で割って layout 座標に） */
