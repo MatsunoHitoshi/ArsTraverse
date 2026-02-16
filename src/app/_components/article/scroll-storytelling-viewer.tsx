@@ -74,6 +74,11 @@ export function ScrollStorytellingViewer({
     [metaGraphData],
   );
 
+  const segmentNodeIds = useMemo(
+    () => getSegmentNodeIdsFromMetaGraphStoryData(metaGraphData),
+    [metaGraphData],
+  );
+
   const isPc = (innerWidth ?? 0) >= XL_BREAKPOINT;
 
   // 先頭センチネルがビューポート内なら1段落目とみなす（初期表示・トップへスクロール時）
@@ -183,7 +188,7 @@ export function ScrollStorytellingViewer({
         width={graphSize.width}
         height={graphSize.height}
         filter={metaGraphData.filter}
-        segmentNodeIds={getSegmentNodeIdsFromMetaGraphStoryData(metaGraphData)}
+        segmentNodeIds={segmentNodeIds}
       />
     </div>
   );
