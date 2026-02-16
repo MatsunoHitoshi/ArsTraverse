@@ -237,25 +237,24 @@ export function ScrollStorytellingViewerUnified({
       const index = steps.findIndex(
         (s) => s.communityId === communityId && s.id !== "__overview__",
       );
-      console.log("[scroll-storytelling] goToFirstSegmentOfCommunity:", { communityId, index, communityIds: steps.map((s) => s.communityId) });
       if (index < 0) return;
-      const targetIndex = index;
-      const selector = `[data-story-step-index="${targetIndex}"]`;
+      // SP版では scroll-snap の挙動で目標の1番目ではなく2番目にスナップしてしまうため、
+      // 意図的に一つ前のセグメントへスクロールし、スナップで1番目に落ち着くようにする。
+      const scrollTargetIndex = isPc ? index : Math.max(0, index - 1);
+      const selector = `[data-story-step-index="${scrollTargetIndex}"]`;
       setUseNormalHeightForScroll(true);
       const behavior = options?.instant ? ("instant" as const) : ("smooth" as const);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           const el = document.querySelector(selector);
-          console.log("[scroll-storytelling] scroll target:", { selector, found: !!el, el });
           if (el) {
             el.scrollIntoView({ behavior, block: "start" });
-            console.log("[scroll-storytelling] scrollIntoView called");
           }
           window.setTimeout(() => setUseNormalHeightForScroll(false), 500);
         });
       });
     },
-    [steps],
+    [steps, isPc],
   );
 
   /** ページロード時: ?community=xxx があればコミュニティラベルクリックと同様に先頭セグメントへスクロール */
@@ -264,16 +263,13 @@ export function ScrollStorytellingViewerUnified({
   if (initialCommunityIdRef.current === undefined && typeof window !== "undefined") {
     const p = new URLSearchParams(window.location.search);
     initialCommunityIdRef.current = p.get("community") ?? p.get("section");
-    console.log("[scroll-storytelling] initialCommunityIdRef:", initialCommunityIdRef.current, "search:", window.location.search);
   }
   useEffect(() => {
     const communityId = initialCommunityIdRef.current ?? searchParams.get("community") ?? searchParams.get("section");
-    console.log("[scroll-storytelling] useEffect run:", { communityId, stepsLength: steps.length, alreadyProcessed: communityFromUrlRef.current });
     if (!communityId || !steps.length || communityFromUrlRef.current !== null) return;
 
     const timer = setTimeout(() => {
       communityFromUrlRef.current = communityId;
-      console.log("[scroll-storytelling] timer fired, calling goToFirstSegmentOfCommunity:", communityId);
       goToFirstSegmentOfCommunity(communityId, { instant: true });
     }, 1000);
     return () => clearTimeout(timer);
