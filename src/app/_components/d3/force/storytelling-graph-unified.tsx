@@ -51,6 +51,9 @@ const EXPLORE_DIM_EDGE_OPACITY = 0.4;
 /** 探索モード用: 隣接エッジの不透明度 */
 const EXPLORE_NEIGHBOR_EDGE_OPACITY = 0.8;
 
+/** スクロール表示時、scale がこの値を下回るとハイライト＋1ホップ以外のノードラベルを非表示にする */
+const LABEL_RESTRICT_SCALE_THRESHOLD = 1.0;
+
 /** フォーカス遷移アニメーションの所要時間（ms） */
 const FOCUS_TRANSITION_MS = 1200;
 /** フェード開始を遅らせるオフセット（ms）。ビュー遷移を先行させる */
@@ -1818,6 +1821,13 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
           freeExploreMode && scaleForSize > 1
             ? Math.max(MIN_DISPLAY_NODE_RADIUS, rRaw)
             : rRaw;
+        /** 引きの場面（scale が閾値未満）では、ハイライト＋1ホップ周辺以外はラベルを表示しない */
+        const shouldShowThisNodeLabel =
+          freeExploreMode || showFullGraph
+            ? true
+            : effectiveScaleForLabels >= LABEL_RESTRICT_SCALE_THRESHOLD
+              ? true
+              : neighborNodeIdSet.has(node.id);
 
         return (
           <g
@@ -1869,7 +1879,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
                   strokeWidth={nodeStrokeWidth / 2}
                 />
               )}
-              {getNodeLabelFontSize(isFocusNode) > 0 && (
+              {shouldShowThisNodeLabel && getNodeLabelFontSize(isFocusNode) > 0 && (
                 <text
                   y={-10}
                   textAnchor="middle"
