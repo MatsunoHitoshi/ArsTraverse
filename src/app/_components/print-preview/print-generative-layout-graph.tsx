@@ -70,7 +70,7 @@ const PrintGraphNode = memo(function PrintGraphNode({
   const imageUrl = node.properties?.imageUrl as string | undefined;
   const showImage = !!imageUrl;
 
-  const r = showImage ? baseRadius * 3 : baseRadius;
+  const r = showImage ? baseRadius * 4 : baseRadius;
 
   // フォーカスモードでない場合（isFocusedが未指定のときも含む）は全ノードを通常表示
   const nodeOpacity = isMetaNode ? 1 : (isFocused !== false ? FOCUS_NODE_OPACITY : DIM_NODE_OPACITY);
