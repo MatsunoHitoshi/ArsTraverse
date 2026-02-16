@@ -170,6 +170,8 @@ interface PrintGenerativeLayoutGraphProps {
   onSectionSizeChange?: (communityId: string, size: { width: number; height: number }) => void; // セクション表示範囲変更時（communityIdごと）
   onCommunityPositionChange?: (communityId: string, pos: { x: number; y: number }) => void; // コミュニティ中心座標のDnD微調整時
   onNodePositionChange?: (nodeId: string, pos: { x: number; y: number }) => void; // ノード座標のDnD微調整時（metaGraphDisplay=none 時のみ）
+  /** シミュレーション再実行のトリガー（変更で再実行、コミュニティ中心座標は layoutSettings.communityPositions で維持） */
+  reSimulationTrigger?: number;
 }
 
 export const PrintGenerativeLayoutGraph = ({
@@ -193,6 +195,7 @@ export const PrintGenerativeLayoutGraph = ({
   onSectionSizeChange,
   onCommunityPositionChange,
   onNodePositionChange,
+  reSimulationTrigger,
 }: PrintGenerativeLayoutGraphProps) => {
   const svgRef = useRef<SVGSVGElement>(null);
   // 詳細グラフ全体のレイアウト（一度だけ計算）
@@ -542,6 +545,15 @@ export const PrintGenerativeLayoutGraph = ({
       });
     }
 
+    // ユーザー調整済みのコミュニティ中心座標で上書き（シミュレーション再実行時も維持）
+    if (layoutSettings?.communityPositions && Object.keys(layoutSettings.communityPositions).length > 0) {
+      Object.entries(layoutSettings.communityPositions).forEach(([communityId, pos]) => {
+        if (pos != null && typeof pos.x === "number" && typeof pos.y === "number") {
+          communityTargetPositions.set(communityId, { x: pos.x, y: pos.y });
+        }
+      });
+    }
+
     // 詳細グラフのレイアウト計算（コミュニティごとの分離込み）
     const detailedSimulation = forceSimulation<CustomNodeType, CustomLinkType>(
       allNodes,
@@ -568,7 +580,7 @@ export const PrintGenerativeLayoutGraph = ({
           }),
       )
       .force("charge", forceManyBody().strength(-300)) // 弱い反発力（generative-layout-graph に合わせる）
-      .force("collide", forceCollide(40)) // 衝突半径（ラベル重なり回避のため拡大）
+      .force("collide", forceCollide(35)) // 衝突半径（ラベル重なり回避のため拡大）
       .force("center", forceCenter(width / 2, height / 2).strength(0.05)); // 中心への引力を弱める
 
     // コミュニティごとに目標位置への引力を追加（forceX/forceYを使用）
@@ -627,6 +639,7 @@ export const PrintGenerativeLayoutGraph = ({
     });
 
     detailedSimulation.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- layoutSettings.communityPositions は deps に入れない（ドラッグのたびに再実行を防ぐ。reSimulationTrigger 変更時に closure で最新値を読み取る）
   }, [
     originalGraphDocument,
     communityMap,
@@ -634,7 +647,7 @@ export const PrintGenerativeLayoutGraph = ({
     height,
     metaNodeData, // order順の整列に必要
     layoutOrientation, // レイアウト方向の変更に応じて再計算
-    // detailedGraphLayoutを依存配列から削除（再計算を可能にするため）
+    reSimulationTrigger, // シミュレーション再実行のトリガー
   ]);
 
   // コミュニティ中心座標の計算

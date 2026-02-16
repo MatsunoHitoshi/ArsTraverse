@@ -31,6 +31,8 @@ interface PrintPreviewContentProps {
   metaGraphData: MetaGraphStoryData;
   originalGraphData: GraphDocumentForFrontend;
   layoutSettings: PrintLayoutSettings;
+  /** シミュレーション再実行のトリガー（変更で再実行） */
+  reSimulationTrigger?: number;
   workspaceId?: string;
   workspaceTitle?: string;
   onWorkspaceTitlePositionChange?: (pos: { x: number; y: number }) => void;
@@ -44,6 +46,7 @@ export function PrintPreviewContent({
   metaGraphData,
   originalGraphData,
   layoutSettings,
+  reSimulationTrigger,
   workspaceId,
   workspaceTitle,
   onWorkspaceTitlePositionChange,
@@ -275,6 +278,7 @@ export function PrintPreviewContent({
               metaGraphData={metaGraphData}
               originalGraphData={graphDataForView}
               layoutSettings={layoutSettings}
+              reSimulationTrigger={reSimulationTrigger}
               storyItems={storyItems}
               previewSize={previewSize}
               workspaceTitle={workspaceTitle}

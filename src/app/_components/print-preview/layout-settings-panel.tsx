@@ -9,11 +9,14 @@ import { DownArrowIcon, RightArrowIcon } from "../icons";
 interface LayoutSettingsPanelProps {
   settings: PrintLayoutSettings;
   onSettingsChange: (settings: PrintLayoutSettings) => void;
+  /** 詳細グラフのシミュレーションを再実行（コミュニティ中心座標は維持、ノード微調整はクリア） */
+  onReSimulation?: () => void;
 }
 
 export function LayoutSettingsPanel({
   settings,
   onSettingsChange,
+  onReSimulation,
 }: LayoutSettingsPanelProps) {
   const [isExpanded, setIsExpanded] = useState({
     pageSize: false,
@@ -649,6 +652,23 @@ export function LayoutSettingsPanel({
           </div>
         )}
       </div>
+
+      {/* シミュレーション再実行 */}
+      {onReSimulation && (
+        <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+          <h3 className="mb-2 font-semibold">グラフレイアウト</h3>
+          <p className="mb-3 text-sm text-slate-400">
+            コミュニティの中心座標は維持したまま、ノード配置を再計算します。ノードの個別微調整はクリアされます。
+          </p>
+          <Button
+            size="small"
+            onClick={onReSimulation}
+            className="w-full bg-slate-700 hover:bg-slate-600"
+          >
+            シミュレーションを再実行
+          </Button>
+        </div>
+      )}
 
       {/* レイアウト方向設定 */}
       <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">

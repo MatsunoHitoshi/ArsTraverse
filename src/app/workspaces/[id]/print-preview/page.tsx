@@ -51,6 +51,7 @@ export default function PrintPreviewPage() {
     null,
   );
   const [isSettingsOpen, setIsSettingsOpen] = useState(true);
+  const [reSimulationTrigger, setReSimulationTrigger] = useState(0);
   const [layoutSettings, setLayoutSettings] = useState<PrintLayoutSettings>({
     pageSize: {
       mode: "template",
@@ -172,6 +173,10 @@ export default function PrintPreviewPage() {
                 <LayoutSettingsPanel
                   settings={layoutSettings}
                   onSettingsChange={setLayoutSettings}
+                  onReSimulation={() => {
+                    setLayoutSettings((prev) => ({ ...prev, nodePositions: {} }));
+                    setReSimulationTrigger((t) => t + 1);
+                  }}
                 />
               </div>
             )}
@@ -183,6 +188,7 @@ export default function PrintPreviewPage() {
                   metaGraphData={metaGraphData}
                   originalGraphData={graphData}
                   layoutSettings={layoutSettings}
+                  reSimulationTrigger={reSimulationTrigger}
                   workspaceId={workspaceId}
                   workspaceTitle={workspaceData?.name}
                   onWorkspaceTitlePositionChange={(pos) =>

@@ -19,6 +19,8 @@ interface PrintUnifiedGraphViewProps {
   metaGraphData: MetaGraphStoryData;
   originalGraphData: GraphDocumentForFrontend;
   layoutSettings: PrintLayoutSettings;
+  /** シミュレーション再実行のトリガー（変更で再実行） */
+  reSimulationTrigger?: number;
   onCommunityPositionsCalculated?: (positions: Map<string, { x: number; y: number }>) => void;
   storyItems?: StoryItem[];
   previewSize?: { width: number; height: number } | null;
@@ -34,6 +36,7 @@ export function PrintUnifiedGraphView({
   metaGraphData,
   originalGraphData,
   layoutSettings,
+  reSimulationTrigger,
   onCommunityPositionsCalculated,
   storyItems = [],
   previewSize,
@@ -195,6 +198,7 @@ export function PrintUnifiedGraphView({
         }}
         storyItems={storyItems}
         layoutSettings={layoutSettings}
+        reSimulationTrigger={reSimulationTrigger}
         storyReferencedNodeIds={storyReferencedNodeIds}
         storyReferencedEdgeIds={storyReferencedEdgeIds}
         workspaceTitle={workspaceTitle}
