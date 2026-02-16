@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { GraphDocumentForFrontend } from "@/app/const/types";
 import type { CustomNodeType, CustomLinkType } from "@/app/const/types";
 import { diffNodes, diffRelationships } from "@/app/_utils/kg/diff";
@@ -67,6 +67,8 @@ export const useGraphEditor = ({
 
   // 初期化フラグ（初回のみデータを設定するため）
   const [isInitialized, setIsInitialized] = useState(false);
+  // 前回のdefaultGraphDocument参照（refetchで更新されたときのみ同期するため）
+  const prevDefaultGraphDocumentRef = useRef<GraphDocumentForFrontend | null | undefined>(undefined);
 
   // 編集状態の管理
   const [isEditor, setIsEditor] = useState<boolean>(false);
@@ -100,18 +102,24 @@ export const useGraphEditor = ({
       setGraphDocument(defaultGraphDocument);
       setInitialGraphDocument(defaultGraphDocument);
       setIsInitialized(true);
+      prevDefaultGraphDocumentRef.current = defaultGraphDocument;
       return;
     }
-    // 既に初期化済みの場合: サーバー側でグラフが更新された（ノード・エッジが増えた）ときは同期
-    // 例: テキストからグラフ抽出→TopicSpace統合後の refetch
+    // 既に初期化済みの場合: defaultGraphDocumentの参照が変わったときのみ同期
+    // （refetchで親から新しいデータが渡された場合。ユーザーのローカル削除で
+    // graphDocumentが減っただけの場合は上書きしない）
+    const defaultHasChanged =
+      defaultGraphDocument !== prevDefaultGraphDocumentRef.current;
     if (
       isInitialized &&
       defaultGraphDocument &&
+      defaultHasChanged &&
       graphDocument &&
       (defaultGraphDocument.nodes.length > graphDocument.nodes.length ||
         defaultGraphDocument.relationships.length >
           graphDocument.relationships.length)
     ) {
+      prevDefaultGraphDocumentRef.current = defaultGraphDocument;
       setGraphDocument(defaultGraphDocument);
       setInitialGraphDocument(defaultGraphDocument);
     }
