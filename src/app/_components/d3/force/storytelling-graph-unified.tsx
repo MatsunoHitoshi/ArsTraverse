@@ -685,22 +685,18 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     };
   }, [links, focusEdgeIdSet]);
 
-  /** フォーカス＋その1ホップ隣のノードID（それ以外は「ほんのり」表示） */
+  /** フォーカス＋その1ホップ隣のノードID（フォーカスに直接エッジで繋がるノードのみ。それ以外は「ほんのり」表示） */
   const neighborNodeIdSet = useMemo(() => {
-    const set = new Set<string>();
-    effectiveFocusNodeIds.forEach((id) => set.add(id));
-    sourceNodeIdsOfFocusEdges.forEach((id) => set.add(id));
-    targetNodeIdsOfFocusEdges.forEach((id) => set.add(id));
+    const focusSet = new Set(effectiveFocusNodeIds);
+    const set = new Set<string>(effectiveFocusNodeIds);
     links.forEach((link) => {
       const src = (link.source as CustomNodeType).id;
       const tgt = (link.target as CustomNodeType).id;
-      if (set.has(src) || set.has(tgt)) {
-        set.add(src);
-        set.add(tgt);
-      }
+      if (focusSet.has(src)) set.add(tgt);
+      if (focusSet.has(tgt)) set.add(src);
     });
     return set;
-  }, [effectiveFocusNodeIds, sourceNodeIdsOfFocusEdges, targetNodeIdsOfFocusEdges, links]);
+  }, [effectiveFocusNodeIds, links]);
 
   const getTargetNodeOpacity = useCallback(
     (node: CustomNodeType): number => {
@@ -1828,6 +1824,8 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
             : effectiveScaleForLabels >= LABEL_RESTRICT_SCALE_THRESHOLD
               ? true
               : neighborNodeIdSet.has(node.id);
+
+        console.log("effectiveScaleForLabels: ", effectiveScaleForLabels);
 
         return (
           <g
