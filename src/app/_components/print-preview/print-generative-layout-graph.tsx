@@ -568,7 +568,7 @@ export const PrintGenerativeLayoutGraph = ({
           }),
       )
       .force("charge", forceManyBody().strength(-300)) // 弱い反発力（generative-layout-graph に合わせる）
-      .force("collide", forceCollide(30)) // 衝突半径（generative-layout-graph に合わせる）
+      .force("collide", forceCollide(60)) // 衝突半径（ラベル重なり回避のため拡大）
       .force("center", forceCenter(width / 2, height / 2).strength(0.05)); // 中心への引力を弱める
 
     // コミュニティごとに目標位置への引力を追加（forceX/forceYを使用）
@@ -1524,10 +1524,30 @@ export const PrintGenerativeLayoutGraph = ({
                     edgeGroups.get(key)!.push(link);
                   });
 
+                  // フォーカスモード時：非フォーカスを先に描画し、フォーカスを最前面に
+                  const sortedLinksForRender = hasFocusMode
+                    ? [...linksToRender].sort((a, b) => {
+                        const aKey = getEdgeCompositeKeyFromLink({
+                          sourceId: a.sourceId ?? (a.source as CustomNodeType).id,
+                          targetId: a.targetId ?? (a.target as CustomNodeType).id,
+                          type: a.type ?? "",
+                        });
+                        const bKey = getEdgeCompositeKeyFromLink({
+                          sourceId: b.sourceId ?? (b.source as CustomNodeType).id,
+                          targetId: b.targetId ?? (b.target as CustomNodeType).id,
+                          type: b.type ?? "",
+                        });
+                        const aFocus = effectiveFocusedEdgeIds.has(aKey);
+                        const bFocus = effectiveFocusedEdgeIds.has(bKey);
+                        if (aFocus === bFocus) return 0;
+                        return aFocus ? 1 : -1;
+                      })
+                    : linksToRender;
+
                   return (
                     <>
-                      {/* 1. エッジの線（リンクごとに描画） */}
-                      {linksToRender.map((link, i) => {
+                      {/* 1. エッジの線（リンクごとに描画、フォーカスを最前面に） */}
+                      {sortedLinksForRender.map((link, i) => {
                         const source = link.source as CustomNodeType;
                         const target = link.target as CustomNodeType;
                         if (
@@ -1584,9 +1604,40 @@ export const PrintGenerativeLayoutGraph = ({
                         );
                       })}
 
-                      {/* 2. エッジラベル（ノード対ごとに1つ、フォーカスエッジを優先・複数時は「…」） */}
+                      {/* 2. エッジラベル（ノード対ごとに1つ、フォーカスエッジを優先・複数時は「…」、フォーカスを最前面に） */}
                       {layoutSettings?.showEdgeLabels &&
-                        Array.from(edgeGroups.entries()).map(([groupKey, linksInPair]) => {
+                        (() => {
+                          const entries = Array.from(edgeGroups.entries());
+                          const sortedEntries = hasFocusMode
+                            ? [...entries].sort(([, linksA], [, linksB]) => {
+                                const hasFocusA = linksA.some((l) => {
+                                  const s = l.source as CustomNodeType;
+                                  const t = l.target as CustomNodeType;
+                                  return effectiveFocusedEdgeIds.has(
+                                    getEdgeCompositeKeyFromLink({
+                                      sourceId: l.sourceId ?? s.id,
+                                      targetId: l.targetId ?? t.id,
+                                      type: l.type ?? "",
+                                    }),
+                                  );
+                                });
+                                const hasFocusB = linksB.some((l) => {
+                                  const s = l.source as CustomNodeType;
+                                  const t = l.target as CustomNodeType;
+                                  return effectiveFocusedEdgeIds.has(
+                                    getEdgeCompositeKeyFromLink({
+                                      sourceId: l.sourceId ?? s.id,
+                                      targetId: l.targetId ?? t.id,
+                                      type: l.type ?? "",
+                                    }),
+                                  );
+                                });
+                                if (hasFocusA === hasFocusB) return 0;
+                                return hasFocusA ? 1 : -1;
+                              })
+                            : entries;
+                          return sortedEntries;
+                        })().map(([groupKey, linksInPair]) => {
                           const link = linksInPair[0];
                           if (!link?.type) return null;
                           const source = link.source as CustomNodeType;
@@ -1810,7 +1861,17 @@ export const PrintGenerativeLayoutGraph = ({
                     );
                   }
 
-                  return nodesToRender.map((node) => {
+                  // フォーカスモード時：非フォーカスを先に描画し、フォーカスノードを最前面に
+                  const sortedNodesForRender = hasFocusMode
+                    ? [...nodesToRender].sort((a, b) => {
+                        const aFocus = effectiveFocusedNodeIds.has(a.id);
+                        const bFocus = effectiveFocusedNodeIds.has(b.id);
+                        if (aFocus === bFocus) return 0;
+                        return aFocus ? 1 : -1;
+                      })
+                    : nodesToRender;
+
+                  return sortedNodesForRender.map((node) => {
                     const queryFiltered =
                       !!nodeSearchQuery &&
                       nodeSearchQuery !== "" &&
