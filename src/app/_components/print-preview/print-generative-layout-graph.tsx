@@ -283,6 +283,28 @@ export const PrintGenerativeLayoutGraph = ({
     return set;
   }, [focusedNodeIds, focusedEdgeIds, originalGraphDocument?.relationships]);
 
+  // フォーカスエッジ＋effectiveFocusedNodeIds のノード間を結ぶエッジ（storytelling-graph-unified と同様）
+  const effectiveFocusedEdgeIds = useMemo(() => {
+    const edgeSet = new Set<string>();
+    if (focusedEdgeIds) {
+      focusedEdgeIds.forEach((id) => edgeSet.add(id));
+    }
+    const focusNodeSet = effectiveFocusedNodeIds;
+    if (originalGraphDocument?.relationships) {
+      originalGraphDocument.relationships.forEach((rel) => {
+        if (focusNodeSet.has(rel.sourceId) && focusNodeSet.has(rel.targetId)) {
+          const key = getEdgeCompositeKeyFromLink({
+            sourceId: rel.sourceId,
+            targetId: rel.targetId,
+            type: rel.type ?? "",
+          });
+          edgeSet.add(key);
+        }
+      });
+    }
+    return edgeSet;
+  }, [focusedEdgeIds, effectiveFocusedNodeIds, originalGraphDocument?.relationships]);
+
   // エッジの色（layoutSettingsから取得）
   const edgeBaseColor = layoutSettings?.edgeColor ?? "#60a5fa";
   const edgeFocusColor =
@@ -1541,9 +1563,7 @@ export const PrintGenerativeLayoutGraph = ({
                           targetId: link.targetId ?? target.id,
                           type: link.type ?? "",
                         });
-                        const isFocusEdge =
-                          (focusedEdgeIds?.has(edgeKey)) ??
-                          (focusedNodeIds != null && focusedNodeIds.has(source.id) && focusedNodeIds.has(target.id));
+                        const isFocusEdge = effectiveFocusedEdgeIds.has(edgeKey);
                         const opacity = hasFocusMode
                           ? (isFocusEdge ? baseOpacity : DIM_EDGE_OPACITY)
                           : baseOpacity;
@@ -1594,10 +1614,7 @@ export const PrintGenerativeLayoutGraph = ({
                               targetId: l.targetId ?? t.id,
                               type: l.type ?? "",
                             });
-                            return (
-                              focusedEdgeIds?.has(k) ??
-                              (focusedNodeIds != null && focusedNodeIds.has(s.id) && focusedNodeIds.has(t.id))
-                            );
+                            return effectiveFocusedEdgeIds.has(k);
                           });
                           const hasFocusInGroup = focusLinks.length > 0;
                           const displayType =
