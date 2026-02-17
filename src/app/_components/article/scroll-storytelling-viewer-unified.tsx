@@ -142,11 +142,27 @@ export function ScrollStorytellingViewerUnified({
     setStepProgress(0);
   }, []);
 
+  // スクロール時の再レンダリングを抑える: onStepProgress を RAF でスロットル（最大 60fps）
+  const pendingProgressRef = useRef<{ index: number; progress: number } | null>(null);
+  const rafScheduledRef = useRef(false);
+
   const onStepProgress = useCallback((arg: ScrollamaProgressCallbackArg) => {
     const index = Number(arg.data);
     const progress = Math.max(0, Math.min(1, arg.progress));
-    setProgressStepIndex(index);
-    setStepProgress(progress);
+    pendingProgressRef.current = { index, progress };
+
+    if (!rafScheduledRef.current) {
+      rafScheduledRef.current = true;
+      requestAnimationFrame(() => {
+        rafScheduledRef.current = false;
+        const pending = pendingProgressRef.current;
+        if (pending) {
+          setProgressStepIndex(pending.index);
+          setStepProgress(pending.progress);
+          pendingProgressRef.current = null;
+        }
+      });
+    }
   }, []);
 
   const graphIndex =
@@ -481,7 +497,7 @@ export function ScrollStorytellingViewerUnified({
                   offset={SCROLLAMA_OFFSET}
                   onStepEnter={onStepEnter}
                   onStepProgress={onStepProgress}
-                  threshold={8}
+                  threshold={32}
                 >
                   {steps.map((step, index) => (
                     <Step data={index} key={step.id}>
@@ -554,7 +570,7 @@ export function ScrollStorytellingViewerUnified({
                   offset={SCROLLAMA_OFFSET}
                   onStepEnter={onStepEnter}
                   onStepProgress={onStepProgress}
-                  threshold={8}
+                  threshold={32}
                 >
                   {steps.map((step, index) => (
                     <Step data={index} key={step.id}>
