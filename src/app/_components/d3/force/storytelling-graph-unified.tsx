@@ -157,7 +157,10 @@ function estimateNodeLabelFontSizeFromScale(scale: number, forRecording: boolean
   if (forRecording) return Math.max(6, scale) * 0.7;
   const base =
     scale > 4 ? 3 : scale > 3 ? 4 : scale > 2 ? 5 : scale > 1.5 ? 6 : scale > 1 ? 7 : scale > 0.9 ? 8 : 9;
-  return base * 1.5;
+  const stepped = base * 1.5;
+  /** 引きのとき（scale < 1）は実際の描画と一致させるため zoomOutFactor を掛ける */
+  const zoomOutFactor = scale < 1 ? Math.max(0.4, scale) : 1;
+  return stepped * zoomOutFactor;
 }
 
 /** ラベルがノードからはみ出す量をレイアウト座標で推定（ビューpx を scale で割って layout 座標に） */
@@ -166,7 +169,8 @@ function estimateLabelMarginLayout(
   fontSize: number,
   textLength: number,
 ): { halfWidth: number; heightAbove: number } {
-  const halfWidthView = (textLength * fontSize) / 1.5;
+  /** 1文字あたり約0.9em相当（1.5→2.2に変更。graph-label-utilsの0.6emよりやや広めで日本語対応） */
+  const halfWidthView = (textLength * fontSize) / 2;
   const heightAboveView = 10 + fontSize;
   return {
     halfWidth: halfWidthView / scale,
@@ -928,18 +932,22 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     if (focusNodesWithLabel.length > 0 && scale > 0.7) {
       const fontSizeBase = estimateNodeLabelFontSizeFromScale(scale, forRecording) * (isPc ? 1 : 0.75);
       const fontSize = fontSizeBase * 2; // フォーカス時は2倍になるため保守的に
-      let marginX = 0;
-      let marginY = 0;
+      let minXExpanded = Infinity;
+      let maxXExpanded = -Infinity;
+      let minYExpanded = Infinity;
+      let maxYExpanded = -Infinity;
       for (const n of focusNodesWithLabel) {
         const name = n.name ?? "";
         const { halfWidth, heightAbove } = estimateLabelMarginLayout(scale, fontSize, name.length);
-        marginX = Math.max(marginX, halfWidth);
-        marginY = Math.max(marginY, heightAbove);
+        minXExpanded = Math.min(minXExpanded, n.x! - halfWidth);
+        maxXExpanded = Math.max(maxXExpanded, n.x! + halfWidth);
+        minYExpanded = Math.min(minYExpanded, n.y! - heightAbove);
+        maxYExpanded = Math.max(maxYExpanded, n.y! + heightAbove);
       }
-      minX -= marginX;
-      maxX += marginX;
-      minY -= marginY;
-      maxY += marginY;
+      minX = Math.min(minX, minXExpanded);
+      maxX = Math.max(maxX, maxXExpanded);
+      minY = Math.min(minY, minYExpanded);
+      maxY = Math.max(maxY, maxYExpanded);
       rangeX = maxX - minX || 1;
       rangeY = maxY - minY || 1;
       rawScale = Math.min(
