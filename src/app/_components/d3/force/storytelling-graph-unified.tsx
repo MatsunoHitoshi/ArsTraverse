@@ -50,6 +50,8 @@ const EXPLORE_NEIGHBOR_NODE_OPACITY = 0.8;
 const EXPLORE_DIM_EDGE_OPACITY = 0.4;
 /** 探索モード用: 隣接エッジの不透明度 */
 const EXPLORE_NEIGHBOR_EDGE_OPACITY = 0.8;
+/** 探索モード用: 入室セグメントに依存しないラベル・ノードサイズの基準スケール */
+const EXPLORE_BASE_SCALE = 1.2;
 
 /** スクロール表示時、scale がこの値を下回るとハイライト＋1ホップ以外のノードラベルを非表示にする */
 const LABEL_RESTRICT_SCALE_THRESHOLD = 1.0;
@@ -638,7 +640,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
           "link",
           forceLink<CustomNodeType, CustomLinkType>(allLinks)
             .id((d) => d.id)
-            .distance(35)
+            .distance(30)
             .strength((link) => {
               const source = link.source as CustomNodeType;
               const target = link.target as CustomNodeType;
@@ -1017,9 +1019,9 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     ? lastLayoutTransformRef.current.centerY
     : interpolatedCenterY;
 
-  /** ラベル表示用の実効スケール（ラベル表示・サイズはスケールに連動）。自由探索時はズーム倍率を掛ける */
+  /** ラベル表示用の実効スケール（ラベル表示・サイズはスケールに連動）。自由探索時は入室セグメントに依存しない固定基準×ズーム倍率でどのセグメントから入っても一貫したサイズに */
   const effectiveScaleForLabels = freeExploreMode
-    ? displayScale * zoomScale
+    ? EXPLORE_BASE_SCALE * zoomScale
     : displayScale;
   /** ノード半径・エッジ太さ・ストロークに使うスケール（effectiveScaleForLabels と同じ値） */
   const scaleForSize = effectiveScaleForLabels;
@@ -1027,18 +1029,18 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   const scaleForNodeRadius =
     freeExploreMode && effectiveScaleForLabels > 1
       ? (() => {
-          const zoomInFactor =
-            effectiveScaleForLabels > 6
-              ? 2.5
-              : effectiveScaleForLabels > 4
-                ? 2
-                : effectiveScaleForLabels > 3
-                  ? 1.6
-                  : effectiveScaleForLabels > 2
-                    ? 1.3
-                    : 1.1;
-          return scaleForSize / zoomInFactor;
-        })()
+        const zoomInFactor =
+          effectiveScaleForLabels > 6
+            ? 2.5
+            : effectiveScaleForLabels > 4
+              ? 2
+              : effectiveScaleForLabels > 3
+                ? 1.6
+                : effectiveScaleForLabels > 2
+                  ? 1.3
+                  : 1.1;
+        return scaleForSize / zoomInFactor;
+      })()
       : scaleForSize;
   /** ストローク用スケール。探索モード時は薄くなりすぎないよう下限 1 */
   const scaleForStroke = freeExploreMode ? Math.max(1, scaleForSize) : scaleForSize;
@@ -1116,8 +1118,9 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
             : 1;
         return base * zoomOutFactor;
       })();
-  /** SP版ではノードラベルをPC版の3/4サイズにする */
-  const nodeLabelFontSizeBase = nodeLabelFontSizeBaseRaw * (isPc ? 1 : 0.75);
+  /** SP版ではノードラベルをPC版の3/4サイズにする。探索モード時は全体的に1.2倍 */
+  const nodeLabelFontSizeBase =
+    nodeLabelFontSizeBaseRaw * (isPc ? 1 : 0.75) * (freeExploreMode ? 1.2 : 1);
   /** 探索モード時は generative-layout-graph に倣い倍率を控えめに（1.2）、通常時は 2。録画時のフォーカスノードは 4 */
   const nodeLabelFontSizeMultiplier = freeExploreMode ? 1.2 : 2;
   const getNodeLabelFontSize = useCallback(
