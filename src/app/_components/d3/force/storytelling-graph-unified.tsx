@@ -1062,29 +1062,15 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     ? Math.max(6, effectiveScaleForLabels) * 0.7
     : freeExploreMode
       ? (() => {
-        /** 引きのとき: zoomOutFactor で縮小（元の挙動を維持） */
-        const zoomOutFactor =
-          effectiveScaleForLabels < 1
-            ? Math.max(0.4, effectiveScaleForLabels)
-            : 1;
+        /** 引きのとき: スケールによらずそのままの大きさ */
         if (effectiveScaleForLabels <= 1) {
-          return 9 * zoomOutFactor;
+          return 9;
         }
-        /** 寄り（scale > 1）のとき: ズーム倍率が高いほどラベルを段階的に小さく（D3 zoom で拡大されるため補正） */
-        const zoomInFactor =
-          effectiveScaleForLabels > 6
-            ? 3
-            : effectiveScaleForLabels > 4
-              ? 2.5
-              : effectiveScaleForLabels > 3
-                ? 2
-                : effectiveScaleForLabels > 2
-                  ? 1.5
-                  : 1.2;
+
         /** 段階的な基準値（寄りほど小さく）。scale>6→2, >4→3, >3→4, >2→5, >1→6 */
         const stepped =
           effectiveScaleForLabels > 6
-            ? 2
+            ? 3
             : effectiveScaleForLabels > 4
               ? 3
               : effectiveScaleForLabels > 3
@@ -1093,7 +1079,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
                   ? 5
                   : 6;
         const base = stepped * 1.5;
-        return base / zoomInFactor;
+        return base;
       })()
       : (() => {
         const stepped =
@@ -1122,7 +1108,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   const nodeLabelFontSizeBase =
     nodeLabelFontSizeBaseRaw * (isPc ? 1 : 0.75) * (freeExploreMode ? 1.2 : 1);
   /** 探索モード時は generative-layout-graph に倣い倍率を控えめに（1.2）、通常時は 2。録画時のフォーカスノードは 4 */
-  const nodeLabelFontSizeMultiplier = freeExploreMode ? 1.2 : 2;
+  const nodeLabelFontSizeMultiplier = freeExploreMode ? 1.4 : 2;
   const getNodeLabelFontSize = useCallback(
     (isFocusNode: boolean) =>
       showNodeLabels
@@ -1154,14 +1140,21 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   const edgeLabelFontSizeBase = edgeLabelFontSizeBaseRaw * edgeLabelZoomOutFactor;
   /** エッジラベルフォントサイズ（getNodeLabelFontSize と同様にフォーカス有無で倍率を切り替え） */
   const getEdgeLabelFontSize = useCallback(
-    (isFocusEdge: boolean) =>
-      edgeLabelFontSizeBase *
-      (forRecording && isFocusEdge ? 3 : forRecording ? 2 : isFocusEdge ? 2 : 1),
-    [edgeLabelFontSizeBase, forRecording],
+    (isFocusEdge: boolean) => {
+      const multiplier =
+        forRecording && isFocusEdge ? 3 : forRecording ? 2 : isFocusEdge ? 2 : 1;
+      const base = edgeLabelFontSizeBase * multiplier;
+      return freeExploreMode && isFocusEdge ? base * 0.85 : base;
+    },
+    [edgeLabelFontSizeBase, forRecording, freeExploreMode],
   );
   /** スケールに応じたエッジ・ノードの線の太さ（探索モード時は scaleForStroke で引きでも薄くならない） */
-  const edgeStrokeWidthFocus = forRecording ? Math.max(0.8, Math.min(3.5, 2 * scaleForStroke)) : Math.max(0.4, Math.min(2.5, 2 * scaleForStroke));
-  const edgeStrokeWidthNormal = Math.max(0.3, Math.min(1.5, 1.5 * scaleForStroke));
+  const edgeStrokeWidthFocusRaw = forRecording ? Math.max(0.8, Math.min(3.5, 2 * scaleForStroke)) : Math.max(0.4, Math.min(2.5, 2 * scaleForStroke));
+  const edgeStrokeWidthNormalRaw = Math.max(0.3, Math.min(1.5, 1.5 * scaleForStroke));
+  const edgeStrokeWidthFocus =
+    freeExploreMode ? Math.max(forRecording ? 0.8 : 0.4, edgeStrokeWidthFocusRaw * 0.5) : edgeStrokeWidthFocusRaw;
+  const edgeStrokeWidthNormal =
+    freeExploreMode ? Math.max(0.3, edgeStrokeWidthNormalRaw * 0.5) : edgeStrokeWidthNormalRaw;
   const nodeStrokeWidth = Math.max(0.25, Math.min(1.5, 1.5 * scaleForStroke));
   const toView = useCallback(
     (x: number, y: number) =>
