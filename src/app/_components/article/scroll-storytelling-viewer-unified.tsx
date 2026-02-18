@@ -79,6 +79,12 @@ export function ScrollStorytellingViewerUnified({
   const [segmentProgress, setSegmentProgress] = useState(1);
   /** セグメント進入時刻。RAF 内で経過時間計算に使用 */
   const segmentStartTimeRef = useRef(0);
+  /** アニメを開始したステップ。一致するときだけ segmentProgress をグラフに渡し、不一致の初回は 0 を渡してフラッシュを防ぐ */
+  const segmentStepIndexRef = useRef(0);
+  /** onStepEnter の直後、次の 1 回のレンダーで必ず 0 を渡す（setState の遅延で segmentProgress がまだ 1 のときのフラッシュ防止） */
+  const forceZeroNextPassRef = useRef(false);
+  /** onStepEnter の直後、最初に渡した値を 1 回だけログする用 */
+  const logFirstPassAfterEnterRef = useRef(false);
 
   const steps = useMemo(() => {
     const storySteps = buildScrollStepsFromMetaGraphStoryData(metaGraphData);
@@ -150,6 +156,8 @@ export function ScrollStorytellingViewerUnified({
 
   const onStepEnter = useCallback((arg: ScrollamaStepCallbackArg) => {
     const index = Number(arg.data);
+    forceZeroNextPassRef.current = true;
+    logFirstPassAfterEnterRef.current = true;
     setCurrentStepIndex(index);
     setProgressStepIndex(index);
     setStepProgress(0);
@@ -164,7 +172,7 @@ export function ScrollStorytellingViewerUnified({
     // progress は時間ベースのためここでは更新しない
   }, []);
 
-  // セグメント進入時に時間ベースで segmentProgress を 0→1 に更新する RAF
+  // セグメント進入時に時間ベースで segmentProgress を 0→1 に更新する RAF。ref は「segmentProgress が 0 で描画された」タイミングでだけ進める（render 側で実施）
   useEffect(() => {
     segmentStartTimeRef.current =
       typeof performance !== "undefined" ? performance.now() : 0;
@@ -400,7 +408,29 @@ export function ScrollStorytellingViewerUnified({
         focusNodeIds={graphNodeIds}
         focusEdgeIds={graphEdgeIds}
         animationProgress={animationProgress}
-        segmentProgress={segmentProgress}
+        segmentProgress={(() => {
+          let pass: number;
+          if (forceZeroNextPassRef.current) {
+            forceZeroNextPassRef.current = false;
+            pass = 0;
+          } else {
+            const match = progressStepIndex === segmentStepIndexRef.current;
+            if (!match && segmentProgress === 0) {
+              segmentStepIndexRef.current = progressStepIndex;
+            }
+            pass = match ? segmentProgress : 0;
+          }
+          if (logFirstPassAfterEnterRef.current) {
+            logFirstPassAfterEnterRef.current = false;
+            console.log("[segment-flash] 1回目に渡した値", {
+              pass,
+              progressStepIndex,
+              segmentProgress,
+              refCurrent: segmentStepIndexRef.current,
+            });
+          }
+          return pass;
+        })()}
         scrollProgressStepIndex={progressStepIndex}
         scrollCurrentStepIndex={currentStepIndex}
         width={graphSize.width}

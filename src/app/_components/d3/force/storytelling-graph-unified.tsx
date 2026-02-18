@@ -222,6 +222,8 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   const clientToLayoutRef = useRef<((cx: number, cy: number) => { x: number; y: number } | null) | null>(null);
   /** RAF から参照するため、最新の fadeProgress を ref に保持 */
   const fadeProgressRef = useRef(0);
+  /** ステップが変わった直後の 1 回は displayProgress を 0 にして前ステップの描画フラッシュを防ぐ */
+  const prevScrollCurrentStepIndexRef = useRef<number | "unset">("unset");
   // 自由探索モードを抜けたときにズームをリセットし、D3のzoomリスナーを外す
   useEffect(() => {
     if (!freeExploreMode) {
@@ -677,16 +679,28 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     fadeProgress < 1 ? fadeProgress : Math.max(progress, 1);
 
   /** セグメント progress が渡されているときはそれでノード・エッジを描画し、そうでなければ effectiveProgress（フォーカス遷移・animationProgress）を使う */
-  const displayProgress =
+  const segmentBranch =
     segmentProgress != null &&
-      scrollProgressStepIndex != null &&
-      scrollCurrentStepIndex != null
-      ? scrollProgressStepIndex === scrollCurrentStepIndex
+    scrollProgressStepIndex != null &&
+    scrollCurrentStepIndex != null;
+  let stepJustChanged = false;
+  if (segmentBranch) {
+    if (prevScrollCurrentStepIndexRef.current === "unset") {
+      prevScrollCurrentStepIndexRef.current = scrollCurrentStepIndex;
+    } else {
+      stepJustChanged = prevScrollCurrentStepIndexRef.current !== scrollCurrentStepIndex;
+      prevScrollCurrentStepIndexRef.current = scrollCurrentStepIndex;
+    }
+  }
+  const displayProgress = segmentBranch
+    ? stepJustChanged
+      ? 0
+      : scrollProgressStepIndex === scrollCurrentStepIndex
         ? segmentProgress
         : scrollProgressStepIndex < scrollCurrentStepIndex
           ? 1
           : 0
-      : effectiveProgress;
+    : effectiveProgress;
 
   fadeProgressRef.current = fadeProgress;
 
@@ -855,7 +869,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
       }
     }
     if (minX === Infinity) return { scale: 0.75, centerX: 0, centerY: 0 };
-    const paddingX = isPc ? forRecording ? 128 : 64 : 32;
+    const paddingX = isPc ? forRecording ? 128 : 64 : 8;
     const paddingY = 128; // 上下のみ 128
     let rangeX = maxX - minX || 1;
     let rangeY = maxY - minY || 1;
