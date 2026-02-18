@@ -6,7 +6,12 @@ import type { GraphDocumentForFrontend } from "@/app/const/types";
 import type { MetaGraphStoryData } from "@/app/_hooks/use-meta-graph-story";
 import { Scrollama, Step } from "react-scrollama";
 import type { ScrollamaStepCallbackArg, ScrollamaProgressCallbackArg } from "react-scrollama";
-import { StorytellingGraphUnified } from "../d3/force/storytelling-graph-unified";
+import {
+  StorytellingGraphUnified,
+  easeInCubic,
+  easeOutCubic,
+  easeInOutCubic,
+} from "../d3/force/storytelling-graph-unified";
 import {
   buildScrollStepsFromMetaGraphStoryData,
   getSegmentNodeIdsFromMetaGraphStoryData,
@@ -39,6 +44,10 @@ const STEP_VIEWPORT_HEIGHT_PC = "100vh";
 const SP_FADE_OVERLAP_PX = 96;
 /** Scrollama: ステップが「入った」とみなすビューポート上の位置 (0–1)。0.99 で段落が画面下端付近に入った時点でグラフが切り替わり、見ている段落と一致する */
 const SCROLLAMA_OFFSET = 0.99;
+/** セグメント進入後のノードフェード・エッジ線描画アニメーションの所要時間（ms） */
+const SEGMENT_ANIMATION_DURATION_MS = 2000;
+/** セグメント進入後のフェード・線描画のイージング。easeIn=最初ゆっくり / easeOut=終わりゆっくり / easeInOut=両方ゆっくり */
+const SEGMENT_ANIMATION_EASING: "easeIn" | "easeOut" | "easeInOut" = "easeInOut";
 
 export interface ScrollStorytellingViewerUnifiedProps {
   graphDocument: GraphDocumentForFrontend;
@@ -66,6 +75,10 @@ export function ScrollStorytellingViewerUnified({
   const frozenGraphIndexRef = useRef(0);
   /** ボタンで次へ送る際、スクロール計算前に通常高さでレイアウトさせるためのフラグ */
   const [useNormalHeightForScroll, setUseNormalHeightForScroll] = useState(false);
+  /** セグメント進入後のフェード・線描画の progress（0–1）。state で保持し RAF で更新する */
+  const [segmentProgress, setSegmentProgress] = useState(1);
+  /** セグメント進入時刻。RAF 内で経過時間計算に使用 */
+  const segmentStartTimeRef = useRef(0);
 
   const steps = useMemo(() => {
     const storySteps = buildScrollStepsFromMetaGraphStoryData(metaGraphData);
@@ -140,30 +153,47 @@ export function ScrollStorytellingViewerUnified({
     setCurrentStepIndex(index);
     setProgressStepIndex(index);
     setStepProgress(0);
+    segmentStartTimeRef.current =
+      typeof performance !== "undefined" ? performance.now() : 0;
+    setSegmentProgress(0);
   }, []);
-
-  // スクロール時の再レンダリングを抑える: onStepProgress を RAF でスロットル（最大 60fps）
-  const pendingProgressRef = useRef<{ index: number; progress: number } | null>(null);
-  const rafScheduledRef = useRef(false);
 
   const onStepProgress = useCallback((arg: ScrollamaProgressCallbackArg) => {
     const index = Number(arg.data);
-    const progress = Math.max(0, Math.min(1, arg.progress));
-    pendingProgressRef.current = { index, progress };
-
-    if (!rafScheduledRef.current) {
-      rafScheduledRef.current = true;
-      requestAnimationFrame(() => {
-        rafScheduledRef.current = false;
-        const pending = pendingProgressRef.current;
-        if (pending) {
-          setProgressStepIndex(pending.index);
-          setStepProgress(pending.progress);
-          pendingProgressRef.current = null;
-        }
-      });
-    }
+    setProgressStepIndex(index);
+    // progress は時間ベースのためここでは更新しない
   }, []);
+
+  // セグメント進入時に時間ベースで segmentProgress を 0→1 に更新する RAF
+  useEffect(() => {
+    segmentStartTimeRef.current =
+      typeof performance !== "undefined" ? performance.now() : 0;
+    setSegmentProgress(0);
+
+    const applyEasing = (t: number) => {
+      switch (SEGMENT_ANIMATION_EASING) {
+        case "easeOut":
+          return easeOutCubic(t);
+        case "easeInOut":
+          return easeInOutCubic(t);
+        default:
+          return easeInCubic(t);
+      }
+    };
+
+    let rafId: number;
+    const tick = (now: number) => {
+      const elapsed = now - segmentStartTimeRef.current;
+      const raw = Math.min(1, elapsed / SEGMENT_ANIMATION_DURATION_MS);
+      const eased = applyEasing(raw);
+      setSegmentProgress(eased);
+      if (eased < 1) {
+        rafId = requestAnimationFrame(tick);
+      }
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [progressStepIndex]);
 
   const graphIndex =
     topSentinelInView
@@ -253,24 +283,25 @@ export function ScrollStorytellingViewerUnified({
       const index = steps.findIndex(
         (s) => s.communityId === communityId && s.id !== "__overview__",
       );
+      console.log("[scroll-storytelling] goToFirstSegmentOfCommunity:", { communityId, index, communityIds: steps.map((s) => s.communityId) });
       if (index < 0) return;
-      // SP版では scroll-snap の挙動で目標の1番目ではなく2番目にスナップしてしまうため、
-      // 意図的に一つ前のセグメントへスクロールし、スナップで1番目に落ち着くようにする。
-      const scrollTargetIndex = isPc ? index : Math.max(0, index - 1);
-      const selector = `[data-story-step-index="${scrollTargetIndex}"]`;
+      const targetIndex = index;
+      const selector = `[data-story-step-index="${targetIndex}"]`;
       setUseNormalHeightForScroll(true);
       const behavior = options?.instant ? ("instant" as const) : ("smooth" as const);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           const el = document.querySelector(selector);
+          console.log("[scroll-storytelling] scroll target:", { selector, found: !!el, el });
           if (el) {
             el.scrollIntoView({ behavior, block: "start" });
+            console.log("[scroll-storytelling] scrollIntoView called");
           }
           window.setTimeout(() => setUseNormalHeightForScroll(false), 500);
         });
       });
     },
-    [steps, isPc],
+    [steps],
   );
 
   /** ページロード時: ?community=xxx があればコミュニティラベルクリックと同様に先頭セグメントへスクロール */
@@ -279,13 +310,16 @@ export function ScrollStorytellingViewerUnified({
   if (initialCommunityIdRef.current === undefined && typeof window !== "undefined") {
     const p = new URLSearchParams(window.location.search);
     initialCommunityIdRef.current = p.get("community") ?? p.get("section");
+    console.log("[scroll-storytelling] initialCommunityIdRef:", initialCommunityIdRef.current, "search:", window.location.search);
   }
   useEffect(() => {
     const communityId = initialCommunityIdRef.current ?? searchParams.get("community") ?? searchParams.get("section");
+    console.log("[scroll-storytelling] useEffect run:", { communityId, stepsLength: steps.length, alreadyProcessed: communityFromUrlRef.current });
     if (!communityId || !steps.length || communityFromUrlRef.current !== null) return;
 
     const timer = setTimeout(() => {
       communityFromUrlRef.current = communityId;
+      console.log("[scroll-storytelling] timer fired, calling goToFirstSegmentOfCommunity:", communityId);
       goToFirstSegmentOfCommunity(communityId, { instant: true });
     }, 1000);
     return () => clearTimeout(timer);
@@ -366,6 +400,9 @@ export function ScrollStorytellingViewerUnified({
         focusNodeIds={graphNodeIds}
         focusEdgeIds={graphEdgeIds}
         animationProgress={animationProgress}
+        segmentProgress={segmentProgress}
+        scrollProgressStepIndex={progressStepIndex}
+        scrollCurrentStepIndex={currentStepIndex}
         width={graphSize.width}
         height={graphSize.height}
         filter={metaGraphData.filter}
@@ -497,7 +534,7 @@ export function ScrollStorytellingViewerUnified({
                   offset={SCROLLAMA_OFFSET}
                   onStepEnter={onStepEnter}
                   onStepProgress={onStepProgress}
-                  threshold={32}
+                  threshold={8}
                 >
                   {steps.map((step, index) => (
                     <Step data={index} key={step.id}>
@@ -570,7 +607,7 @@ export function ScrollStorytellingViewerUnified({
                   offset={SCROLLAMA_OFFSET}
                   onStepEnter={onStepEnter}
                   onStepProgress={onStepProgress}
-                  threshold={32}
+                  threshold={8}
                 >
                   {steps.map((step, index) => (
                     <Step data={index} key={step.id}>

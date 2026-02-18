@@ -73,18 +73,23 @@ const STEADY_EDGE_FLOW_MIN_OPACITY = 0.2;
 const STEADY_ANIM_FADE_IN_MS = 50;
 
 /** 出る側ノードのフェードイン完了までに使う progress の割合 (0–1) */
-const SOURCE_FADE_END = 0.25;
+const SOURCE_FADE_END = 0.35;
 /** 入る側ノードのフェードイン開始となる progress の閾値 */
-const TARGET_FADE_START = 0.45;
+const TARGET_FADE_START = 0.55;
 /** 入る側ノードのフェードインに要する progress の幅 */
 const TARGET_FADE_DURATION = 0.35;
 
-function easeOutCubic(t: number): number {
+export function easeOutCubic(t: number): number {
   return 1 - (1 - t) ** 3;
 }
 
+/** 最初をゆるく、終わりに速く（セグメント進入後のフェード・線描画用） */
+export function easeInCubic(t: number): number {
+  return t * t * t;
+}
+
 /** 最初と最後をゆるく、中間を速く（カメラ遷移用） */
-function easeInOutCubic(t: number): number {
+export function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
 }
 
@@ -133,6 +138,9 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   focusNodeIds,
   focusEdgeIds,
   animationProgress,
+  segmentProgress,
+  scrollProgressStepIndex,
+  scrollCurrentStepIndex,
   width,
   height,
   filter,
@@ -152,6 +160,10 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   focusNodeIds: string[];
   focusEdgeIds: string[];
   animationProgress: number;
+  /** セグメント進入後のフェード・線描画の progress（0–1）。渡されているときはノード・エッジをこの値で描画する */
+  segmentProgress?: number;
+  scrollProgressStepIndex?: number;
+  scrollCurrentStepIndex?: number;
   width: number;
   height: number;
   filter?: LayoutInstruction["filter"];
@@ -208,7 +220,8 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   } | null>(null);
   const nodesRef = useRef<CustomNodeType[]>([]);
   const clientToLayoutRef = useRef<((cx: number, cy: number) => { x: number; y: number } | null) | null>(null);
-
+  /** RAF から参照するため、最新の fadeProgress を ref に保持 */
+  const fadeProgressRef = useRef(0);
   // 自由探索モードを抜けたときにズームをリセットし、D3のzoomリスナーを外す
   useEffect(() => {
     if (!freeExploreMode) {
@@ -663,6 +676,20 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   const effectiveProgress =
     fadeProgress < 1 ? fadeProgress : Math.max(progress, 1);
 
+  /** セグメント progress が渡されているときはそれでノード・エッジを描画し、そうでなければ effectiveProgress（フォーカス遷移・animationProgress）を使う */
+  const displayProgress =
+    segmentProgress != null &&
+      scrollProgressStepIndex != null &&
+      scrollCurrentStepIndex != null
+      ? scrollProgressStepIndex === scrollCurrentStepIndex
+        ? segmentProgress
+        : scrollProgressStepIndex < scrollCurrentStepIndex
+          ? 1
+          : 0
+      : effectiveProgress;
+
+  fadeProgressRef.current = fadeProgress;
+
   const transitionFromNodeIdSet = useMemo(
     () => new Set(transitionFromNodeIds),
     [transitionFromNodeIds],
@@ -698,8 +725,9 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     return set;
   }, [effectiveFocusNodeIds, links]);
 
-  const getTargetNodeOpacity = useCallback(
-    (node: CustomNodeType): number => {
+  /** progress を引数で受け取り、RAF からも呼べるようにした版 */
+  const getTargetNodeOpacityForProgress = useCallback(
+    (node: CustomNodeType, progress: number): number => {
       const isFocus = focusNodeIdSet.has(node.id);
       const isNeighbor = neighborNodeIdSet.has(node.id);
       if (freeExploreMode) {
@@ -721,18 +749,18 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         return maxOpacity;
       }
       if (isSource && !isTarget) {
-        if (effectiveProgress >= SOURCE_FADE_END) return maxOpacity;
-        return (effectiveProgress / SOURCE_FADE_END) * maxOpacity;
+        if (progress >= SOURCE_FADE_END) return maxOpacity;
+        return (progress / SOURCE_FADE_END) * maxOpacity;
       }
       if (isTarget && !isSource) {
-        if (effectiveProgress <= TARGET_FADE_START) return 0;
-        if (effectiveProgress >= TARGET_FADE_START + TARGET_FADE_DURATION) return maxOpacity;
-        const t = (effectiveProgress - TARGET_FADE_START) / TARGET_FADE_DURATION;
+        if (progress <= TARGET_FADE_START) return 0;
+        if (progress >= TARGET_FADE_START + TARGET_FADE_DURATION) return maxOpacity;
+        const t = (progress - TARGET_FADE_START) / TARGET_FADE_DURATION;
         return t * maxOpacity;
       }
       if (isSource && isTarget) {
-        if (effectiveProgress >= SOURCE_FADE_END) return maxOpacity;
-        return (effectiveProgress / SOURCE_FADE_END) * maxOpacity;
+        if (progress >= SOURCE_FADE_END) return maxOpacity;
+        return (progress / SOURCE_FADE_END) * maxOpacity;
       }
       return maxOpacity;
     },
@@ -741,10 +769,15 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
       focusNodeIdSet,
       hasExplicitEdges,
       neighborNodeIdSet,
-      effectiveProgress,
       sourceNodeIdsOfFocusEdges,
       targetNodeIdsOfFocusEdges,
     ],
+  );
+
+  const getTargetNodeOpacity = useCallback(
+    (node: CustomNodeType): number =>
+      getTargetNodeOpacityForProgress(node, displayProgress),
+    [getTargetNodeOpacityForProgress, displayProgress],
   );
 
   const getPrevNodeOpacity = useCallback(
@@ -1169,6 +1202,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         : nodes,
     [nodes, communityMap],
   );
+
   const linksToRender = useMemo(
     () =>
       communityMap != null
@@ -1520,7 +1554,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         const dirKey = getDirectionalKey(link);
         const pathD = `M ${sx} ${sy} L ${tx} ${ty}`;
         const isFocusEdge = item.hasFocus;
-        const edgeProgress = fadeProgress < 1 ? fadeProgress : effectiveProgress;
+        const edgeProgress = fadeProgress < 1 ? fadeProgress : displayProgress;
         /** 冒頭の全体グラフ表示時は overviewEdgeProgress でエッジを描くアニメーションを再生 */
         const effectiveEdgeProgress =
           freeExploreMode
@@ -1568,6 +1602,13 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
                   pathLength={1}
                   strokeDasharray={1}
                   strokeDashoffset={1 - effectiveEdgeProgress}
+                  style={
+                    segmentProgress != null
+                      ? undefined
+                      : !isPc
+                        ? { transition: "stroke-dashoffset 100ms ease-out" }
+                        : undefined
+                  }
                   strokeLinecap="round"
                   strokeOpacity={focusStrokeOpacity}
                   strokeWidth={edgeStrokeWidthFocus}
@@ -1670,7 +1711,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         const labelX = (sx + tx) / 2 + perpX;
         const labelY = (sy + ty) / 2 + perpY;
         const labelTransform = `rotate(${angle}, ${labelX}, ${labelY})`;
-        const effectiveEdgeProgress = freeExploreMode ? 1 : (fadeProgress < 1 ? fadeProgress : effectiveProgress);
+        const effectiveEdgeProgress = freeExploreMode ? 1 : (fadeProgress < 1 ? fadeProgress : displayProgress);
         /** スクロール時・引きのときはエッジ長を超えないようフォントサイズ上限を動的計算 */
         const labelTextLength =
           expandedEdgePairKey === pairKey && pairCount > 1
@@ -1773,7 +1814,12 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
                 pairCount > 1 ? "cursor-pointer" : "pointer-events-none"
               }
               transform={labelTransform}
-              style={{ opacity: edgeOpacity }}
+              style={{
+                opacity: edgeOpacity,
+                ...(segmentProgress != null
+                  ? undefined
+                  : !isPc && { transition: "opacity 100ms ease-out" }),
+              }}
               opacity={effectiveEdgeProgress}
               onClick={handleLabelClick}
             >
@@ -1832,6 +1878,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
             transform={`translate(${vx}, ${vy})`}
             style={{
               opacity,
+              ...(segmentProgress != null ? undefined : !isPc && { transition: "opacity 100ms ease-out" }),
               ...(freeExploreMode && {
                 cursor: draggingNodeId === node.id ? "grabbing" : "grab",
               }),
