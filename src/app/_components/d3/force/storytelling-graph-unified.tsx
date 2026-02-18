@@ -54,6 +54,11 @@ const EXPLORE_NEIGHBOR_EDGE_OPACITY = 0.8;
 /** スクロール表示時、scale がこの値を下回るとハイライト＋1ホップ以外のノードラベルを非表示にする */
 const LABEL_RESTRICT_SCALE_THRESHOLD = 1.0;
 
+/** ビューポートカリング: 拡張ビューポートのマージン（px） */
+const CULLING_VIEWPORT_MARGIN = 80;
+/** ビューポートカリング: このノード数以上でカリングを有効化 */
+const CULLING_THRESHOLD = 120;
+
 /** フォーカス遷移アニメーションの所要時間（ms） */
 const FOCUS_TRANSITION_MS = 1200;
 /** フェード開始を遅らせるオフセット（ms）。ビュー遷移を先行させる */
@@ -105,6 +110,42 @@ function getDirectionalKey(link: CustomLinkType): string {
   const src = (link.source as CustomNodeType).id;
   const tgt = (link.target as CustomNodeType).id;
   return `${src}|${tgt}`;
+}
+
+/** 線分 (x1,y1)-(x2,y2) が矩形 (minX,minY)-(maxX,maxY) と交差するか */
+function isLineSegmentInViewport(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  minX: number,
+  minY: number,
+  maxX: number,
+  maxY: number,
+): boolean {
+  const pointInRect = (px: number, py: number) =>
+    px >= minX && px <= maxX && py >= minY && py <= maxY;
+  if (pointInRect(x1, y1) || pointInRect(x2, y2)) return true;
+  const lineIntersectsHorizontal = (y: number, xa: number, ya: number, xb: number, yb: number) => {
+    if (ya === yb) return ya === y && Math.min(xa, xb) <= maxX && Math.max(xa, xb) >= minX;
+    const t = (y - ya) / (yb - ya);
+    if (t < 0 || t > 1) return false;
+    const x = xa + t * (xb - xa);
+    return x >= minX && x <= maxX;
+  };
+  const lineIntersectsVertical = (x: number, xa: number, ya: number, xb: number, yb: number) => {
+    if (xa === xb) return xa === x && Math.min(ya, yb) <= maxY && Math.max(ya, yb) >= minY;
+    const t = (x - xa) / (xb - xa);
+    if (t < 0 || t > 1) return false;
+    const y = ya + t * (yb - ya);
+    return y >= minY && y <= maxY;
+  };
+  return (
+    lineIntersectsHorizontal(minY, x1, y1, x2, y2) ||
+    lineIntersectsHorizontal(maxY, x1, y1, x2, y2) ||
+    lineIntersectsVertical(minX, x1, y1, x2, y2) ||
+    lineIntersectsVertical(maxX, x1, y1, x2, y2)
+  );
 }
 
 function isCustomNodeType(x: unknown): x is CustomNodeType {
@@ -1229,17 +1270,81 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     [links, communityMap],
   );
 
+  const shouldApplyCulling = useMemo(
+    () =>
+      isTransitionComplete &&
+      (showFullGraph || nodesToRender.length > CULLING_THRESHOLD),
+    [isTransitionComplete, showFullGraph, nodesToRender.length],
+  );
+
+  /** カリング用のビューポート（view 座標）。探索モード時は zoom 変換を考慮する */
+  const cullingViewport = useMemo(() => {
+    const margin = CULLING_VIEWPORT_MARGIN;
+    if (freeExploreMode) {
+      const k = zoomScale;
+      return {
+        minX: (-zoomX - margin) / k,
+        minY: (-zoomY - margin) / k,
+        maxX: (width - zoomX + margin) / k,
+        maxY: (height - zoomY + margin) / k,
+      };
+    }
+    return {
+      minX: -margin,
+      minY: -margin,
+      maxX: width + margin,
+      maxY: height + margin,
+    };
+  }, [freeExploreMode, width, height, zoomScale, zoomX, zoomY]);
+
+  const visibleNodesToRender = useMemo(() => {
+    if (!shouldApplyCulling) return nodesToRender;
+    const { minX, minY, maxX, maxY } = cullingViewport;
+    return nodesToRender.filter((node) => {
+      if (focusNodeIdSet.has(node.id) || neighborNodeIdSet.has(node.id))
+        return true;
+      const [vx, vy] = toView(node.x ?? 0, node.y ?? 0);
+      return vx >= minX && vx <= maxX && vy >= minY && vy <= maxY;
+    });
+  }, [
+    shouldApplyCulling,
+    nodesToRender,
+    focusNodeIdSet,
+    neighborNodeIdSet,
+    toView,
+    cullingViewport,
+  ]);
+
+  const visibleLinksToRender = useMemo(() => {
+    if (!shouldApplyCulling) return linksToRender;
+    const { minX, minY, maxX, maxY } = cullingViewport;
+    return linksToRender.filter((link) => {
+      const src = link.source as CustomNodeType;
+      const tgt = link.target as CustomNodeType;
+      if (focusEdgeIdSet.has(getEdgeCompositeKeyFromLink(link))) return true;
+      const [sx, sy] = toView(src.x ?? 0, src.y ?? 0);
+      const [tx, ty] = toView(tgt.x ?? 0, tgt.y ?? 0);
+      return isLineSegmentInViewport(sx, sy, tx, ty, minX, minY, maxX, maxY);
+    });
+  }, [
+    shouldApplyCulling,
+    linksToRender,
+    focusEdgeIdSet,
+    toView,
+    cullingViewport,
+  ]);
+
   /** 同一ノード対ごとのエッジグループ（代表ラベル＋クリック展開用） */
   const linksByNodePair = useMemo(() => {
     const map = new Map<string, CustomLinkType[]>();
-    linksToRender.forEach((link) => {
+    visibleLinksToRender.forEach((link) => {
       if (!link.source || !link.target) return;
       const key = getNodePairKey(link);
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(link);
     });
     return map;
-  }, [linksToRender]);
+  }, [visibleLinksToRender]);
 
   /** パス描画用: 同一方向のエッジを1本に集約。逆向きは別パス。代表リンクとその方向にフォーカスが含まれるか */
   const linksForPathRendering = useMemo(() => {
@@ -1247,7 +1352,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
       string,
       { link: CustomLinkType; hasFocus: boolean }
     >();
-    for (const link of linksToRender) {
+    for (const link of visibleLinksToRender) {
       const key = getDirectionalKey(link);
       const isFocus = focusEdgeIdSet.has(
         getEdgeCompositeKeyFromLink(link),
@@ -1263,7 +1368,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
       }
     }
     return Array.from(byDir.values());
-  }, [linksToRender, focusEdgeIdSet]);
+  }, [visibleLinksToRender, focusEdgeIdSet]);
 
   /** クリックでラベルを垂直展開したノード対キー（null で閉じる） */
   const [expandedEdgePairKey, setExpandedEdgePairKey] = useState<string | null>(
@@ -1857,7 +1962,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
           </g>
         );
       })}
-      {nodesToRender.map((node) => {
+      {visibleNodesToRender.map((node) => {
         if (node.x == null || node.y == null) return null;
         const isFocusNode = focusNodeIdSet.has(node.id);
         const [vx, vy] = toView(node.x, node.y);
