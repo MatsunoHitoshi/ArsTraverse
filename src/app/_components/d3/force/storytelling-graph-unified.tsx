@@ -638,7 +638,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
           "link",
           forceLink<CustomNodeType, CustomLinkType>(allLinks)
             .id((d) => d.id)
-            .distance(30)
+            .distance(35)
             .strength((link) => {
               const source = link.source as CustomNodeType;
               const target = link.target as CustomNodeType;
@@ -649,7 +649,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
             }),
         )
         .force("charge", forceManyBody().strength(-200))
-        .force("collide", forceCollide(20))
+        .force("collide", forceCollide(30))
         .force("center", forceCenter(REF_LAYOUT_WIDTH / 2, REF_LAYOUT_HEIGHT / 2).strength(0.05))
         .force(
           "y",
@@ -1023,56 +1023,110 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     : displayScale;
   /** ノード半径・エッジ太さ・ストロークに使うスケール（effectiveScaleForLabels と同じ値） */
   const scaleForSize = effectiveScaleForLabels;
+  /** ノード半径用スケール。探索モード寄り時は段階的に小さくして大きすぎないように */
+  const scaleForNodeRadius =
+    freeExploreMode && effectiveScaleForLabels > 1
+      ? (() => {
+          const zoomInFactor =
+            effectiveScaleForLabels > 6
+              ? 2.5
+              : effectiveScaleForLabels > 4
+                ? 2
+                : effectiveScaleForLabels > 3
+                  ? 1.6
+                  : effectiveScaleForLabels > 2
+                    ? 1.3
+                    : 1.1;
+          return scaleForSize / zoomInFactor;
+        })()
+      : scaleForSize;
   /** ストローク用スケール。探索モード時は薄くなりすぎないよう下限 1 */
   const scaleForStroke = freeExploreMode ? Math.max(1, scaleForSize) : scaleForSize;
 
-  /** ノード半径（generative-layout-graph と同様 */
+  /** ノード半径（generative-layout-graph と同様）。探索モード寄り時は scaleForNodeRadius で段階的に小さく */
   const getNodeRadius = useCallback(
     (node: CustomNodeType) => {
       const baseRadiusLayout =
         1.6 * ((node.neighborLinkCount ?? 0) * 0.1 + 3.6);
-      return Math.max(1.5, Math.min(22, baseRadiusLayout * scaleForSize));
+      return Math.max(1.5, Math.min(22, baseRadiusLayout * scaleForNodeRadius));
     },
-    [scaleForSize],
+    [scaleForNodeRadius],
   );
   /** ノードラベルを表示する閾値。スクロール表示時は常に表示、探索モード・冒頭グラフ時はズームに応じて表示 */
   const showNodeLabels =
     freeExploreMode || showFullGraph ? effectiveScaleForLabels > 0.7 : true;
-  /** ノードラベルフォントサイズの基準値。録画時はスケールに比例、通常時は段階的に。引きのときはスケールに比例して縮小し他ノードとの被りを防ぐ */
+  /** ノードラベルフォントサイズの基準値。録画時はスケールに比例、通常時は段階的に。引きのときはスケールに比例して縮小し他ノードとの被りを防ぐ。探索モード時は generative-layout-graph に倣い控えめな値を使用。寄り（ズームイン）時は段階的に小さくして拡大で大きくなりすぎないように */
   const nodeLabelFontSizeBaseRaw = forRecording
     ? Math.max(6, effectiveScaleForLabels) * 0.7
-    : (() => {
-      const stepped =
-        effectiveScaleForLabels > 4
-          ? 3
-          : effectiveScaleForLabels > 3
-            ? 4
-            : effectiveScaleForLabels > 2
-              ? 5
-              : effectiveScaleForLabels > 1.5
-                ? 6
-                : effectiveScaleForLabels > 1
-                  ? 7
-                  : effectiveScaleForLabels > 0.9
-                    ? 8
-                    : 9;
-      const base = stepped * 1.5;
-      /** 引きのとき（scale < 1）はスケールに比例して縮小し、ラベル同士の被りを防ぐ。最低 0.4 で極端に小さくならないように */
-      const zoomOutFactor =
-        effectiveScaleForLabels < 1
-          ? Math.max(0.4, effectiveScaleForLabels)
-          : 1;
-      return base * zoomOutFactor;
-    })();
+    : freeExploreMode
+      ? (() => {
+        /** 引きのとき: zoomOutFactor で縮小（元の挙動を維持） */
+        const zoomOutFactor =
+          effectiveScaleForLabels < 1
+            ? Math.max(0.4, effectiveScaleForLabels)
+            : 1;
+        if (effectiveScaleForLabels <= 1) {
+          return 9 * zoomOutFactor;
+        }
+        /** 寄り（scale > 1）のとき: ズーム倍率が高いほどラベルを段階的に小さく（D3 zoom で拡大されるため補正） */
+        const zoomInFactor =
+          effectiveScaleForLabels > 6
+            ? 3
+            : effectiveScaleForLabels > 4
+              ? 2.5
+              : effectiveScaleForLabels > 3
+                ? 2
+                : effectiveScaleForLabels > 2
+                  ? 1.5
+                  : 1.2;
+        /** 段階的な基準値（寄りほど小さく）。scale>6→2, >4→3, >3→4, >2→5, >1→6 */
+        const stepped =
+          effectiveScaleForLabels > 6
+            ? 2
+            : effectiveScaleForLabels > 4
+              ? 3
+              : effectiveScaleForLabels > 3
+                ? 4
+                : effectiveScaleForLabels > 2
+                  ? 5
+                  : 6;
+        const base = stepped * 1.5;
+        return base / zoomInFactor;
+      })()
+      : (() => {
+        const stepped =
+          effectiveScaleForLabels > 4
+            ? 3
+            : effectiveScaleForLabels > 3
+              ? 4
+              : effectiveScaleForLabels > 2
+                ? 5
+                : effectiveScaleForLabels > 1.5
+                  ? 6
+                  : effectiveScaleForLabels > 1
+                    ? 7
+                    : effectiveScaleForLabels > 0.9
+                      ? 8
+                      : 9;
+        const base = stepped * 1.5;
+        /** 引きのとき（scale < 1）はスケールに比例して縮小し、ラベル同士の被りを防ぐ。最低 0.4 で極端に小さくならないように */
+        const zoomOutFactor =
+          effectiveScaleForLabels < 1
+            ? Math.max(0.4, effectiveScaleForLabels)
+            : 1;
+        return base * zoomOutFactor;
+      })();
   /** SP版ではノードラベルをPC版の3/4サイズにする */
   const nodeLabelFontSizeBase = nodeLabelFontSizeBaseRaw * (isPc ? 1 : 0.75);
+  /** 探索モード時は generative-layout-graph に倣い倍率を控えめに（1.2）、通常時は 2。録画時のフォーカスノードは 4 */
+  const nodeLabelFontSizeMultiplier = freeExploreMode ? 1.2 : 2;
   const getNodeLabelFontSize = useCallback(
     (isFocusNode: boolean) =>
       showNodeLabels
         ? nodeLabelFontSizeBase *
-        (forRecording && isFocusNode ? 4 : 2)
+        (forRecording && isFocusNode ? 4 : nodeLabelFontSizeMultiplier)
         : 0,
-    [showNodeLabels, nodeLabelFontSizeBase, forRecording],
+    [showNodeLabels, nodeLabelFontSizeBase, forRecording, nodeLabelFontSizeMultiplier],
   );
   /** エッジラベルを表示する閾値。スクロール表示時は常に表示、探索モード・冒頭グラフ時はズームに応じて表示 */
   const showEdgeLabels =
@@ -1848,10 +1902,10 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
               : typesInPair[0]?.length ?? 1;
         const baseEdgeLabelFontSize = getEdgeLabelFontSize(isFocusEdge);
         const maxFontSizeByEdge = getMaxEdgeLabelFontSizeByLength(len, labelTextLength);
-        const effectiveEdgeLabelFontSize =
-          !freeExploreMode
-            ? Math.max(4, Math.min(baseEdgeLabelFontSize, maxFontSizeByEdge))
-            : baseEdgeLabelFontSize;
+        const effectiveEdgeLabelFontSize = Math.max(
+          4,
+          Math.min(baseEdgeLabelFontSize, maxFontSizeByEdge),
+        );
 
         const handleLabelClick =
           pairCount > 1
