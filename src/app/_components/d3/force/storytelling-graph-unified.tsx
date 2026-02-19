@@ -197,6 +197,8 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   communityMap,
   narrativeFlow,
   showFullGraph = false,
+  /** セグメントに特定の nodeIds/edgeIds がある（コミュニティ全体表示でない） */
+  hasSpecificSegmentFocus = true,
   communityTitles,
   onCommunityTitleClick,
   onTransitionComplete,
@@ -225,6 +227,8 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   narrativeFlow?: Array<{ communityId: string; order: number }>;
   /** オーバービュー時など、グラフ全体を表示。内部の baseGraph の全ノード・全エッジでフォーカスする */
   showFullGraph?: boolean;
+  /** セグメントに特定の nodeIds/edgeIds がある（false のときはコミュニティ全体表示で persistent 判定の ref を更新しない） */
+  hasSpecificSegmentFocus?: boolean;
   /** コミュニティID → タイトル。showFullGraph 時にコミュニティ円とタイトル表示に使用（print-generative-layout-graph に倣う） */
   communityTitles?: Record<string, string>;
   /** コミュニティタイトルクリック時。そのコミュニティの先頭セグメントへ遷移するために使用 */
@@ -271,6 +275,10 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   const fadeProgressRef = useRef(0);
   /** ステップが変わった直後の 1 回は displayProgress を 0 にして前ステップの描画フラッシュを防ぐ */
   const prevScrollCurrentStepIndexRef = useRef<number | "unset">("unset");
+  /** 前セグメントの effectiveFocus（フォーカス＋エッジ端点のみ。隣接ノードは含まない）。
+   * フェードインスキップ用。隣接のみだったノードを除外することで、新規エッジ端点のフェードインと
+   * 前セグメントフォーカスの再フェード防止の両立を実現。 */
+  const lastEffectiveFocusNodeIdsRef = useRef<Set<string>>(new Set());
   // 自由探索モードを抜けたときにズームをリセットし、D3のzoomリスナーを外す
   useEffect(() => {
     if (!freeExploreMode) {
@@ -786,6 +794,29 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     return set;
   }, [effectiveFocusNodeIds, links]);
 
+  /** 前セグメントで effectiveFocus（フォーカス＋エッジ端点）だったノード＝フェードインをスキップ。
+   * 隣接ノードのみだったものは含めないため、新規エッジ端点は正しくフェードインする。 */
+  const persistentHighlightNodeIds = useMemo(() => {
+    if (!segmentBranch) return new Set<string>();
+    const prevFocus = lastEffectiveFocusNodeIdsRef.current;
+    const currHighlighted = neighborNodeIdSet;
+    const persistent = new Set<string>();
+    currHighlighted.forEach((id) => {
+      if (prevFocus.has(id)) persistent.add(id);
+    });
+    return persistent;
+  }, [segmentBranch, neighborNodeIdSet]);
+
+  /** セグメントアニメ完了時、または非セグメントモード時のみ前回 effectiveFocus を更新。
+   * neighborNodeIdSet ではなく effectiveFocusNodeIds を使用することで、隣接のみのノードを除外。 */
+  const shouldUpdateLastEffectiveFocus =
+    !showFullGraph && hasSpecificSegmentFocus;
+  if (segmentBranch && (segmentProgress ?? 0) >= 1 && shouldUpdateLastEffectiveFocus) {
+    lastEffectiveFocusNodeIdsRef.current = new Set(effectiveFocusNodeIds);
+  } else if (!segmentBranch && shouldUpdateLastEffectiveFocus) {
+    lastEffectiveFocusNodeIdsRef.current = new Set(effectiveFocusNodeIds);
+  }
+
   /** progress を引数で受け取り、RAF からも呼べるようにした版 */
   const getTargetNodeOpacityForProgress = useCallback(
     (node: CustomNodeType, progress: number): number => {
@@ -836,9 +867,13 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   );
 
   const getTargetNodeOpacity = useCallback(
-    (node: CustomNodeType): number =>
-      getTargetNodeOpacityForProgress(node, displayProgress),
-    [getTargetNodeOpacityForProgress, displayProgress],
+    (node: CustomNodeType): number => {
+      const effectiveProgress = persistentHighlightNodeIds.has(node.id)
+        ? 1
+        : displayProgress;
+      return getTargetNodeOpacityForProgress(node, effectiveProgress);
+    },
+    [getTargetNodeOpacityForProgress, displayProgress, persistentHighlightNodeIds],
   );
 
   const getPrevNodeOpacity = useCallback(
@@ -864,12 +899,13 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   const getNodeOpacity = useCallback(
     (node: CustomNodeType): number => {
       const target = getTargetNodeOpacity(node);
-      if (fadeProgress >= 1) return target;
+      /** セグメントモード時は displayProgress のみ使用。fadeProgress のブレンドをスキップして遅延・二重アニメを防ぐ */
+      if (segmentBranch || fadeProgress >= 1) return target;
       const prev = getPrevNodeOpacity(node);
       const eased = easeOutCubic(fadeProgress);
       return prev + (target - prev) * eased;
     },
-    [fadeProgress, getTargetNodeOpacity, getPrevNodeOpacity],
+    [segmentBranch, fadeProgress, getTargetNodeOpacity, getPrevNodeOpacity],
   );
 
   // ビューはフォーカス部分グラフを中心とした局所範囲だけを viewBox に表示。
@@ -1731,7 +1767,9 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         const dirKey = getDirectionalKey(link);
         const pathD = `M ${sx} ${sy} L ${tx} ${ty}`;
         const isFocusEdge = item.hasFocus;
-        const edgeProgress = fadeProgress < 1 ? fadeProgress : displayProgress;
+        /** セグメントモード時は displayProgress のみ使用。fadeProgress を使うとフォーカス遷移と重複して二重アニメになる */
+        const edgeProgress =
+          segmentBranch ? displayProgress : (fadeProgress < 1 ? fadeProgress : displayProgress);
         /** 冒頭の全体グラフ表示時は overviewEdgeProgress でエッジを描くアニメーションを再生 */
         const effectiveEdgeProgress =
           freeExploreMode
@@ -1759,8 +1797,11 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
                   return 0.6 - normalizedDistance * 0.59;
                 })()
                 : FOCUS_EDGE_OPACITY;
+          /** セグメントモードで進捗アニメ中は線描画（strokeDashoffset）を優先。完了後にフローグラデーションへ */
           const useFlowGrad =
-            shouldRunSteadyAnim && edgeFlowStops != null;
+            shouldRunSteadyAnim &&
+            edgeFlowStops != null &&
+            (!segmentBranch || (segmentProgress ?? 1) >= 1);
           return (
             <g key={`path-${dirKey}-${i}`}>
               {useFlowGrad ? (
@@ -1888,7 +1929,9 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         const labelX = (sx + tx) / 2 + perpX;
         const labelY = (sy + ty) / 2 + perpY;
         const labelTransform = `rotate(${angle}, ${labelX}, ${labelY})`;
-        const effectiveEdgeProgress = freeExploreMode ? 1 : (fadeProgress < 1 ? fadeProgress : displayProgress);
+        /** セグメントモード時は displayProgress のみ使用。fadeProgress だと二重フェードになる */
+        const effectiveEdgeProgress =
+          freeExploreMode ? 1 : (segmentBranch ? displayProgress : (fadeProgress < 1 ? fadeProgress : displayProgress));
         /** スクロール時・引きのときはエッジ長を超えないようフォントサイズ上限を動的計算 */
         const labelTextLength =
           expandedEdgePairKey === pairKey && pairCount > 1

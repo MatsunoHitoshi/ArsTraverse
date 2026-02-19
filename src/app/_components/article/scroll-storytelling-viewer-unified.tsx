@@ -8,9 +8,7 @@ import { Scrollama, Step } from "react-scrollama";
 import type { ScrollamaStepCallbackArg, ScrollamaProgressCallbackArg } from "react-scrollama";
 import {
   StorytellingGraphUnified,
-  easeInCubic,
   easeOutCubic,
-  easeInOutCubic,
 } from "../d3/force/storytelling-graph-unified";
 import {
   buildScrollStepsFromMetaGraphStoryData,
@@ -42,10 +40,10 @@ const STEP_VIEWPORT_HEIGHT_PC = "100vh";
 const SP_FADE_OVERLAP_PX = 96;
 /** Scrollama: ステップが「入った」とみなすビューポート上の位置 (0–1)。0.99 で段落が画面下端付近に入った時点でグラフが切り替わり、見ている段落と一致する */
 const SCROLLAMA_OFFSET = 0.99;
+/** セグメント進入後、アニメーション開始まで遅延する時間（ms） */
+const SEGMENT_ANIMATION_DELAY_MS = 500;
 /** セグメント進入後のノードフェード・エッジ線描画アニメーションの所要時間（ms） */
 const SEGMENT_ANIMATION_DURATION_MS = 2000;
-/** セグメント進入後のフェード・線描画のイージング。easeIn=最初ゆっくり / easeOut=終わりゆっくり / easeInOut=両方ゆっくり */
-const SEGMENT_ANIMATION_EASING: "easeIn" | "easeOut" | "easeInOut" = "easeInOut";
 
 export interface ScrollStorytellingViewerUnifiedProps {
   graphDocument: GraphDocumentForFrontend;
@@ -79,8 +77,6 @@ export function ScrollStorytellingViewerUnified({
   const segmentStepIndexRef = useRef(0);
   /** onStepEnter の直後、次の 1 回のレンダーで必ず 0 を渡す（setState の遅延で segmentProgress がまだ 1 のときのフラッシュ防止） */
   const forceZeroNextPassRef = useRef(false);
-  /** onStepEnter の直後、最初に渡した値を 1 回だけログする用 */
-  const logFirstPassAfterEnterRef = useRef(false);
 
   const steps = useMemo(() => {
     const storySteps = buildScrollStepsFromMetaGraphStoryData(metaGraphData);
@@ -146,12 +142,9 @@ export function ScrollStorytellingViewerUnified({
   const onStepEnter = useCallback((arg: ScrollamaStepCallbackArg) => {
     const index = Number(arg.data);
     forceZeroNextPassRef.current = true;
-    logFirstPassAfterEnterRef.current = true;
     setCurrentStepIndex(index);
     setProgressStepIndex(index);
     setStepProgress(0);
-    segmentStartTimeRef.current =
-      typeof performance !== "undefined" ? performance.now() : 0;
     setSegmentProgress(0);
   }, []);
 
@@ -161,28 +154,17 @@ export function ScrollStorytellingViewerUnified({
     // progress は時間ベースのためここでは更新しない
   }, []);
 
-  // セグメント進入時に時間ベースで segmentProgress を 0→1 に更新する RAF。ref は「segmentProgress が 0 で描画された」タイミングでだけ進める（render 側で実施）
+  // セグメント進入時に時間ベースで segmentProgress を 0→1 に更新する RAF。SEGMENT_ANIMATION_DELAY_MS 経過後にアニメーション開始
   useEffect(() => {
-    segmentStartTimeRef.current =
-      typeof performance !== "undefined" ? performance.now() : 0;
+    const now = typeof performance !== "undefined" ? performance.now() : 0;
+    segmentStartTimeRef.current = now + SEGMENT_ANIMATION_DELAY_MS;
     setSegmentProgress(0);
-
-    const applyEasing = (t: number) => {
-      switch (SEGMENT_ANIMATION_EASING) {
-        case "easeOut":
-          return easeOutCubic(t);
-        case "easeInOut":
-          return easeInOutCubic(t);
-        default:
-          return easeInCubic(t);
-      }
-    };
 
     let rafId: number;
     const tick = (now: number) => {
-      const elapsed = now - segmentStartTimeRef.current;
+      const elapsed = Math.max(0, now - segmentStartTimeRef.current);
       const raw = Math.min(1, elapsed / SEGMENT_ANIMATION_DURATION_MS);
-      const eased = applyEasing(raw);
+      const eased = easeOutCubic(raw);
       setSegmentProgress(eased);
       if (eased < 1) {
         rafId = requestAnimationFrame(tick);
@@ -396,15 +378,6 @@ export function ScrollStorytellingViewerUnified({
             }
             pass = match ? segmentProgress : 0;
           }
-          if (logFirstPassAfterEnterRef.current) {
-            logFirstPassAfterEnterRef.current = false;
-            console.log("[segment-flash] 1回目に渡した値", {
-              pass,
-              progressStepIndex,
-              segmentProgress,
-              refCurrent: segmentStepIndexRef.current,
-            });
-          }
           return pass;
         })()}
         scrollProgressStepIndex={progressStepIndex}
@@ -418,6 +391,7 @@ export function ScrollStorytellingViewerUnified({
         communityMap={metaGraphData.communityMap}
         narrativeFlow={metaGraphData.narrativeFlow}
         showFullGraph={displayStep?.id === "__overview__"}
+        hasSpecificSegmentFocus={!segmentHasNoFocus}
         communityTitles={communityTitles}
         onCommunityTitleClick={goToFirstSegmentOfCommunity}
       />
