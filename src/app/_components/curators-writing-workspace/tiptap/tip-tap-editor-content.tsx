@@ -62,6 +62,7 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
   const editorRef = useRef<HTMLDivElement>(null);
   const debounceTimeoutRef = useRef<NodeJS.Timeout>();
   const updateTimeoutRef = useRef<NodeJS.Timeout>();
+  const lastTypingTimestampRef = useRef<number>(0);
   const DEBOUNCE_TIME = 1000;
   const { } = useContext(TiptapGraphFilterContext);
   const [isImageInsert, setIsImageInsert] = useState<boolean>(false);
@@ -83,14 +84,22 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
     entities,
     onEntityClick,
     isTextSuggestionMode: textCompletion.isTextSuggestionMode,
+    lastTypingTimestampRef,
   });
+
+  // 安定した参照を抽出（毎レンダリングでuseEffectが発火するのを防止）
+  const {
+    triggerHighlightUpdate,
+    isUpdatingHighlightsRef,
+    editorRef: highlightEditorRef,
+  } = highlight;
 
   // デバウンス処理付きのonUpdate
   const debouncedUpdate = useCallback(
     (content: JSONContent) => {
       // ハイライト更新中はonUpdateをスキップ
       const updateAllowed =
-        !highlight.isUpdatingHighlightsRef.current &&
+        !isUpdatingHighlightsRef.current &&
         !textCompletion.isUpdatingTextCompletionSuggestionRef.current;
 
       if (updateTimeoutRef.current) {
@@ -98,12 +107,15 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
       }
       updateTimeoutRef.current = setTimeout(() => {
         onUpdate(content, updateAllowed);
+        // 保存後にハイライトも更新（タイピング停止後なので安全）
+        triggerHighlightUpdate();
       }, DEBOUNCE_TIME);
     },
     [
       onUpdate,
       textCompletion.isUpdatingTextCompletionSuggestionRef,
-      highlight.isUpdatingHighlightsRef,
+      isUpdatingHighlightsRef,
+      triggerHighlightUpdate,
     ],
   );
 
@@ -235,8 +247,15 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
       ...(mentionExtension ? [mentionExtension] : []),
     ],
     content,
-    onUpdate: ({ editor }) => {
-      debouncedUpdate(editor.getJSON());
+    onUpdate: ({ editor: ed, transaction }) => {
+      // プログラム的変更（ハイライト適用等）はタイピングとして扱わない
+      const isHighlightTx = transaction.getMeta("highlightUpdate") as
+        | boolean
+        | undefined;
+      if (!isHighlightTx && !isUpdatingHighlightsRef.current) {
+        lastTypingTimestampRef.current = Date.now();
+      }
+      debouncedUpdate(ed.getJSON());
     },
     onSelectionUpdate: () => {
       // カーソル移動時にテキスト提案モードを無効化
@@ -281,16 +300,21 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
     }
   }, [editor, updateEditor]);
 
-  // エディタが作成されたらハイライトフックに設定
+  // エディタが作成されたらハイライトフックにエディタ参照を設定
   useEffect(() => {
     if (editor) {
-      highlight.editorRef.current = editor;
-      // エディタが設定されたらハイライト処理を手動でトリガー
-      setTimeout(() => {
-        highlight.triggerHighlightOnEditorSet();
-      }, 500);
+      highlightEditorRef.current = editor;
     }
-  }, [editor, highlight.editorRef, highlight]);
+  }, [editor, highlightEditorRef]);
+
+  // エディタ or エンティティリストが変わったらハイライトを再適用
+  useEffect(() => {
+    if (!editor || entities.length === 0) return;
+    const timer = setTimeout(() => {
+      triggerHighlightUpdate();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [editor, triggerHighlightUpdate, entities.length]);
 
   // クリーンアップ処理を改善
   useEffect(() => {

@@ -9,128 +9,119 @@ const escapeRegExp = (string: string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 };
 
+/**
+ * 単一の ProseMirror トランザクションでエンティティハイライトを適用する。
+ * setTextSelection を使わないため、カーソル位置は ProseMirror が自動保持する。
+ * IME 入力中 (editor.view.composing) の場合は処理をスキップする。
+ */
 export const performHighlightUpdate = (
   editor: Editor,
   entities: CustomNodeType[],
   isUpdatingHighlightsRef: React.MutableRefObject<boolean>,
   onNewHighlighted?: (entityName: string) => void,
 ) => {
-  console.log("performHighlightUpdate");
   if (!editor || editor.isDestroyed) return;
 
-  // ハイライト更新中フラグを設定
+  // IME 入力中はスキップ（日本語・中国語等のコンポジション中断を防止）
+  if (editor.view.composing) return;
+
   isUpdatingHighlightsRef.current = true;
 
   try {
-    // 現在のカーソル位置を保存
-    const currentSelection = editor.state.selection;
+    const { state } = editor;
+    const { doc, schema, selection } = state;
 
-    // トランザクション全体をhistoryから除外
-    const tr = editor.state.tr.setMeta("addToHistory", false);
-    editor.view.dispatch(tr);
+    const tr = state.tr;
 
-    // 既存のハイライトをクリア
-    editor.commands.unsetEntityHighlight();
-    editor.commands.unsetCustomTagHighlight();
+    // 既存のエンティティハイライトマークを一括削除
+    const entityHighlightType = schema.marks.entityHighlight;
+    if (entityHighlightType) {
+      tr.removeMark(0, doc.content.size, entityHighlightType);
+    }
 
-    // エディタのドキュメント構造を取得
-    const doc = editor.state.doc;
+    // 既存のカスタムタグハイライトマークを一括削除
+    for (const tagName of customTags) {
+      const customMarkType = schema.marks[`${tagName}-highlight`];
+      if (customMarkType) {
+        tr.removeMark(0, doc.content.size, customMarkType);
+      }
+    }
 
-    // 各エンティティ名をハイライト
+    // エンティティ名の長い順にソート（長いマッチを優先）
     const sortedEntities = [...entities].sort(
       (a, b) => b.name.length - a.name.length,
     );
 
-    // すべてのマッチを収集（ドキュメント構造を直接使用）
     const allMatches: Array<{
       start: number;
       end: number;
       entityName: string;
+      entity: CustomNodeType;
     }> = [];
 
-    // ドキュメントの各ブロックを走査
     doc.descendants((node, pos) => {
       if (node.isText) {
         const text = node.text ?? "";
-
         sortedEntities.forEach((entity) => {
           const regex = new RegExp(escapeRegExp(entity.name), "gi");
           let match;
-
           while ((match = regex.exec(text)) !== null) {
             allMatches.push({
               start: pos + match.index,
               end: pos + match.index + entity.name.length,
               entityName: entity.name,
+              entity,
             });
           }
         });
       }
     });
 
-    // 開始位置でソート
     allMatches.sort((a, b) => a.start - b.start);
 
-    // 後ろから前に向かってハイライトを適用（位置のずれを防ぐ）
-    allMatches.reverse().forEach(({ start, end, entityName }) => {
-      try {
-        // 選択範囲を設定
-        editor.commands.setTextSelection({ from: start, to: end });
-
-        // エンティティのlabelを確認してPersonの場合はpers - nameタグで囲む;
-        const entity = entities.find((e) => e.name === entityName);
-
-        customTags.forEach((tagName) => {
-          if (entity?.label === customTagMatch[tagName]) {
-            editor.commands.setCustomTagHighlight({
-              tagName,
-              entityName,
-              ref: entity?.id ?? "",
-            });
-          }
-        });
-
-        //通常のハイライトを適用
-        editor.commands.setEntityHighlight({ entityName });
-      } catch (error) {
-        console.warn(
-          `Failed to highlight entity "${entityName}" at position ${start}-${end}:`,
-          error,
-        );
+    // 単一トランザクション内で全マークを一括適用（カーソル移動なし）
+    for (const { start, end, entityName, entity } of allMatches) {
+      if (entityHighlightType) {
+        tr.addMark(start, end, entityHighlightType.create({ entityName }));
       }
-    });
 
-    // カーソル位置の直前にハイライトされたエンティティを検出
+      for (const tagName of customTags) {
+        if (entity.label === customTagMatch[tagName]) {
+          const customMarkType = schema.marks[`${tagName}-highlight`];
+          if (customMarkType) {
+            tr.addMark(
+              start,
+              end,
+              customMarkType.create({
+                tagName,
+                entityName,
+                ref: entity.id ?? "",
+              }),
+            );
+          }
+        }
+      }
+    }
+
+    tr.setMeta("addToHistory", false);
+    tr.setMeta("highlightUpdate", true);
+
+    editor.view.dispatch(tr);
+
     if (onNewHighlighted) {
-      const cursorPos = currentSelection.from;
+      const cursorPos = selection.from;
       const newHighlightedEntity = allMatches.find(
         (match) => match.start < cursorPos && match.end >= cursorPos,
       );
-
       if (newHighlightedEntity) {
         onNewHighlighted(newHighlightedEntity.entityName);
       }
     }
-
-    // カーソル位置を復元
-    try {
-      if (currentSelection.from <= editor.state.doc.content.size) {
-        editor.commands.setTextSelection({
-          from: Math.min(currentSelection.from, editor.state.doc.content.size),
-          to: Math.min(currentSelection.to, editor.state.doc.content.size),
-        });
-      }
-    } catch (error) {
-      // カーソル位置の復元に失敗した場合は最後に戻す
-      const docSize = editor.state.doc.content.size;
-      editor.commands.setTextSelection(docSize);
-    }
   } catch (error) {
     console.error("Error updating highlights:", error);
   } finally {
-    // ハイライト更新完了後にフラグをリセット
     setTimeout(() => {
       isUpdatingHighlightsRef.current = false;
-    }, 100);
+    }, 50);
   }
 };
