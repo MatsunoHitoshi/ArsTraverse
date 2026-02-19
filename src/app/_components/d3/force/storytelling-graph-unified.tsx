@@ -952,7 +952,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
       }
     }
     if (minX === Infinity) return { scale: 0.75, centerX: 0, centerY: 0 };
-    const paddingX = isPc ? forRecording ? 128 : 64 : 16;
+    const paddingX = isPc ? forRecording ? 128 : 64 : 32;
     const paddingY = 128; // 上下のみ 128
     let rangeX = maxX - minX || 1;
     let rangeY = maxY - minY || 1;
