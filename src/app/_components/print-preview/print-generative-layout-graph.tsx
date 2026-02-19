@@ -1441,9 +1441,9 @@ export const PrintGenerativeLayoutGraph = ({
                 (m) => m.communityId === node.id && m.order !== undefined,
               )
             ) {
-              nodeColor = nodeFocusColor; // ストーリーに含まれるコミュニティはフォーカスノード色
+              nodeColor = nodeBaseColor; // ストーリーに含まれるコミュニティは通常ノード色
             } else {
-              nodeColor = darkenHexColor(nodeFocusColor, 0.55); // その他のコミュニティはフォーカスノード色を暗く
+              nodeColor = darkenHexColor(nodeBaseColor, 0.7); // その他のコミュニティは通常ノード色を暗く
             }
             const gradientId = `metaNodeGradient-${node.id}`;
             return (
@@ -1762,16 +1762,16 @@ export const PrintGenerativeLayoutGraph = ({
                     node.properties?.size ?? node.properties?.memberCount ?? 0,
                   );
 
-                  // ノードの色を決定（フォーカスノード色に合わせる）
+                  // ノードの色を決定（通常ノード色に合わせる）
                   let nodeColor: string;
                   if (
                     metaNodeData?.some(
                       (m) => m.communityId === node.id && m.order !== undefined,
                     )
                   ) {
-                    nodeColor = nodeFocusColor; // ストーリーに含まれるコミュニティはフォーカスノード色
+                    nodeColor = nodeBaseColor; // ストーリーに含まれるコミュニティは通常ノード色
                   } else {
-                    nodeColor = darkenHexColor(nodeFocusColor, 0.55); // その他のコミュニティはフォーカスノード色を暗く
+                    nodeColor = darkenHexColor(nodeBaseColor, 0.7); // その他のコミュニティは通常ノード色を暗く
                   }
 
                   const handleMetaNodeMouseDown =
