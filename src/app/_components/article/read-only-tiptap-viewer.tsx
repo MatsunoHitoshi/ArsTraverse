@@ -65,16 +65,22 @@ export const ReadOnlyTipTapViewer: React.FC<ReadOnlyTipTapViewerProps> = ({
     }
   }, [editor, content]);
 
+  const { editorRef: highlightEditorRef, triggerHighlightUpdate } = highlight;
+
   // エディタが初期化されたらハイライトを設定
   useEffect(() => {
     if (editor) {
-      highlight.editorRef.current = editor;
-      // エディタが設定されたらハイライト処理を手動でトリガー
-      setTimeout(() => {
-        highlight.triggerHighlightOnEditorSet();
-      }, 500);
+      highlightEditorRef.current = editor;
     }
-  }, [editor, highlight]);
+  }, [editor, highlightEditorRef]);
+
+  useEffect(() => {
+    if (!editor || entities.length === 0) return;
+    const timer = setTimeout(() => {
+      triggerHighlightUpdate();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [editor, entities, triggerHighlightUpdate]);
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!editor || !onEntityClick) return;
