@@ -32,11 +32,9 @@ import { StoryStepContent } from "./story-step-content";
 
 const XL_BREAKPOINT = 1280;
 const GRAPH_MIN_HEIGHT = 400;
-/** グラフエリアの高さ（PC / SP） */
+/** グラフエリアの高さ（PC / SP）。SP版はオーバービュー・セグメントで統一し、遷移時のResizeObserver発火・D3再計算を防ぐ */
 const GRAPH_SECTION_HEIGHT_PC = "min(95vh, 800px)";
 const GRAPH_SECTION_HEIGHT_SP = "min(72vh, 600px)";
-/** SP版の冒頭（オーバービュー）のみグラフを大きく */
-const GRAPH_SECTION_HEIGHT_SP_OVERVIEW = "min(88vh, 720px)";
 /** 1画面に1セグメントのみ表示するため、各ステップをビューポート高に揃える（SP: 65vh / PC: 100vh で1セグメントに制限） */
 const STEP_VIEWPORT_HEIGHT_SP = "65vh";
 const STEP_VIEWPORT_HEIGHT_PC = "100vh";
@@ -73,8 +71,6 @@ export function ScrollStorytellingViewerUnified({
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const [isFreeExploreMode, setIsFreeExploreMode] = useState(false);
   const frozenGraphIndexRef = useRef(0);
-  /** ボタンで次へ送る際、スクロール計算前に通常高さでレイアウトさせるためのフラグ */
-  const [useNormalHeightForScroll, setUseNormalHeightForScroll] = useState(false);
   /** セグメント進入後のフェード・線描画の progress（0–1）。state で保持し RAF で更新する */
   const [segmentProgress, setSegmentProgress] = useState(1);
   /** セグメント進入時刻。RAF 内で経過時間計算に使用 */
@@ -132,13 +128,6 @@ export function ScrollStorytellingViewerUnified({
       html.style.scrollSnapType = previous;
     };
   }, []);
-
-  // トップを離れたときだけ useNormalHeightForScroll を false に戻す（scrollToTop でトップに来た場合は true のままにしてレイアウト変化を防ぐ）
-  useEffect(() => {
-    if (!topSentinelInView) {
-      setUseNormalHeightForScroll(false);
-    }
-  }, [topSentinelInView]);
 
   useEffect(() => {
     const el = graphContainerRef.current;
@@ -295,7 +284,6 @@ export function ScrollStorytellingViewerUnified({
       if (index < 0) return;
       const targetIndex = index;
       const selector = `[data-story-step-index="${targetIndex}"]`;
-      setUseNormalHeightForScroll(true);
       const behavior = options?.instant ? ("instant" as const) : ("smooth" as const);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
@@ -305,7 +293,6 @@ export function ScrollStorytellingViewerUnified({
             el.scrollIntoView({ behavior, block: "start" });
             console.log("[scroll-storytelling] scrollIntoView called");
           }
-          window.setTimeout(() => setUseNormalHeightForScroll(false), 500);
         });
       });
     },
@@ -336,26 +323,20 @@ export function ScrollStorytellingViewerUnified({
   }, [steps.length, goToFirstSegmentOfCommunity]);
 
   const scrollToTop = useCallback(() => {
-    setUseNormalHeightForScroll(true);
-    // 高さを通常にしたうえでレイアウトが更新されてからスクロールする（スナップ目標が正しく計算され、iOS実機で戻り抜けしない）
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         topSentinelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-        // トップにいる間は高さを変えず、ユーザーが下にスクロールしてトップを離れたときだけ false に戻す（useEffect で実施）
       });
     });
   }, []);
 
   const scrollToNextSegment = useCallback(() => {
     if (steps.length < 2) return;
-    setUseNormalHeightForScroll(true);
-    const selector = `[data-story-step-index="0"]`;
-    // 高さを通常にしたうえでレイアウトが更新されてからスクロールする（スナップ目標が正しく計算される）
+    const selector = `[data-story-step-index="1"]`;
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         const el = document.querySelector(selector);
         el?.scrollIntoView({ behavior: "smooth", block: "start" });
-        window.setTimeout(() => setUseNormalHeightForScroll(false), 500);
       });
     });
   }, [steps.length]);
@@ -392,12 +373,7 @@ export function ScrollStorytellingViewerUnified({
       className={`flex shrink-0 items-center justify-center overflow-hidden ${!isPc ? "relative from-slate-900 bg-gradient-to-b from-75% to-transparent" : ""}`}
       style={{
         minHeight: GRAPH_MIN_HEIGHT,
-        height:
-          isPc
-            ? GRAPH_SECTION_HEIGHT_PC
-            : displayStep?.id === "__overview__" && !useNormalHeightForScroll
-              ? GRAPH_SECTION_HEIGHT_SP_OVERVIEW
-              : GRAPH_SECTION_HEIGHT_SP,
+        height: isPc ? GRAPH_SECTION_HEIGHT_PC : GRAPH_SECTION_HEIGHT_SP,
         width: "100%",
       }}
     >
