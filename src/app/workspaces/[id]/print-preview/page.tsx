@@ -56,7 +56,7 @@ export default function PrintPreviewPage() {
     pageSize: {
       mode: "template",
       template: "A0",
-      customWidth: 2000,
+      customWidth: 2200,
       customHeight: 1116,
       unit: "mm",
       orientation: "landscape",
@@ -71,8 +71,8 @@ export default function PrintPreviewPage() {
       workspaceTitle: 21,
       sectionTitle: 14,
       body: 7,
-      node: 12,
-      edge: 6,
+      node: 14,
+      edge: 10,
     },
     graphSize: {
       width: 800,
