@@ -262,20 +262,23 @@ export function ScrollStorytellingViewerUnified({
       const index = steps.findIndex(
         (s) => s.communityId === communityId && s.id !== "__overview__",
       );
+      console.log("[scroll-storytelling] goToFirstSegmentOfCommunity:", { communityId, index, communityIds: steps.map((s) => s.communityId) });
       if (index < 0) return;
       const targetIndex = index;
-      // SP: Scrollama の offset 0.99 だと「1つ前」にスクロールしたとき 99% 線が目的セグメントに入り正しく発火する
-      const scrollToIndex = isPc ? targetIndex : Math.max(0, targetIndex - 1);
-      const selector = `[data-story-step-index="${scrollToIndex}"]`;
+      const selector = `[data-story-step-index="${targetIndex}"]`;
       const behavior = options?.instant ? ("instant" as const) : ("smooth" as const);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           const el = document.querySelector(selector);
-          if (el) el.scrollIntoView({ behavior, block: "start" });
+          console.log("[scroll-storytelling] scroll target:", { selector, found: !!el, el });
+          if (el) {
+            el.scrollIntoView({ behavior, block: "start" });
+            console.log("[scroll-storytelling] scrollIntoView called");
+          }
         });
       });
     },
-    [steps, isPc],
+    [steps],
   );
 
   /** ページロード時: ?community=xxx があればコミュニティラベルクリックと同様に先頭セグメントへスクロール */
