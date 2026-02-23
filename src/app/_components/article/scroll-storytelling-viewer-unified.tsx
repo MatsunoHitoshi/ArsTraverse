@@ -262,7 +262,6 @@ export function ScrollStorytellingViewerUnified({
       const index = steps.findIndex(
         (s) => s.communityId === communityId && s.id !== "__overview__",
       );
-      console.log("[scroll-storytelling] goToFirstSegmentOfCommunity:", { communityId, index, communityIds: steps.map((s) => s.communityId) });
       if (index < 0) return;
       const targetIndex = index;
       const selector = `[data-story-step-index="${targetIndex}"]`;
@@ -270,15 +269,25 @@ export function ScrollStorytellingViewerUnified({
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           const el = document.querySelector(selector);
-          console.log("[scroll-storytelling] scroll target:", { selector, found: !!el, el });
-          if (el) {
+          if (!el) return;
+          if (isPc) {
             el.scrollIntoView({ behavior, block: "start" });
-            console.log("[scroll-storytelling] scrollIntoView called");
+            return;
           }
+          // SP: Scrollama の offset (0.99) で「入った」と判定される位置に合わせる。
+          // セグメント上端がビューポート上端から 99% の高さに来るようにスクロールし、
+          // 先頭セグメントで onStepEnter が発火するようにする。
+          const rect = el.getBoundingClientRect();
+          const targetScrollY =
+            rect.top + window.scrollY - SCROLLAMA_OFFSET * window.innerHeight;
+          window.scrollTo({
+            top: Math.max(0, targetScrollY),
+            behavior,
+          });
         });
       });
     },
-    [steps],
+    [steps, isPc],
   );
 
   /** ページロード時: ?community=xxx があればコミュニティラベルクリックと同様に先頭セグメントへスクロール */
