@@ -258,7 +258,14 @@ export function ScrollStorytellingViewerUnified({
   }, [isFreeExploreMode, graphIndex]);
 
   const goToFirstSegmentOfCommunity = useCallback(
-    (communityId: string, options?: { instant?: boolean }) => {
+    (
+      communityId: string,
+      options?: {
+        instant?: boolean;
+        /** SP の初期 ?community= ジャンプ時のみ使用。スクロール後に state を目的 index に合わせる */
+        onAfterScroll?: (targetIndex: number) => void;
+      },
+    ) => {
       const index = steps.findIndex(
         (s) => s.communityId === communityId && s.id !== "__overview__",
       );
@@ -270,24 +277,18 @@ export function ScrollStorytellingViewerUnified({
         requestAnimationFrame(() => {
           const el = document.querySelector(selector);
           if (!el) return;
-          if (isPc) {
-            el.scrollIntoView({ behavior, block: "start" });
-            return;
+          el.scrollIntoView({ behavior, block: "start" });
+          // SP の ?community= 初期ジャンプ時: Scrollama は offset 0.99 で次のセグメントを
+          // 「入った」と判定するため、スクロール完了後に state を目的 index で上書きする
+          const onAfterScroll = options?.onAfterScroll;
+          if (onAfterScroll) {
+            const delay = options?.instant ? 150 : 400;
+            window.setTimeout(() => onAfterScroll(targetIndex), delay);
           }
-          // SP: Scrollama の offset (0.99) で「入った」と判定される位置に合わせる。
-          // セグメント上端がビューポート上端から 99% の高さに来るようにスクロールし、
-          // 先頭セグメントで onStepEnter が発火するようにする。
-          const rect = el.getBoundingClientRect();
-          const targetScrollY =
-            rect.top + window.scrollY - SCROLLAMA_OFFSET * window.innerHeight;
-          window.scrollTo({
-            top: Math.max(0, targetScrollY),
-            behavior,
-          });
         });
       });
     },
-    [steps, isPc],
+    [steps],
   );
 
   /** ページロード時: ?community=xxx があればコミュニティラベルクリックと同様に先頭セグメントへスクロール */
@@ -305,8 +306,19 @@ export function ScrollStorytellingViewerUnified({
 
     const timer = setTimeout(() => {
       communityFromUrlRef.current = communityId;
-      console.log("[scroll-storytelling] timer fired, calling goToFirstSegmentOfCommunity:", communityId);
-      goToFirstSegmentOfCommunity(communityId, { instant: true });
+      const isSp = (innerWidth ?? 0) < XL_BREAKPOINT;
+      goToFirstSegmentOfCommunity(communityId, {
+        instant: true,
+        ...(isSp && {
+          onAfterScroll: (targetIndex) => {
+            forceZeroNextPassRef.current = true;
+            setCurrentStepIndex(targetIndex);
+            setProgressStepIndex(targetIndex);
+            setStepProgress(0);
+            setSegmentProgress(0);
+          },
+        }),
+      });
     }, 1000);
     return () => clearTimeout(timer);
     // searchParams を依存に含めると effect が再実行されタイマーがキャンセルされるため意図的に除外
