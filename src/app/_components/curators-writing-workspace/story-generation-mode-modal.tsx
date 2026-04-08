@@ -13,6 +13,7 @@ interface StoryGenerationModeModalProps {
   onClose: () => void;
   onModeSelected: (mode: StoryGenerationMode) => void;
   workspaceContent: JSONContent | null | undefined;
+  hasReferencedTopicSpace: boolean;
   /** 処理中（テキスト→グラフ抽出・統合・クラスタリング）のとき true */
   isProcessing?: boolean;
   /** 処理中のモード（テキストモード時のみ処理状況インジケータを表示） */
@@ -34,6 +35,7 @@ export const StoryGenerationModeModal: React.FC<
   onClose,
   onModeSelected,
   workspaceContent,
+  hasReferencedTopicSpace,
   isProcessing = false,
   processingMode = null,
 }) => {
@@ -71,6 +73,9 @@ export const StoryGenerationModeModal: React.FC<
     }, [contentArray, entityCount]);
 
     const handleSelect = (mode: StoryGenerationMode) => {
+      if (mode === "graph" && !hasReferencedTopicSpace) {
+        return;
+      }
       if (mode === "text" && !hasEnoughContentForTextMode) {
         return;
       }
@@ -124,13 +129,22 @@ export const StoryGenerationModeModal: React.FC<
                 <button
                   type="button"
                   onClick={() => handleSelect("graph")}
-                  className="flex flex-col gap-2 rounded-lg border border-slate-600 bg-slate-800/50 p-4 text-left transition-colors hover:border-slate-500 hover:bg-slate-800"
+                  disabled={!hasReferencedTopicSpace}
+                  className={`flex flex-col gap-2 rounded-lg border p-4 text-left transition-colors ${hasReferencedTopicSpace
+                    ? "border-slate-600 bg-slate-800/50 hover:border-slate-500 hover:bg-slate-800"
+                    : "cursor-not-allowed border-slate-700 bg-slate-900/50 opacity-70"
+                    }`}
                 >
                   <span className="font-semibold text-white">グラフから生成</span>
                   <span className="text-sm text-slate-400">
                     グラフの構造（Louvain クラスタリング）に基づいてコミュニティを決め、AI
                     が各コミュニティのストーリー本文を生成します。
                   </span>
+                  {!hasReferencedTopicSpace && (
+                    <span className="text-xs text-amber-400">
+                      グラフから生成するには、このワークスペースにリポジトリを紐づけてください。
+                    </span>
+                  )}
                 </button>
 
                 <button
@@ -138,8 +152,8 @@ export const StoryGenerationModeModal: React.FC<
                   onClick={() => handleSelect("text")}
                   disabled={!hasEnoughContentForTextMode}
                   className={`flex flex-col gap-2 rounded-lg border p-4 text-left transition-colors ${hasEnoughContentForTextMode
-                      ? "border-slate-600 bg-slate-800/50 hover:border-slate-500 hover:bg-slate-800"
-                      : "cursor-not-allowed border-slate-700 bg-slate-900/50 opacity-70"
+                    ? "border-slate-600 bg-slate-800/50 hover:border-slate-500 hover:bg-slate-800"
+                    : "cursor-not-allowed border-slate-700 bg-slate-900/50 opacity-70"
                     }`}
                 >
                   <span className="font-semibold text-white">テキストから生成</span>

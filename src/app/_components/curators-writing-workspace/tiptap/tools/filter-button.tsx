@@ -1,6 +1,6 @@
 import { Crosshair1Icon } from "@/app/_components/icons";
 import { useContext } from "react";
-import { TiptapGraphFilterContext } from "../..";
+import { TiptapGraphFilterContext } from "../../curators-writing-workspace";
 import type { Editor } from "@tiptap/core";
 import { findEntityHighlights } from "@/app/_utils/text/find-entity-highlights";
 
@@ -27,13 +27,12 @@ const FilterButton = ({ editor }: { editor: Editor }) => {
       }}
     >
       <div
-        className={`text-xs ${
-          tiptapGraphFilterOption.mode === "focused"
+        className={`text-xs ${tiptapGraphFilterOption.mode === "focused"
             ? "text-orange-300"
             : tiptapGraphFilterOption.mode === "filtered"
               ? "text-green-300"
               : "text-white"
-        }`}
+          }`}
       >
         Focus
       </div>

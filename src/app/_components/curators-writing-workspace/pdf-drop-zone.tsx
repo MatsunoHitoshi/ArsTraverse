@@ -60,7 +60,7 @@ export const PDFDropZone: React.FC<PDFDropZoneProps> = ({
             {withTopicSpaceOption && (
               <div className="pointer-events-auto flex flex-col items-center gap-2">
                 <p className="text-sm text-gray-300">
-                  または既存のリポジトリを選択
+                  または
                 </p>
 
                 <Button

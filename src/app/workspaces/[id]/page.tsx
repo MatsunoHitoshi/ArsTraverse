@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import CuratorsWritingWorkspace from "@/app/_components/curators-writing-workspace";
+import CuratorsWritingWorkspace from "@/app/_components/curators-writing-workspace/curators-writing-workspace";
 import { api } from "@/trpc/react";
 
 export default function WorkspacePage() {
@@ -48,7 +48,7 @@ export default function WorkspacePage() {
       <div className="flex min-h-screen items-center justify-center bg-slate-900">
         <div className="text-center text-white">
           <h1 className="mb-4 text-2xl font-bold">
-            ワークスペースが見つかりません
+            ワークスペースが見つかりませんa
           </h1>
           <p className="text-gray-400">
             指定されたワークスペースは存在しないか、アクセス権限がありません

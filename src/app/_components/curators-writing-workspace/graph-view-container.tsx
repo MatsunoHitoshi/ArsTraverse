@@ -136,6 +136,7 @@ export const GraphViewContainer = ({
   if (activeEntity) {
     return (
       <RelatedNodesAndLinksViewer
+        key={`related-${graphSize.width}-${graphSize.height}-${activeEntity.id}`}
         node={activeEntity}
         contextId={topicSpace?.id ?? ""}
         contextType="topicSpace"
@@ -152,6 +153,7 @@ export const GraphViewContainer = ({
   if (layoutInstruction ?? isMetaGraphMode) {
     return (
       <GenerativeLayoutGraph
+        key={`generative-${graphSize.width}-${graphSize.height}-${isMetaGraphMode ? "meta" : "detailed"}`}
         width={graphSize.width}
         height={graphSize.height}
         graphDocument={graphDocument}

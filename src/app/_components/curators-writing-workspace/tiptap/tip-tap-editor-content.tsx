@@ -21,7 +21,7 @@ import { TiptapStyles } from "./styles/tiptap-styles";
 import { KeyboardHandlerExtension } from "./extensions/keyboard-handler-extension";
 import { useTextCompletion } from "./hooks/use-text-completion";
 import { useHighlight } from "./hooks/use-highlight";
-import { TiptapGraphFilterContext } from "..";
+import { TiptapGraphFilterContext } from "../curators-writing-workspace";
 import { HighlightVisibilityProvider } from "./contexts/highlight-visibility-context";
 import TextAlign from "@tiptap/extension-text-align";
 import { useMentionConfig } from "./hooks/use-mention-config";

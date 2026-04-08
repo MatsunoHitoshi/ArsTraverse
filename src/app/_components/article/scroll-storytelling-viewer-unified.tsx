@@ -77,6 +77,8 @@ export function ScrollStorytellingViewerUnified({
   const segmentStepIndexRef = useRef(0);
   /** onStepEnter の直後、次の 1 回のレンダーで必ず 0 を渡す（setState の遅延で segmentProgress がまだ 1 のときのフラッシュ防止） */
   const forceZeroNextPassRef = useRef(false);
+  /** ?community= 初回ジャンプ時のみ: 目的の step index。onStepEnter で N+1 誤発火を検知して N に補正するために使用 */
+  const initialScrollTargetIndexRef = useRef<number | null>(null);
 
   const steps = useMemo(() => {
     const storySteps = buildScrollStepsFromMetaGraphStoryData(metaGraphData);
@@ -140,7 +142,23 @@ export function ScrollStorytellingViewerUnified({
   }, [isPc]);
 
   const onStepEnter = useCallback((arg: ScrollamaStepCallbackArg) => {
-    const index = Number(arg.data);
+    const enteredIndex = Number(arg.data);
+    // SP セクションリンク初回ジャンプ時: Scrollama が 99% 線で N+1 と判定した場合、目的は N なので補正する
+    if (
+      initialScrollTargetIndexRef.current !== null &&
+      enteredIndex === initialScrollTargetIndexRef.current + 1
+    ) {
+      const correctedIndex = initialScrollTargetIndexRef.current;
+      initialScrollTargetIndexRef.current = null;
+      forceZeroNextPassRef.current = true;
+      segmentStepIndexRef.current = correctedIndex;
+      setCurrentStepIndex(correctedIndex);
+      setProgressStepIndex(correctedIndex);
+      setStepProgress(0);
+      setSegmentProgress(0);
+      return;
+    }
+    const index = enteredIndex;
     forceZeroNextPassRef.current = true;
     setCurrentStepIndex(index);
     setProgressStepIndex(index);
@@ -262,7 +280,6 @@ export function ScrollStorytellingViewerUnified({
       const index = steps.findIndex(
         (s) => s.communityId === communityId && s.id !== "__overview__",
       );
-      console.log("[scroll-storytelling] goToFirstSegmentOfCommunity:", { communityId, index, communityIds: steps.map((s) => s.communityId) });
       if (index < 0) return;
       const targetIndex = index;
       const selector = `[data-story-step-index="${targetIndex}"]`;
@@ -270,10 +287,8 @@ export function ScrollStorytellingViewerUnified({
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           const el = document.querySelector(selector);
-          console.log("[scroll-storytelling] scroll target:", { selector, found: !!el, el });
           if (el) {
             el.scrollIntoView({ behavior, block: "start" });
-            console.log("[scroll-storytelling] scrollIntoView called");
           }
         });
       });
@@ -287,15 +302,19 @@ export function ScrollStorytellingViewerUnified({
   if (initialCommunityIdRef.current === undefined && typeof window !== "undefined") {
     const p = new URLSearchParams(window.location.search);
     initialCommunityIdRef.current = p.get("community") ?? p.get("section");
-    console.log("[scroll-storytelling] initialCommunityIdRef:", initialCommunityIdRef.current, "search:", window.location.search);
   }
   useEffect(() => {
     const communityId = initialCommunityIdRef.current ?? searchParams.get("community") ?? searchParams.get("section");
-    console.log("[scroll-storytelling] useEffect run:", { communityId, stepsLength: steps.length, alreadyProcessed: communityFromUrlRef.current });
     if (!communityId || !steps.length || communityFromUrlRef.current !== null) return;
+
+    const targetIndex = steps.findIndex(
+      (s) => s.communityId === communityId && s.id !== "__overview__",
+    );
+    if (targetIndex < 0) return;
 
     const timer = setTimeout(() => {
       communityFromUrlRef.current = communityId;
+      initialScrollTargetIndexRef.current = targetIndex;
       goToFirstSegmentOfCommunity(communityId, { instant: true });
     }, 1000);
     return () => clearTimeout(timer);

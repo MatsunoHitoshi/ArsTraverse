@@ -70,7 +70,7 @@ export const RightPanelContainer = ({
     <div className="flex h-full w-full items-center justify-center rounded-b-lg border border-t-0 border-gray-300 bg-slate-800 text-gray-400">
       <div className="text-center">
         <p className="text-sm">
-          リポジトリを選択すると詳細パネルが表示されます
+          リポジトリを紐づけると詳細パネルが表示されます
         </p>
       </div>
     </div>

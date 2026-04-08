@@ -13,6 +13,7 @@ type WorkspaceListProps = {
   start?: number;
   end?: number;
   menu?: (workspace: WorkspaceResponse) => React.ReactNode;
+  onWorkspaceHover?: (workspace: WorkspaceResponse | null) => void;
 };
 
 const WorkspaceList = ({
@@ -21,6 +22,7 @@ const WorkspaceList = ({
   start = 0,
   end = workspaces.length,
   menu,
+  onWorkspaceHover,
 }: WorkspaceListProps) => {
   const router = useRouter();
 
@@ -58,6 +60,8 @@ const WorkspaceList = ({
             <div
               key={workspace.id}
               className="group relative flex flex-row items-center justify-between px-4 py-1"
+              onMouseEnter={() => onWorkspaceHover?.(workspace)}
+              onMouseLeave={() => onWorkspaceHover?.(null)}
             >
               <button
                 className={`absolute inset-0 hover:bg-slate-50/10 ${id === workspace.id && "!bg-slate-50/30"}`}
@@ -81,15 +85,15 @@ const WorkspaceList = ({
                 )}
               </div>
 
-              <div className="flex min-w-[216px] flex-row items-center justify-between gap-2">
-                <Button
+              <div className="flex h-8 min-w-[216px] flex-row items-center justify-between gap-2">
+                {/* <Button
                   className="z-10 !h-8 !w-8 bg-transparent !p-2 text-sm hover:bg-slate-50/10"
                   onClick={() => {
                     router.push(`/workspaces/${workspace.id}`);
                   }}
                 >
                   <GraphIcon height={16} width={16} color="white" />
-                </Button>
+                </Button> */}
 
                 {/* <UrlCopy
                   messagePosition="inButton"

@@ -19,6 +19,7 @@ import {
   convertFromDatabase,
   type StoryWithRelations,
 } from "@/server/lib/meta-graph-converter";
+import { DEFAULT_EMPTY_WORKSPACE_CONTENT } from "@/app/_constants/workspace-default-content";
 
 export const TiptapContentSchema = z.object({
   type: z.string(),
@@ -161,6 +162,7 @@ export const workspaceRouter = createTRPCRouter({
           name: "新しいワークスペース",
           description: "",
           status: WorkspaceStatus.DRAFT,
+          content: DEFAULT_EMPTY_WORKSPACE_CONTENT,
           user: {
             connect: { id: ctx.session.user.id },
           },
