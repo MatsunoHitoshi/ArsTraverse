@@ -52,6 +52,8 @@ const STEP_BOUNCE_GUARD_MS = 320;
  */
 const FIRST_SEGMENT_LOCK_MS =
   SEGMENT_ANIMATION_DELAY_MS + SEGMENT_ANIMATION_DURATION_MS;
+/** 初回 deep link ジャンプ時に Scrollama が1つ先を先行判定するのを抑制するロック時間（ms） */
+const INITIAL_DEEP_LINK_LOCK_MS = 2000;
 
 export interface ScrollStorytellingViewerUnifiedProps {
   graphDocument: GraphDocumentForFrontend;
@@ -98,6 +100,8 @@ export function ScrollStorytellingViewerUnified({
   }, []);
   /** ?community= 初回ジャンプ時のみ: 目的の step index。onStepEnter で N+1 誤発火を検知して N に補正するために使用 */
   const initialScrollTargetIndexRef = useRef<number | null>(null);
+  const initialDeepLinkLockTargetRef = useRef<number | null>(null);
+  const initialDeepLinkLockUntilRef = useRef(0);
 
   const steps = useMemo(() => {
     const storySteps = buildScrollStepsFromMetaGraphStoryData(metaGraphData);
@@ -171,6 +175,22 @@ export function ScrollStorytellingViewerUnified({
       segmentStepIndex: segmentStepIndexRef.current,
       segmentProgressBefore: segmentProgress,
     });
+    const deepLinkLockTarget = initialDeepLinkLockTargetRef.current;
+    const isWithinDeepLinkLock =
+      deepLinkLockTarget != null && now < initialDeepLinkLockUntilRef.current;
+    if (isWithinDeepLinkLock && enteredIndex > deepLinkLockTarget) {
+      debugLog("onStepEnterIgnoredDeepLinkLock", {
+        enteredIndex,
+        deepLinkLockTarget,
+        remainingMs: initialDeepLinkLockUntilRef.current - now,
+      });
+      return;
+    }
+    if (deepLinkLockTarget != null && enteredIndex === deepLinkLockTarget) {
+      initialDeepLinkLockTargetRef.current = null;
+      initialDeepLinkLockUntilRef.current = 0;
+      debugLog("onStepEnterDeepLinkLockReleased", { enteredIndex });
+    }
     // SP セクションリンク初回ジャンプ時: Scrollama が 99% 線で N+1 と判定した場合、目的は N なので補正する
     if (
       initialScrollTargetIndexRef.current !== null &&
@@ -238,6 +258,23 @@ export function ScrollStorytellingViewerUnified({
   const onStepProgress = useCallback((arg: ScrollamaProgressCallbackArg) => {
     const index = Number(arg.data);
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const deepLinkLockTarget = initialDeepLinkLockTargetRef.current;
+    const isWithinDeepLinkLock =
+      deepLinkLockTarget != null && now < initialDeepLinkLockUntilRef.current;
+    if (isWithinDeepLinkLock && index > deepLinkLockTarget) {
+      debugLog("onStepProgressIgnoredDeepLinkLock", {
+        index,
+        deepLinkLockTarget,
+        remainingMs: initialDeepLinkLockUntilRef.current - now,
+        argProgress: arg.progress,
+      });
+      return;
+    }
+    if (deepLinkLockTarget != null && index === deepLinkLockTarget) {
+      initialDeepLinkLockTargetRef.current = null;
+      initialDeepLinkLockUntilRef.current = 0;
+      debugLog("onStepProgressDeepLinkLockReleased", { index });
+    }
     const withinFirstSegmentLock =
       firstSegmentEnteredAtRef.current != null &&
       now - firstSegmentEnteredAtRef.current < FIRST_SEGMENT_LOCK_MS;
@@ -455,6 +492,15 @@ export function ScrollStorytellingViewerUnified({
     const timer = setTimeout(() => {
       communityFromUrlRef.current = communityId;
       initialScrollTargetIndexRef.current = targetIndex;
+      initialDeepLinkLockTargetRef.current = targetIndex;
+      initialDeepLinkLockUntilRef.current =
+        (typeof performance !== "undefined" ? performance.now() : Date.now()) +
+        INITIAL_DEEP_LINK_LOCK_MS;
+      debugLog("initialDeepLinkStart", {
+        communityId,
+        targetIndex,
+        lockMs: INITIAL_DEEP_LINK_LOCK_MS,
+      });
       goToFirstSegmentOfCommunity(communityId, { instant: true });
     }, 1000);
     return () => clearTimeout(timer);
