@@ -1,7 +1,7 @@
 "use client";
 import type { WorkspaceResponse } from "@/app/const/types";
 import { Button } from "../button/button";
-import { DotHorizontalIcon, GraphIcon, PlusIcon } from "../icons";
+import { DotHorizontalIcon, PlusIcon } from "../icons";
 import { formatDate } from "@/app/_utils/date/format-date";
 import { useRouter } from "next/navigation";
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
