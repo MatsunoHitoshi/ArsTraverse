@@ -465,12 +465,48 @@ export function ScrollStorytellingViewerUnified({
         requestAnimationFrame(() => {
           const el = document.querySelector(selector);
           if (el) {
-            el.scrollIntoView({ behavior, block: "start" });
+            const element = el as HTMLElement;
+            const absoluteTop = element.getBoundingClientRect().top + window.scrollY;
+            // SP で block:start だと Scrollama(0.99) が即座に次stepを拾いやすいため、
+            // 少し上側に余白を残した位置へ明示スクロールする
+            const targetTop = isPc
+              ? absoluteTop
+              : Math.max(0, absoluteTop - Math.floor(window.innerHeight * 0.22));
+
+            // deep link / セクションジャンプ直後の判定を安定化させるため、遷移先を先に確定
+            setTopSentinelInView(false);
+            setCurrentStepIndex(targetIndex);
+            setProgressStepIndex(targetIndex);
+            setStepProgress(0);
+            setSegmentProgress(0);
+            segmentStepIndexRef.current = targetIndex;
+            forceZeroNextPassRef.current = true;
+            previousAcceptedStepIndexRef.current = acceptedStepIndexRef.current;
+            acceptedStepIndexRef.current = targetIndex;
+            acceptedStepUpdatedAtRef.current =
+              typeof performance !== "undefined" ? performance.now() : Date.now();
+
+            initialDeepLinkLockTargetRef.current = targetIndex;
+            initialDeepLinkLockUntilRef.current =
+              (typeof performance !== "undefined" ? performance.now() : Date.now()) +
+              INITIAL_DEEP_LINK_LOCK_MS;
+
+            if (!isPc) {
+              const html = document.documentElement;
+              const prevSnap = html.style.scrollSnapType;
+              html.style.scrollSnapType = "none";
+              window.scrollTo({ top: targetTop, behavior });
+              window.setTimeout(() => {
+                html.style.scrollSnapType = prevSnap || "y mandatory";
+              }, 450);
+            } else {
+              window.scrollTo({ top: targetTop, behavior });
+            }
           }
         });
       });
     },
-    [steps],
+    [isPc, steps],
   );
 
   /** ページロード時: ?community=xxx があればコミュニティラベルクリックと同様に先頭セグメントへスクロール */
@@ -492,10 +528,6 @@ export function ScrollStorytellingViewerUnified({
     const timer = setTimeout(() => {
       communityFromUrlRef.current = communityId;
       initialScrollTargetIndexRef.current = targetIndex;
-      initialDeepLinkLockTargetRef.current = targetIndex;
-      initialDeepLinkLockUntilRef.current =
-        (typeof performance !== "undefined" ? performance.now() : Date.now()) +
-        INITIAL_DEEP_LINK_LOCK_MS;
       debugLog("initialDeepLinkStart", {
         communityId,
         targetIndex,
