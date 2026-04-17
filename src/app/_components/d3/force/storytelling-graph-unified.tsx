@@ -19,14 +19,28 @@ import {
 import { select } from "d3";
 import type { Simulation } from "d3";
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
-import { getMaxEdgeLabelFontSizeByLength } from "@/app/_utils/graph-label-utils";
 import { filterGraphByLayoutInstruction } from "@/app/_utils/kg/filter-graph-by-layout-instruction";
 import { getNodeByIdForFrontend } from "@/app/_utils/kg/filter";
-import { D3ZoomProvider } from "../zoom";
+import {
+  easeInOutCubic,
+  easeOutCubic,
+  estimateLabelMarginLayout,
+  estimateNodeLabelFontSizeFromScale,
+  getDirectionalKey,
+  getNodePairKey,
+  isCustomNodeType,
+  isLineSegmentInViewport,
+} from "./storytelling-graph/utils/graph-utils";
+import { FOCUS_TRANSITION_MS, useTransitionProgress } from "./storytelling-graph/hooks/use-transition-progress";
+import { useSteadyAnimation } from "./storytelling-graph/hooks/use-steady-animation";
+import { StoryGraphViewportLayer } from "./storytelling-graph/components/story-graph-viewport-layer";
+import { StoryGraphSvgFrame } from "./storytelling-graph/components/story-graph-svg-frame";
+import { StoryGraphContent } from "./storytelling-graph/components/story-graph-content";
+
+// 既存呼び出し側との互換性維持用に再エクスポート
+export { easeOutCubic } from "./storytelling-graph/utils/graph-utils";
 
 const NODE_RADIUS = 3;
-/** 探索モードでズームしすぎたときの表示用ノード半径の下限（ビュー座標・px） */
-const MIN_DISPLAY_NODE_RADIUS = 3;
 const LINK_DISTANCE = 80;
 /** フォーカスが1点のとき scale が暴れないよう cap する */
 const MAX_VIEW_SCALE = 3;
@@ -53,31 +67,11 @@ const EXPLORE_NEIGHBOR_EDGE_OPACITY = 0.8;
 /** 探索モード用: 入室セグメントに依存しないラベル・ノードサイズの基準スケール */
 const EXPLORE_BASE_SCALE = 1.2;
 
-/** スクロール表示時、scale がこの値を下回るとハイライト＋1ホップ以外のノードラベルを非表示にする */
-const LABEL_RESTRICT_SCALE_THRESHOLD = 1.0;
-
 /** ビューポートカリング: 拡張ビューポートのマージン（px） */
 const CULLING_VIEWPORT_MARGIN = 80;
 /** ビューポートカリング: このノード数以上でカリングを有効化 */
 const CULLING_THRESHOLD = 120;
 
-/** フォーカス遷移アニメーションの所要時間（ms） */
-const FOCUS_TRANSITION_MS = 1200;
-/** フェード開始を遅らせるオフセット（ms）。ビュー遷移を先行させる */
-const FADE_DELAY_MS = 200;
-/** フェードアニメーションの所要時間（ms）。FADE_DELAY_MS 経過後からこの時間で 0→1 */
-const FADE_DURATION_MS = FOCUS_TRANSITION_MS - FADE_DELAY_MS;
-
-/** 定常パルスアニメーションの周期（ms）。1→1.15→1 のスケール往復 */
-const STEADY_PULSE_PERIOD_MS = 3000;
-/** 定常エッジフローアニメーションの周期（ms） */
-const STEADY_EDGE_FLOW_PERIOD_MS = 3000;
-/** エッジフローの谷（最低不透明度）の広がり幅（エッジ長に対する割合 0–1） */
-const STEADY_EDGE_FLOW_VALLEY_WIDTH = 0.2;
-/** エッジフローの最低不透明度（谷の底） */
-const STEADY_EDGE_FLOW_MIN_OPACITY = 0.2;
-/** 定常アニメーション開始時のフェードイン時間（ms） */
-const STEADY_ANIM_FADE_IN_MS = 50;
 
 /** 出る側ノードのフェードイン完了までに使う progress の割合 (0–1) */
 const SOURCE_FADE_END = 0.35;
@@ -86,99 +80,6 @@ const TARGET_FADE_START = 0.55;
 /** 入る側ノードのフェードインに要する progress の幅 */
 const TARGET_FADE_DURATION = 0.35;
 
-export function easeOutCubic(t: number): number {
-  return 1 - (1 - t) ** 3;
-}
-
-/** 最初をゆるく、終わりに速く（セグメント進入後のフェード・線描画用） */
-export function easeInCubic(t: number): number {
-  return t * t * t;
-}
-
-/** 最初と最後をゆるく、中間を速く（カメラ遷移用） */
-export function easeInOutCubic(t: number): number {
-  return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
-}
-
-/** 同一ノード対のエッジをグループ化するキー（ソース・ターゲットの順序を正規化） */
-function getNodePairKey(link: CustomLinkType): string {
-  const a = (link.source as CustomNodeType).id;
-  const b = (link.target as CustomNodeType).id;
-  return a < b ? `${a}|${b}` : `${b}|${a}`;
-}
-
-/** 方向付きエッジキー（source→target。逆向きは別キー、同一方向の重複パス描画を省くため） */
-function getDirectionalKey(link: CustomLinkType): string {
-  const src = (link.source as CustomNodeType).id;
-  const tgt = (link.target as CustomNodeType).id;
-  return `${src}|${tgt}`;
-}
-
-/** 線分 (x1,y1)-(x2,y2) が矩形 (minX,minY)-(maxX,maxY) と交差するか */
-function isLineSegmentInViewport(
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-  minX: number,
-  minY: number,
-  maxX: number,
-  maxY: number,
-): boolean {
-  const pointInRect = (px: number, py: number) =>
-    px >= minX && px <= maxX && py >= minY && py <= maxY;
-  if (pointInRect(x1, y1) || pointInRect(x2, y2)) return true;
-  const lineIntersectsHorizontal = (y: number, xa: number, ya: number, xb: number, yb: number) => {
-    if (ya === yb) return ya === y && Math.min(xa, xb) <= maxX && Math.max(xa, xb) >= minX;
-    const t = (y - ya) / (yb - ya);
-    if (t < 0 || t > 1) return false;
-    const x = xa + t * (xb - xa);
-    return x >= minX && x <= maxX;
-  };
-  const lineIntersectsVertical = (x: number, xa: number, ya: number, xb: number, yb: number) => {
-    if (xa === xb) return xa === x && Math.min(ya, yb) <= maxY && Math.max(ya, yb) >= minY;
-    const t = (x - xa) / (xb - xa);
-    if (t < 0 || t > 1) return false;
-    const y = ya + t * (yb - ya);
-    return y >= minY && y <= maxY;
-  };
-  return (
-    lineIntersectsHorizontal(minY, x1, y1, x2, y2) ||
-    lineIntersectsHorizontal(maxY, x1, y1, x2, y2) ||
-    lineIntersectsVertical(minX, x1, y1, x2, y2) ||
-    lineIntersectsVertical(maxX, x1, y1, x2, y2)
-  );
-}
-
-function isCustomNodeType(x: unknown): x is CustomNodeType {
-  return typeof x === "object" && x !== null && "id" in x && typeof (x as { id: unknown }).id === "string";
-}
-
-/** スケールからノードラベルフォントサイズの基準値を推定（nodeLabelFontSizeBase と同等の logic） */
-function estimateNodeLabelFontSizeFromScale(scale: number, forRecording: boolean): number {
-  if (forRecording) return Math.max(6, scale) * 0.7;
-  const base =
-    scale > 4 ? 3 : scale > 3 ? 4 : scale > 2 ? 5 : scale > 1.5 ? 6 : scale > 1 ? 7 : scale > 0.9 ? 8 : 9;
-  const stepped = base * 1.5;
-  /** 引きのとき（scale < 1）は実際の描画と一致させるため zoomOutFactor を掛ける */
-  const zoomOutFactor = scale < 1 ? Math.max(0.4, scale) : 1;
-  return stepped * zoomOutFactor;
-}
-
-/** ラベルがノードからはみ出す量をレイアウト座標で推定（ビューpx を scale で割って layout 座標に） */
-function estimateLabelMarginLayout(
-  scale: number,
-  fontSize: number,
-  textLength: number,
-): { halfWidth: number; heightAbove: number } {
-  /** 1文字あたり約0.9em相当（1.5→2.2に変更。graph-label-utilsの0.6emよりやや広めで日本語対応） */
-  const halfWidthView = (textLength * fontSize) / 2;
-  const heightAboveView = 10 + fontSize;
-  return {
-    halfWidth: halfWidthView / scale,
-    heightAbove: heightAboveView / scale,
-  };
-}
 
 export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   graphDocument,
@@ -430,7 +331,8 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     };
   }, [focusNodeIds, focusEdgeIds, showFullGraph]);
 
-  const isTransitionComplete = transitionElapsedMs >= FOCUS_TRANSITION_MS;
+  const { isTransitionComplete, viewProgress, fadeProgress } =
+    useTransitionProgress(transitionElapsedMs);
 
   // 遷移完了時に親へ通知（録画シーケンサーが遷移完了を検知するために使用）
   const onTransitionCompleteRef = useRef(onTransitionComplete);
@@ -444,37 +346,12 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     prevTransitionCompleteRef.current = isTransitionComplete;
   }, [isTransitionComplete]);
 
-  // ── 定常アニメーション（セグメント遷移完了後、探索モード・全体表示以外で駆動） ──
-  const shouldRunSteadyAnim = isTransitionComplete && !freeExploreMode && !showFullGraph;
-  const steadyRafRef = useRef<number | null>(null);
-  const steadyStartRef = useRef<number | null>(null);
-  const [steadyAnimTimeMs, setSteadyAnimTimeMs] = useState(0);
-
-  useEffect(() => {
-    if (!shouldRunSteadyAnim) {
-      if (steadyRafRef.current != null) {
-        cancelAnimationFrame(steadyRafRef.current);
-        steadyRafRef.current = null;
-      }
-      steadyStartRef.current = null;
-      setSteadyAnimTimeMs(0);
-      return;
-    }
-    const tick = (now: number) => {
-      if (steadyStartRef.current == null) {
-        steadyStartRef.current = now;
-      }
-      setSteadyAnimTimeMs(now - steadyStartRef.current);
-      steadyRafRef.current = requestAnimationFrame(tick);
-    };
-    steadyRafRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (steadyRafRef.current != null) {
-        cancelAnimationFrame(steadyRafRef.current);
-        steadyRafRef.current = null;
-      }
-    };
-  }, [shouldRunSteadyAnim]);
+  const { shouldRunSteadyAnim, nodePulseScale, edgeFlowStops } =
+    useSteadyAnimation({
+      isTransitionComplete,
+      freeExploreMode,
+      showFullGraph,
+    });
 
   const [transitionFromLayoutTransform, setTransitionFromLayoutTransform] = useState<{
     scale: number;
@@ -486,28 +363,6 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     centerX: number;
     centerY: number;
   }>({ scale: 1, centerX: 0, centerY: 0 });
-
-  const viewProgress = useMemo(
-    () =>
-      isTransitionComplete
-        ? 1
-        : easeOutCubic(Math.min(1, transitionElapsedMs / FOCUS_TRANSITION_MS)),
-    [transitionElapsedMs, isTransitionComplete],
-  );
-  const fadeProgress = useMemo(
-    () =>
-      isTransitionComplete
-        ? 1
-        : transitionElapsedMs <= FADE_DELAY_MS
-          ? 0
-          : easeOutCubic(
-            Math.min(
-              1,
-              (transitionElapsedMs - FADE_DELAY_MS) / FADE_DURATION_MS,
-            ),
-          ),
-    [transitionElapsedMs, isTransitionComplete],
-  );
 
   useEffect(() => {
     if (!initNodes.length) {
@@ -1591,45 +1446,6 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     }));
   }, [linksForPathRendering]);
 
-  // ── 定常アニメーション計算値 ──
-  /** フォーカスノードのパルススケール（1→1.1→1 のループ） */
-  const nodePulseScale = useMemo(() => {
-    if (!shouldRunSteadyAnim) return 1;
-    const fadeIn = Math.min(1, steadyAnimTimeMs / STEADY_ANIM_FADE_IN_MS);
-    const phase = (steadyAnimTimeMs % STEADY_PULSE_PERIOD_MS) / STEADY_PULSE_PERIOD_MS;
-    const amplitude = 0.1 * fadeIn;
-    return 1 + amplitude * 0.5 * (1 - Math.cos(2 * Math.PI * phase));
-  }, [shouldRunSteadyAnim, steadyAnimTimeMs]);
-
-  /** フォーカスエッジの流れるグラデーション停止点 */
-  const edgeFlowStops = useMemo(() => {
-    if (!shouldRunSteadyAnim) return null;
-    const fadeIn = Math.min(1, steadyAnimTimeMs / STEADY_ANIM_FADE_IN_MS);
-    const effectiveMinOpacity =
-      1 - (1 - STEADY_EDGE_FLOW_MIN_OPACITY) * fadeIn;
-    // 谷がエッジの外側から入り、反対側の外側へ出ていくことでシームレスにループさせる
-    const totalRange = 1 + 2 * STEADY_EDGE_FLOW_VALLEY_WIDTH;
-    const rawPhase =
-      (steadyAnimTimeMs % STEADY_EDGE_FLOW_PERIOD_MS) /
-      STEADY_EDGE_FLOW_PERIOD_MS;
-    const flowCenter =
-      -STEADY_EDGE_FLOW_VALLEY_WIDTH + rawPhase * totalRange;
-
-    const stops: Array<{ offset: string; opacity: number }> = [];
-    const numSteps = 10;
-    for (let i = 0; i <= numSteps; i++) {
-      const t = i / numSteps;
-      const dist = Math.abs(t - flowCenter);
-      const normalized = Math.min(1, dist / STEADY_EDGE_FLOW_VALLEY_WIDTH);
-      // smoothstep で滑らかに遷移
-      const smooth = normalized * normalized * (3 - 2 * normalized);
-      const opacity =
-        effectiveMinOpacity + (1 - effectiveMinOpacity) * smooth;
-      stops.push({ offset: `${(t * 100).toFixed(1)}%`, opacity });
-    }
-    return stops;
-  }, [shouldRunSteadyAnim, steadyAnimTimeMs]);
-
   if (!baseGraph || baseGraph.nodes.length === 0) {
     return (
       <div
@@ -1641,665 +1457,73 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     );
   }
 
-  const graphContent = (
-    <g>
-      {/* 定常エッジフローアニメーション用グラデーション */}
-      {shouldRunSteadyAnim && edgeFlowStops && (
-        <defs>
-          {pathItemsWithFocusIndex
-            .filter((item) => item.hasFocus)
-            .map((item, i) => {
-              const link = item.link;
-              const src = link.source as CustomNodeType;
-              const tgt = link.target as CustomNodeType;
-              if (
-                !src ||
-                !tgt ||
-                src.x == null ||
-                src.y == null ||
-                tgt.x == null ||
-                tgt.y == null
-              )
-                return null;
-              const [gsx, gsy] = toView(src.x, src.y);
-              const [gtx, gty] = toView(tgt.x, tgt.y);
-              return (
-                <linearGradient
-                  key={`edge-flow-${i}`}
-                  id={`edge-flow-${i}`}
-                  gradientUnits="userSpaceOnUse"
-                  x1={gsx}
-                  y1={gsy}
-                  x2={gtx}
-                  y2={gty}
-                >
-                  {edgeFlowStops.map((stop, j) => (
-                    <stop
-                      key={j}
-                      offset={stop.offset}
-                      stopColor="#94a3b8"
-                      stopOpacity={stop.opacity}
-                    />
-                  ))}
-                </linearGradient>
-              );
-            })}
-        </defs>
-      )}
-      {/* ストーリー冒頭の全体グラフ時: コミュニティの円とタイトル（print-generative-layout-graph に倣う） */}
-      {showFullGraph && communityDisplayData.length > 0 && (
-        <>
-          <defs>
-            {communityDisplayData.map((comm) => {
-              const gradientId = `storytelling-community-gradient-${comm.communityId}`;
-              return (
-                <radialGradient
-                  key={gradientId}
-                  id={gradientId}
-                  cx="50%"
-                  cy="50%"
-                  r="50%"
-                >
-                  <stop offset="0%" stopColor="#004df7" stopOpacity="0.25" />
-                  <stop offset="50%" stopColor="#004df7" stopOpacity="0.12" />
-                  <stop offset="100%" stopColor="#004df7" stopOpacity="0" />
-                </radialGradient>
-              );
-            })}
-          </defs>
-          {communityDisplayData.map((comm) => {
-            const [vx, vy] = toView(comm.centerX, comm.centerY);
-            const viewRadius = comm.radius * displayScale;
-            const gradientId = `storytelling-community-gradient-${comm.communityId}`;
-            return (
-              <g key={comm.communityId}>
-                <circle
-                  cx={vx}
-                  cy={vy}
-                  r={viewRadius}
-                  fill={`url(#${gradientId})`}
-                  stroke="#334155"
-                  strokeWidth={1}
-                  strokeOpacity={0.4}
-                  className="pointer-events-none"
-                />
-                {comm.title != null && comm.title !== "" && (
-                  <text
-                    x={vx}
-                    y={vy}
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    fill="#e2e8f0"
-                    fontSize={Math.max(10, Math.min(14, viewRadius / 4))}
-                    fontWeight="600"
-                    className="cursor-pointer select-none hover:fill-slate-100"
-                    style={{ pointerEvents: "all" }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onCommunityTitleClick?.(comm.communityId);
-                    }}
-                  >
-                    {comm.title}
-                  </text>
-                )}
-              </g>
-            );
-          })}
-        </>
-      )}
-      {/* 1. エッジのパスをすべて先に描画（同一方向は1本に集約） */}
-      {pathItemsWithFocusIndex.map((item, i) => {
-        const link = item.link;
-        const source = link.source as CustomNodeType;
-        const target = link.target as CustomNodeType;
-        if (
-          !source ||
-          !target ||
-          source.x == null ||
-          source.y == null ||
-          target.x == null ||
-          target.y == null
-        ) {
-          return null;
-        }
-        const [sx, sy] = toView(source.x, source.y);
-        const [tx, ty] = toView(target.x, target.y);
-        const dirKey = getDirectionalKey(link);
-        const pathD = `M ${sx} ${sy} L ${tx} ${ty}`;
-        const isFocusEdge = item.hasFocus;
-        /** セグメントモード時は displayProgress のみ使用。fadeProgress を使うとフォーカス遷移と重複して二重アニメになる */
-        const edgeProgress =
-          segmentBranch ? displayProgress : (fadeProgress < 1 ? fadeProgress : displayProgress);
-        /** 冒頭の全体グラフ表示時は overviewEdgeProgress でエッジを描くアニメーションを再生 */
-        const effectiveEdgeProgress =
-          freeExploreMode
-            ? 1
-            : showFullGraph && isFocusEdge
-              ? overviewEdgeProgress
-              : edgeProgress;
-
-        if (hasExplicitEdges && isFocusEdge) {
-          const focusStrokeOpacity =
-            freeExploreMode
-              ? FOCUS_EDGE_OPACITY
-              : showFullGraph
-                ? (() => {
-                  const layoutDx = target.x - source.x;
-                  const layoutDy = target.y - source.y;
-                  const distance = Math.sqrt(
-                    layoutDx * layoutDx + layoutDy * layoutDy,
-                  );
-                  const normalizedDistance =
-                    linkDistanceRange.distanceRange > 0
-                      ? (distance - linkDistanceRange.minDistance) /
-                      linkDistanceRange.distanceRange
-                      : 0;
-                  return 0.6 - normalizedDistance * 0.59;
-                })()
-                : FOCUS_EDGE_OPACITY;
-          /** セグメントモードで進捗アニメ中は線描画（strokeDashoffset）を優先。完了後にフローグラデーションへ */
-          const useFlowGrad =
-            shouldRunSteadyAnim &&
-            edgeFlowStops != null &&
-            (!segmentBranch || (segmentProgress ?? 1) >= 1);
-          return (
-            <g key={`path-${dirKey}-${i}`}>
-              {useFlowGrad ? (
-                <path
-                  d={pathD}
-                  fill="none"
-                  stroke={`url(#edge-flow-${item.focusGradientIndex})`}
-                  strokeLinecap="round"
-                  strokeWidth={edgeStrokeWidthFocus}
-                />
-              ) : (
-                <path
-                  d={pathD}
-                  fill="none"
-                  stroke="#94a3b8"
-                  pathLength={1}
-                  strokeDasharray={1}
-                  strokeDashoffset={1 - effectiveEdgeProgress}
-                  style={
-                    segmentProgress != null
-                      ? undefined
-                      : !isPc
-                        ? { transition: "stroke-dashoffset 100ms ease-out" }
-                        : undefined
-                  }
-                  strokeLinecap="round"
-                  strokeOpacity={focusStrokeOpacity}
-                  strokeWidth={edgeStrokeWidthFocus}
-                />
-              )}
-            </g>
-          );
-        }
-        const sourceNode = link.source as CustomNodeType;
-        const targetNode = link.target as CustomNodeType;
-        const isNeighborEdge =
-          neighborNodeIdSet.has(sourceNode.id) ||
-          neighborNodeIdSet.has(targetNode.id);
-        const baseEdgeOpacity = freeExploreMode
-          ? isNeighborEdge
-            ? EXPLORE_NEIGHBOR_EDGE_OPACITY
-            : EXPLORE_DIM_EDGE_OPACITY
-          : isNeighborEdge
-            ? NEIGHBOR_EDGE_OPACITY
-            : DIM_EDGE_OPACITY;
-        const edgeOpacity =
-          freeExploreMode
-            ? baseEdgeOpacity
-            : showFullGraph
-              ? (() => {
-                const layoutDx = target.x - source.x;
-                const layoutDy = target.y - source.y;
-                const distance = Math.sqrt(
-                  layoutDx * layoutDx + layoutDy * layoutDy,
-                );
-                const normalizedDistance =
-                  linkDistanceRange.distanceRange > 0
-                    ? (distance - linkDistanceRange.minDistance) /
-                    linkDistanceRange.distanceRange
-                    : 0;
-                return 0.6 - normalizedDistance * 0.59;
-              })()
-              : baseEdgeOpacity;
-        return (
-          <g key={`path-${dirKey}-${i}`}>
-            <path
-              d={pathD}
-              fill="none"
-              stroke="#94a3b8"
-              strokeWidth={edgeStrokeWidthNormal}
-              strokeOpacity={edgeOpacity}
-            />
-          </g>
-        );
-      })}
-      {/* 2. ラベルをパスの前面に描画（ノード対ごとに1つだけ） */}
-      {Array.from(linksByNodePair.entries()).map(([pairKey, linksInPair]) => {
-        const link = linksInPair[0];
-        if (!link) return null;
-        const source = link.source as CustomNodeType;
-        const target = link.target as CustomNodeType;
-        if (
-          !source ||
-          !target ||
-          source.x == null ||
-          source.y == null ||
-          target.x == null ||
-          target.y == null
-        ) {
-          return null;
-        }
-        const pairCount = linksInPair.length;
-        const typesInPair = linksInPair.map((l) => l.type ?? "").filter(Boolean);
-        const isFocusEdge = linksInPair.some((l) =>
-          focusEdgeIdSet.has(getEdgeCompositeKeyFromLink(l)),
-        );
-        /** 探索時でない・冒頭グラフでないときはフォーカスエッジのラベルをScaleによらず常に表示。冒頭グラフでは引きで非表示 */
-        const showThisEdgeLabel =
-          typesInPair.length > 0 &&
-          (showEdgeLabels || (isFocusEdge && !freeExploreMode && !showFullGraph));
-        if (!showThisEdgeLabel) {
-          return null;
-        }
-
-        const [sx, sy] = toView(source.x, source.y);
-        const [tx, ty] = toView(target.x, target.y);
-        const dx = tx - sx;
-        const dy = ty - sy;
-        const len = Math.sqrt(dx * dx + dy * dy) || 1;
-        /** ラベルをエッジにかぶらないよう法線方向に十分離す（フォーカス時はフォントが大きいので多めに） */
-        const labelOffsetPx = hasExplicitEdges && isFocusEdge ? 8 : 4;
-        const rawAngleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
-        /** 90°超〜270°以下では法線を反転し、ラベルをエッジの反対側に置く */
-        const perpSign =
-          rawAngleDeg > 90 && rawAngleDeg <= 270 ? -1 : 1;
-        /** 90°〜180°では回転したテキストがまだ被りやすいため、この範囲だけオフセットを追加 */
-        const is90To180 = rawAngleDeg > -180 && rawAngleDeg <= -90;
-        const extraOffsetPx = is90To180 ? (hasExplicitEdges && isFocusEdge ? 8 : 4) : 0;
-        const effectiveOffsetPx = labelOffsetPx + extraOffsetPx;
-        const perpX = (dy / len) * effectiveOffsetPx * perpSign;
-        const perpY = (-dx / len) * effectiveOffsetPx * perpSign;
-        let angle = rawAngleDeg;
-        if (angle > 90) angle -= 180;
-        else if (angle < -90) angle += 180;
-        const labelX = (sx + tx) / 2 + perpX;
-        const labelY = (sy + ty) / 2 + perpY;
-        const labelTransform = `rotate(${angle}, ${labelX}, ${labelY})`;
-        /** セグメントモード時は displayProgress のみ使用。fadeProgress だと二重フェードになる */
-        const effectiveEdgeProgress =
-          freeExploreMode ? 1 : (segmentBranch ? displayProgress : (fadeProgress < 1 ? fadeProgress : displayProgress));
-        /** スクロール時・引きのときはエッジ長を超えないようフォントサイズ上限を動的計算 */
-        const labelTextLength =
-          expandedEdgePairKey === pairKey && pairCount > 1
-            ? Math.max(...typesInPair.map((t) => t.length))
-            : pairCount > 1
-              ? (typesInPair[0]?.length ?? 0) + 3
-              : typesInPair[0]?.length ?? 1;
-        const baseEdgeLabelFontSize = getEdgeLabelFontSize(isFocusEdge);
-        const maxFontSizeByEdge = getMaxEdgeLabelFontSizeByLength(len, labelTextLength);
-        const effectiveEdgeLabelFontSize = Math.max(
-          4,
-          Math.min(baseEdgeLabelFontSize, maxFontSizeByEdge),
-        );
-
-        const handleLabelClick =
-          pairCount > 1
-            ? (e: React.MouseEvent) => {
-              e.stopPropagation();
-              setExpandedEdgePairKey((prev) =>
-                prev === pairKey ? null : pairKey,
-              );
-            }
-            : undefined;
-
-        if (hasExplicitEdges && isFocusEdge) {
-          return (
-            <g key={`label-${pairKey}`}>
-              <text
-                x={labelX}
-                y={labelY}
-                textAnchor="middle"
-                fill="#94a3b8"
-                fontSize={effectiveEdgeLabelFontSize}
-                className={
-                  pairCount > 1 ? "cursor-pointer" : "pointer-events-none"
-                }
-                transform={labelTransform}
-                opacity={Math.max(0, Math.min(1, effectiveEdgeProgress * 2 - 0.5))}
-                onClick={handleLabelClick}
-              >
-                {expandedEdgePairKey === pairKey && pairCount > 1 ? (
-                  typesInPair.map((t, j) => (
-                    <tspan
-                      key={`${t}-${j}`}
-                      x={labelX}
-                      y={labelY}
-                      dy={j === 0 ? 0 : `${j * 1.2}em`}
-                    >
-                      {t}
-                    </tspan>
-                  ))
-                ) : pairCount > 1 ? (
-                  `${typesInPair[0]} …`
-                ) : (
-                  typesInPair[0]
-                )}
-              </text>
-            </g>
-          );
-        }
-        const sourceNode = link.source as CustomNodeType;
-        const targetNode = link.target as CustomNodeType;
-        const isNeighborEdge =
-          neighborNodeIdSet.has(sourceNode.id) ||
-          neighborNodeIdSet.has(targetNode.id);
-        const baseEdgeOpacity = freeExploreMode
-          ? isNeighborEdge
-            ? EXPLORE_NEIGHBOR_EDGE_OPACITY
-            : EXPLORE_DIM_EDGE_OPACITY
-          : isNeighborEdge
-            ? NEIGHBOR_EDGE_OPACITY
-            : DIM_EDGE_OPACITY;
-        const edgeOpacity =
-          freeExploreMode
-            ? baseEdgeOpacity
-            : showFullGraph
-              ? (() => {
-                const layoutDx = target.x - source.x;
-                const layoutDy = target.y - source.y;
-                const distance = Math.sqrt(
-                  layoutDx * layoutDx + layoutDy * layoutDy,
-                );
-                const normalizedDistance =
-                  linkDistanceRange.distanceRange > 0
-                    ? (distance - linkDistanceRange.minDistance) /
-                    linkDistanceRange.distanceRange
-                    : 0;
-                return 0.6 - normalizedDistance * 0.59;
-              })()
-              : baseEdgeOpacity;
-        return (
-          <g key={`label-${pairKey}`}>
-            <text
-              x={labelX}
-              y={labelY}
-              textAnchor="middle"
-              fill="#646368"
-              fontSize={effectiveEdgeLabelFontSize}
-              className={
-                pairCount > 1 ? "cursor-pointer" : "pointer-events-none"
-              }
-              transform={labelTransform}
-              style={{
-                opacity: edgeOpacity,
-                ...(segmentProgress != null
-                  ? undefined
-                  : !isPc && { transition: "opacity 100ms ease-out" }),
-              }}
-              opacity={effectiveEdgeProgress}
-              onClick={handleLabelClick}
-            >
-              {expandedEdgePairKey === pairKey && pairCount > 1 ? (
-                typesInPair.map((t, j) => (
-                  <tspan
-                    key={`${t}-${j}`}
-                    x={labelX}
-                    y={labelY}
-                    dy={j === 0 ? 0 : `${j * 1.2}em`}
-                  >
-                    {t}
-                  </tspan>
-                ))
-              ) : pairCount > 1 ? (
-                `${typesInPair[0]} …`
-              ) : (
-                typesInPair[0]
-              )}
-            </text>
-          </g>
-        );
-      })}
-      {visibleNodesToRender.map((node) => {
-        if (node.x == null || node.y == null) return null;
-        const isFocusNode = focusNodeIdSet.has(node.id);
-        const [vx, vy] = toView(node.x, node.y);
-        const opacity = getNodeOpacity(node);
-        const baseR = getNodeRadius(node) * (0.8 / Math.max(1, scaleForSize));
-        const pulseScale = focusNodeIdSet.has(node.id)
-          ? nodePulseScale
-          : 1;
-        const imageUrl = node.properties?.imageUrl as string | undefined;
-        const showImage =
-          imageUrl &&
-          !failedImageNodeIds.has(node.id);
-        /** 画像が入っているノードは通常の2倍の大きさで表示 */
-        const rRaw = imageUrl ? baseR * 2.5 : baseR;
-        /** 探索モードでズームイン時のみ下限を適用（引きの俯瞰時はノードを適切に小さく表示する） */
-        const r =
-          freeExploreMode && scaleForSize > 1
-            ? Math.max(MIN_DISPLAY_NODE_RADIUS, rRaw)
-            : rRaw;
-        /** 引きの場面（scale が閾値未満）では、ハイライト＋1ホップ周辺以外はラベルを表示しない */
-        const shouldShowThisNodeLabel =
-          freeExploreMode || showFullGraph
-            ? true
-            : effectiveScaleForLabels >= LABEL_RESTRICT_SCALE_THRESHOLD
-              ? true
-              : neighborNodeIdSet.has(node.id);
-
-        return (
-          <g
-            key={node.id}
-            data-node-id={freeExploreMode ? node.id : undefined}
-            transform={`translate(${vx}, ${vy})`}
-            style={{
-              opacity,
-              ...(segmentProgress != null ? undefined : !isPc && { transition: "opacity 100ms ease-out" }),
-              ...(freeExploreMode && {
-                cursor: draggingNodeId === node.id ? "grabbing" : "grab",
-              }),
-            }}
-          >
-            <g transform={pulseScale !== 1 ? `scale(${pulseScale})` : undefined}>
-              {showImage ? (
-                <>
-                  <defs>
-                    <clipPath id={`node-image-clip-${node.id}`}>
-                      <circle r={r} />
-                    </clipPath>
-                  </defs>
-                  <g clipPath={`url(#node-image-clip-${node.id})`}>
-                    <image
-                      x={-r}
-                      y={-r}
-                      width={r * 2}
-                      height={r * 2}
-                      href={imageUrl}
-                      preserveAspectRatio="xMidYMid slice"
-                      onError={() => {
-                        setFailedImageNodeIds((prev) =>
-                          new Set(prev).add(node.id),
-                        );
-                      }}
-                    />
-                  </g>
-                  <circle
-                    r={r}
-                    fill="none"
-                    stroke="#94a3b8"
-                    strokeWidth={nodeStrokeWidth}
-                  />
-                </>
-              ) : (
-                <circle
-                  r={r}
-                  fill="#e2e8f0"
-                  stroke="#94a3b8"
-                  strokeWidth={nodeStrokeWidth / 2}
-                />
-              )}
-              {shouldShowThisNodeLabel && getNodeLabelFontSize(isFocusNode) > 0 && (
-                <text
-                  y={-10}
-                  textAnchor="middle"
-                  fill="#e2e8f0"
-                  fontSize={getNodeLabelFontSize(isFocusNode)}
-                  fontWeight={focusNodeIdSet.has(node.id) ? "bold" : "normal"}
-                  className="pointer-events-none select-none"
-                >
-                  {node.name}
-                </text>
-              )}
-            </g>
-          </g>
-        );
-      })}
-    </g>
-  );
-
-  const graphInner = freeExploreMode ? (
-    <D3ZoomProvider
-      svgRef={svgRef}
-      currentScale={zoomScale}
-      setCurrentScale={setZoomScale}
-      currentTransformX={zoomX}
-      setCurrentTransformX={setZoomX}
-      currentTransformY={zoomY}
-      setCurrentTransformY={setZoomY}
-    >
-      {graphContent}
-    </D3ZoomProvider>
-  ) : (
-    graphContent
-  );
-
   return (
-    <svg
-      ref={svgRef}
+    <StoryGraphSvgFrame
+      svgRef={svgRef}
       width={width}
       height={height}
-      viewBox={`0 0 ${width} ${height}`}
-      className="overflow-hidden"
-      style={{ maxWidth: "100%", height: "auto" }}
+      freeExploreMode={freeExploreMode}
+      showBottomFadeGradient={showBottomFadeGradient}
+      edgeFadePx={edgeFadePx}
     >
-      {(showBottomFadeGradient || edgeFadePx != null) && (
-        <defs>
-          {edgeFadePx != null ? (
-            <>
-              <linearGradient
-                id="storytelling-edge-fade-top"
-                x1={0}
-                y1={0}
-                x2={0}
-                y2={edgeFadePx}
-                gradientUnits="userSpaceOnUse"
-              >
-                <stop offset={0} stopColor="black" />
-                <stop offset={1} stopColor="white" />
-              </linearGradient>
-              <linearGradient
-                id="storytelling-edge-fade-bottom"
-                x1={0}
-                y1={height}
-                x2={0}
-                y2={height - edgeFadePx}
-                gradientUnits="userSpaceOnUse"
-              >
-                <stop offset={0} stopColor="black" />
-                <stop offset={1} stopColor="white" />
-              </linearGradient>
-              <linearGradient
-                id="storytelling-edge-fade-left"
-                x1={0}
-                y1={0}
-                x2={edgeFadePx}
-                y2={0}
-                gradientUnits="userSpaceOnUse"
-              >
-                <stop offset={0} stopColor="black" />
-                <stop offset={1} stopColor="white" />
-              </linearGradient>
-              <linearGradient
-                id="storytelling-edge-fade-right"
-                x1={width}
-                y1={0}
-                x2={width - edgeFadePx}
-                y2={0}
-                gradientUnits="userSpaceOnUse"
-              >
-                <stop offset={0} stopColor="black" />
-                <stop offset={1} stopColor="white" />
-              </linearGradient>
-              <mask id="storytelling-edge-fade-mask">
-                <rect x={0} y={0} width={width} height={height} fill="white" />
-                <rect
-                  x={0}
-                  y={0}
-                  width={width}
-                  height={edgeFadePx}
-                  fill="url(#storytelling-edge-fade-top)"
-                />
-                <rect
-                  x={0}
-                  y={height - edgeFadePx}
-                  width={width}
-                  height={edgeFadePx}
-                  fill="url(#storytelling-edge-fade-bottom)"
-                />
-                <rect
-                  x={0}
-                  y={0}
-                  width={edgeFadePx}
-                  height={height}
-                  fill="url(#storytelling-edge-fade-left)"
-                />
-                <rect
-                  x={width - edgeFadePx}
-                  y={0}
-                  width={edgeFadePx}
-                  height={height}
-                  fill="url(#storytelling-edge-fade-right)"
-                />
-              </mask>
-            </>
-          ) : (
-            <>
-              <linearGradient
-                id="storytelling-bottom-fade-mask-gradient"
-                x1={0}
-                y1={height - 96}
-                x2={0}
-                y2={height}
-                gradientUnits="userSpaceOnUse"
-              >
-                <stop offset={0} stopColor="white" />
-                <stop offset={1} stopColor="black" />
-              </linearGradient>
-              <mask id="storytelling-bottom-fade-mask">
-                <rect x={0} y={0} width={width} height={height} fill="white" />
-                <rect
-                  x={0}
-                  y={height - 96}
-                  width={width}
-                  height={96}
-                  fill="url(#storytelling-bottom-fade-mask-gradient)"
-                />
-              </mask>
-            </>
-          )}
-        </defs>
-      )}
-      {!freeExploreMode && edgeFadePx != null ? (
-        <g mask="url(#storytelling-edge-fade-mask)">{graphInner}</g>
-      ) : !freeExploreMode && showBottomFadeGradient ? (
-        <g mask="url(#storytelling-bottom-fade-mask)">{graphInner}</g>
-      ) : (
-        graphInner
-      )}
-    </svg>
+      <StoryGraphViewportLayer
+        freeExploreMode={freeExploreMode}
+        svgRef={svgRef}
+        zoomScale={zoomScale}
+        zoomX={zoomX}
+        zoomY={zoomY}
+        setZoomScale={setZoomScale}
+        setZoomX={setZoomX}
+        setZoomY={setZoomY}
+      >
+        <StoryGraphContent
+          shouldRunSteadyAnim={shouldRunSteadyAnim}
+          edgeFlowStops={edgeFlowStops}
+          pathItemsWithFocusIndex={pathItemsWithFocusIndex}
+          toView={toView}
+          showFullGraph={showFullGraph}
+          communityDisplayData={communityDisplayData}
+          displayScale={displayScale}
+          onCommunityTitleClick={onCommunityTitleClick}
+          hasExplicitEdges={hasExplicitEdges}
+          segmentBranch={segmentBranch}
+          displayProgress={displayProgress}
+          fadeProgress={fadeProgress}
+          freeExploreMode={freeExploreMode}
+          overviewEdgeProgress={overviewEdgeProgress}
+          linkDistanceRange={linkDistanceRange}
+          segmentProgress={segmentProgress}
+          isPc={isPc}
+          edgeStrokeWidthFocus={edgeStrokeWidthFocus}
+          edgeStrokeWidthNormal={edgeStrokeWidthNormal}
+          neighborNodeIdSet={neighborNodeIdSet}
+          edgeOpacities={{
+            focus: FOCUS_EDGE_OPACITY,
+            neighbor: NEIGHBOR_EDGE_OPACITY,
+            dim: DIM_EDGE_OPACITY,
+            exploreNeighbor: EXPLORE_NEIGHBOR_EDGE_OPACITY,
+            exploreDim: EXPLORE_DIM_EDGE_OPACITY,
+          }}
+          linksByNodePair={linksByNodePair}
+          focusEdgeIdSet={focusEdgeIdSet}
+          showEdgeLabels={showEdgeLabels}
+          expandedEdgePairKey={expandedEdgePairKey}
+          setExpandedEdgePairKey={setExpandedEdgePairKey}
+          getEdgeLabelFontSize={getEdgeLabelFontSize}
+          visibleNodesToRender={visibleNodesToRender}
+          focusNodeIdSet={focusNodeIdSet}
+          getNodeOpacity={getNodeOpacity}
+          getNodeRadius={getNodeRadius}
+          scaleForSize={scaleForSize}
+          nodePulseScale={nodePulseScale}
+          failedImageNodeIds={failedImageNodeIds}
+          setFailedImageNodeIds={setFailedImageNodeIds}
+          nodeStrokeWidth={nodeStrokeWidth}
+          getNodeLabelFontSize={getNodeLabelFontSize}
+          effectiveScaleForLabels={effectiveScaleForLabels}
+          draggingNodeId={draggingNodeId}
+        />
+      </StoryGraphViewportLayer>
+    </StoryGraphSvgFrame>
   );
 });

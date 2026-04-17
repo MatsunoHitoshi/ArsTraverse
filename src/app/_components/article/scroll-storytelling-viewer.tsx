@@ -50,6 +50,7 @@ const STEP_VIEWPORT_HEIGHT = "65vh";
 const SP_FADE_OVERLAP_PX = 96;
 /** Scrollama: ステップが「入った」とみなすビューポート上の位置 (0–1)。0.99 で段落が画面下端付近に入った時点でグラフが切り替わり、見ている段落と一致する */
 const SCROLLAMA_OFFSET = 0.99;
+const DEBUG_STORY_SCROLL = true;
 
 export interface ScrollStorytellingViewerProps {
   graphDocument: GraphDocumentForFrontend;
@@ -68,6 +69,20 @@ export function ScrollStorytellingViewer({
   const prevGraphKeyRef = useRef<string | null>(null);
   const [graphSize, setGraphSize] = useState({ width: 400, height: GRAPH_MIN_HEIGHT });
   const topSentinelRef = useRef<HTMLDivElement>(null);
+  const debugSeqRef = useRef(0);
+
+  const debugLog = useCallback(
+    (event: string, payload?: Record<string, unknown>) => {
+      if (!DEBUG_STORY_SCROLL) return;
+      debugSeqRef.current += 1;
+      const now =
+        typeof performance !== "undefined" ? performance.now().toFixed(1) : "n/a";
+      console.log(`[StoryScroll][${debugSeqRef.current}][${now}ms] ${event}`, {
+        ...(payload ?? {}),
+      });
+    },
+    [],
+  );
 
   const steps = useMemo(
     () => buildScrollStepsFromMetaGraphStoryData(metaGraphData),
@@ -87,12 +102,30 @@ export function ScrollStorytellingViewer({
     const el = topSentinelRef.current;
     if (!el) return;
     const io = new IntersectionObserver(
-      ([entry]) => setTopSentinelInView(entry?.isIntersecting ?? false),
+      ([entry]) => {
+        const intersecting = entry?.isIntersecting ?? false;
+        const scrollY = typeof window !== "undefined" ? window.scrollY : 0;
+        const nextTopSentinelInView = !intersecting ? false : scrollY < 100;
+        debugLog("topSentinelIO", {
+          intersecting,
+          scrollY,
+          nextTopSentinelInView,
+          prevTopSentinelInView: topSentinelInView,
+        });
+        if (!intersecting) {
+          setTopSentinelInView(false);
+          return;
+        }
+        // PCでのレイアウト変化（sticky要素の再配置等）による一時的な再交差で
+        // 先頭判定が戻ってしまうと、overview→segment1→overview→segment1 と揺れて
+        // カメラ遷移が二重発火するため、十分に上部にいる時だけ true を許可する。
+        setTopSentinelInView(scrollY < 100);
+      },
       { threshold: 0, rootMargin: "-1px 0px 0px 0px" },
     );
     io.observe(el);
     return () => io.disconnect();
-  }, []);
+  }, [debugLog, topSentinelInView]);
 
   // セグメントごとの Scroll Snap: マウント時に html に適用、アンマウントで解除
   useEffect(() => {
@@ -120,17 +153,31 @@ export function ScrollStorytellingViewer({
 
   const onStepEnter = useCallback((arg: ScrollamaStepCallbackArg) => {
     const index = Number(arg.data);
+    debugLog("onStepEnter", {
+      index,
+      topSentinelInView,
+      currentStepIndexBefore: currentStepIndex,
+      progressStepIndexBefore: progressStepIndex,
+      stepProgressBefore: stepProgress,
+    });
     setCurrentStepIndex(index);
     setProgressStepIndex(index);
     setStepProgress(0);
-  }, []);
+  }, [currentStepIndex, debugLog, progressStepIndex, stepProgress, topSentinelInView]);
 
   const onStepProgress = useCallback((arg: ScrollamaProgressCallbackArg) => {
     const index = Number(arg.data);
     const progress = Math.max(0, Math.min(1, arg.progress));
+    debugLog("onStepProgress", {
+      index,
+      progress,
+      topSentinelInView,
+      currentStepIndexBefore: currentStepIndex,
+      progressStepIndexBefore: progressStepIndex,
+    });
     setProgressStepIndex(index);
     setStepProgress(progress);
-  }, []);
+  }, [currentStepIndex, debugLog, progressStepIndex, topSentinelInView]);
 
   // 先頭センチネルがビュー内なら1段落目。それ以外は Scrollama の step に従う
   const graphIndex =
@@ -153,20 +200,56 @@ export function ScrollStorytellingViewer({
           ? 1
           : 0;
 
+  const graphKey = progressStep?.id ?? `step-${graphIndex}`;
+
+  useEffect(() => {
+    debugLog("stateSnapshot", {
+      topSentinelInView,
+      currentStepIndex,
+      progressStepIndex,
+      stepProgress,
+      graphIndex,
+      graphKey,
+      progressStepId: progressStep?.id ?? null,
+      nodeCount: graphNodeIds.length,
+      edgeCount: graphEdgeIds.length,
+    });
+  }, [
+    currentStepIndex,
+    debugLog,
+    graphEdgeIds.length,
+    graphIndex,
+    graphKey,
+    graphNodeIds.length,
+    progressStep?.id,
+    progressStepIndex,
+    stepProgress,
+    topSentinelInView,
+  ]);
+
+  // 検証: graphKey が変わったときだけ。表示中の段落テキストと step が一致しているか確認用
+  if (prevGraphKeyRef.current !== graphKey) {
+    debugLog("graphKeyChanged", {
+      prevGraphKey: prevGraphKeyRef.current,
+      nextGraphKey: graphKey,
+      topSentinelInView,
+      currentStepIndex,
+      progressStepIndex,
+      stepProgress,
+      graphIndex,
+      progressStepId: progressStep?.id ?? null,
+    });
+    prevGraphKeyRef.current = graphKey;
+    const textPreview = progressStep?.text?.slice(0, 60) ?? "";
+    debugLog("graphTextPreview", { textPreview });
+  }
+
   if (steps.length === 0) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center text-slate-400">
         表示するストーリーがありません
       </div>
     );
-  }
-
-  const graphKey = progressStep?.id ?? `step-${graphIndex}`;
-
-  // 検証: graphKey が変わったときだけ。表示中の段落テキストと step が一致しているか確認用
-  if (prevGraphKeyRef.current !== graphKey) {
-    prevGraphKeyRef.current = graphKey;
-    const textPreview = progressStep?.text?.slice(0, 60) ?? "";
   }
 
   const graphSection = (

@@ -44,6 +44,14 @@ const SCROLLAMA_OFFSET = 0.99;
 const SEGMENT_ANIMATION_DELAY_MS = 500;
 /** セグメント進入後のノードフェード・エッジ線描画アニメーションの所要時間（ms） */
 const SEGMENT_ANIMATION_DURATION_MS = 2000;
+const DEBUG_STORY_SCROLL_UNIFIED = true;
+/** Scrollama 境界で隣接ステップが短時間に往復するノイズを無視する猶予（ms） */
+const STEP_BOUNCE_GUARD_MS = 320;
+/** overview(0) -> first segment(1) 直後の慣性スクロールで 2 へ飛ぶのを抑制する猶予（ms）
+ * segment 演出（delay + duration）と同程度にして、1つ目のセグメント表示を安定化する
+ */
+const FIRST_SEGMENT_LOCK_MS =
+  SEGMENT_ANIMATION_DELAY_MS + SEGMENT_ANIMATION_DURATION_MS;
 
 export interface ScrollStorytellingViewerUnifiedProps {
   graphDocument: GraphDocumentForFrontend;
@@ -77,6 +85,17 @@ export function ScrollStorytellingViewerUnified({
   const segmentStepIndexRef = useRef(0);
   /** onStepEnter の直後、次の 1 回のレンダーで必ず 0 を渡す（setState の遅延で segmentProgress がまだ 1 のときのフラッシュ防止） */
   const forceZeroNextPassRef = useRef(false);
+  const acceptedStepIndexRef = useRef(0);
+  const previousAcceptedStepIndexRef = useRef<number | null>(null);
+  const acceptedStepUpdatedAtRef = useRef(0);
+  const firstSegmentEnteredAtRef = useRef<number | null>(null);
+  const debugSeqRef = useRef(0);
+  const debugLog = useCallback((event: string, payload?: Record<string, unknown>) => {
+    if (!DEBUG_STORY_SCROLL_UNIFIED) return;
+    debugSeqRef.current += 1;
+    const now = typeof performance !== "undefined" ? performance.now().toFixed(1) : "n/a";
+    console.log(`[StoryScrollUnified][${debugSeqRef.current}][${now}ms] ${event}`, payload ?? {});
+  }, []);
   /** ?community= 初回ジャンプ時のみ: 目的の step index。onStepEnter で N+1 誤発火を検知して N に補正するために使用 */
   const initialScrollTargetIndexRef = useRef<number | null>(null);
 
@@ -143,6 +162,15 @@ export function ScrollStorytellingViewerUnified({
 
   const onStepEnter = useCallback((arg: ScrollamaStepCallbackArg) => {
     const enteredIndex = Number(arg.data);
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    debugLog("onStepEnter", {
+      enteredIndex,
+      topSentinelInView,
+      currentStepIndexBefore: currentStepIndex,
+      progressStepIndexBefore: progressStepIndex,
+      segmentStepIndex: segmentStepIndexRef.current,
+      segmentProgressBefore: segmentProgress,
+    });
     // SP セクションリンク初回ジャンプ時: Scrollama が 99% 線で N+1 と判定した場合、目的は N なので補正する
     if (
       initialScrollTargetIndexRef.current !== null &&
@@ -156,21 +184,106 @@ export function ScrollStorytellingViewerUnified({
       setProgressStepIndex(correctedIndex);
       setStepProgress(0);
       setSegmentProgress(0);
+      previousAcceptedStepIndexRef.current = acceptedStepIndexRef.current;
+      acceptedStepIndexRef.current = correctedIndex;
+      acceptedStepUpdatedAtRef.current = now;
+      debugLog("onStepEnterCorrected", { correctedIndex });
       return;
     }
     const index = enteredIndex;
+    const withinFirstSegmentLock =
+      firstSegmentEnteredAtRef.current != null &&
+      now - firstSegmentEnteredAtRef.current < FIRST_SEGMENT_LOCK_MS;
+    const shouldIgnoreEarlyForwardFromFirst =
+      acceptedStepIndexRef.current === 1 &&
+      index >= 2 &&
+      withinFirstSegmentLock;
+    if (shouldIgnoreEarlyForwardFromFirst) {
+      debugLog("onStepEnterIgnoredFirstSegmentLock", {
+        index,
+        acceptedStepIndex: acceptedStepIndexRef.current,
+        elapsedMsFromFirstEnter: now - (firstSegmentEnteredAtRef.current ?? now),
+      });
+      return;
+    }
+    const shouldIgnoreBounce =
+      previousAcceptedStepIndexRef.current != null &&
+      index === previousAcceptedStepIndexRef.current &&
+      index !== acceptedStepIndexRef.current &&
+      now - acceptedStepUpdatedAtRef.current < STEP_BOUNCE_GUARD_MS;
+    if (shouldIgnoreBounce) {
+      debugLog("onStepEnterIgnoredBounce", {
+        index,
+        acceptedStepIndex: acceptedStepIndexRef.current,
+        previousAcceptedStepIndex: previousAcceptedStepIndexRef.current,
+        elapsedMs: now - acceptedStepUpdatedAtRef.current,
+      });
+      return;
+    }
     forceZeroNextPassRef.current = true;
+    previousAcceptedStepIndexRef.current = acceptedStepIndexRef.current;
+    acceptedStepIndexRef.current = index;
+    acceptedStepUpdatedAtRef.current = now;
+    if (previousAcceptedStepIndexRef.current === 0 && index === 1) {
+      firstSegmentEnteredAtRef.current = now;
+    } else if (index !== 1) {
+      firstSegmentEnteredAtRef.current = null;
+    }
     setCurrentStepIndex(index);
     setProgressStepIndex(index);
     setStepProgress(0);
     setSegmentProgress(0);
-  }, []);
+  }, [currentStepIndex, debugLog, progressStepIndex, segmentProgress, topSentinelInView]);
 
   const onStepProgress = useCallback((arg: ScrollamaProgressCallbackArg) => {
     const index = Number(arg.data);
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const withinFirstSegmentLock =
+      firstSegmentEnteredAtRef.current != null &&
+      now - firstSegmentEnteredAtRef.current < FIRST_SEGMENT_LOCK_MS;
+    const shouldIgnoreEarlyForwardFromFirst =
+      acceptedStepIndexRef.current === 1 &&
+      index >= 2 &&
+      withinFirstSegmentLock;
+    if (shouldIgnoreEarlyForwardFromFirst) {
+      debugLog("onStepProgressIgnoredFirstSegmentLock", {
+        index,
+        acceptedStepIndex: acceptedStepIndexRef.current,
+        elapsedMsFromFirstEnter: now - (firstSegmentEnteredAtRef.current ?? now),
+        argProgress: arg.progress,
+      });
+      return;
+    }
+    const shouldIgnoreBounce =
+      previousAcceptedStepIndexRef.current != null &&
+      index === previousAcceptedStepIndexRef.current &&
+      index !== acceptedStepIndexRef.current &&
+      now - acceptedStepUpdatedAtRef.current < STEP_BOUNCE_GUARD_MS;
+    if (shouldIgnoreBounce) {
+      debugLog("onStepProgressIgnoredBounce", {
+        index,
+        acceptedStepIndex: acceptedStepIndexRef.current,
+        previousAcceptedStepIndex: previousAcceptedStepIndexRef.current,
+        elapsedMs: now - acceptedStepUpdatedAtRef.current,
+        argProgress: arg.progress,
+      });
+      return;
+    }
+    debugLog("onStepProgress", {
+      index,
+      argProgress: arg.progress,
+      topSentinelInView,
+      currentStepIndexBefore: currentStepIndex,
+      progressStepIndexBefore: progressStepIndex,
+    });
+    if (index !== acceptedStepIndexRef.current) {
+      previousAcceptedStepIndexRef.current = acceptedStepIndexRef.current;
+      acceptedStepIndexRef.current = index;
+      acceptedStepUpdatedAtRef.current = now;
+    }
     setProgressStepIndex(index);
     // progress は時間ベースのためここでは更新しない
-  }, []);
+  }, [currentStepIndex, debugLog, progressStepIndex, topSentinelInView]);
 
   // セグメント進入時に時間ベースで segmentProgress を 0→1 に更新する RAF。SEGMENT_ANIMATION_DELAY_MS 経過後にアニメーション開始
   useEffect(() => {
@@ -267,6 +380,33 @@ export function ScrollStorytellingViewerUnified({
           : progressStepIndex < currentStepIndex
             ? 1
             : 0;
+
+  useEffect(() => {
+    debugLog("stateSnapshot", {
+      topSentinelInView,
+      currentStepIndex,
+      progressStepIndex,
+      stepProgress,
+      graphIndex,
+      progressStepId: progressStep?.id ?? null,
+      displayGraphIndex,
+      displayStepId: displayStep?.id ?? null,
+      segmentStepIndex: segmentStepIndexRef.current,
+      forceZeroNextPass: forceZeroNextPassRef.current,
+      animationProgress,
+    });
+  }, [
+    animationProgress,
+    currentStepIndex,
+    debugLog,
+    displayGraphIndex,
+    displayStep?.id,
+    graphIndex,
+    progressStep?.id,
+    progressStepIndex,
+    stepProgress,
+    topSentinelInView,
+  ]);
 
   const toggleFreeExplore = useCallback(() => {
     if (!isFreeExploreMode) {
