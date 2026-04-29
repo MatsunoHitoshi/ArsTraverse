@@ -64,3 +64,6 @@ yarn-error.log*
 
 # inner docs
 /inner-docs
+
+# local strategy benchmark outputs
+/experiments/out
