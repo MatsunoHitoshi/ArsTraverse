@@ -234,6 +234,7 @@ export function useMetaGraphStory(
           workspaceContent,
           minCommunitySize: 3,
           workspaceId: workspace.id,
+          topicSpaceId: targetGraph.nodes[0]?.topicSpaceId,
         },
         {
           onSuccess: (result) => {

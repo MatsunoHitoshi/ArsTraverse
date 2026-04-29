@@ -126,8 +126,10 @@ export function extractSectionsWithSegments(
   const blocks = collectBlocksWithPositions(content);
   const highlights = findEntityHighlights(content);
 
-  console.log("[extractSectionsWithSegments] blocks", blocks.length, blocks.map((b) => ({ type: b.type, level: b.level, from: b.from, to: b.to, text: b.text.slice(0, 30) + (b.text.length > 30 ? "…" : "") })));
-  console.log("[extractSectionsWithSegments] highlights", highlights.length, highlights.slice(0, 20).map((h) => ({ name: h.name, from: h.from, to: h.to })), highlights.length > 20 ? `... and ${highlights.length - 20} more` : "");
+  if (!process.env.SKIP_EXTRACT_SECTIONS_LOG) {
+    console.log("[extractSectionsWithSegments] blocks", blocks.length, blocks.map((b) => ({ type: b.type, level: b.level, from: b.from, to: b.to, text: b.text.slice(0, 30) + (b.text.length > 30 ? "…" : "") })));
+    console.log("[extractSectionsWithSegments] highlights", highlights.length, highlights.slice(0, 20).map((h) => ({ name: h.name, from: h.from, to: h.to })), highlights.length > 20 ? `... and ${highlights.length - 20} more` : "");
+  }
 
   const sections: SectionWithSegments[] = [];
   let currentSection: SectionWithSegments | null = null;
@@ -177,6 +179,8 @@ export function extractSectionsWithSegments(
     }
   }
 
-  console.log("[extractSectionsWithSegments] sections", sections.length, sections.map((s) => ({ index: s.sectionIndex, title: s.title, segments: s.segments.length, entityNames: s.entityNames.length, entityNamesSample: s.entityNames.slice(0, 8) })));
+  if (!process.env.SKIP_EXTRACT_SECTIONS_LOG) {
+    console.log("[extractSectionsWithSegments] sections", sections.length, sections.map((s) => ({ index: s.sectionIndex, title: s.title, segments: s.segments.length, entityNames: s.entityNames.length, entityNamesSample: s.entityNames.slice(0, 8) })));
+  }
   return sections;
 }

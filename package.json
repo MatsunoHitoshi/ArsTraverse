@@ -12,6 +12,8 @@
     "dev": "next dev",
     "postinstall": "prisma generate",
     "lint": "next lint",
+    "experiment:meta-graph": "tsx scripts/meta-graph-strategy-benchmark.ts",
+    "experiment:build-fixture": "tsx scripts/build-meta-graph-fixture-from-workspace.ts",
     "start": "next start",
     "mcp:i": "sudo npx @modelcontextprotocol/inspector"
   },
@@ -61,6 +63,8 @@
     "next": "14.2.35",
     "next-auth": "^4.24.7",
     "next-intl": "^4.3.12",
+    "ngraph.graph": "^20.1.2",
+    "ngraph.leiden": "^0.2.0",
     "open-graph-scraper": "^6.10.0",
     "openai": "^4.62.1",
     "pdf-parse": "^1.1.1",
@@ -101,6 +105,7 @@
     "prisma": "^5.14.0",
     "tailwindcss": "^3.4.3",
     "ts-node": "^10.9.2",
+    "tsx": "^4.19.3",
     "typescript": "^5.4.2"
   },
   "ct3aMetadata": {

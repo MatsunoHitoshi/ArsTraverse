@@ -40,12 +40,46 @@ import {
   runCreateSourceDocumentWithGraphData,
 } from "./source-document";
 import { runAttachDocuments, runDetachDocument } from "./topic-space";
+import type {
+  CommunityAssignmentResult,
+  HybridSectionMappingContext,
+  MetaGraphStrategiesInput,
+} from "@/server/lib/meta-graph-strategies/types";
+import {
+  CLUSTER_STRATEGY_IDS,
+  type ClusterStrategyId,
+} from "@/server/lib/meta-graph-strategies/types";
+import { runCommunityAssignment } from "@/server/lib/meta-graph-strategies/run-community-assignment";
+import { resolveTopicSpaceIdForMetaGraph } from "@/server/lib/meta-graph-strategies/resolve-topic-space-id";
+import { loadNodeNameEmbeddingsForTopicSpace } from "@/server/lib/load-node-name-embeddings";
+import { embedSectionTextsMiniL6 } from "@/server/lib/section-embedding";
+import { sectionPlainText } from "@/server/lib/meta-graph-strategies/section-map-hybrid-embedding";
 
 // ---------------------------------------------------------------------------
 // generateMetaGraphFromText 用ヘルパー関数
 // ---------------------------------------------------------------------------
 
 type GraphDoc = z.infer<typeof GraphDocumentFrontendSchema>;
+
+const clusterStrategyEnum = z.enum(
+  CLUSTER_STRATEGY_IDS as unknown as [string, ...string[]],
+);
+
+const MetaGraphStrategiesSchema = z
+  .object({
+    clusterStrategy: clusterStrategyEnum.optional(),
+    sectionMapStrategy: z
+      .enum(["seed-max-count", "hybrid-seed-embedding"])
+      .optional(),
+    clusterOptions: z
+      .object({
+        maxK: z.number().optional(),
+        labelPropagationIterations: z.number().optional(),
+        randomSeed: z.number().optional(),
+      })
+      .optional(),
+  })
+  .optional();
 
 /** セグメントごとにLLMで局所的なnodeIds/edgeIdsを推定する。annotateStorySegmentsおよびbuildMetaGraphFromTextSectionsで利用 */
 async function runAnnotateStorySegments(
@@ -270,155 +304,6 @@ async function integrateWorkspaceTextGraph(
       formRelationshipDataForFrontend(r),
     ),
   } as GraphDoc;
-}
-
-interface CommunityAssignmentResult {
-  nodeToCommunity: Map<string, string>;
-  communityGroups: Map<string, string[]>;
-  communityInternalEdges: Map<
-    string,
-    Array<{ sourceName: string; targetName: string; type: string }>
-  >;
-  communityExternalConnections: Map<
-    string,
-    Map<string, { count: number; types: Set<string> }>
-  >;
-}
-
-/**
- * Louvainコミュニティをテキストセクションに割り当てる。
- */
-function assignCommunitiesToSections(
-  graphDocument: GraphDoc,
-  sections: SectionWithSegments[],
-): CommunityAssignmentResult {
-  const nameToNode = new Map(graphDocument.nodes.map((n) => [n.name, n]));
-  const communityIdBySectionIndex = (i: number) => `text-${i}` as const;
-
-  const sectionSeedIds = sections.map(() => new Set<string>());
-  for (const section of sections) {
-    const seedSet = sectionSeedIds[section.sectionIndex]!;
-    for (const name of section.entityNames) {
-      const node = nameToNode.get(name);
-      if (node) seedSet.add(node.id);
-    }
-  }
-
-  const fullGraph = new Graph();
-  graphDocument.nodes.forEach((node) => {
-    fullGraph.addNode(node.id, {
-      name: node.name,
-      label: node.label,
-      properties: node.properties ?? {},
-    });
-  });
-  graphDocument.relationships.forEach((rel) => {
-    if (!fullGraph.hasEdge(rel.sourceId, rel.targetId)) {
-      fullGraph.addEdge(rel.sourceId, rel.targetId, {
-        type: rel.type,
-        properties: rel.properties ?? {},
-        weight: 1,
-      });
-    }
-  });
-  const louvainLabels = louvain(fullGraph) as Record<string, number>;
-
-  const numericToNodeIds = new Map<number, string[]>();
-  graphDocument.nodes.forEach((node) => {
-    const num = louvainLabels[node.id];
-    if (num === undefined) return;
-    if (!numericToNodeIds.has(num)) numericToNodeIds.set(num, []);
-    numericToNodeIds.get(num)!.push(node.id);
-  });
-
-  const numericToSectionOrNonStory = new Map<number, string>();
-  const nonStoryNumericLabels: number[] = [];
-  for (const [num, nodeIds] of numericToNodeIds) {
-    let bestSectionIndex: number | null = null;
-    let bestCount = 0;
-    for (let i = 0; i < sections.length; i++) {
-      const seedSet = sectionSeedIds[i]!;
-      const count = nodeIds.filter((id) => seedSet.has(id)).length;
-      if (count > bestCount) {
-        bestCount = count;
-        bestSectionIndex = i;
-      }
-    }
-    if (bestSectionIndex !== null && bestCount > 0) {
-      numericToSectionOrNonStory.set(
-        num,
-        communityIdBySectionIndex(bestSectionIndex),
-      );
-    } else {
-      nonStoryNumericLabels.push(num);
-    }
-  }
-  nonStoryNumericLabels.sort((a, b) => a - b);
-  nonStoryNumericLabels.forEach((num, idx) => {
-    numericToSectionOrNonStory.set(num, `louvain-${idx}`);
-  });
-
-  const nodeToCommunity = new Map<string, string>();
-  graphDocument.nodes.forEach((node) => {
-    const num = louvainLabels[node.id];
-    const cid =
-      num !== undefined
-        ? (numericToSectionOrNonStory.get(num) ?? "louvain-0")
-        : "louvain-0";
-    nodeToCommunity.set(node.id, cid);
-  });
-
-  const communityGroups = new Map<string, string[]>();
-  for (const [nodeId, cid] of nodeToCommunity) {
-    if (!communityGroups.has(cid)) communityGroups.set(cid, []);
-    communityGroups.get(cid)!.push(nodeId);
-  }
-
-  const communityInternalEdges = new Map<
-    string,
-    Array<{ sourceName: string; targetName: string; type: string }>
-  >();
-  const communityExternalConnections = new Map<
-    string,
-    Map<string, { count: number; types: Set<string> }>
-  >();
-
-  graphDocument.relationships.forEach((rel) => {
-    const sourceCommunity = nodeToCommunity.get(rel.sourceId) ?? "unassigned";
-    const targetCommunity = nodeToCommunity.get(rel.targetId) ?? "unassigned";
-    const sourceNode = graphDocument.nodes.find((n) => n.id === rel.sourceId);
-    const targetNode = graphDocument.nodes.find((n) => n.id === rel.targetId);
-    if (!sourceNode || !targetNode) return;
-    if (sourceCommunity === targetCommunity) {
-      const list = communityInternalEdges.get(sourceCommunity) ?? [];
-      list.push({
-        sourceName: sourceNode.name,
-        targetName: targetNode.name,
-        type: rel.type,
-      });
-      communityInternalEdges.set(sourceCommunity, list);
-    } else {
-      let conn = communityExternalConnections.get(sourceCommunity);
-      if (!conn) {
-        conn = new Map();
-        communityExternalConnections.set(sourceCommunity, conn);
-      }
-      const existing = conn.get(targetCommunity) ?? {
-        count: 0,
-        types: new Set<string>(),
-      };
-      existing.count += 1;
-      existing.types.add(rel.type);
-      conn.set(targetCommunity, existing);
-    }
-  });
-
-  return {
-    nodeToCommunity,
-    communityGroups,
-    communityInternalEdges,
-    communityExternalConnections,
-  };
 }
 
 /**
@@ -2053,6 +1938,8 @@ Community ${idx + 1} (ID: ${c.communityId}):
         workspaceContent: z.unknown(), // TipTap JSONContent (doc with content array)
         minCommunitySize: z.number().optional().default(3),
         workspaceId: z.string().optional(),
+        topicSpaceId: z.string().optional(),
+        metaGraphStrategies: MetaGraphStrategiesSchema,
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -2061,6 +1948,8 @@ Community ${idx + 1} (ID: ${c.communityId}):
         workspaceContent,
         minCommunitySize,
         workspaceId,
+        topicSpaceId: inputTopicSpaceId,
+        metaGraphStrategies,
       } = input;
 
       const contentArray = Array.isArray(
@@ -2105,10 +1994,104 @@ Community ${idx + 1} (ID: ${c.communityId}):
         };
       }
 
-      const communityData = assignCommunitiesToSections(
-        graphDocument,
-        sections,
+      const effectiveStrategies: MetaGraphStrategiesInput = {
+        clusterStrategy: metaGraphStrategies?.clusterStrategy as
+          | ClusterStrategyId
+          | undefined,
+        sectionMapStrategy:
+          metaGraphStrategies?.sectionMapStrategy ?? "seed-max-count",
+        clusterOptions: metaGraphStrategies?.clusterOptions,
+      };
+
+      const clusterStrategyId =
+        effectiveStrategies.clusterStrategy ?? "louvain-unweighted";
+
+      const resolvedTopicSpaceId = await resolveTopicSpaceIdForMetaGraph(
+        ctx.db,
+        {
+          userId: ctx.session.user.id,
+          workspaceId,
+          topicSpaceId: inputTopicSpaceId,
+          graphNodes: graphDocument.nodes,
+        },
       );
+
+      const clusterStrategyContext: {
+        nodeNameEmbeddings?: Map<string, number[]>;
+      } = {};
+
+      let hybridContext: HybridSectionMappingContext | null = null;
+
+      const needsNodeEmbeddingsForCluster =
+        clusterStrategyId === "embedding-kmeans-name";
+      const wantsHybrid =
+        effectiveStrategies.sectionMapStrategy === "hybrid-seed-embedding";
+
+      if (
+        resolvedTopicSpaceId &&
+        (needsNodeEmbeddingsForCluster || wantsHybrid)
+      ) {
+        try {
+          const nodeIds = graphDocument.nodes.map((n) => n.id);
+          const nodeNameEmbeddings = await loadNodeNameEmbeddingsForTopicSpace(
+            ctx.db,
+            resolvedTopicSpaceId,
+            nodeIds,
+          );
+          if (needsNodeEmbeddingsForCluster) {
+            if (nodeNameEmbeddings.size === 0) {
+              throw new Error("no nameEmbedding rows for graph nodes");
+            }
+            clusterStrategyContext.nodeNameEmbeddings = nodeNameEmbeddings;
+          }
+          if (wantsHybrid) {
+            if (nodeNameEmbeddings.size === 0) {
+              throw new Error("no nameEmbedding rows for graph nodes");
+            }
+            const sectionTexts = sections.map(sectionPlainText);
+            const sectionEmbeddingVectors =
+              await embedSectionTextsMiniL6(sectionTexts);
+            hybridContext = {
+              sectionEmbeddingVectors,
+              nodeNameEmbeddings,
+              weights: { seed: 0.45, semantic: 0.55 },
+              semanticThreshold: 1e-3,
+            };
+          }
+        } catch (e) {
+          if (needsNodeEmbeddingsForCluster) {
+            console.warn(
+              "embedding-kmeans-name: failed to load embeddings; falling back to louvain-unweighted",
+              e,
+            );
+            effectiveStrategies.clusterStrategy = "louvain-unweighted";
+          }
+          if (wantsHybrid) {
+            console.warn(
+              "hybrid section mapping failed; using seed-max-count",
+              e,
+            );
+            effectiveStrategies.sectionMapStrategy = "seed-max-count";
+          }
+        }
+      } else if (needsNodeEmbeddingsForCluster && !resolvedTopicSpaceId) {
+        console.warn(
+          "embedding-kmeans-name: topicSpaceId unresolved; falling back to louvain-unweighted",
+        );
+        effectiveStrategies.clusterStrategy = "louvain-unweighted";
+      } else if (wantsHybrid && !resolvedTopicSpaceId) {
+        console.warn(
+          "hybrid-seed-embedding: topicSpaceId could not be resolved; using seed-max-count",
+        );
+        effectiveStrategies.sectionMapStrategy = "seed-max-count";
+      }
+
+      const communityData = runCommunityAssignment(graphDocument, sections, {
+        strategies: effectiveStrategies,
+        hybridContext,
+        clusterStrategyContext,
+      });
+
       return await buildMetaGraphFromTextSections(
         graphDocument,
         communityData,

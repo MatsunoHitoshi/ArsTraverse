@@ -1,0 +1,84 @@
+{
+  "graphDocument": {
+    "nodes": [
+      {
+        "id": "n1",
+        "name": "Alice",
+        "label": "Person",
+        "properties": {}
+      },
+      {
+        "id": "n2",
+        "name": "Bob",
+        "label": "Person",
+        "properties": {}
+      },
+      {
+        "id": "n3",
+        "name": "Carol",
+        "label": "Person",
+        "properties": {}
+      }
+    ],
+    "relationships": [
+      {
+        "id": "r1",
+        "sourceId": "n1",
+        "targetId": "n2",
+        "type": "KNOWS",
+        "properties": {}
+      },
+      {
+        "id": "r2",
+        "sourceId": "n2",
+        "targetId": "n3",
+        "type": "KNOWS",
+        "properties": {}
+      }
+    ]
+  },
+  "sections": [
+    {
+      "sectionIndex": 0,
+      "title": "序章",
+      "segments": [
+        {
+          "paragraphIndex": 0,
+          "text": "Alice と Bob の段落。",
+          "entityNames": ["Alice", "Bob"]
+        }
+      ],
+      "entityNames": ["Alice", "Bob"]
+    },
+    {
+      "sectionIndex": 1,
+      "title": "終章",
+      "segments": [
+        {
+          "paragraphIndex": 0,
+          "text": "Carol の段落。",
+          "entityNames": ["Carol"]
+        }
+      ],
+      "entityNames": ["Carol"]
+    }
+  ],
+  "nodeNameEmbeddings": {
+    "n1": [1, 0, 0, 0],
+    "n2": [0.9, 0.1, 0, 0],
+    "n3": [0, 1, 0, 0]
+  },
+  "hybridContext": {
+    "sectionEmbeddingVectors": [
+      [1, 0, 0, 0],
+      [0, 1, 0, 0]
+    ],
+    "weights": { "seed": 0.45, "semantic": 0.55 },
+    "semanticThreshold": 0.001
+  },
+  "clusterOptions": {
+    "maxK": 8,
+    "labelPropagationIterations": 20,
+    "randomSeed": 42
+  }
+}
