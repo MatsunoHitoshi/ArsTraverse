@@ -36,7 +36,7 @@ The ultimate goal is to democratize cultural knowledge creation and make the ric
 
 ### Core Framework
 
-- **Next.js 14** - React framework with App Router
+- **Next.js 14.2** - React framework with App Router
 - **TypeScript** - Type-safe development
 - **Tailwind CSS** - Utility-first styling
 
@@ -108,7 +108,7 @@ ArsTraverse follows a monolithic Next.js architecture with clear separation of c
 
    ```bash
    git clone <repository-url>
-   cd graph-viz-with-llm
+   cd ArsTraverse
    ```
 
 2. **Install dependencies**
@@ -231,6 +231,16 @@ supabase/
 - **Version Control** - Complete history tracking for all changes
 - **Export/Import** - Graph data export and sharing capabilities
 - **User Management** - Role-based access control
+
+## ドキュメント（`/docs`）
+
+概念図・処理フロー・公開ビューの URL 挙動など、開発向けの補足は `docs/` を参照する。
+
+- [執筆体験とデータの関係（概念図）](./docs/concept-writing-experience.md)
+- [データ連携の概念](./docs/concept-writing-data-linkage.md)
+- [テキストからストーリー生成（処理フロー）](./docs/story-generation-text-mode-flow.md)
+- [自動アノテーションと情報参照](./docs/auto-annotation-information-reference-flow.md)
+- [公開記事のストーリーテリングと URL クエリ](./docs/storytelling-public-viewer-and-urls.md)
 
 ## Available Scripts
 
