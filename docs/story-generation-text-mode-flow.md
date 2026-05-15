@@ -59,3 +59,5 @@ flowchart TB
 - `src/app/_utils/text/find-entity-highlights.ts` — findEntityHighlights
 - `src/server/api/routers/kg-copilot.ts` — integrateWorkspaceTextGraph, assignCommunitiesToSections, buildMetaGraphFromTextSections, runAnnotateStorySegments
 - `src/app/_components/curators-writing-workspace/artifact/snapshot-storyboard.tsx` — SnapshotStoryboard
+
+公開記事でのスクロール連動表示・ディープリンクは [storytelling-scroll-viewer.md](./storytelling-scroll-viewer.md) を参照。

@@ -108,7 +108,7 @@ ArsTraverse follows a monolithic Next.js architecture with clear separation of c
 
    ```bash
    git clone <repository-url>
-   cd graph-viz-with-llm
+   cd ArsTraverse
    ```
 
 2. **Install dependencies**
@@ -158,7 +158,9 @@ ArsTraverse follows a monolithic Next.js architecture with clear separation of c
      NEXT_PUBLIC_SUPABASE_ANON_KEY="your-local-anon-key"
      ```
 
-5. **Run Database Migrations**
+5. **Run database migrations (development)**
+
+   `npm run db:generate` runs `prisma migrate dev` (create/apply migrations from schema changes). The Prisma client is generated on `npm install` via the `postinstall` script (`prisma generate`).
 
    ```bash
    npm run db:generate
@@ -172,6 +174,15 @@ ArsTraverse follows a monolithic Next.js architecture with clear separation of c
 
 7. **Access the Application**
    Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## Documentation (Japanese)
+
+Concept and flow diagrams for the writing workspace, story generation, auto-highlighting, and the public scroll-linked storytelling viewer live under `docs/`. Notable entries:
+
+- `docs/concept-writing-experience.md` / `docs/concept-writing-data-linkage.md` — writing UX vs data
+- `docs/story-generation-text-mode-flow.md` — text-to-meta-graph pipeline
+- `docs/auto-annotation-information-reference-flow.md` — entity highlight ↔ graph focus
+- `docs/storytelling-scroll-viewer.md` — published article `ScrollStorytellingViewerUnified`, URL params, scroll guards
 
 ## Project Structure
 
@@ -242,9 +253,9 @@ npm run start            # Start production server
 npm run lint             # Run ESLint
 
 # Database
-npm run db:generate      # Generate Prisma client and run migrations
-npm run db:migrate       # Deploy migrations to production
-npm run db:push          # Push schema changes to database
+npm run db:generate      # prisma migrate dev (dev migrations; client via postinstall)
+npm run db:migrate       # Deploy migrations to production (prisma migrate deploy)
+npm run db:push          # Push schema changes without migration files
 npm run db:studio        # Open Prisma Studio
 
 # Utilities
