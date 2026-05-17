@@ -44,4 +44,4 @@
 ## 開発時の注意
 
 - Unified ビューでは `DEBUG_STORY_SCROLL_UNIFIED` が `true` のとき、コンソールに `[StoryScrollUnified]` ログが出る。挙動確認・不具合調査に利用する。
-- SP ではスクロール位置と Scrollama のオフセット（0.99）の兼ね合いで、意図的にスクロールスナップの一時解除やオフセット調整が入っている。レイアウト変更時はステップ境界の誤発火に注意する。
+- SP ではスクロール位置と Scrollama のオフセット（0.99）の兼ね合いで、意図的にスクロールスナップの一時解除やオフセット調整が入っている。レイアウト変更時はステップ境界の誤発火に注意する。定数値・ディープリンク時の `scroll-snap-type` 切替などの根拠は [storytelling-scroll-viewer.md](./storytelling-scroll-viewer.md) に集約している。

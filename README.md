@@ -252,6 +252,7 @@ supabase/
 - [テキストからストーリー生成（処理フロー）](./docs/story-generation-text-mode-flow.md)
 - [自動アノテーションと情報参照](./docs/auto-annotation-information-reference-flow.md)
 - [公開記事のストーリーテリングと URL クエリ](./docs/storytelling-public-viewer-and-urls.md)
+- [公開 Unified ビューのスクロール・ガード・レイアウト詳細](./docs/storytelling-scroll-viewer.md)
 
 ## Available Scripts
 
