@@ -108,6 +108,9 @@
     "initVersion": "7.35.0"
   },
   "packageManager": "npm@9.5.0",
+  "optionalDependencies": {
+    "@parcel/watcher-linux-x64-glibc": "2.5.6"
+  },
   "overrides": {
     "@langchain/core": "^1.1.47",
     "cookie": "^0.7.0"

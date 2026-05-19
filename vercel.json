@@ -1,4 +1,5 @@
 {
+  "installCommand": "npm install --include=optional",
   "functions": {
     "app/api/**/*": {
       "maxDuration": 300
