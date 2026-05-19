@@ -144,7 +144,9 @@ const mergerGraphsWithDuplicatedNodeName = (p: {
     }
   });
 
-  return { nodes: newNodes, relationships: newRelationships };
+  const deduplicatedRelationships =
+    deleteDuplicatedRelationships(newRelationships);
+  return { nodes: newNodes, relationships: deduplicatedRelationships };
 };
 
 const simpleMerge = (graph: {

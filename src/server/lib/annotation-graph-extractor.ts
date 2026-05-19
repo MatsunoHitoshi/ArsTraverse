@@ -155,9 +155,7 @@ export class AnnotationGraphExtractor {
       );
 
       // フロントエンド用の形式に変換
-      const graphDocument = formGraphDataForFrontend(
-        disambiguatedNodesAndRelationships,
-      );
+      const graphDocument = formGraphDataForFrontend(translatedGraphDocument);
 
       return {
         graphDocument,

@@ -7,10 +7,16 @@ import {
   GraphChangeType,
   GraphChangeEntityType,
   GraphChangeRecordType,
+  type GraphEditChange,
 } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { KnowledgeGraphInputSchema } from "../schemas/knowledge-graph";
 import { TiptapContentSchema } from "./workspace";
 import { diffNodes, diffRelationships } from "@/app/_utils/kg/diff";
+import type {
+  NodeDiffType,
+  RelationshipDiffType,
+} from "@/app/_utils/kg/get-nodes-and-relationships-from-result";
 import { formGraphDataForFrontend } from "@/app/_utils/kg/frontend-properties";
 import type {
   NodeTypeForFrontend,
@@ -20,6 +26,213 @@ import {
   applyGraphChanges,
   generateProposalChangeData,
 } from "@/server/lib/graph-update-utils";
+import { rollbackNodeLinkChanges } from "@/server/lib/graph-rollback-utils";
+
+type DraftGraphData = {
+  nodes: NodeTypeForFrontend[];
+  relationships: RelationshipTypeForFrontend[];
+};
+
+function normalizePropertiesToStringRecord(
+  properties: unknown,
+): Record<string, string> {
+  if (
+    properties === null ||
+    properties === undefined ||
+    typeof properties !== "object" ||
+    Array.isArray(properties)
+  ) {
+    return {};
+  }
+  const obj = properties as Record<string, unknown>;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    out[k] = String(v);
+  }
+  return out;
+}
+
+function normalizeNodeForDiff(node: NodeTypeForFrontend): NodeTypeForFrontend {
+  return {
+    ...node,
+    name: String(node.name ?? ""),
+    label: String(node.label ?? ""),
+    properties: normalizePropertiesToStringRecord(node.properties),
+  };
+}
+
+function normalizeRelationshipForDiff(
+  relationship: RelationshipTypeForFrontend,
+): RelationshipTypeForFrontend {
+  return {
+    ...relationship,
+    type: String(relationship.type ?? ""),
+    properties: normalizePropertiesToStringRecord(relationship.properties),
+    sourceId: String(relationship.sourceId ?? ""),
+    targetId: String(relationship.targetId ?? ""),
+  };
+}
+
+function normalizeGraphDataForDiff(graphData: DraftGraphData): DraftGraphData {
+  return {
+    nodes: graphData.nodes.map(normalizeNodeForDiff),
+    relationships: graphData.relationships.map(normalizeRelationshipForDiff),
+  };
+}
+
+function parseNodeFromChangeState(
+  state: unknown,
+  fallbackId: string,
+): NodeTypeForFrontend {
+  type NodeChangeState = {
+    id?: unknown;
+    name?: unknown;
+    label?: unknown;
+    properties?: unknown;
+  };
+
+  const obj =
+    typeof state === "object" && state !== null && !Array.isArray(state)
+      ? (state as NodeChangeState)
+      : null;
+
+  const id = String(obj?.id ?? fallbackId);
+  return {
+    id,
+    name: String(obj?.name ?? ""),
+    label: String(obj?.label ?? ""),
+    properties: normalizePropertiesToStringRecord(
+      obj?.properties ?? {},
+    ),
+  };
+}
+
+function parseRelationshipFromChangeState(
+  state: unknown,
+  fallbackId: string,
+): RelationshipTypeForFrontend {
+  type RelationshipChangeState = {
+    id?: unknown;
+    type?: unknown;
+    properties?: unknown;
+    sourceId?: unknown;
+    targetId?: unknown;
+  };
+
+  const obj =
+    typeof state === "object" && state !== null && !Array.isArray(state)
+      ? (state as RelationshipChangeState)
+      : null;
+
+  const id = String(obj?.id ?? fallbackId);
+  return {
+    id,
+    type: String(obj?.type ?? ""),
+    properties: normalizePropertiesToStringRecord(
+      obj?.properties ?? {},
+    ),
+    sourceId: String(obj?.sourceId ?? ""),
+    targetId: String(obj?.targetId ?? ""),
+  };
+}
+
+/**
+ * proposal.changes を「ベースグラフ」に適用して、ドラフト状態のグラフを復元します。
+ * ※ ベースは TopicSpace の現在スナップショットを使い、changes は差分として適用されます。
+ */
+function reconstructDraftGraphData(
+  baseGraphData: DraftGraphData,
+  changes: GraphEditChange[],
+): DraftGraphData {
+  const normalizedBase = normalizeGraphDataForDiff(baseGraphData);
+
+  const nodeMap = new Map<string, NodeTypeForFrontend>(
+    normalizedBase.nodes.map((n) => [n.id, n]),
+  );
+  const relationshipMap = new Map<string, RelationshipTypeForFrontend>(
+    normalizedBase.relationships.map((r) => [r.id, r]),
+  );
+
+  for (const change of changes) {
+    const entityId = String(change.changeEntityId);
+
+    if (change.changeEntityType === GraphChangeEntityType.NODE) {
+      if (change.changeType === GraphChangeType.REMOVE) {
+        nodeMap.delete(entityId);
+      } else if (
+        change.changeType === GraphChangeType.ADD ||
+        change.changeType === GraphChangeType.UPDATE
+      ) {
+        const nextNode = parseNodeFromChangeState(change.nextState, entityId);
+        nodeMap.set(nextNode.id, nextNode);
+      }
+    } else if (change.changeEntityType === GraphChangeEntityType.EDGE) {
+      if (change.changeType === GraphChangeType.REMOVE) {
+        relationshipMap.delete(entityId);
+      } else if (
+        change.changeType === GraphChangeType.ADD ||
+        change.changeType === GraphChangeType.UPDATE
+      ) {
+        const nextRel = parseRelationshipFromChangeState(change.nextState, entityId);
+        relationshipMap.set(nextRel.id, nextRel);
+      }
+    }
+  }
+
+  // ノードが削除された場合、入出辺も整合性のため削除します。
+  const nodeIds = new Set(nodeMap.keys());
+  const draftRelationships = Array.from(relationshipMap.values()).filter(
+    (r) => nodeIds.has(r.sourceId) && nodeIds.has(r.targetId),
+  );
+
+  return {
+    nodes: Array.from(nodeMap.values()),
+    relationships: draftRelationships,
+  };
+}
+
+/**
+ * ドラフト状態のグラフを、proposalId に紐づく graphEditChange へ「差分」として上書きします。
+ */
+async function overwriteProposalChangesFromDraft(
+  db: PrismaClient,
+  proposalId: string,
+  baseGraphData: DraftGraphData,
+  draftGraphData: DraftGraphData,
+) {
+  const normalizedBase = normalizeGraphDataForDiff(baseGraphData);
+  const normalizedDraft = normalizeGraphDataForDiff(draftGraphData);
+
+  const nodeDiffs = diffNodes(normalizedBase.nodes, normalizedDraft.nodes);
+  const relationshipDiffs = diffRelationships(
+    normalizedBase.relationships,
+    normalizedDraft.relationships,
+  );
+
+  await db.graphEditChange.deleteMany({ where: { proposalId } });
+
+  const createData = [
+    ...nodeDiffs.map((diff) => ({
+      proposalId,
+      changeType: diff.type,
+      changeEntityType: GraphChangeEntityType.NODE,
+      changeEntityId: String(diff.original?.id ?? diff.updated?.id),
+      previousState: diff.original ?? {},
+      nextState: diff.updated ?? {},
+    })),
+    ...relationshipDiffs.map((diff) => ({
+      proposalId,
+      changeType: diff.type,
+      changeEntityType: GraphChangeEntityType.EDGE,
+      changeEntityId: String(diff.original?.id ?? diff.updated?.id),
+      previousState: diff.original ?? {},
+      nextState: diff.updated ?? {},
+    })),
+  ];
+
+  if (createData.length === 0) return;
+  await db.graphEditChange.createMany({ data: createData });
+}
 
 // 変更提案作成スキーマ
 const CreateProposalSchema = z.object({
@@ -43,6 +256,363 @@ const AddCommentSchema = z.object({
   content: TiptapContentSchema,
   parentCommentId: z.string().optional(),
 });
+
+const PropertyValueSchema = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+]);
+
+const PropertiesRecordSchema = z
+  .record(PropertyValueSchema)
+  .optional()
+  .default({});
+
+// ===== ドラフト編集（MCP/LLM向け）入力スキーマ =====
+const CreateDraftProposalSchema = z.object({
+  topicSpaceId: z.string(),
+  title: z.string().min(1, "タイトルは必須です"),
+  description: z.string().min(10, "説明は10文字以上必要です"),
+});
+
+const UpsertNodeInDraftSchema = z.object({
+  proposalId: z.string(),
+  node: z.object({
+    id: z.string(),
+    name: z.string(),
+    label: z.string(),
+    properties: PropertiesRecordSchema,
+  }),
+});
+
+const DeleteNodeInDraftSchema = z.object({
+  proposalId: z.string(),
+  nodeId: z.string(),
+});
+
+const SetNodePropertyInDraftSchema = z.object({
+  proposalId: z.string(),
+  nodeId: z.string(),
+  key: z.string(),
+  value: PropertyValueSchema,
+});
+
+const UnsetNodePropertyInDraftSchema = z.object({
+  proposalId: z.string(),
+  nodeId: z.string(),
+  key: z.string(),
+});
+
+const UpsertRelationshipInDraftSchema = z.object({
+  proposalId: z.string(),
+  relationship: z.object({
+    id: z.string(),
+    type: z.string(),
+    sourceId: z.string(),
+    targetId: z.string(),
+    properties: PropertiesRecordSchema,
+  }),
+});
+
+const DeleteRelationshipInDraftSchema = z.object({
+  proposalId: z.string(),
+  relationshipId: z.string(),
+});
+
+const SetRelationshipPropertyInDraftSchema = z.object({
+  proposalId: z.string(),
+  relationshipId: z.string(),
+  key: z.string(),
+  value: PropertyValueSchema,
+});
+
+const UnsetRelationshipPropertyInDraftSchema = z.object({
+  proposalId: z.string(),
+  relationshipId: z.string(),
+  key: z.string(),
+});
+
+const MergeNodesInDraftSchema = z.object({
+  proposalId: z.string(),
+  canonicalNodeId: z.string(),
+  duplicateNodeIds: z.array(z.string()).min(1),
+  canonicalName: z.string().optional(),
+  canonicalLabel: z.string().optional(),
+  canonicalProperties: PropertiesRecordSchema.optional(),
+});
+
+function relationshipEndpointKey(rel: RelationshipTypeForFrontend): string {
+  return `${rel.type}\0${rel.sourceId}\0${rel.targetId}`;
+}
+
+function mergeNodesInDraftGraph(
+  draftGraphData: DraftGraphData,
+  input: {
+    canonicalNodeId: string;
+    duplicateNodeIds: string[];
+    canonicalName?: string;
+    canonicalLabel?: string;
+    canonicalProperties?: Record<string, string>;
+  },
+): {
+  nextDraftGraphData: DraftGraphData;
+  removedDuplicateNodeCount: number;
+  rewiredEdgeCount: number;
+  deduplicatedEdgeCount: number;
+  skippedDuplicateNodeIds: string[];
+} {
+  const duplicateIdSet = new Set(
+    input.duplicateNodeIds.filter((id) => id !== input.canonicalNodeId),
+  );
+
+  const nodeMap = new Map(
+    draftGraphData.nodes.map((n) => [n.id, n] as const),
+  );
+
+  const canonicalNode = nodeMap.get(input.canonicalNodeId);
+  if (!canonicalNode) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "指定された正規ノードがドラフトに存在しません",
+    });
+  }
+
+  const skippedDuplicateNodeIds: string[] = [];
+  for (const duplicateId of duplicateIdSet) {
+    if (!nodeMap.has(duplicateId)) {
+      skippedDuplicateNodeIds.push(duplicateId);
+      duplicateIdSet.delete(duplicateId);
+    }
+  }
+
+  if (duplicateIdSet.size === 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "統合対象の重複ノードがドラフトに存在しません",
+    });
+  }
+
+  const normalizedCanonicalProperties =
+    input.canonicalProperties !== undefined
+      ? Object.fromEntries(
+          Object.entries(input.canonicalProperties).map(([k, v]) => [
+            k,
+            String(v),
+          ]),
+        )
+      : canonicalNode.properties;
+
+  nodeMap.set(input.canonicalNodeId, {
+    ...canonicalNode,
+    name: input.canonicalName ?? canonicalNode.name,
+    label: input.canonicalLabel ?? canonicalNode.label,
+    properties: normalizedCanonicalProperties,
+  });
+
+  let rewiredEdgeCount = 0;
+  const remappedRelationships = draftGraphData.relationships
+    .map((rel) => {
+      const sourceIsDuplicate = duplicateIdSet.has(rel.sourceId);
+      const targetIsDuplicate = duplicateIdSet.has(rel.targetId);
+
+      if (sourceIsDuplicate && targetIsDuplicate) {
+        return null;
+      }
+
+      const nextSourceId = sourceIsDuplicate
+        ? input.canonicalNodeId
+        : rel.sourceId;
+      const nextTargetId = targetIsDuplicate
+        ? input.canonicalNodeId
+        : rel.targetId;
+
+      if (
+        nextSourceId === rel.sourceId &&
+        nextTargetId === rel.targetId
+      ) {
+        return rel;
+      }
+
+      rewiredEdgeCount++;
+
+      return {
+        ...rel,
+        sourceId: nextSourceId,
+        targetId: nextTargetId,
+      };
+    })
+    .filter((rel): rel is RelationshipTypeForFrontend => rel !== null);
+
+  const seenRelationshipKeys = new Set<string>();
+  const deduplicatedRelationships: RelationshipTypeForFrontend[] = [];
+  let deduplicatedEdgeCount = 0;
+
+  for (const rel of remappedRelationships) {
+    const key = relationshipEndpointKey(rel);
+    if (seenRelationshipKeys.has(key)) {
+      deduplicatedEdgeCount++;
+      continue;
+    }
+    seenRelationshipKeys.add(key);
+    deduplicatedRelationships.push(rel);
+  }
+
+  for (const duplicateId of duplicateIdSet) {
+    nodeMap.delete(duplicateId);
+  }
+
+  const nextDraftGraphData: DraftGraphData = {
+    nodes: Array.from(nodeMap.values()),
+    relationships: deduplicatedRelationships.filter(
+      (r) => nodeMap.has(r.sourceId) && nodeMap.has(r.targetId),
+    ),
+  };
+
+  return {
+    nextDraftGraphData,
+    removedDuplicateNodeCount: duplicateIdSet.size,
+    rewiredEdgeCount,
+    deduplicatedEdgeCount,
+    skippedDuplicateNodeIds,
+  };
+}
+
+type DraftEditCtx = {
+  db: PrismaClient;
+  session: { user: { id: string } };
+};
+
+async function loadDraftEditableProposal(
+  ctx: DraftEditCtx,
+  proposalId: string,
+) {
+  const proposal = await ctx.db.graphEditProposal.findUnique({
+    where: { id: proposalId },
+    include: {
+      topicSpace: {
+        include: {
+          admins: true,
+          graphNodes: true,
+          graphRelationships: true,
+        },
+      },
+      changes: true,
+    },
+  });
+
+  if (!proposal) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "変更提案が見つかりません",
+    });
+  }
+
+  const isProposer = proposal.proposerId === ctx.session.user.id;
+  const isAdmin = proposal.topicSpace.admins.some(
+    (admin) => admin.id === ctx.session.user.id,
+  );
+
+  if (!isProposer && !isAdmin) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "この変更提案を編集する権限がありません",
+    });
+  }
+
+  // DRAFT/PENDING 状態のみ編集可能（既存 updateProposal と整合）
+  if (!([ProposalStatus.DRAFT, ProposalStatus.PENDING] as ProposalStatus[]).includes(proposal.status)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "この状態の変更提案は編集できません",
+    });
+  }
+
+  // ロックされている場合は編集不可
+  if (
+    proposal.lockedById &&
+    proposal.lockedById !== ctx.session.user.id
+  ) {
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "この変更提案は他のユーザーによってロックされています",
+    });
+  }
+
+  const baseGraphData = formGraphDataForFrontend({
+    nodes: proposal.topicSpace.graphNodes,
+    relationships: proposal.topicSpace.graphRelationships,
+  });
+
+  return { proposal, baseGraphData };
+}
+
+function buildNodeNameMap(graphs: DraftGraphData[]): Map<string, string> {
+  const nameById = new Map<string, string>();
+  for (const graph of graphs) {
+    for (const node of graph.nodes) {
+      nameById.set(node.id, node.name);
+    }
+  }
+  return nameById;
+}
+
+function formatNodeSnapshot(node: NodeTypeForFrontend) {
+  return {
+    name: node.name,
+    label: node.label,
+    properties: node.properties,
+  };
+}
+
+function formatNodeDiffsForReview(nodeDiffs: NodeDiffType[]) {
+  return nodeDiffs.map((diff) => ({
+    changeType: diff.type,
+    entityId: String(diff.original?.id ?? diff.updated?.id),
+    before: diff.original ? formatNodeSnapshot(diff.original) : null,
+    after: diff.updated ? formatNodeSnapshot(diff.updated) : null,
+  }));
+}
+
+function formatRelationshipDiffsForReview(
+  relationshipDiffs: RelationshipDiffType[],
+  nameById: Map<string, string>,
+) {
+  const resolveName = (id: string) => nameById.get(id) ?? `(unknown:${id})`;
+
+  const formatEdgeSnapshot = (rel: RelationshipTypeForFrontend) => ({
+    type: rel.type,
+    sourceId: rel.sourceId,
+    targetId: rel.targetId,
+    sourceName: resolveName(rel.sourceId),
+    targetName: resolveName(rel.targetId),
+    properties: rel.properties,
+  });
+
+  return relationshipDiffs.map((diff) => ({
+    changeType: diff.type,
+    entityId: String(diff.original?.id ?? diff.updated?.id),
+    before: diff.original ? formatEdgeSnapshot(diff.original) : null,
+    after: diff.updated ? formatEdgeSnapshot(diff.updated) : null,
+  }));
+}
+
+function summarizeDiffCounts(
+  nodeDiffs: NodeDiffType[],
+  relationshipDiffs: RelationshipDiffType[],
+) {
+  const countByType = (diffs: Array<{ type: GraphChangeType }>) => ({
+    added: diffs.filter((d) => d.type === GraphChangeType.ADD).length,
+    updated: diffs.filter((d) => d.type === GraphChangeType.UPDATE).length,
+    removed: diffs.filter((d) => d.type === GraphChangeType.REMOVE).length,
+  });
+
+  return {
+    nodes: countByType(nodeDiffs),
+    edges: countByType(relationshipDiffs),
+    totalChanges: nodeDiffs.length + relationshipDiffs.length,
+  };
+}
 
 export const graphEditProposalRouter = createTRPCRouter({
   // 変更提案を作成
@@ -300,6 +870,551 @@ export const graphEditProposalRouter = createTRPCRouter({
       }
 
       return proposal;
+    }),
+
+  // =========================================================
+  // ドラフト編集（LLM/MCP向け: proposal.changes を段階的に更新）
+  // =========================================================
+  createDraftProposal: protectedProcedure
+    .input(CreateDraftProposalSchema)
+    .mutation(async ({ ctx, input }) => {
+      const topicSpace = await ctx.db.topicSpace.findFirst({
+        where: {
+          id: input.topicSpaceId,
+          isDeleted: false,
+        },
+        select: { id: true },
+      });
+
+      if (!topicSpace) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "TopicSpaceが見つかりません",
+        });
+      }
+
+      const proposal = await ctx.db.graphEditProposal.create({
+        data: {
+          title: input.title,
+          description: input.description,
+          status: ProposalStatus.DRAFT,
+          topicSpaceId: input.topicSpaceId,
+          proposerId: ctx.session.user.id,
+        },
+        include: {
+          proposer: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+            },
+          },
+          changes: true,
+        },
+      });
+
+      return proposal;
+    }),
+
+  upsertNodeInDraft: protectedProcedure
+    .input(UpsertNodeInDraftSchema)
+    .mutation(async ({ ctx, input }) => {
+      const { proposal, baseGraphData } = await loadDraftEditableProposal(
+        ctx,
+        input.proposalId,
+      );
+
+      const draftGraphData = reconstructDraftGraphData(
+        baseGraphData,
+        proposal.changes,
+      );
+
+      const nodeMap = new Map(
+        draftGraphData.nodes.map((n) => [n.id, n] as const),
+      );
+
+      const normalizedProperties: Record<string, string> = Object.fromEntries(
+        Object.entries(input.node.properties ?? {}).map(([k, v]) => [
+          k,
+          String(v),
+        ]),
+      );
+
+      nodeMap.set(input.node.id, {
+        id: input.node.id,
+        name: input.node.name,
+        label: input.node.label,
+        properties: normalizedProperties,
+      });
+
+      const nextDraftGraphData: DraftGraphData = {
+        nodes: Array.from(nodeMap.values()),
+        relationships: draftGraphData.relationships.filter(
+          (r) => nodeMap.has(r.sourceId) && nodeMap.has(r.targetId),
+        ),
+      };
+
+      await overwriteProposalChangesFromDraft(
+        ctx.db,
+        input.proposalId,
+        baseGraphData,
+        nextDraftGraphData,
+      );
+
+      return { proposalId: input.proposalId };
+    }),
+
+  deleteNodeInDraft: protectedProcedure
+    .input(DeleteNodeInDraftSchema)
+    .mutation(async ({ ctx, input }) => {
+      const { proposal, baseGraphData } = await loadDraftEditableProposal(
+        ctx,
+        input.proposalId,
+      );
+
+      const draftGraphData = reconstructDraftGraphData(
+        baseGraphData,
+        proposal.changes,
+      );
+
+      const nodeMap = new Map(
+        draftGraphData.nodes.map((n) => [n.id, n] as const),
+      );
+      const relMap = new Map(
+        draftGraphData.relationships.map((r) => [r.id, r] as const),
+      );
+
+      if (!nodeMap.has(input.nodeId)) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "指定されたノードがドラフトに存在しません",
+        });
+      }
+
+      nodeMap.delete(input.nodeId);
+
+      // incident edges を落とす
+      for (const [relId, rel] of Array.from(relMap.entries())) {
+        if (rel.sourceId === input.nodeId || rel.targetId === input.nodeId) {
+          relMap.delete(relId);
+        }
+      }
+
+      const nextDraftGraphData: DraftGraphData = {
+        nodes: Array.from(nodeMap.values()),
+        relationships: Array.from(relMap.values()),
+      };
+
+      await overwriteProposalChangesFromDraft(
+        ctx.db,
+        input.proposalId,
+        baseGraphData,
+        nextDraftGraphData,
+      );
+
+      return { proposalId: input.proposalId };
+    }),
+
+  setNodePropertyInDraft: protectedProcedure
+    .input(SetNodePropertyInDraftSchema)
+    .mutation(async ({ ctx, input }) => {
+      const { proposal, baseGraphData } = await loadDraftEditableProposal(
+        ctx,
+        input.proposalId,
+      );
+
+      const draftGraphData = reconstructDraftGraphData(
+        baseGraphData,
+        proposal.changes,
+      );
+
+      const nodeMap = new Map(
+        draftGraphData.nodes.map((n) => [n.id, n] as const),
+      );
+
+      const node = nodeMap.get(input.nodeId);
+      if (!node) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "指定されたノードがドラフトに存在しません",
+        });
+      }
+
+      const nextProperties = {
+        ...node.properties,
+        [input.key]: String(input.value),
+      };
+
+      nodeMap.set(input.nodeId, { ...node, properties: nextProperties });
+
+      const nextDraftGraphData: DraftGraphData = {
+        nodes: Array.from(nodeMap.values()),
+        relationships: draftGraphData.relationships.filter(
+          (r) => nodeMap.has(r.sourceId) && nodeMap.has(r.targetId),
+        ),
+      };
+
+      await overwriteProposalChangesFromDraft(
+        ctx.db,
+        input.proposalId,
+        baseGraphData,
+        nextDraftGraphData,
+      );
+
+      return { proposalId: input.proposalId };
+    }),
+
+  unsetNodePropertyInDraft: protectedProcedure
+    .input(UnsetNodePropertyInDraftSchema)
+    .mutation(async ({ ctx, input }) => {
+      const { proposal, baseGraphData } = await loadDraftEditableProposal(
+        ctx,
+        input.proposalId,
+      );
+
+      const draftGraphData = reconstructDraftGraphData(
+        baseGraphData,
+        proposal.changes,
+      );
+
+      const nodeMap = new Map(
+        draftGraphData.nodes.map((n) => [n.id, n] as const),
+      );
+
+      const node = nodeMap.get(input.nodeId);
+      if (!node) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "指定されたノードがドラフトに存在しません",
+        });
+      }
+
+      const nextProperties = { ...node.properties };
+      delete nextProperties[input.key];
+
+      nodeMap.set(input.nodeId, { ...node, properties: nextProperties });
+
+      const nextDraftGraphData: DraftGraphData = {
+        nodes: Array.from(nodeMap.values()),
+        relationships: draftGraphData.relationships.filter(
+          (r) => nodeMap.has(r.sourceId) && nodeMap.has(r.targetId),
+        ),
+      };
+
+      await overwriteProposalChangesFromDraft(
+        ctx.db,
+        input.proposalId,
+        baseGraphData,
+        nextDraftGraphData,
+      );
+
+      return { proposalId: input.proposalId };
+    }),
+
+  upsertRelationshipInDraft: protectedProcedure
+    .input(UpsertRelationshipInDraftSchema)
+    .mutation(async ({ ctx, input }) => {
+      const { proposal, baseGraphData } = await loadDraftEditableProposal(
+        ctx,
+        input.proposalId,
+      );
+
+      const draftGraphData = reconstructDraftGraphData(
+        baseGraphData,
+        proposal.changes,
+      );
+
+      const nodeMap = new Map(
+        draftGraphData.nodes.map((n) => [n.id, n] as const),
+      );
+      const relMap = new Map(
+        draftGraphData.relationships.map((r) => [r.id, r] as const),
+      );
+
+      const { relationship } = input;
+      if (!nodeMap.has(relationship.sourceId) || !nodeMap.has(relationship.targetId)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "エッジの両端ノードがドラフトに存在しません",
+        });
+      }
+
+      const normalizedProperties: Record<string, string> = Object.fromEntries(
+        Object.entries(relationship.properties ?? {}).map(([k, v]) => [
+          k,
+          String(v),
+        ]),
+      );
+
+      relMap.set(relationship.id, {
+        id: relationship.id,
+        type: relationship.type,
+        sourceId: relationship.sourceId,
+        targetId: relationship.targetId,
+        properties: normalizedProperties,
+      });
+
+      const nextDraftGraphData: DraftGraphData = {
+        nodes: Array.from(nodeMap.values()),
+        relationships: Array.from(relMap.values()).filter(
+          (r) => nodeMap.has(r.sourceId) && nodeMap.has(r.targetId),
+        ),
+      };
+
+      await overwriteProposalChangesFromDraft(
+        ctx.db,
+        input.proposalId,
+        baseGraphData,
+        nextDraftGraphData,
+      );
+
+      return { proposalId: input.proposalId };
+    }),
+
+  deleteRelationshipInDraft: protectedProcedure
+    .input(DeleteRelationshipInDraftSchema)
+    .mutation(async ({ ctx, input }) => {
+      const { proposal, baseGraphData } = await loadDraftEditableProposal(
+        ctx,
+        input.proposalId,
+      );
+
+      const draftGraphData = reconstructDraftGraphData(
+        baseGraphData,
+        proposal.changes,
+      );
+
+      const relMap = new Map(
+        draftGraphData.relationships.map((r) => [r.id, r] as const),
+      );
+
+      if (!relMap.has(input.relationshipId)) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "指定されたエッジがドラフトに存在しません",
+        });
+      }
+
+      relMap.delete(input.relationshipId);
+
+      const nextDraftGraphData: DraftGraphData = {
+        nodes: draftGraphData.nodes,
+        relationships: Array.from(relMap.values()),
+      };
+
+      await overwriteProposalChangesFromDraft(
+        ctx.db,
+        input.proposalId,
+        baseGraphData,
+        nextDraftGraphData,
+      );
+
+      return { proposalId: input.proposalId };
+    }),
+
+  setRelationshipPropertyInDraft: protectedProcedure
+    .input(SetRelationshipPropertyInDraftSchema)
+    .mutation(async ({ ctx, input }) => {
+      const { proposal, baseGraphData } = await loadDraftEditableProposal(
+        ctx,
+        input.proposalId,
+      );
+
+      const draftGraphData = reconstructDraftGraphData(
+        baseGraphData,
+        proposal.changes,
+      );
+
+      const relMap = new Map(
+        draftGraphData.relationships.map((r) => [r.id, r] as const),
+      );
+
+      const rel = relMap.get(input.relationshipId);
+      if (!rel) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "指定されたエッジがドラフトに存在しません",
+        });
+      }
+
+      const nextProperties = {
+        ...rel.properties,
+        [input.key]: String(input.value),
+      };
+
+      relMap.set(input.relationshipId, { ...rel, properties: nextProperties });
+
+      const nextDraftGraphData: DraftGraphData = {
+        nodes: draftGraphData.nodes,
+        relationships: Array.from(relMap.values()),
+      };
+
+      await overwriteProposalChangesFromDraft(
+        ctx.db,
+        input.proposalId,
+        baseGraphData,
+        nextDraftGraphData,
+      );
+
+      return { proposalId: input.proposalId };
+    }),
+
+  unsetRelationshipPropertyInDraft: protectedProcedure
+    .input(UnsetRelationshipPropertyInDraftSchema)
+    .mutation(async ({ ctx, input }) => {
+      const { proposal, baseGraphData } = await loadDraftEditableProposal(
+        ctx,
+        input.proposalId,
+      );
+
+      const draftGraphData = reconstructDraftGraphData(
+        baseGraphData,
+        proposal.changes,
+      );
+
+      const relMap = new Map(
+        draftGraphData.relationships.map((r) => [r.id, r] as const),
+      );
+
+      const rel = relMap.get(input.relationshipId);
+      if (!rel) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "指定されたエッジがドラフトに存在しません",
+        });
+      }
+
+      const nextProperties = { ...rel.properties };
+      delete nextProperties[input.key];
+
+      relMap.set(input.relationshipId, { ...rel, properties: nextProperties });
+
+      const nextDraftGraphData: DraftGraphData = {
+        nodes: draftGraphData.nodes,
+        relationships: Array.from(relMap.values()),
+      };
+
+      await overwriteProposalChangesFromDraft(
+        ctx.db,
+        input.proposalId,
+        baseGraphData,
+        nextDraftGraphData,
+      );
+
+      return { proposalId: input.proposalId };
+    }),
+
+  mergeNodesInDraft: protectedProcedure
+    .input(MergeNodesInDraftSchema)
+    .mutation(async ({ ctx, input }) => {
+      const { proposal, baseGraphData } = await loadDraftEditableProposal(
+        ctx,
+        input.proposalId,
+      );
+
+      const draftGraphData = reconstructDraftGraphData(
+        baseGraphData,
+        proposal.changes,
+      );
+
+      const {
+        nextDraftGraphData,
+        removedDuplicateNodeCount,
+        rewiredEdgeCount,
+        deduplicatedEdgeCount,
+        skippedDuplicateNodeIds,
+      } = mergeNodesInDraftGraph(draftGraphData, {
+        canonicalNodeId: input.canonicalNodeId,
+        duplicateNodeIds: input.duplicateNodeIds,
+        canonicalName: input.canonicalName,
+        canonicalLabel: input.canonicalLabel,
+        canonicalProperties: input.canonicalProperties
+          ? Object.fromEntries(
+              Object.entries(input.canonicalProperties).map(([k, v]) => [
+                k,
+                String(v),
+              ]),
+            )
+          : undefined,
+      });
+
+      await overwriteProposalChangesFromDraft(
+        ctx.db,
+        input.proposalId,
+        baseGraphData,
+        nextDraftGraphData,
+      );
+
+      return {
+        proposalId: input.proposalId,
+        removedDuplicateNodeCount,
+        rewiredEdgeCount,
+        deduplicatedEdgeCount,
+        skippedDuplicateNodeIds,
+      };
+    }),
+
+  // =========================================================
+  // ドラフト確認（LLM向け：必要なら呼び出して下書き状態を確認）
+  // =========================================================
+  getProposalDraftDiff: protectedProcedure
+    .input(z.object({ proposalId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const { proposal, baseGraphData } = await loadDraftEditableProposal(
+        ctx,
+        input.proposalId,
+      );
+
+      const draftGraphData = reconstructDraftGraphData(
+        baseGraphData,
+        proposal.changes,
+      );
+
+      const nodeDiffs = diffNodes(baseGraphData.nodes, draftGraphData.nodes);
+      const relationshipDiffs = diffRelationships(
+        baseGraphData.relationships,
+        draftGraphData.relationships,
+      );
+
+      const nameById = buildNodeNameMap([baseGraphData, draftGraphData]);
+
+      return {
+        proposal: {
+          id: proposal.id,
+          title: proposal.title,
+          status: proposal.status,
+          description: proposal.description,
+        },
+        summary: summarizeDiffCounts(nodeDiffs, relationshipDiffs),
+        nodeChanges: formatNodeDiffsForReview(nodeDiffs),
+        edgeChanges: formatRelationshipDiffsForReview(
+          relationshipDiffs,
+          nameById,
+        ),
+        hasChanges: nodeDiffs.length + relationshipDiffs.length > 0,
+      };
+    }),
+
+  getProposalDraftGraph: protectedProcedure
+    .input(z.object({ proposalId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const { proposal, baseGraphData } = await loadDraftEditableProposal(
+        ctx,
+        input.proposalId,
+      );
+
+      const draft = reconstructDraftGraphData(
+        baseGraphData,
+        proposal.changes,
+      );
+
+      return {
+        proposal: {
+          id: proposal.id,
+          status: proposal.status,
+        },
+        draftGraph: draft,
+      };
     }),
 
   // 提案を提出（DRAFT → PENDING）
@@ -835,17 +1950,6 @@ export const graphEditProposalRouter = createTRPCRouter({
         });
       }
 
-      // 変更履歴を作成
-      const graphChangeHistory = await ctx.db.graphChangeHistory.create({
-        data: {
-          recordType: GraphChangeRecordType.TOPIC_SPACE,
-          recordId: proposal.topicSpaceId,
-          description: `変更提案「${proposal.title}」をマージしました`,
-          userId: ctx.session.user.id,
-        },
-      });
-
-      // プロポーザル変更から変更データを生成
       const changeData = generateProposalChangeData(
         proposal.changes.map((change) => ({
           ...change,
@@ -855,28 +1959,39 @@ export const graphEditProposalRouter = createTRPCRouter({
         proposal.topicSpaceId,
       );
 
-      // 変更を適用
-      await applyGraphChanges(ctx.db, proposal.topicSpaceId, changeData);
+      const updatedProposal = await ctx.db.$transaction(
+        async (tx) => {
+          const graphChangeHistory = await tx.graphChangeHistory.create({
+            data: {
+              recordType: GraphChangeRecordType.TOPIC_SPACE,
+              recordId: proposal.topicSpaceId,
+              description: `変更提案「${proposal.title}」をマージしました`,
+              userId: ctx.session.user.id,
+            },
+          });
 
-      // 変更履歴を記録
-      await ctx.db.nodeLinkChangeHistory.createMany({
-        data: proposal.changes.map((change) => ({
-          changeType: change.changeType,
-          changeEntityType: change.changeEntityType,
-          changeEntityId: change.changeEntityId,
-          previousState: change.previousState ?? {},
-          nextState: change.nextState ?? {},
-          graphChangeHistoryId: graphChangeHistory.id,
-        })),
-      });
+          await applyGraphChanges(tx, proposal.topicSpaceId, changeData);
 
-      // 提案をマージ済みに更新
-      const updatedProposal = await ctx.db.graphEditProposal.update({
-        where: { id: input.proposalId },
-        data: {
-          status: ProposalStatus.MERGED,
+          await tx.nodeLinkChangeHistory.createMany({
+            data: proposal.changes.map((change) => ({
+              changeType: change.changeType,
+              changeEntityType: change.changeEntityType,
+              changeEntityId: change.changeEntityId,
+              previousState: change.previousState ?? {},
+              nextState: change.nextState ?? {},
+              graphChangeHistoryId: graphChangeHistory.id,
+            })),
+          });
+
+          return await tx.graphEditProposal.update({
+            where: { id: input.proposalId },
+            data: {
+              status: ProposalStatus.MERGED,
+            },
+          });
         },
-      });
+        { timeout: 30000 },
+      );
 
       return updatedProposal;
     }),
@@ -1119,24 +2234,15 @@ export const graphEditProposalRouter = createTRPCRouter({
         },
       });
 
-      // 各変更を逆順で適用（ロールバック）
-      for (const change of changeHistory.nodeLinkChangeHistories) {
-        if (change.changeEntityType === GraphChangeEntityType.NODE) {
-          if (change.changeType === GraphChangeType.UPDATE) {
-            await ctx.db.graphNode.update({
-              where: { id: change.changeEntityId },
-              data: { properties: change.previousState ?? {} },
-            });
-          }
-        } else if (change.changeEntityType === GraphChangeEntityType.EDGE) {
-          if (change.changeType === GraphChangeType.UPDATE) {
-            await ctx.db.graphRelationship.update({
-              where: { id: change.changeEntityId },
-              data: { properties: change.previousState ?? {} },
-            });
-          }
-        }
+      const topicSpaceId = changeHistory.recordId;
 
+      await rollbackNodeLinkChanges(
+        ctx.db,
+        topicSpaceId,
+        changeHistory.nodeLinkChangeHistories,
+      );
+
+      for (const change of changeHistory.nodeLinkChangeHistories) {
         // ロールバック履歴を記録
         await ctx.db.nodeLinkChangeHistory.create({
           data: {

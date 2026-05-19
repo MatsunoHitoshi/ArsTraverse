@@ -15,6 +15,7 @@ import {
 } from "@/app/_utils/kg/frontend-properties";
 import { getTextFromDocumentFile } from "@/app/_utils/text/text";
 import { extractRelevantSections } from "@/app/_utils/text/extract-relevant-sections";
+import { findExactDuplicateNodeGroups } from "@/app/_utils/kg/find-exact-duplicate-node-groups";
 import type { GraphNode, GraphRelationship } from "@prisma/client";
 
 function isGraphDocument(data: unknown): data is GraphDocumentForFrontend {
@@ -265,6 +266,57 @@ export const mcpRouter = createTRPCRouter({
       };
 
       return result;
+    }),
+
+  findExactDuplicateNodeGroupsPublic: publicProcedure
+    .input(
+      z.object({
+        topicSpaceId: z.string(),
+        requireSameLabel: z.boolean().optional().default(true),
+        minGroupSize: z.number().int().min(2).optional().default(2),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const topicSpace = await ctx.db.topicSpace.findFirst({
+        where: {
+          id: input.topicSpaceId,
+          isDeleted: false,
+        },
+        include: {
+          graphNodes: true,
+        },
+      });
+
+      if (!topicSpace) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "TopicSpace not found or you don't have access.",
+        });
+      }
+
+      const nodes = topicSpace.graphNodes.map((node) => ({
+        id: node.id,
+        name: node.name,
+        label: node.label,
+      }));
+
+      const groups = findExactDuplicateNodeGroups(nodes, {
+        requireSameLabel: input.requireSameLabel,
+        minGroupSize: input.minGroupSize,
+      });
+
+      const duplicateNodeCount = groups.reduce(
+        (sum, group) => sum + group.nodeCount,
+        0,
+      );
+
+      return {
+        topicSpaceId: input.topicSpaceId,
+        totalNodeCount: nodes.length,
+        duplicateGroupCount: groups.length,
+        duplicateNodeCount,
+        groups,
+      };
     }),
 });
 

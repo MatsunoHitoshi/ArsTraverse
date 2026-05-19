@@ -197,9 +197,12 @@ export const integrationProcedures = {
           properties: node.updated?.properties ?? {},
           topicSpaceId: topicSpace.id,
         }));
-      await ctx.db.graphNode.createMany({
-        data: addedNodesData,
-      });
+      if (addedNodesData.length > 0) {
+        await ctx.db.graphNode.createMany({
+          data: addedNodesData,
+          skipDuplicates: true,
+        });
+      }
 
       // リレーションシップの差分から追加されたリレーションシップを作成
       const relationshipDiffs = diffRelationships(
@@ -226,14 +229,20 @@ export const integrationProcedures = {
 
       const addedRelationshipsData = relationshipDiffs
         .filter((diff) => diff.type === GraphChangeType.ADD)
-        .map((relationship) => ({
-          id: relationship.updated?.id,
-          type: relationship.updated?.type ?? "",
-          properties: relationship.updated?.properties ?? {},
-          fromNodeId: relationship.updated?.sourceId ?? "",
-          toNodeId: relationship.updated?.targetId ?? "",
-          topicSpaceId: topicSpace.id,
-        }));
+        .map((relationship) => {
+          const sourceId = relationship.updated?.sourceId;
+          const targetId = relationship.updated?.targetId;
+          if (!sourceId || !targetId) return null;
+          return {
+            id: relationship.updated?.id,
+            type: relationship.updated?.type ?? "",
+            properties: relationship.updated?.properties ?? {},
+            fromNodeId: sourceId,
+            toNodeId: targetId,
+            topicSpaceId: topicSpace.id,
+          };
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null);
 
       console.log("追加されるエッジ数:", addedRelationshipsData.length);
       console.log(
@@ -249,6 +258,7 @@ export const integrationProcedures = {
       if (addedRelationshipsData.length > 0) {
         await ctx.db.graphRelationship.createMany({
           data: addedRelationshipsData,
+          skipDuplicates: true,
         });
         console.log("エッジをデータベースに追加しました");
       } else {
