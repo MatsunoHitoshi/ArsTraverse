@@ -263,8 +263,8 @@ const CuratorsWritingWorkspace = ({
   );
   const { data: topicSpace, refetch: refetchTopicSpace } =
     api.topicSpaces.getByIdPublic.useQuery(
-      { id: topicSpaceId! },
-      { enabled: !!topicSpaceId },
+      { id: topicSpaceId ?? "" },
+      { enabled: Boolean(topicSpaceId) },
     );
 
   const isAdmin = topicSpace?.admins?.some(

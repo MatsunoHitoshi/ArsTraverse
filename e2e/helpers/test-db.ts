@@ -49,21 +49,25 @@ export async function createTestTopicSpaceWithAdmin(namePrefix = "pw-kg-test") {
   return { topicSpace, userId: user.id };
 }
 
-export async function deleteTestTopicSpace(topicSpaceId: string) {
+async function deleteGraphHistoriesForRecord(recordId: string) {
   const histories = await testDb.graphChangeHistory.findMany({
-    where: { recordId: topicSpaceId },
+    where: { recordId },
     select: { id: true },
   });
-  if (histories.length > 0) {
-    await testDb.nodeLinkChangeHistory.deleteMany({
-      where: {
-        graphChangeHistoryId: { in: histories.map((h) => h.id) },
-      },
-    });
-    await testDb.graphChangeHistory.deleteMany({
-      where: { recordId: topicSpaceId },
-    });
-  }
+  if (histories.length === 0) return;
+
+  await testDb.nodeLinkChangeHistory.deleteMany({
+    where: {
+      graphChangeHistoryId: { in: histories.map((h) => h.id) },
+    },
+  });
+  await testDb.graphChangeHistory.deleteMany({
+    where: { recordId },
+  });
+}
+
+export async function deleteTestTopicSpace(topicSpaceId: string) {
+  await deleteGraphHistoriesForRecord(topicSpaceId);
 
   await testDb.graphEditProposal.deleteMany({ where: { topicSpaceId } });
   await testDb.graphRelationship.deleteMany({ where: { topicSpaceId } });
@@ -150,20 +154,7 @@ export async function deleteTestDocumentGraph(
   documentGraphId: string,
   sourceDocumentId: string,
 ) {
-  const histories = await testDb.graphChangeHistory.findMany({
-    where: { recordId: documentGraphId },
-    select: { id: true },
-  });
-  if (histories.length > 0) {
-    await testDb.nodeLinkChangeHistory.deleteMany({
-      where: {
-        graphChangeHistoryId: { in: histories.map((h) => h.id) },
-      },
-    });
-    await testDb.graphChangeHistory.deleteMany({
-      where: { recordId: documentGraphId },
-    });
-  }
+  await deleteGraphHistoriesForRecord(documentGraphId);
 
   await testDb.graphRelationship.deleteMany({ where: { documentGraphId } });
   await testDb.graphNode.deleteMany({ where: { documentGraphId } });

@@ -292,7 +292,11 @@ test.describe("KG pipeline services", () => {
       ).toBe(false);
     } finally {
       if (docId) {
-        await testDb.sourceDocument.delete({ where: { id: docId } }).catch(() => {});
+        await testDb.sourceDocument
+          .delete({ where: { id: docId } })
+          .catch((e) =>
+            console.warn(`Ignoring cleanup error for doc ${docId}:`, e),
+          );
       }
       await deleteTestTopicSpace(topicSpace.id);
     }
