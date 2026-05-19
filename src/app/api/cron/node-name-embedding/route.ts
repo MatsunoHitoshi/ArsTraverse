@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 export const maxDuration = 60;
 export const revalidate = 0;
 
-export const GET = async (_request: Request, res: Response) => {
+export const GET = async (_request: Request) => {
   try {
     const res = await fetch(
       `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/bulk-create-node-name-embedding`,

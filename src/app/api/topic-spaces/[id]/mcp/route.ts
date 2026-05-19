@@ -301,9 +301,9 @@ const createHandlerForTopicSpace = (
 // Next.js のルートハンドラ
 const routeHandler = async (
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) => {
-  const topicSpaceId = params.id;
+  const { id: topicSpaceId } = await params;
   if (!topicSpaceId) {
     return new Response("Topic Space ID is missing", { status: 400 });
   }

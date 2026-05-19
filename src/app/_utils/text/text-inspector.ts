@@ -1,7 +1,6 @@
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
-import { TextLoader } from "langchain/document_loaders/fs/text";
 import { Document } from "@langchain/core/documents";
-import { TokenTextSplitter } from "langchain/text_splitter";
+import { TokenTextSplitter } from "@langchain/textsplitters";
 import * as fs from "fs";
 
 // pdf-parseの型定義
@@ -70,8 +69,10 @@ export const textInspect = async (
   let rawDocs: Document[];
 
   if (isPlaneTextMode) {
-    const loader = new TextLoader(localFilePath);
-    rawDocs = await loader.load();
+    const text = fs.readFileSync(localFilePath, "utf-8");
+    rawDocs = [
+      new Document({ pageContent: text, metadata: { source: localFilePath } }),
+    ];
   } else {
     // 改良されたPDFテキスト抽出を使用
     const pageTexts = await extractTextFromPDF(localFilePath);

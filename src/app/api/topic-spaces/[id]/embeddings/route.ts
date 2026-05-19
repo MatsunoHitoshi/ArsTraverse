@@ -3,10 +3,10 @@ import { api } from "@/trpc/server";
 
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const topicSpaceId = params.id;
+    const { id: topicSpaceId } = await params;
 
     const job = await api.graphEmbedding.createEmbeddingQueue({
       topicSpaceId,
