@@ -4,8 +4,7 @@ import {
   GraphChangeType,
 } from "@prisma/client";
 import { test, expect } from "@playwright/test";
-import { applyGraphChanges } from "@/server/lib/graph-update-utils";
-import { rollbackNodeLinkChanges } from "@/server/lib/graph-rollback-utils";
+import { applyGraphChanges, rollbackNodeLinkChanges } from "@/server/domain/kg";
 import { isIntegrationDatabaseReady } from "../helpers/db-ready";
 import {
   createTestTopicSpace,

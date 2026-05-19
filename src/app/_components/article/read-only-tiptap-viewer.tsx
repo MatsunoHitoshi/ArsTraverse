@@ -9,7 +9,7 @@ import {
   HighlightVisibilityProvider,
   useHighlightVisibility,
 } from "../curators-writing-workspace/tiptap/contexts/highlight-visibility-context";
-import { ResizableImage } from "../curators-writing-workspace/tiptap/extensions/resizable-image-extension";
+import { ReadOnlyImage } from "../curators-writing-workspace/tiptap/extensions/read-only-image-extension";
 import { TiptapStyles } from "../curators-writing-workspace/tiptap/styles/tiptap-styles";
 import { TeiCustomTagHighlightExtensions } from "../curators-writing-workspace/tiptap/tei/tei-custom-tag-highlight-extension";
 import { useHighlightToggle } from "../curators-writing-workspace/tiptap/hooks/use-highlight-toggle";
@@ -45,7 +45,7 @@ export const ReadOnlyTipTapViewer: React.FC<ReadOnlyTipTapViewerProps> = ({
       TextAlign.configure({
         types: ["heading", "paragraph"],
       }),
-      ResizableImage,
+      ReadOnlyImage,
       ...TeiCustomTagHighlightExtensions,
     ],
     content,
@@ -58,11 +58,12 @@ export const ReadOnlyTipTapViewer: React.FC<ReadOnlyTipTapViewerProps> = ({
     immediatelyRender: false,
   });
 
-  // エディタが初期化されたらコンテンツを設定（immediatelyRender: falseの場合に必要）
+  // immediatelyRender: false 時は初回コンテンツ同期が必要。ReactRenderer 由来の flushSync 警告を避けるためマイクロタスクで実行
   useEffect(() => {
-    if (editor && content) {
-      editor.commands.setContent(content);
-    }
+    if (!editor || !content) return;
+    queueMicrotask(() => {
+      editor.commands.setContent(content, { emitUpdate: false });
+    });
   }, [editor, content]);
 
   const { editorRef: highlightEditorRef, triggerHighlightUpdate } = highlight;

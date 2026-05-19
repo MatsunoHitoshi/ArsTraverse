@@ -3,7 +3,7 @@ import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { BUCKETS } from "@/app/_utils/supabase/const";
 import type { PrismaClient } from "@prisma/client";
 import { writeLocalFileFromUrl } from "@/app/_utils/sys/file";
-import { dataDisambiguation } from "@/app/_utils/kg/data-disambiguation";
+import { dataDisambiguation } from "@/server/domain/kg/data-disambiguation";
 import { formGraphDataForFrontend } from "@/app/_utils/kg/frontend-properties";
 import type { Extractor } from "@/server/lib/extractors/base";
 import { AssistantsApiExtractor } from "@/server/lib/extractors/assistants";

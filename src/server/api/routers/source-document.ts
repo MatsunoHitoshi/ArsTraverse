@@ -6,20 +6,20 @@ import {
   publicProcedure,
 } from "@/server/api/trpc";
 import { PUBLIC_USER_SELECT } from "@/server/lib/user-select";
-import type {
-  LocaleEnum,
-  NodeTypeForFrontend,
-  RelationshipTypeForFrontend,
-} from "@/app/const/types";
+import type { LocaleEnum } from "@/app/const/types";
 import { BUCKETS } from "@/app/_utils/supabase/const";
 import { storageUtils } from "@/app/_utils/supabase/supabase";
 import { env } from "@/env";
 import { getTextFromDocumentFile } from "@/app/_utils/text/text";
-import { inspectFileTypeFromUrl } from "@/app/_utils/sys/file";
-import { DocumentType, type PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { formDocumentGraphForFrontend } from "@/app/_utils/kg/frontend-properties";
 import { extractRelevantSections } from "@/app/_utils/text/extract-relevant-sections";
 import { KnowledgeGraphInputSchema } from "../schemas/knowledge-graph";
+import {
+  createSourceDocumentWithGraph,
+  type CreateSourceDocumentWithGraphInput,
+} from "@/server/services/kg/create-source-document-with-graph.service";
+import { sendDocumentGraphToUser } from "@/server/services/kg/clone-document-graph.service";
 
 const SourceDocumentSchema = z.object({
   name: z.string(),
@@ -32,123 +32,19 @@ const SourceDocumentWithGraphSchema = z.object({
   dataJson: KnowledgeGraphInputSchema,
 });
 
-export type CreateSourceDocumentWithGraphInput = z.infer<
-  typeof SourceDocumentWithGraphSchema
->;
+export type { CreateSourceDocumentWithGraphInput };
 
 type CreateWithGraphCtx = {
   db: PrismaClient;
   session: { user: { id: string } };
 };
 
-/**
- * SourceDocument + DocumentGraph + nodes/relationships を1トランザクションで作成。
- * kg-copilot の本文KG統合など、ルーター外から呼ぶ用。
- */
+/** kg-copilot 等、ルーター外から呼ぶ用 */
 export async function runCreateSourceDocumentWithGraphData(
   ctx: CreateWithGraphCtx,
   input: CreateSourceDocumentWithGraphInput,
 ) {
-  const docFileType = await inspectFileTypeFromUrl(input.url);
-  if (!docFileType) {
-    throw new Error("ファイルタイプを判定できませんでした");
-  }
-
-  const nodes = input.dataJson.nodes as NodeTypeForFrontend[];
-  const existingNodeIds = await ctx.db.graphNode.findMany({
-    where: { id: { in: nodes.map((n) => n.id) } },
-    select: { id: true },
-  });
-  const existingNodeIdSet = new Set(existingNodeIds.map((n) => n.id));
-  const nodesToCreate = nodes.filter((node) => !existingNodeIdSet.has(node.id));
-
-  if (nodesToCreate.length !== nodes.length) {
-    const skippedCount = nodes.length - nodesToCreate.length;
-    const skippedIds = nodes
-      .filter((node) => existingNodeIdSet.has(node.id))
-      .map((node) => node.id);
-    console.warn(
-      `Skipping ${skippedCount} node(s) that already exist in database:`,
-      skippedIds.slice(0, 10),
-    );
-  }
-
-  const relationships = input.dataJson
-    .relationships as RelationshipTypeForFrontend[];
-  const existingRelationshipIds = await ctx.db.graphRelationship.findMany({
-    where: { id: { in: relationships.map((r) => r.id) } },
-    select: { id: true },
-  });
-  const existingRelationshipIdSet = new Set(
-    existingRelationshipIds.map((r) => r.id),
-  );
-  const relationshipsToCreate = relationships.filter(
-    (relationship) => !existingRelationshipIdSet.has(relationship.id),
-  );
-
-  if (relationshipsToCreate.length !== relationships.length) {
-    const skippedCount = relationships.length - relationshipsToCreate.length;
-    const skippedIds = relationships
-      .filter((relationship) =>
-        existingRelationshipIdSet.has(relationship.id),
-      )
-      .map((relationship) => relationship.id);
-    console.warn(
-      `Skipping ${skippedCount} relationship(s) that already exist in database:`,
-      skippedIds.slice(0, 10),
-    );
-  }
-
-  return ctx.db.$transaction(async (tx) => {
-    const document = await tx.sourceDocument.create({
-      data: {
-        name: input.name,
-        url: input.url,
-        documentType:
-          docFileType === "pdf"
-            ? DocumentType.INPUT_PDF
-            : DocumentType.INPUT_TXT,
-        user: { connect: { id: ctx.session.user.id } },
-      },
-    });
-
-    const documentGraph = await tx.documentGraph.create({
-      data: {
-        user: { connect: { id: ctx.session.user.id } },
-        sourceDocument: { connect: { id: document.id } },
-        dataJson: {},
-      },
-    });
-
-    if (nodesToCreate.length > 0) {
-      await tx.graphNode.createMany({
-        data: nodesToCreate.map((node: NodeTypeForFrontend) => ({
-          id: node.id,
-          name: node.name,
-          label: node.label,
-          properties: node.properties ?? {},
-          documentGraphId: documentGraph.id,
-        })),
-      });
-    }
-
-    if (relationshipsToCreate.length > 0) {
-      await tx.graphRelationship.createMany({
-        data: relationshipsToCreate.map(
-          (relationship: RelationshipTypeForFrontend) => ({
-            id: relationship.id,
-            fromNodeId: relationship.sourceId,
-            toNodeId: relationship.targetId,
-            type: relationship.type,
-            properties: relationship.properties ?? {},
-            documentGraphId: documentGraph.id,
-          }),
-        ),
-      });
-    }
-
-    return { documentGraph, sourceDocument: document };
-  });
+  return createSourceDocumentWithGraph(ctx, input);
 }
 
 export const getTextReference = async (
@@ -370,100 +266,10 @@ export const sourceDocumentRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const senderId = ctx.session.user.id;
-      if (input.recipientUserId === senderId) {
-        throw new Error("自分自身には送信できません");
-      }
-
-      const document = await ctx.db.sourceDocument.findFirst({
-        where: {
-          id: input.documentId,
-          isDeleted: false,
-          userId: senderId,
-        },
-        include: {
-          graph: {
-            include: {
-              graphNodes: true,
-              graphRelationships: true,
-            },
-          },
-        },
+      return sendDocumentGraphToUser(ctx.db, {
+        senderId: ctx.session.user.id,
+        documentId: input.documentId,
+        recipientUserId: input.recipientUserId,
       });
-
-      if (!document) {
-        throw new Error("Document not found");
-      }
-
-      const recipient = await ctx.db.user.findUnique({
-        where: { id: input.recipientUserId },
-      });
-      if (!recipient) {
-        throw new Error("受信者が見つかりません");
-      }
-
-      const result = await ctx.db.$transaction(async (tx) => {
-        const newDocument = await tx.sourceDocument.create({
-          data: {
-            name: document.name,
-            url: document.url,
-            documentType: document.documentType,
-            user: { connect: { id: input.recipientUserId } },
-          },
-        });
-
-        if (!document.graph) {
-          return { sourceDocument: newDocument };
-        }
-
-        const newGraph = await tx.documentGraph.create({
-          data: {
-            dataJson: {},
-            user: { connect: { id: input.recipientUserId } },
-            sourceDocument: { connect: { id: newDocument.id } },
-          },
-        });
-
-        const oldToNewNodeId = new Map<string, string>();
-        for (const node of document.graph.graphNodes) {
-          const created = await tx.graphNode.create({
-            data: {
-              name: node.name,
-              label: node.label,
-              properties: node.properties ?? {},
-              documentGraphId: newGraph.id,
-            },
-          });
-          oldToNewNodeId.set(node.id, created.id);
-        }
-
-        const relationshipsToCreate = document.graph.graphRelationships
-          .map((rel) => {
-            const fromId = oldToNewNodeId.get(rel.fromNodeId);
-            const toId = oldToNewNodeId.get(rel.toNodeId);
-            if (!fromId || !toId) return null;
-            return {
-              type: rel.type,
-              properties: rel.properties ?? {},
-              fromNodeId: fromId,
-              toNodeId: toId,
-              documentGraphId: newGraph.id,
-            };
-          })
-          .filter((r): r is NonNullable<typeof r> => r !== null);
-
-        if (relationshipsToCreate.length > 0) {
-          await tx.graphRelationship.createMany({
-            data: relationshipsToCreate,
-          });
-        }
-
-        return {
-          sourceDocument: newDocument,
-          documentGraph: newGraph,
-        };
-      });
-
-      return result;
     }),
 });

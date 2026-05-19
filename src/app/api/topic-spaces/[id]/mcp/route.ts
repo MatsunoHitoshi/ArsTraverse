@@ -4,6 +4,21 @@ import { api } from "@/trpc/server";
 import type { NextRequest } from "next/server";
 import { getServerAuthSession } from "@/server/auth";
 import { db } from "@/server/db";
+import type { McpDraftHandlerCtx } from "@/server/mcp/graph-edit-draft-handlers";
+import {
+  mcpCreateDraftProposal,
+  mcpDeleteNodeInDraft,
+  mcpDeleteRelationshipInDraft,
+  mcpGetProposalDraftDiff,
+  mcpGetProposalDraftGraph,
+  mcpMergeNodesInDraft,
+  mcpSetNodePropertyInDraft,
+  mcpSetRelationshipPropertyInDraft,
+  mcpUnsetNodePropertyInDraft,
+  mcpUnsetRelationshipPropertyInDraft,
+  mcpUpsertNodeInDraft,
+  mcpUpsertRelationshipInDraft,
+} from "@/server/mcp/graph-edit-draft-handlers";
 
 type DuplicateCandidate = {
   id: string;
@@ -165,6 +180,7 @@ const createHandlerForTopicSpace = (
   topicSpaceName: string,
   topicSpaceMcpToolIdentifier: string,
   userAuthToken: string | null,
+  draftCtx: McpDraftHandlerCtx | null,
 ) => {
   return createMcpHandler(
     (server) => {
@@ -722,7 +738,7 @@ const createHandlerForTopicSpace = (
         },
         async ({ title, description }) => {
           try {
-            const proposal = await api.graphEditProposal.createDraftProposal({
+            const proposal = await mcpCreateDraftProposal(draftCtx!, {
               topicSpaceId,
               title,
               description,
@@ -755,9 +771,7 @@ const createHandlerForTopicSpace = (
         },
         async ({ proposalId }) => {
           try {
-            const result = await api.graphEditProposal.getProposalDraftGraph({
-              proposalId,
-            });
+            const result = await mcpGetProposalDraftGraph(draftCtx!, proposalId);
 
             const draftGraph = result.draftGraph;
 
@@ -811,9 +825,7 @@ ${submitGraphEditProposalToolName} の前に必ず呼び出し、変更内容を
         },
         async ({ proposalId }) => {
           try {
-            const result = await api.graphEditProposal.getProposalDraftDiff({
-              proposalId,
-            });
+            const result = await mcpGetProposalDraftDiff(draftCtx!, proposalId);
 
             return {
               content: [
@@ -853,7 +865,7 @@ nodeId は「このドラフト内で一意」です。以後のプロパティ�
         },
         async ({ proposalId, nodeId, name, label, properties }) => {
           try {
-            await api.graphEditProposal.upsertNodeInDraft({
+            await mcpUpsertNodeInDraft(draftCtx!, {
               proposalId,
               node: {
                 id: nodeId,
@@ -892,7 +904,7 @@ nodeId は「このドラフト内で一意」です。以後のプロパティ�
         },
         async ({ proposalId, nodeId }) => {
           try {
-            await api.graphEditProposal.deleteNodeInDraft({
+            await mcpDeleteNodeInDraft(draftCtx!, {
               proposalId,
               nodeId,
             });
@@ -927,7 +939,7 @@ nodeId は「このドラフト内で一意」です。以後のプロパティ�
         },
         async ({ proposalId, nodeId, key, value }) => {
           try {
-            await api.graphEditProposal.setNodePropertyInDraft({
+            await mcpSetNodePropertyInDraft(draftCtx!, {
               proposalId,
               nodeId,
               key,
@@ -967,7 +979,7 @@ nodeId は「このドラフト内で一意」です。以後のプロパティ�
         },
         async ({ proposalId, nodeId, key }) => {
           try {
-            await api.graphEditProposal.unsetNodePropertyInDraft({
+            await mcpUnsetNodePropertyInDraft(draftCtx!, {
               proposalId,
               nodeId,
               key,
@@ -1007,7 +1019,7 @@ propertiesは任意です。`,
         },
         async ({ proposalId, edgeId, type, sourceId, targetId, properties }) => {
           try {
-            await api.graphEditProposal.upsertRelationshipInDraft({
+            await mcpUpsertRelationshipInDraft(draftCtx!, {
               proposalId,
               relationship: {
                 id: edgeId,
@@ -1046,7 +1058,7 @@ propertiesは任意です。`,
         },
         async ({ proposalId, edgeId }) => {
           try {
-            await api.graphEditProposal.deleteRelationshipInDraft({
+            await mcpDeleteRelationshipInDraft(draftCtx!, {
               proposalId,
               relationshipId: edgeId,
             });
@@ -1076,7 +1088,7 @@ propertiesは任意です。`,
         },
         async ({ proposalId, edgeId, key, value }) => {
           try {
-            await api.graphEditProposal.setRelationshipPropertyInDraft({
+            await mcpSetRelationshipPropertyInDraft(draftCtx!, {
               proposalId,
               relationshipId: edgeId,
               key,
@@ -1113,7 +1125,7 @@ propertiesは任意です。`,
         },
         async ({ proposalId, edgeId, key }) => {
           try {
-            await api.graphEditProposal.unsetRelationshipPropertyInDraft({
+            await mcpUnsetRelationshipPropertyInDraft(draftCtx!, {
               proposalId,
               relationshipId: edgeId,
               key,
@@ -1171,13 +1183,20 @@ propertiesは任意です。`,
           canonicalProperties,
         }) => {
           try {
-            const result = await api.graphEditProposal.mergeNodesInDraft({
+            const result = await mcpMergeNodesInDraft(draftCtx!, {
               proposalId,
               canonicalNodeId,
               duplicateNodeIds,
               canonicalName,
               canonicalLabel,
-              canonicalProperties,
+              canonicalProperties: canonicalProperties
+                ? Object.fromEntries(
+                    Object.entries(canonicalProperties).map(([k, v]) => [
+                      k,
+                      String(v),
+                    ]),
+                  )
+                : undefined,
             });
 
             return {
@@ -1219,9 +1238,7 @@ propertiesは任意です。`,
         },
         async ({ proposalId }) => {
           try {
-            const diff = await api.graphEditProposal.getProposalDraftDiff({
-              proposalId,
-            });
+            const diff = await mcpGetProposalDraftDiff(draftCtx!, proposalId);
 
             if (!diff.hasChanges) {
               return {
@@ -1297,12 +1314,17 @@ const routeHandler = async (
     return new Response("Topic space not found", { status: 404 });
   }
   const userAuthToken = await resolveUserAuthToken(request);
+  const session = await getServerAuthSession();
+  const draftCtx: McpDraftHandlerCtx | null = session?.user?.id
+    ? { db, userId: session.user.id }
+    : null;
 
   const handler = createHandlerForTopicSpace(
     topicSpaceId,
     topicSpaceInfo.name,
     topicSpaceInfo.mcpToolIdentifier ?? "",
     userAuthToken,
+    draftCtx,
   );
   return handler(request);
 };

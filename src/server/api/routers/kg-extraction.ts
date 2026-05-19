@@ -4,7 +4,7 @@ import path from "path";
 import { publicProcedure } from "../trpc";
 import { writeLocalFileFromUrl } from "@/app/_utils/sys/file";
 import { textInspect } from "@/app/_utils/text/text-inspector";
-import { dataDisambiguation } from "@/app/_utils/kg/data-disambiguation";
+import { dataDisambiguation } from "@/server/domain/kg/data-disambiguation";
 import type {
   CustomMappingRules,
   Extractor,
