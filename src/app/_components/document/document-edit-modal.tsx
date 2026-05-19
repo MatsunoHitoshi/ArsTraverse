@@ -15,9 +15,10 @@ export const DocumentEditModal = ({
   documentId: string | null;
   refetch: () => void;
 }) => {
-  const { data: document } = api.sourceDocument.getById.useQuery({
-    id: documentId ?? "",
-  });
+  const { data: document } = api.sourceDocument.getById.useQuery(
+    { id: documentId! },
+    { enabled: isOpen && !!documentId },
+  );
 
   const { mutate: updateDocument } = api.sourceDocument.update.useMutation();
 
@@ -45,8 +46,6 @@ export const DocumentEditModal = ({
       );
     }
   };
-
-  console.log("document", document);
 
   if (!documentId) {
     return null;

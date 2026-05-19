@@ -1,6 +1,6 @@
 import { createId } from "@paralleldrive/cuid2";
 import { test, expect } from "@playwright/test";
-import { applyGraphChanges } from "@/server/lib/graph-update-utils";
+import { applyGraphChanges } from "@/server/domain/kg";
 import { isIntegrationDatabaseReady } from "../helpers/db-ready";
 import {
   createTestTopicSpace,

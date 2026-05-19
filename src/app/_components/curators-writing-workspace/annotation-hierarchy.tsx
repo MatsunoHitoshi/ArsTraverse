@@ -45,9 +45,10 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
     id: string;
     type: DeleteRecordType;
   }>();
-  const { data: topicSpace } = api.topicSpaces.getByIdPublic.useQuery({
-    id: topicSpaceId,
-  });
+  const { data: topicSpace } = api.topicSpaces.getByIdPublic.useQuery(
+    { id: topicSpaceId },
+    { enabled: !!topicSpaceId },
+  );
   const entities = topicSpace?.graphData?.nodes ?? [];
   const handleEditClick = (annotation: AnnotationResponse) => {
     setEditingAnnotation(annotation);

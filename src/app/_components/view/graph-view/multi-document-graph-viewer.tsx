@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import type { GraphDocumentForFrontend } from "@/app/const/types";
 import type { CustomNodeType, CustomLinkType } from "@/app/const/types";
 import { D3ForceGraph } from "@/app/_components/d3/force/graph";
-import { D3SphericalGraph } from "@/app/_components/d3/spherical/spherical-graph";
+import { D3SphericalGraph } from "@/app/_components/d3/lazy-3d-graphs";
 import { GraphInfoPanel } from "@/app/_components/d3/force/graph-info-panel";
 import { GraphTool } from "./graph-tool";
 import { useWindowSize } from "@/app/_hooks/use-window-size";

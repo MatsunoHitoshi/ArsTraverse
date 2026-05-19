@@ -15,7 +15,6 @@ type NodeLinkChange = {
 const previousState = (change: { previousState: unknown }) =>
   (change.previousState ?? {}) as Record<string, unknown>;
 
-/** 変更履歴1件分のグラフ状態をロールバックする（履歴レコード作成は呼び出し元の責務） */
 export async function rollbackNodeLinkChanges(
   db: PrismaClient | Prisma.TransactionClient,
   topicSpaceId: string,

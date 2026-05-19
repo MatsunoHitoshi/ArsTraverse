@@ -262,9 +262,10 @@ const CuratorsWritingWorkspace = ({
     undefined,
   );
   const { data: topicSpace, refetch: refetchTopicSpace } =
-    api.topicSpaces.getByIdPublic.useQuery({
-      id: topicSpaceId ?? "",
-    });
+    api.topicSpaces.getByIdPublic.useQuery(
+      { id: topicSpaceId ?? "" },
+      { enabled: Boolean(topicSpaceId) },
+    );
 
   const isAdmin = topicSpace?.admins?.some(
     (admin) => admin.id === session?.user?.id,
@@ -1124,11 +1125,11 @@ const CuratorsWritingWorkspace = ({
       </Modal>
 
       {/* 変更提案作成モーダル */}
-      {graphDocument && (
+      {graphDocument && topicSpaceId && (
         <ProposalCreateModal
           isOpen={isProposalCreateModalOpen}
           setIsOpen={setIsProposalCreateModalOpen}
-          topicSpaceId={topicSpaceId ?? ""}
+          topicSpaceId={topicSpaceId}
           graphDocument={graphDocument}
           onSuccess={(proposalId) => {
             router.push(`/proposals/${proposalId}`);
@@ -1139,12 +1140,14 @@ const CuratorsWritingWorkspace = ({
       )}
 
       {/* TopicSpace共有モーダル */}
-      <ShareTopicSpaceModal
-        isOpen={isShareTopicSpaceModalOpen}
-        setIsOpen={setIsShareTopicSpaceModalOpen}
-        topicSpaceId={topicSpace?.id ?? ""}
-        topicSpaceName={topicSpace?.name ?? ""}
-      />
+      {topicSpaceId && (
+        <ShareTopicSpaceModal
+          isOpen={isShareTopicSpaceModalOpen}
+          setIsOpen={setIsShareTopicSpaceModalOpen}
+          topicSpaceId={topicSpaceId}
+          topicSpaceName={topicSpace?.name ?? ""}
+        />
+      )}
 
       {/* 記事公開モーダル */}
       <PublishWorkspaceModal
