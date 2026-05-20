@@ -94,6 +94,39 @@ export function estimateNodeLabelFontSizeFromScale(
   return stepped * zoomOutFactor;
 }
 
+/**
+ * エッジラベルの表示位置（中点 + 法線オフセット）と角度を計算する。
+ * DOM 直接操作用の座標収集と JSX レンダリングの両方で使用する。
+ */
+export function calcEdgeLabelPos(
+  sx: number,
+  sy: number,
+  tx: number,
+  ty: number,
+  hasExplicitEdges: boolean,
+  isFocusEdge: boolean,
+): { x: number; y: number; angle: number } {
+  const dx = tx - sx;
+  const dy = ty - sy;
+  const len = Math.sqrt(dx * dx + dy * dy) || 1;
+  const labelOffsetPx = hasExplicitEdges && isFocusEdge ? 8 : 4;
+  const rawAngleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
+  const perpSign = rawAngleDeg > 90 && rawAngleDeg <= 270 ? -1 : 1;
+  const is90To180 = rawAngleDeg > -180 && rawAngleDeg <= -90;
+  const extraOffsetPx = is90To180 ? (hasExplicitEdges && isFocusEdge ? 8 : 4) : 0;
+  const effectiveOffsetPx = labelOffsetPx + extraOffsetPx;
+  const perpX = (dy / len) * effectiveOffsetPx * perpSign;
+  const perpY = (-dx / len) * effectiveOffsetPx * perpSign;
+  let angle = rawAngleDeg;
+  if (angle > 90) angle -= 180;
+  else if (angle < -90) angle += 180;
+  return {
+    x: (sx + tx) / 2 + perpX,
+    y: (sy + ty) / 2 + perpY,
+    angle,
+  };
+}
+
 /** ラベルがノードからはみ出す量をレイアウト座標で推定（ビューpx を scale で割って layout 座標に） */
 export function estimateLabelMarginLayout(
   scale: number,
