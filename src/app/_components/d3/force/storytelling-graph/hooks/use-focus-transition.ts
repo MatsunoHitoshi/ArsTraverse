@@ -129,19 +129,27 @@ export function useFocusTransition({
         if (!freeExploreMode) {
           const root = graphContentRef.current;
           if (root) {
+            const safeSelectorValue = (value: string) =>
+              typeof CSS !== "undefined" && typeof CSS.escape === "function"
+                ? CSS.escape(value)
+                : value.replace(/["\\]/g, "\\$&");
             transitionNodeViewCoordsRef.current.forEach((_, nodeId) => {
-              const el = root.querySelector(`[data-node-id="${nodeId}"]`);
+              const el = root.querySelector(`[data-node-id="${safeSelectorValue(nodeId)}"]`);
               if (el instanceof SVGElement) transitionNodeElsRef.current.set(nodeId, el);
             });
             // 取得漏れエッジを再試行（React の遅延コミットに対応）
             transitionEdgeViewCoordsRef.current.forEach((_, edgeKey) => {
               const paths = Array.from(
-                root.querySelectorAll<SVGPathElement>(`path[data-edge-key="${edgeKey}"]`),
+                root.querySelectorAll<SVGPathElement>(
+                  `path[data-edge-key="${safeSelectorValue(edgeKey)}"]`,
+                ),
               );
               if (paths.length) transitionEdgePathElsRef.current.set(edgeKey, paths);
             });
             transitionEdgeLabelCoordsRef.current.forEach((_, pairKey) => {
-              const el = root.querySelector(`[data-edge-label-key="${pairKey}"]`);
+              const el = root.querySelector(
+                `[data-edge-label-key="${safeSelectorValue(pairKey)}"]`,
+              );
               if (el instanceof SVGElement) transitionEdgeLabelElsRef.current.set(pairKey, el);
             });
           }
