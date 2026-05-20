@@ -28,7 +28,7 @@ import {
   CdtAnimatedEdgePath,
   CdtEdgeGlowFilterDef,
 } from "./storytelling-graph/components/cdt-animated-edge-path";
-import { EdgeSemanticPictogram } from "./storytelling-graph/components/edge-semantic-pictogram";
+import { GraphLinkEdgeSemanticPictogram } from "./graph-link-edge-semantic-pictogram";
 
 /** 同一ノード対のエッジをグループ化するキー（ソース・ターゲットの順序を正規化） */
 function getNodePairKey(link: CustomLinkType): string {
@@ -875,12 +875,6 @@ export const D3ForceGraph = ({
                 const sourceNodeVisible = sourceNode?.visible ?? false;
                 const targetNodeVisible = targetNode?.visible ?? false;
 
-                // 既存コンテキストエッジかどうかを判定
-                const isExistingContextLink =
-                  graphLink.isExistingContext ??
-                  sourceNode?.isExistingContext ??
-                  targetNode?.isExistingContext;
-
                 if (
                   (sourceNodeVisible || targetNodeVisible) &&
                   modSource.x !== undefined &&
@@ -1023,21 +1017,13 @@ export const D3ForceGraph = ({
                         </g>
                       )}
 
-                      {showEdgeSemanticAnimation && (() => {
-                        const motionConfig = getEdgeMotionConfig(graphLink.id);
-                        if (!motionConfig) return null;
-                        const midX = ((modSource.x ?? 0) + (modTarget.x ?? 0)) / 2;
-                        const midY = ((modSource.y ?? 0) + (modTarget.y ?? 0)) / 2;
-                        return (
-                          <EdgeSemanticPictogram
-                            key={`pictogram-${graphLink.id}`}
-                            config={motionConfig}
-                            cx={midX}
-                            cy={midY}
-                            displayScale={currentScale}
-                          />
-                        );
-                      })()}
+                      {showEdgeSemanticAnimation && (
+                        <GraphLinkEdgeSemanticPictogram
+                          graphLink={graphLink}
+                          getEdgeMotionConfig={getEdgeMotionConfig}
+                          displayScale={currentScale}
+                        />
+                      )}
                     </g>
                   );
                 }
