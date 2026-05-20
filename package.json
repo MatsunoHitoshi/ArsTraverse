@@ -20,7 +20,8 @@
     "test:e2e:kg": "playwright test e2e/kg",
     "test:e2e:edge-motion": "playwright test e2e/kg/edge-cdt-animation.unit.spec.ts e2e/kg/edge-motion-classification.unit.spec.ts e2e/kg/classify-edge-motion.integration.spec.ts",
     "test:e2e:ui": "playwright test --ui",
-    "mcp:i": "sudo npx @modelcontextprotocol/inspector"
+    "mcp:i": "sudo npx @modelcontextprotocol/inspector",
+    "kg:align": "tsx scripts/kg-alignment-agent/index.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^1.6.0",
@@ -91,6 +92,7 @@
     "zod-form-data": "^2.0.2"
   },
   "devDependencies": {
+    "@inquirer/prompts": "^8.4.3",
     "@playwright/test": "^1.56.1",
     "@types/d3": "^7.4.3",
     "@types/eslint": "^8.56.2",
@@ -101,7 +103,7 @@
     "@types/three": "^0.169.0",
     "@typescript-eslint/eslint-plugin": "^7.1.1",
     "@typescript-eslint/parser": "^7.1.1",
-    "dotenv": "^16.4.7",
+    "dotenv": "^16.6.1",
     "eslint": "^8.57.0",
     "eslint-config-next": "^15.5.18",
     "ignore-loader": "^0.1.2",
@@ -111,6 +113,7 @@
     "prisma": "^5.14.0",
     "tailwindcss": "^3.4.3",
     "ts-node": "^10.9.2",
+    "tsx": "^4.22.2",
     "typescript": "^5.4.2"
   },
   "ct3aMetadata": {

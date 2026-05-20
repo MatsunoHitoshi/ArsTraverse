@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
+import { slugifyMcpToolIdentifier } from "@/app/_utils/mcp/mcp-tool-identifier";
 import { buildRelationshipCreateRowsFromIdMap } from "@/server/domain/kg/graph-format";
 
 export async function createTopicSpaceFromDocument(
@@ -18,6 +19,7 @@ export async function createTopicSpaceFromDocument(
         name: params.name,
         image: params.image,
         description: params.description,
+        mcpToolIdentifier: slugifyMcpToolIdentifier(params.name),
         admins: { connect: { id: params.userId } },
       },
     });
@@ -48,6 +50,7 @@ export async function createTopicSpaceFromDocument(
         name: params.name,
         image: params.image,
         description: params.description,
+        mcpToolIdentifier: slugifyMcpToolIdentifier(params.name),
         sourceDocuments: { connect: { id: params.documentId } },
         admins: { connect: { id: params.userId } },
       },

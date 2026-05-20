@@ -271,6 +271,7 @@ npm run db:studio        # Open Prisma Studio
 
 # Utilities
 npm run mcp:i           # Model Context Protocol inspector
+npm run kg:align        # KG alignment CLI agent (see docs/kg-alignment-agent/)
 ```
 
 ## Contributing
