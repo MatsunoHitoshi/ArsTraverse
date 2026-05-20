@@ -8,7 +8,30 @@ import {
 } from "./checkpoints.js";
 import { generateAlignmentPlan } from "./llm-planner.js";
 
-function extractProposalId(text: string): string | null {
+function extractProposalId(text: string, parsed?: unknown): string | null {
+  if (typeof parsed === "object" && parsed !== null) {
+    if ("proposalId" in parsed) {
+      return String((parsed as { proposalId: unknown }).proposalId);
+    }
+    if ("id" in parsed) {
+      return String((parsed as { id: unknown }).id);
+    }
+  }
+
+  try {
+    const fromText = JSON.parse(text) as unknown;
+    if (typeof fromText === "object" && fromText !== null) {
+      if ("proposalId" in fromText) {
+        return String((fromText as { proposalId: unknown }).proposalId);
+      }
+      if ("id" in fromText) {
+        return String((fromText as { id: unknown }).id);
+      }
+    }
+  } catch {
+    // plain-text MCP responses (e.g. proposalId=...) fall through to regex
+  }
+
   const match = text.match(/proposalId=([^\s]+)/);
   return match?.[1] ?? null;
 }
@@ -169,7 +192,7 @@ async function executePlan(
     throw new Error(`ドラフト作成失敗: ${draftResult.text}`);
   }
 
-  const proposalId = extractProposalId(draftResult.text);
+  const proposalId = extractProposalId(draftResult.text, draftResult.parsed);
   if (!proposalId) {
     throw new Error(`proposalId を取得できませんでした: ${draftResult.text}`);
   }
@@ -200,7 +223,6 @@ async function executePlan(
       nodeId: norm.nodeId,
       name: norm.name,
       label: norm.label,
-      properties: {},
     });
     if (result.isError) {
       console.warn(`label normalization skipped for ${norm.nodeId}:`, result.text);

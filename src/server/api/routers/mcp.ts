@@ -82,26 +82,25 @@ export const mcpRouter = createTRPCRouter({
 
       const matchedById = new Map<string, (typeof graphData.nodes)[number]>();
 
-      for (const query of lowerCaseQueries) {
-        for (const node of graphData.nodes) {
-          if (matchedById.has(node.id)) {
-            continue;
-          }
-          if (node.name.toLowerCase().includes(query)) {
+      for (const node of graphData.nodes) {
+        if (matchedById.has(node.id)) {
+          continue;
+        }
+
+        const nameLower = node.name.toLowerCase();
+        const labelLower = node.label.toLowerCase();
+        const propertiesLower = node.properties
+          ? JSON.stringify(node.properties).toLowerCase()
+          : "";
+
+        for (const query of lowerCaseQueries) {
+          if (
+            nameLower.includes(query) ||
+            labelLower.includes(query) ||
+            propertiesLower.includes(query)
+          ) {
             matchedById.set(node.id, node);
-            continue;
-          }
-          if (node.label.toLowerCase().includes(query)) {
-            matchedById.set(node.id, node);
-            continue;
-          }
-          if (node.properties) {
-            const propertiesString = JSON.stringify(
-              node.properties,
-            ).toLowerCase();
-            if (propertiesString.includes(query)) {
-              matchedById.set(node.id, node);
-            }
+            break;
           }
         }
       }
