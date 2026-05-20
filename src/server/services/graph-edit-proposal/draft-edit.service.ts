@@ -12,6 +12,7 @@ import {
   reconstructDraftGraphData,
   overwriteProposalChangesFromDraft,
 } from "./draft.service";
+import { resolveDraftEntityProperties } from "./resolve-draft-entity-properties";
 
 function relationshipEndpointKey(rel: RelationshipTypeForFrontend): string {
   return `${rel.type}\0${rel.sourceId}\0${rel.targetId}`;
@@ -183,11 +184,10 @@ export async function upsertNodeInDraft(
 ) {
   return commitDraftGraphUpdate(db, userId, input.proposalId, (draft) => {
     const nodeMap = new Map(draft.nodes.map((n) => [n.id, n] as const));
-    const normalizedProperties: Record<string, string> = Object.fromEntries(
-      Object.entries(input.node.properties ?? {}).map(([k, v]) => [
-        k,
-        String(v),
-      ]),
+    const existing = nodeMap.get(input.node.id);
+    const normalizedProperties = resolveDraftEntityProperties(
+      existing?.properties,
+      input.node.properties,
     );
     nodeMap.set(input.node.id, {
       id: input.node.id,
@@ -316,11 +316,10 @@ export async function upsertRelationshipInDraft(
         message: "エッジの両端ノードがドラフトに存在しません",
       });
     }
-    const normalizedProperties: Record<string, string> = Object.fromEntries(
-      Object.entries(relationship.properties ?? {}).map(([k, v]) => [
-        k,
-        String(v),
-      ]),
+    const existing = relMap.get(relationship.id);
+    const normalizedProperties = resolveDraftEntityProperties(
+      existing?.properties,
+      relationship.properties,
     );
     relMap.set(relationship.id, {
       id: relationship.id,
