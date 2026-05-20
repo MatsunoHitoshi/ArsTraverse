@@ -1,12 +1,16 @@
 import { z } from "zod";
-import { createMcpHandler } from "@vercel/mcp-adapter";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { api } from "@/trpc/server";
+import { TRPCError } from "@trpc/server";
 import type { NextRequest } from "next/server";
 import { getServerAuthSession } from "@/server/auth";
 import { db } from "@/server/db";
+import { resolveMcpToolIdentifier } from "@/app/_utils/mcp/mcp-tool-identifier";
 import type { McpDraftHandlerCtx } from "@/server/mcp/graph-edit-draft-handlers";
 import {
   mcpCreateDraftProposal,
+  mcpDeduplicateEdgesInDraft,
   mcpDeleteNodeInDraft,
   mcpDeleteRelationshipInDraft,
   mcpGetProposalDraftDiff,
@@ -220,8 +224,15 @@ const createHandlerForTopicSpace = (
   userAuthToken: string | null,
   draftCtx: McpDraftHandlerCtx | null,
 ) => {
-  return createMcpHandler(
-    (server) => {
+  return async (request: Request) => {
+    const transport = new WebStandardStreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+    });
+    const server = new McpServer({
+      name: `topic-space-mcp-${topicSpaceId}`,
+      version: "1.0.0",
+    });
+
       const searchRelationToolName = `search_topics_relations_in_${topicSpaceMcpToolIdentifier.toLowerCase()}`;
       const searchRelationBetweenNodesToolName = `search_relation_between_nodes_in_${topicSpaceMcpToolIdentifier.toLowerCase()}`;
       const getContextualDescriptionToolName = `get_contextual_description_from_${topicSpaceMcpToolIdentifier.toLowerCase()}`;
@@ -328,7 +339,13 @@ const createHandlerForTopicSpace = (
                 textResponse = `## ${startNodeName}と${endNodeName}の関係性\n\n`;
                 textResponse += results.graphData.relationships
                   .map((relationship) => {
-                    return `- [${relationship.type}] - (ID: ${relationship.sourceId}, name: ${relationship.sourceId}, label: ${relationship.sourceId}, properties: ${JSON.stringify(relationship.sourceId)})`;
+                    const sourceNode = results.graphData.nodes.find(
+                      (n) => n.id === relationship.sourceId,
+                    );
+                    const targetNode = results.graphData.nodes.find(
+                      (n) => n.id === relationship.targetId,
+                    );
+                    return `- [${relationship.type}] - (ID: ${sourceNode?.id}, name: ${sourceNode?.name}, label: ${sourceNode?.label}, properties: ${JSON.stringify(sourceNode?.properties)}) -> (ID: ${targetNode?.id}, name: ${targetNode?.name}, label: ${targetNode?.label}, properties: ${JSON.stringify(targetNode?.properties)})`;
                   })
                   .join("\n");
 
@@ -338,14 +355,17 @@ const createHandlerForTopicSpace = (
 
                 // 推論データを取得
                 try {
+                  const supabaseAnonKey =
+                    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+                    process.env.SUPABASE_ANON_KEY ??
+                    "";
                   const response = await fetch(
                     `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/trans-e-predict-relations-query-rpc`,
                     {
                       method: "POST",
                       headers: {
                         "Content-Type": "application/json",
-                        Authorization:
-                          "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",
+                        Authorization: `Bearer ${userAuthToken ?? supabaseAnonKey}`,
                       },
                       body: JSON.stringify({
                         head: startNodeName,
@@ -512,6 +532,8 @@ const createHandlerForTopicSpace = (
       const listTopicSpaceGraphToolName = `list_topic_space_graph_in_${identifier}`;
       const findDuplicateNodeCandidatesToolName = `find_duplicate_node_candidates_in_${identifier}`;
       const findExactDuplicateNodeGroupsToolName = `find_exact_duplicate_node_groups_in_${identifier}`;
+      const findDuplicateEdgeGroupsToolName = `find_duplicate_edges_in_${identifier}`;
+      const getLabelDistributionToolName = `get_label_distribution_in_${identifier}`;
 
       server.tool(
         listTopicSpaceGraphToolName,
@@ -532,8 +554,15 @@ const createHandlerForTopicSpace = (
             .optional()
             .default(200)
             .describe("取得件数上限（最大500）。"),
+          includeCrossPageEdges: z
+            .boolean()
+            .optional()
+            .default(false)
+            .describe(
+              "true のとき、ページ外ノードに接続するエッジも返します（デフォルトはページ内ノードに接続するエッジのみ）。",
+            ),
         },
-        async ({ offset, limit }) => {
+        async ({ offset, limit, includeCrossPageEdges }) => {
           try {
             const topicSpace = await api.topicSpaces.getByIdPublic({
               id: topicSpaceId,
@@ -556,10 +585,12 @@ const createHandlerForTopicSpace = (
 
             const pageNodes = allNodes.slice(offset, offset + limit);
             const nodeIdSet = new Set(pageNodes.map((n) => n.id));
-            const edges = allEdges.filter(
-              (rel) =>
-                nodeIdSet.has(rel.sourceId) || nodeIdSet.has(rel.targetId),
-            );
+            const edges = includeCrossPageEdges
+              ? allEdges
+              : allEdges.filter(
+                  (rel) =>
+                    nodeIdSet.has(rel.sourceId) && nodeIdSet.has(rel.targetId),
+                );
 
             return {
               content: [
@@ -633,6 +664,17 @@ const createHandlerForTopicSpace = (
               userAuthToken,
             );
 
+            let embeddingSkippedReason: string | undefined;
+            if (embeddingCandidates.length === 0) {
+              if (!userAuthToken) {
+                embeddingSkippedReason =
+                  "User-Authorization ヘッダーまたはブラウザログインが必要です。";
+              } else if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+                embeddingSkippedReason =
+                  "NEXT_PUBLIC_SUPABASE_URL が未設定のため embedding 検索をスキップしました。";
+              }
+            }
+
             const stringCandidates = findDuplicateCandidatesViaStringMatch(
               allNodes,
               nodeName,
@@ -653,6 +695,7 @@ const createHandlerForTopicSpace = (
                       query: nodeName,
                       candidateCount: candidates.length,
                       usedEmbedding: embeddingCandidates.length > 0,
+                      embeddingSkippedReason,
                       candidates,
                     },
                     null,
@@ -725,6 +768,79 @@ const createHandlerForTopicSpace = (
         },
       );
 
+      server.tool(
+        findDuplicateEdgeGroupsToolName,
+        `${topicSpaceName} 全体から、type・source・target が同一の重複エッジグループを検出します。`,
+        {
+          minGroupSize: z
+            .number()
+            .int()
+            .min(2)
+            .optional()
+            .default(2)
+            .describe("グループとして返す最小エッジ数。"),
+        },
+        async ({ minGroupSize }) => {
+          try {
+            const result = await api.mcp.findDuplicateEdgeGroupsPublic({
+              topicSpaceId,
+              minGroupSize,
+            });
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          } catch (error) {
+            console.error(error);
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: "重複エッジグループの検出中にエラーが発生しました。",
+                },
+              ],
+            };
+          }
+        },
+      );
+
+      server.tool(
+        getLabelDistributionToolName,
+        `${topicSpaceName} のノード label 分布を返します。カテゴリ正規化の計画時に利用してください。`,
+        {},
+        async () => {
+          try {
+            const result = await api.mcp.getLabelDistributionPublic({
+              topicSpaceId,
+            });
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          } catch (error) {
+            console.error(error);
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: "ラベル分布の取得中にエラーが発生しました。",
+                },
+              ],
+            };
+          }
+        },
+      );
+
       const propertyValueSchema = z.union([
         z.string(),
         z.number(),
@@ -752,6 +868,7 @@ const createHandlerForTopicSpace = (
       const getDraftGraphToolName = `get_graph_edit_proposal_draft_graph_in_${identifier}`;
       const getDraftDiffToolName = `get_graph_edit_proposal_diff_in_${identifier}`;
       const mergeNodesInDraftToolName = `merge_nodes_in_draft_in_${identifier}`;
+      const deduplicateEdgesInDraftToolName = `deduplicate_edges_in_draft_in_${identifier}`;
       const submitGraphEditProposalToolName = `submit_graph_edit_proposal_in_${identifier}`;
 
       server.tool(
@@ -1229,6 +1346,55 @@ propertiesは任意です。`,
       );
 
       server.tool(
+        deduplicateEdgesInDraftToolName,
+        `ドラフト提案内の重複エッジを削除します。edgeGroups を省略すると自動検出した重複をすべて解消します。`,
+        {
+          proposalId: z.string().describe("編集対象の下書き変更提案ID。"),
+          edgeGroups: z
+            .array(
+              z.object({
+                keepEdgeId: z.string(),
+                removeEdgeIds: z.array(z.string()),
+              }),
+            )
+            .optional()
+            .describe(
+              "保持するエッジと削除するエッジのグループ。省略時は自動検出。",
+            ),
+        },
+        async ({ proposalId, edgeGroups }) => {
+          try {
+            const result = await mcpDeduplicateEdgesInDraft(
+              requireDraftCtx(draftCtx),
+              { proposalId, edgeGroups },
+            );
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify(
+                    {
+                      proposalId: result.proposalId,
+                      removedEdgeCount: result.removedEdgeCount,
+                      message: `重複エッジを ${result.removedEdgeCount} 件削除しました。${getDraftGraphToolName} で結果を確認してください。`,
+                    },
+                    null,
+                    2,
+                  ),
+                },
+              ],
+            };
+          } catch (error) {
+            return formatMcpToolError(
+              error,
+              "重複エッジの削除に失敗しました。",
+            );
+          }
+        },
+      );
+
+      server.tool(
         submitGraphEditProposalToolName,
         `ドラフト状態の変更提案をレビュー待ち（PENDING）に提出します。提出前に ${getDraftDiffToolName} で hasChanges を確認してください。提出後は管理UIで確認・承認・マージを行ってください。`,
         {
@@ -1288,10 +1454,10 @@ propertiesは任意です。`,
           }
         },
       );
-    },
-    {},
-    { basePath: `/api/topic-spaces/${topicSpaceId}` },
-  );
+
+    await server.connect(transport);
+    return transport.handleRequest(request);
+  };
 };
 
 // Next.js のルートハンドラ
@@ -1303,11 +1469,16 @@ const routeHandler = async (
   if (!topicSpaceId) {
     return new Response("Topic Space ID is missing", { status: 400 });
   }
-  const topicSpaceInfo = await api.topicSpaces.getSummaryByIdPublic({
-    id: topicSpaceId,
-  });
-  if (!topicSpaceInfo) {
-    return new Response("Topic space not found", { status: 404 });
+  let topicSpaceInfo;
+  try {
+    topicSpaceInfo = await api.topicSpaces.getSummaryByIdPublic({
+      id: topicSpaceId,
+    });
+  } catch (error) {
+    if (error instanceof TRPCError && error.code === "NOT_FOUND") {
+      return new Response("Topic space not found", { status: 404 });
+    }
+    throw error;
   }
   const userAuthToken = await resolveUserAuthToken(request);
   const session = await getServerAuthSession();
@@ -1315,10 +1486,15 @@ const routeHandler = async (
     ? { db, userId: session.user.id }
     : null;
 
+  const mcpToolIdentifier = resolveMcpToolIdentifier(
+    topicSpaceId,
+    topicSpaceInfo.mcpToolIdentifier,
+  );
+
   const handler = createHandlerForTopicSpace(
     topicSpaceId,
     topicSpaceInfo.name,
-    topicSpaceInfo.mcpToolIdentifier ?? "",
+    mcpToolIdentifier,
     userAuthToken,
     draftCtx,
   );

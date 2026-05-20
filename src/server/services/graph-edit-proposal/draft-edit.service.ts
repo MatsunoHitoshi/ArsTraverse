@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { diffNodes, diffRelationships } from "@/app/_utils/kg/diff";
+import { findDuplicateEdgeGroups } from "@/app/_utils/kg/find-duplicate-edge-groups";
 import type {
   NodeTypeForFrontend,
   RelationshipTypeForFrontend,
@@ -446,6 +447,88 @@ export async function mergeNodesInDraft(
     rewiredEdgeCount: result.rewiredEdgeCount,
     deduplicatedEdgeCount: result.deduplicatedEdgeCount,
     skippedDuplicateNodeIds: result.skippedDuplicateNodeIds,
+  };
+}
+
+export async function deduplicateEdgesInDraft(
+  db: PrismaClient,
+  userId: string,
+  input: {
+    proposalId: string;
+    edgeGroups?: Array<{
+      keepEdgeId: string;
+      removeEdgeIds: string[];
+    }>;
+  },
+) {
+  const { proposal, baseGraphData } = await loadDraftEditableProposal(
+    db,
+    input.proposalId,
+    userId,
+  );
+
+  const draftGraphData = reconstructDraftGraphData(
+    baseGraphData,
+    proposal.changes,
+  );
+
+  const relMap = new Map(
+    draftGraphData.relationships.map((r) => [r.id, r] as const),
+  );
+
+  const removeIds = new Set<string>();
+
+  if (input.edgeGroups && input.edgeGroups.length > 0) {
+    for (const group of input.edgeGroups) {
+      if (!relMap.has(group.keepEdgeId)) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: `保持するエッジがドラフトに存在しません: ${group.keepEdgeId}`,
+        });
+      }
+      for (const removeId of group.removeEdgeIds) {
+        if (removeId === group.keepEdgeId) continue;
+        if (relMap.has(removeId)) {
+          removeIds.add(removeId);
+        }
+      }
+    }
+  } else {
+    const duplicateGroups = findDuplicateEdgeGroups(
+      draftGraphData.relationships.map((r) => ({
+        id: r.id,
+        type: r.type,
+        sourceId: r.sourceId,
+        targetId: r.targetId,
+      })),
+    );
+    for (const group of duplicateGroups) {
+      const [, ...duplicates] = group.edges;
+      for (const edge of duplicates) {
+        removeIds.add(edge.id);
+      }
+    }
+  }
+
+  for (const removeId of removeIds) {
+    relMap.delete(removeId);
+  }
+
+  const nextDraftGraphData: DraftGraphData = {
+    nodes: draftGraphData.nodes,
+    relationships: Array.from(relMap.values()),
+  };
+
+  await overwriteProposalChangesFromDraft(
+    db,
+    input.proposalId,
+    baseGraphData,
+    nextDraftGraphData,
+  );
+
+  return {
+    proposalId: input.proposalId,
+    removedEdgeCount: removeIds.size,
   };
 }
 

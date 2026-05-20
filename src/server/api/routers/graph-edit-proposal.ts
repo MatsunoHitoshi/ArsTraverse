@@ -19,6 +19,7 @@ import {
   deleteRelationshipInDraft,
   getProposalDraftDiff,
   getProposalDraftGraph,
+  deduplicateEdgesInDraft,
   mergeNodesInDraft,
   setNodePropertyInDraft,
   setRelationshipPropertyInDraft,
@@ -133,6 +134,18 @@ const MergeNodesInDraftSchema = z.object({
   canonicalName: z.string().optional(),
   canonicalLabel: z.string().optional(),
   canonicalProperties: PropertiesRecordSchema.optional(),
+});
+
+const DeduplicateEdgesInDraftSchema = z.object({
+  proposalId: z.string(),
+  edgeGroups: z
+    .array(
+      z.object({
+        keepEdgeId: z.string(),
+        removeEdgeIds: z.array(z.string()),
+      }),
+    )
+    .optional(),
 });
 
 export const graphEditProposalRouter = createTRPCRouter({
@@ -250,6 +263,12 @@ export const graphEditProposalRouter = createTRPCRouter({
             )
           : undefined,
       }),
+    ),
+
+  deduplicateEdgesInDraft: protectedProcedure
+    .input(DeduplicateEdgesInDraftSchema)
+    .mutation(({ ctx, input }) =>
+      deduplicateEdgesInDraft(ctx.db, ctx.session.user.id, input),
     ),
 
   // =========================================================
