@@ -60,12 +60,15 @@ export interface ScrollStorytellingViewerUnifiedProps {
   metaGraphData: MetaGraphStoryData;
   /** 最初の「グラフ全体」セクションのタイトル（ワークスペース名を渡す） */
   workspaceTitle?: string;
+  /** エッジ意味アニメーションのキャッシュに使用する TopicSpace ID */
+  topicSpaceId?: string;
 }
 
 export function ScrollStorytellingViewerUnified({
   graphDocument,
   metaGraphData,
   workspaceTitle,
+  topicSpaceId,
 }: ScrollStorytellingViewerUnifiedProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -78,6 +81,7 @@ export function ScrollStorytellingViewerUnified({
   const [graphSize, setGraphSize] = useState({ width: 400, height: GRAPH_MIN_HEIGHT });
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const [isFreeExploreMode, setIsFreeExploreMode] = useState(false);
+  const [showEdgeSemanticAnimation, setShowEdgeSemanticAnimation] = useState(false);
   const frozenGraphIndexRef = useRef(0);
   /** セグメント進入後のフェード・線描画の progress（0–1）。state で保持し RAF で更新する */
   const [segmentProgress, setSegmentProgress] = useState(1);
@@ -630,6 +634,8 @@ export function ScrollStorytellingViewerUnified({
         hasSpecificSegmentFocus={!segmentHasNoFocus}
         communityTitles={communityTitles}
         onCommunityTitleClick={goToFirstSegmentOfCommunity}
+        showEdgeSemanticAnimation={showEdgeSemanticAnimation}
+        topicSpaceId={topicSpaceId}
       />
 
       {/* グラフの端をフェードさせる軽量な CSS Overlay (SVG Mask の代わり)。PCのみ */}
@@ -666,6 +672,25 @@ export function ScrollStorytellingViewerUnified({
               <ZoomInIcon width={18} height={18} color="currentColor" />
             )}
           </button>
+          {topicSpaceId && (
+            <button
+              type="button"
+              onClick={() => setShowEdgeSemanticAnimation((v) => !v)}
+              className={`flex h-10 w-10 items-center justify-center rounded-md shadow focus:outline-none focus:ring-2 focus:ring-slate-400 ${
+                showEdgeSemanticAnimation
+                  ? "bg-indigo-600/90 text-white hover:bg-indigo-500"
+                  : "bg-slate-700/90 text-slate-200 hover:bg-slate-600"
+              }`}
+              aria-label={showEdgeSemanticAnimation ? "エッジアニメーションをオフ" : "エッジ意味アニメーションをオン"}
+              aria-pressed={showEdgeSemanticAnimation}
+              title={showEdgeSemanticAnimation ? "エッジ意味アニメーション: オン（クリックでオフ）" : "エッジ意味アニメーション: オフ（クリックでオン）"}
+            >
+              <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
+              </svg>
+            </button>
+          )}
         </div>
       )}
 

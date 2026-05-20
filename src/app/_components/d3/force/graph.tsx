@@ -23,6 +23,12 @@ import type { CustomNodeType, CustomLinkType } from "@/app/const/types";
 import { getNodeByIdForFrontend } from "@/app/_utils/kg/filter";
 import { MagnifierLens } from "../magnifier/magnifier-lens";
 import { getMaxEdgeLabelFontSizeByLength } from "@/app/_utils/graph-label-utils";
+import { useEdgeSemanticAnimation } from "./storytelling-graph/hooks/use-edge-semantic-animation";
+import {
+  CdtAnimatedEdgePath,
+  CdtEdgeGlowFilterDef,
+} from "./storytelling-graph/components/cdt-animated-edge-path";
+import { EdgeSemanticPictogram } from "./storytelling-graph/components/edge-semantic-pictogram";
 
 /** 同一ノード対のエッジをグループ化するキー（ソース・ターゲットの順序を正規化） */
 function getNodePairKey(link: CustomLinkType): string {
@@ -288,6 +294,8 @@ export const D3ForceGraph = ({
   isSelectionMode,
   onNodeSelectionToggle,
   highlightData,
+  showEdgeSemanticAnimation = false,
+  topicSpaceId,
 }: {
   svgRef: React.RefObject<SVGSVGElement>;
   height: number;
@@ -328,6 +336,10 @@ export const D3ForceGraph = ({
     addedLinkIds: Set<string>;
     removedLinkIds: Set<string>;
   };
+  /** エッジ意味アニメーション（CDT分類 + ピクトグラム）の有効/無効 */
+  showEdgeSemanticAnimation?: boolean;
+  /** エッジ分類キャッシュに使用する TopicSpace ID */
+  topicSpaceId?: string;
 }) => {
   const { nodes, relationships } = graphDocument;
   const initLinks = relationships as CustomLinkType[];
@@ -351,6 +363,19 @@ export const D3ForceGraph = ({
       };
     });
   }, [initLinks, initNodes]);
+
+  /** 分類対象はフォーカス中のエッジ1本のみ（LLM負荷抑制） */
+  const linksForEdgeSemanticAnimation = useMemo(() => {
+    if (!focusedLink?.id || !focusedLink.type) return [];
+    const link = newLinks.find((l) => l.id === focusedLink.id);
+    return link ? [link] : [];
+  }, [focusedLink, newLinks]);
+
+  const { getEdgeMotionConfig } = useEdgeSemanticAnimation({
+    links: linksForEdgeSemanticAnimation,
+    enabled: showEdgeSemanticAnimation,
+    topicSpaceId,
+  });
 
   const [currentTransformX, setCurrentTransformX] = useState<number>(
     defaultPosition.x,
@@ -822,6 +847,11 @@ export const D3ForceGraph = ({
               currentTransformX={currentTransformX}
               currentTransformY={currentTransformY}
             >
+              {showEdgeSemanticAnimation && (
+                <defs>
+                  <CdtEdgeGlowFilterDef />
+                </defs>
+              )}
               {graphLinks.map((graphLink, linkIndex) => {
                 const { source, target, type } = graphLink;
                 const modSource = source as CustomNodeType;
@@ -835,6 +865,10 @@ export const D3ForceGraph = ({
                   );
                 const linkMagnification =
                   linkMagnificationMap.get(graphLink.id) ?? 1;
+                const cdtMotionConfig =
+                  showEdgeSemanticAnimation && isFocused
+                    ? getEdgeMotionConfig(graphLink.id)
+                    : null;
 
                 const sourceNode = nodeMap.get(modSource.id);
                 const targetNode = nodeMap.get(modTarget.id);
@@ -894,57 +928,73 @@ export const D3ForceGraph = ({
                         onLinkContextMenu?.(graphLink);
                       }}
                     >
-                      <line
-                        stroke={
-                          isFocused
-                            ? "#ef7234"
-                            : isSelectionMode && isSelectedLink
-                              ? "#ef7234"
-                              : graphLink.isAddedInHistory
-                                ? "#10b981" // 変更履歴で追加されたエッジは緑色
-                                : graphLink.isRemovedInHistory
-                                  ? "#ef4444" // 変更履歴で削除されたエッジは赤色
-                                  : isPathLink
-                                    ? "#eae80c"
-                                    : graphLink.isAdditional
-                                      ? "#3769d4"
-                                      : "white"
-                        }
-                        data-link-id={graphLink.id}
-                        data-is-added={graphLink.isAddedInHistory}
-                        data-is-removed={graphLink.isRemovedInHistory}
-                        strokeOpacity={
-                          (graphLink.isAddedInHistory ??
-                            graphLink.isRemovedInHistory)
-                            ? 0.8 // ハイライトエッジは少し濃く
-                            : isFocused
-                              ? 1
-                              : isSelectionMode && isSelectedLink
-                                ? 0.9
-                                : graphLink.isExistingContext
-                                  ? 0.2 // 既存グラフのコンテキストエッジは薄く
-                                  : isGradient
-                                    ? 0.04
-                                    : (distance(graphLink) ? 0.6 : 0.4) /
-                                    (distance(graphLink) *
-                                      distance(graphLink) || 1)
-                        }
-                        strokeWidth={
-                          (graphLink.isAddedInHistory ??
-                            graphLink.isRemovedInHistory)
-                            ? 2.5 // ハイライトエッジは太く
-                            : (isFocused || (isSelectionMode && isSelectedLink)
-                              ? 2
-                              : 1.2) *
+                      {cdtMotionConfig ? (
+                        <CdtAnimatedEdgePath
+                          pathD={`M ${modSource.x} ${modSource.y} L ${modTarget.x} ${modTarget.y}`}
+                          motionConfig={cdtMotionConfig}
+                          strokeWidth={
+                            ((graphLink.isAddedInHistory ??
+                              graphLink.isRemovedInHistory)
+                              ? 2.5
+                              : 2) *
                             linkMagnification *
                             1.5
-                        }
-                        // strokeOpacity={isFocused ? 1 : isGradient ? 0.3 : 0.4}
-                        x1={modSource.x}
-                        y1={modSource.y}
-                        x2={modTarget.x}
-                        y2={modTarget.y}
-                      ></line>
+                          }
+                          strokeOpacity={1}
+                          steadyAnimate
+                        />
+                      ) : (
+                        <line
+                          stroke={
+                            isFocused
+                              ? "#ef7234"
+                              : isSelectionMode && isSelectedLink
+                                ? "#ef7234"
+                                : graphLink.isAddedInHistory
+                                  ? "#10b981" // 変更履歴で追加されたエッジは緑色
+                                  : graphLink.isRemovedInHistory
+                                    ? "#ef4444" // 変更履歴で削除されたエッジは赤色
+                                    : isPathLink
+                                      ? "#eae80c"
+                                      : graphLink.isAdditional
+                                        ? "#3769d4"
+                                        : "white"
+                          }
+                          data-link-id={graphLink.id}
+                          data-is-added={graphLink.isAddedInHistory}
+                          data-is-removed={graphLink.isRemovedInHistory}
+                          strokeOpacity={
+                            (graphLink.isAddedInHistory ??
+                              graphLink.isRemovedInHistory)
+                              ? 0.8 // ハイライトエッジは少し濃く
+                              : isFocused
+                                ? 1
+                                : isSelectionMode && isSelectedLink
+                                  ? 0.9
+                                  : graphLink.isExistingContext
+                                    ? 0.2 // 既存グラフのコンテキストエッジは薄く
+                                    : isGradient
+                                      ? 0.04
+                                      : (distance(graphLink) ? 0.6 : 0.4) /
+                                      (distance(graphLink) *
+                                        distance(graphLink) || 1)
+                          }
+                          strokeWidth={
+                            (graphLink.isAddedInHistory ??
+                              graphLink.isRemovedInHistory)
+                              ? 2.5 // ハイライトエッジは太く
+                              : (isFocused || (isSelectionMode && isSelectedLink)
+                                ? 2
+                                : 1.2) *
+                              linkMagnification *
+                              1.5
+                          }
+                          x1={modSource.x}
+                          y1={modSource.y}
+                          x2={modTarget.x}
+                          y2={modTarget.y}
+                        />
+                      )}
                       {isDirectedLinks && (
                         <g>
                           <line
@@ -973,22 +1023,21 @@ export const D3ForceGraph = ({
                         </g>
                       )}
 
-                      {/* <defs>
-                      <linearGradient
-                        id={`gradient-${graphLink.id}`}
-                        x1={gradientTo === modSource.id ? "0%" : "100%"}
-                        y1={gradientTo === modSource.id ? "0%" : "100%"}
-                        x2={gradientTo === modTarget.id ? "0%" : "100%"}
-                        y2={gradientTo === modTarget.id ? "0%" : "100%"}
-                      >
-                        <stop offset="0%" stopColor="white" stopOpacity={0} />
-                        <stop
-                          offset="100%"
-                          stopColor="white"
-                          stopOpacity={0.3}
-                        />
-                      </linearGradient>
-                    </defs> */}
+                      {showEdgeSemanticAnimation && (() => {
+                        const motionConfig = getEdgeMotionConfig(graphLink.id);
+                        if (!motionConfig) return null;
+                        const midX = ((modSource.x ?? 0) + (modTarget.x ?? 0)) / 2;
+                        const midY = ((modSource.y ?? 0) + (modTarget.y ?? 0)) / 2;
+                        return (
+                          <EdgeSemanticPictogram
+                            key={`pictogram-${graphLink.id}`}
+                            config={motionConfig}
+                            cx={midX}
+                            cy={midY}
+                            displayScale={currentScale}
+                          />
+                        );
+                      })()}
                     </g>
                   );
                 }

@@ -3,6 +3,9 @@ import type { CustomLinkType, CustomNodeType } from "@/app/const/types";
 import { getEdgeCompositeKeyFromLink } from "@/app/const/story-segment";
 import { getMaxEdgeLabelFontSizeByLength } from "@/app/_utils/graph-label-utils";
 import { getDirectionalKey } from "../utils/graph-utils";
+import type { EdgeMotionConfig } from "@/app/const/edge-cdt-animation";
+import { CdtAnimatedEdgePath, CdtEdgeGlowFilterDef } from "./cdt-animated-edge-path";
+import { EdgeSemanticPictogram } from "./edge-semantic-pictogram";
 
 const MIN_DISPLAY_NODE_RADIUS = 3;
 
@@ -64,6 +67,8 @@ export function StoryGraphContent(props: {
   getNodeLabelFontSize: (isFocusNode: boolean) => number;
   effectiveScaleForLabels: number;
   draggingNodeId: string | null;
+  /** CDT分類済みエッジのアニメーション設定を取得する関数。null なら標準描画 */
+  getEdgeMotionConfig?: (edgeId: string) => EdgeMotionConfig | null;
 }) {
   const {
     shouldRunSteadyAnim,
@@ -105,10 +110,20 @@ export function StoryGraphContent(props: {
     getNodeLabelFontSize,
     effectiveScaleForLabels,
     draggingNodeId,
+    getEdgeMotionConfig,
   } = props;
+
+  const hasCdtEdges = pathItemsWithFocusIndex.some(
+    (item) => item.hasFocus && getEdgeMotionConfig?.(item.link.id),
+  );
 
   return (
     <g>
+      {hasCdtEdges && (
+        <defs>
+          <CdtEdgeGlowFilterDef />
+        </defs>
+      )}
       {shouldRunSteadyAnim && edgeFlowStops && (
         <defs>
           {pathItemsWithFocusIndex
@@ -209,11 +224,37 @@ export function StoryGraphContent(props: {
           const useFlowGrad =
             shouldRunSteadyAnim &&
             edgeFlowStops != null &&
-            (!segmentBranch || (segmentProgress ?? 1) >= 1);
+            (!segmentBranch || (segmentProgress ?? 1) >= 1) &&
+            !getEdgeMotionConfig?.(link.id);
+
+          // CDTアニメーション設定（取得できた場合にエッジ色・線アニメを上書き）
+          const motionConfig = getEdgeMotionConfig?.(link.id) ?? null;
+          const edgeMidX = (sx + tx) / 2;
+          const edgeMidY = (sy + ty) / 2;
+          const edgeFullyRevealed = effectiveEdgeProgress >= 1;
+          const steadyCdtAnim =
+            motionConfig != null &&
+            (useFlowGrad || edgeFullyRevealed || freeExploreMode);
+
           return (
             <g key={`path-${dirKey}-${i}`}>
-              {useFlowGrad ? (
-                <path d={pathD} fill="none" stroke={`url(#edge-flow-${item.focusGradientIndex})`} strokeLinecap="round" strokeWidth={edgeStrokeWidthFocus} />
+              {motionConfig ? (
+                <CdtAnimatedEdgePath
+                  pathD={pathD}
+                  motionConfig={motionConfig}
+                  strokeWidth={edgeStrokeWidthFocus}
+                  strokeOpacity={focusStrokeOpacity}
+                  revealProgress={edgeFullyRevealed ? undefined : effectiveEdgeProgress}
+                  steadyAnimate={steadyCdtAnim}
+                />
+              ) : useFlowGrad ? (
+                <path
+                  d={pathD}
+                  fill="none"
+                  stroke={`url(#edge-flow-${item.focusGradientIndex})`}
+                  strokeLinecap="round"
+                  strokeWidth={edgeStrokeWidthFocus}
+                />
               ) : (
                 <path
                   d={pathD}
@@ -226,6 +267,15 @@ export function StoryGraphContent(props: {
                   strokeLinecap="round"
                   strokeOpacity={focusStrokeOpacity}
                   strokeWidth={edgeStrokeWidthFocus}
+                />
+              )}
+              {motionConfig && (
+                <EdgeSemanticPictogram
+                  config={motionConfig}
+                  cx={edgeMidX}
+                  cy={edgeMidY}
+                  displayScale={displayScale}
+                  opacity={Math.max(0, Math.min(1, effectiveEdgeProgress * 2 - 0.5))}
                 />
               )}
             </g>

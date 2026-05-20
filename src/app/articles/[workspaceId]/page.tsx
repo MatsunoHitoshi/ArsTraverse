@@ -108,6 +108,7 @@ export default function ArticlePage() {
                 graphDocument={workspaceData.graphDocument}
                 metaGraphData={metaGraphData}
                 workspaceTitle={workspaceData.name}
+                topicSpaceId={topicSpaceId}
               />
             ) : (
               <ScrollStorytellingViewer

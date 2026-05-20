@@ -33,6 +33,7 @@ import {
 } from "./storytelling-graph/utils/graph-utils";
 import { FOCUS_TRANSITION_MS, useTransitionProgress } from "./storytelling-graph/hooks/use-transition-progress";
 import { useSteadyAnimation } from "./storytelling-graph/hooks/use-steady-animation";
+import { useEdgeSemanticAnimation } from "./storytelling-graph/hooks/use-edge-semantic-animation";
 import { StoryGraphViewportLayer } from "./storytelling-graph/components/story-graph-viewport-layer";
 import { StoryGraphSvgFrame } from "./storytelling-graph/components/story-graph-svg-frame";
 import { StoryGraphContent } from "./storytelling-graph/components/story-graph-content";
@@ -105,6 +106,8 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   onTransitionComplete,
   onSvgRef,
   forRecording = false,
+  showEdgeSemanticAnimation = false,
+  topicSpaceId,
 }: {
   graphDocument: GraphDocumentForFrontend;
   focusNodeIds: string[];
@@ -140,6 +143,10 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   onSvgRef?: (el: SVGSVGElement | null) => void;
   /** 録画時など、ビューパディングを 0 にしてグラフを最大表示する */
   forRecording?: boolean;
+  /** エッジ意味アニメーション（CDT分類 + ピクトグラム）の有効/無効 */
+  showEdgeSemanticAnimation?: boolean;
+  /** エッジ分類キャッシュに使用する TopicSpace ID */
+  topicSpaceId?: string;
 }) {
   const showBottomFadeGradient = !isPc;
   // PC版のフェードは親コンテナ（CSS Overlay）で行うため、ここでは SVG Mask を生成しない（描画負荷軽減）
@@ -278,6 +285,15 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   );
   const hasExplicitEdges = effectiveFocusEdgeIds.length > 0;
 
+  /** エッジ意味アニメーションの分類対象（フォーカスエッジのみ。LLM負荷抑制） */
+  const linksForEdgeSemanticAnimation = useMemo(
+    () =>
+      initLinks.filter((link) =>
+        focusEdgeIdSet.has(getEdgeCompositeKeyFromLink(link)),
+      ),
+    [initLinks, focusEdgeIdSet],
+  );
+
   const [nodes, setNodes] = useState<CustomNodeType[]>(initNodes);
   const [links, setLinks] = useState<CustomLinkType[]>(initLinks);
   const simulationRef = useRef<Simulation<CustomNodeType, CustomLinkType> | null>(null);
@@ -352,6 +368,12 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
       freeExploreMode,
       showFullGraph,
     });
+
+  const { getEdgeMotionConfig } = useEdgeSemanticAnimation({
+    links: linksForEdgeSemanticAnimation,
+    enabled: showEdgeSemanticAnimation,
+    topicSpaceId,
+  });
 
   const [transitionFromLayoutTransform, setTransitionFromLayoutTransform] = useState<{
     scale: number;
@@ -1522,6 +1544,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
           getNodeLabelFontSize={getNodeLabelFontSize}
           effectiveScaleForLabels={effectiveScaleForLabels}
           draggingNodeId={draggingNodeId}
+          getEdgeMotionConfig={showEdgeSemanticAnimation ? getEdgeMotionConfig : undefined}
         />
       </StoryGraphViewportLayer>
     </StoryGraphSvgFrame>
