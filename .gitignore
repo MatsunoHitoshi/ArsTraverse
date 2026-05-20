@@ -71,3 +71,6 @@ yarn-error.log*
 
 # local strategy benchmark outputs
 /experiments/out
+
+# KG alignment agent — per-run logs (events.jsonl, plan.json, summary.md)
+.alignment-runs/*/

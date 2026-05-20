@@ -180,7 +180,10 @@ export const topicSpaceRouter = createTRPCRouter({
       });
 
       if (!topicSpace) {
-        throw new Error("TopicSpace not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "TopicSpace not found",
+        });
       }
 
       return topicSpace;

@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { diffNodes, diffRelationships } from "@/app/_utils/kg/diff";
+import { findDuplicateEdgeGroups } from "@/app/_utils/kg/find-duplicate-edge-groups";
 import type {
   NodeTypeForFrontend,
   RelationshipTypeForFrontend,
@@ -11,6 +12,7 @@ import {
   reconstructDraftGraphData,
   overwriteProposalChangesFromDraft,
 } from "./draft.service";
+import { resolveDraftEntityProperties } from "./resolve-draft-entity-properties";
 
 function relationshipEndpointKey(rel: RelationshipTypeForFrontend): string {
   return `${rel.type}\0${rel.sourceId}\0${rel.targetId}`;
@@ -182,11 +184,10 @@ export async function upsertNodeInDraft(
 ) {
   return commitDraftGraphUpdate(db, userId, input.proposalId, (draft) => {
     const nodeMap = new Map(draft.nodes.map((n) => [n.id, n] as const));
-    const normalizedProperties: Record<string, string> = Object.fromEntries(
-      Object.entries(input.node.properties ?? {}).map(([k, v]) => [
-        k,
-        String(v),
-      ]),
+    const existing = nodeMap.get(input.node.id);
+    const normalizedProperties = resolveDraftEntityProperties(
+      existing?.properties,
+      input.node.properties,
     );
     nodeMap.set(input.node.id, {
       id: input.node.id,
@@ -315,11 +316,10 @@ export async function upsertRelationshipInDraft(
         message: "エッジの両端ノードがドラフトに存在しません",
       });
     }
-    const normalizedProperties: Record<string, string> = Object.fromEntries(
-      Object.entries(relationship.properties ?? {}).map(([k, v]) => [
-        k,
-        String(v),
-      ]),
+    const existing = relMap.get(relationship.id);
+    const normalizedProperties = resolveDraftEntityProperties(
+      existing?.properties,
+      relationship.properties,
     );
     relMap.set(relationship.id, {
       id: relationship.id,
@@ -446,6 +446,88 @@ export async function mergeNodesInDraft(
     rewiredEdgeCount: result.rewiredEdgeCount,
     deduplicatedEdgeCount: result.deduplicatedEdgeCount,
     skippedDuplicateNodeIds: result.skippedDuplicateNodeIds,
+  };
+}
+
+export async function deduplicateEdgesInDraft(
+  db: PrismaClient,
+  userId: string,
+  input: {
+    proposalId: string;
+    edgeGroups?: Array<{
+      keepEdgeId: string;
+      removeEdgeIds: string[];
+    }>;
+  },
+) {
+  const { proposal, baseGraphData } = await loadDraftEditableProposal(
+    db,
+    input.proposalId,
+    userId,
+  );
+
+  const draftGraphData = reconstructDraftGraphData(
+    baseGraphData,
+    proposal.changes,
+  );
+
+  const relMap = new Map(
+    draftGraphData.relationships.map((r) => [r.id, r] as const),
+  );
+
+  const removeIds = new Set<string>();
+
+  if (input.edgeGroups && input.edgeGroups.length > 0) {
+    for (const group of input.edgeGroups) {
+      if (!relMap.has(group.keepEdgeId)) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: `保持するエッジがドラフトに存在しません: ${group.keepEdgeId}`,
+        });
+      }
+      for (const removeId of group.removeEdgeIds) {
+        if (removeId === group.keepEdgeId) continue;
+        if (relMap.has(removeId)) {
+          removeIds.add(removeId);
+        }
+      }
+    }
+  } else {
+    const duplicateGroups = findDuplicateEdgeGroups(
+      draftGraphData.relationships.map((r) => ({
+        id: r.id,
+        type: r.type,
+        sourceId: r.sourceId,
+        targetId: r.targetId,
+      })),
+    );
+    for (const group of duplicateGroups) {
+      const [, ...duplicates] = group.edges;
+      for (const edge of duplicates) {
+        removeIds.add(edge.id);
+      }
+    }
+  }
+
+  for (const removeId of removeIds) {
+    relMap.delete(removeId);
+  }
+
+  const nextDraftGraphData: DraftGraphData = {
+    nodes: draftGraphData.nodes,
+    relationships: Array.from(relMap.values()),
+  };
+
+  await overwriteProposalChangesFromDraft(
+    db,
+    input.proposalId,
+    baseGraphData,
+    nextDraftGraphData,
+  );
+
+  return {
+    proposalId: input.proposalId,
+    removedEdgeCount: removeIds.size,
   };
 }
 

@@ -16,6 +16,7 @@ import {
 import { getTextFromDocumentFile } from "@/app/_utils/text/text";
 import { extractRelevantSections } from "@/app/_utils/text/extract-relevant-sections";
 import { findExactDuplicateNodeGroups } from "@/app/_utils/kg/find-exact-duplicate-node-groups";
+import { findDuplicateEdgeGroups } from "@/app/_utils/kg/find-duplicate-edge-groups";
 import type { GraphNode, GraphRelationship } from "@prisma/client";
 
 function isGraphDocument(data: unknown): data is GraphDocumentForFrontend {
@@ -79,27 +80,32 @@ export const mcpRouter = createTRPCRouter({
         return []; // グラフデータがない場合は空配列を返す
       }
 
-      const matchedNodes = lowerCaseQueries
-        .map((query) => {
-          return graphData.nodes.filter((node) => {
-            if (node.name.toLowerCase().includes(query)) {
-              return true;
-            }
-            if (node.label.toLowerCase().includes(query)) {
-              return true;
-            }
-            if (node.properties) {
-              const propertiesString = JSON.stringify(
-                node.properties,
-              ).toLowerCase();
-              if (propertiesString.includes(query)) {
-                return true;
-              }
-            }
-            return false;
-          });
-        })
-        .flat();
+      const matchedById = new Map<string, (typeof graphData.nodes)[number]>();
+
+      for (const node of graphData.nodes) {
+        if (matchedById.has(node.id)) {
+          continue;
+        }
+
+        const nameLower = node.name.toLowerCase();
+        const labelLower = node.label.toLowerCase();
+        const propertiesLower = node.properties
+          ? JSON.stringify(node.properties).toLowerCase()
+          : "";
+
+        for (const query of lowerCaseQueries) {
+          if (
+            nameLower.includes(query) ||
+            labelLower.includes(query) ||
+            propertiesLower.includes(query)
+          ) {
+            matchedById.set(node.id, node);
+            break;
+          }
+        }
+      }
+
+      const matchedNodes = Array.from(matchedById.values());
       // const matchedNodes = graphData.nodes.filter((node) => {
       //   // 名前の一致をチェック
       //   if (node.name.toLowerCase().includes(lowerCaseQueries)) {
@@ -316,6 +322,94 @@ export const mcpRouter = createTRPCRouter({
         duplicateGroupCount: groups.length,
         duplicateNodeCount,
         groups,
+      };
+    }),
+
+  findDuplicateEdgeGroupsPublic: publicProcedure
+    .input(
+      z.object({
+        topicSpaceId: z.string(),
+        minGroupSize: z.number().int().min(2).optional().default(2),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const topicSpace = await ctx.db.topicSpace.findFirst({
+        where: {
+          id: input.topicSpaceId,
+          isDeleted: false,
+        },
+        include: {
+          graphRelationships: true,
+        },
+      });
+
+      if (!topicSpace) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "TopicSpace not found or you don't have access.",
+        });
+      }
+
+      const edges = topicSpace.graphRelationships.map((rel) => ({
+        id: rel.id,
+        type: rel.type,
+        sourceId: rel.fromNodeId,
+        targetId: rel.toNodeId,
+      }));
+
+      const groups = findDuplicateEdgeGroups(edges, {
+        minGroupSize: input.minGroupSize,
+      });
+
+      const duplicateEdgeCount = groups.reduce(
+        (sum, group) => sum + group.edgeCount,
+        0,
+      );
+
+      return {
+        topicSpaceId: input.topicSpaceId,
+        totalEdgeCount: edges.length,
+        duplicateGroupCount: groups.length,
+        duplicateEdgeCount,
+        groups,
+      };
+    }),
+
+  getLabelDistributionPublic: publicProcedure
+    .input(z.object({ topicSpaceId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const topicSpace = await ctx.db.topicSpace.findFirst({
+        where: {
+          id: input.topicSpaceId,
+          isDeleted: false,
+        },
+        include: {
+          graphNodes: true,
+        },
+      });
+
+      if (!topicSpace) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "TopicSpace not found or you don't have access.",
+        });
+      }
+
+      const labelCounts = new Map<string, number>();
+      for (const node of topicSpace.graphNodes) {
+        const label = node.label || "(empty)";
+        labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
+      }
+
+      const labels = Array.from(labelCounts.entries())
+        .map(([label, nodeCount]) => ({ label, nodeCount }))
+        .sort((a, b) => b.nodeCount - a.nodeCount);
+
+      return {
+        topicSpaceId: input.topicSpaceId,
+        totalNodeCount: topicSpace.graphNodes.length,
+        distinctLabelCount: labels.length,
+        labels,
       };
     }),
 });

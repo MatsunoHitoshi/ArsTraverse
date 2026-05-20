@@ -7,6 +7,7 @@ import {
   deleteRelationshipInDraft,
   getProposalDraftDiff,
   getProposalDraftGraph,
+  deduplicateEdgesInDraft,
   mergeNodesInDraft,
   setNodePropertyInDraft,
   setRelationshipPropertyInDraft,
@@ -92,6 +93,13 @@ export async function mcpMergeNodesInDraft(
   input: Parameters<typeof mergeNodesInDraft>[2],
 ) {
   return mergeNodesInDraft(ctx.db, ctx.userId, input);
+}
+
+export async function mcpDeduplicateEdgesInDraft(
+  ctx: McpDraftHandlerCtx,
+  input: Parameters<typeof deduplicateEdgesInDraft>[2],
+) {
+  return deduplicateEdgesInDraft(ctx.db, ctx.userId, input);
 }
 
 export async function mcpGetProposalDraftGraph(
