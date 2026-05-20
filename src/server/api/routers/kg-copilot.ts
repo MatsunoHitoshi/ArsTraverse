@@ -40,6 +40,7 @@ import {
   runCreateSourceDocumentWithGraphData,
 } from "./source-document";
 import { runAttachDocuments, runDetachDocument } from "./topic-space";
+import { classifyEdgeMotion as runClassifyEdgeMotion } from "@/server/services/kg/classify-edge-motion.service";
 
 // ---------------------------------------------------------------------------
 // generateMetaGraphFromText 用ヘルパー関数
@@ -2818,4 +2819,23 @@ Order ${idx + 1}: Community ${c.communityId}
         };
       }
     }),
+
+  /**
+   * エッジ述語をCDT（概念依存理論）の8カテゴリに分類し、アニメーション設定を返す。
+   * DBキャッシュを活用し、未分類のエッジのみLLMに問い合わせる。
+   * DancingBoard (IUI 2025) の Appendix A プロンプト構造を参考にしている。
+   */
+  classifyEdgeMotion: protectedProcedure
+    .input(
+      z.object({
+        topicSpaceId: z.string(),
+        edges: z.array(
+          z.object({
+            edgeId: z.string(),
+            edgeType: z.string(),
+          }),
+        ),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => runClassifyEdgeMotion(ctx.db, input)),
 };

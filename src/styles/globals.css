@@ -1,3 +1,163 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ============================================================
+   Edge Semantic Animation: CDT-based pictogram keyframes
+   ============================================================ */
+
+@keyframes edge-motion-flow {
+  0%   { transform: translateX(-4px); opacity: 0.6; }
+  50%  { transform: translateX(4px);  opacity: 1;   }
+  100% { transform: translateX(-4px); opacity: 0.6; }
+}
+
+@keyframes edge-motion-extend {
+  0%   { transform: scaleX(0.7); opacity: 0.5; }
+  50%  { transform: scaleX(1.1); opacity: 1;   }
+  100% { transform: scaleX(0.7); opacity: 0.5; }
+}
+
+@keyframes edge-motion-impact {
+  0%   { transform: scale(1);   opacity: 1;   }
+  20%  { transform: scale(1.4); opacity: 1;   }
+  40%  { transform: scale(0.8); opacity: 0.8; }
+  60%  { transform: scale(1.2); opacity: 1;   }
+  80%  { transform: scale(1);   opacity: 0.9; }
+  100% { transform: scale(1);   opacity: 1;   }
+}
+
+@keyframes edge-motion-wave {
+  0%   { transform: rotate(-15deg); }
+  50%  { transform: rotate(15deg);  }
+  100% { transform: rotate(-15deg); }
+}
+
+@keyframes edge-motion-converge {
+  0%   { transform: scale(1.2); opacity: 0.5; }
+  50%  { transform: scale(0.8); opacity: 1;   }
+  100% { transform: scale(1.2); opacity: 0.5; }
+}
+
+@keyframes edge-motion-diverge {
+  0%   { transform: scale(0.8); opacity: 1;   }
+  50%  { transform: scale(1.3); opacity: 0.5; }
+  100% { transform: scale(0.8); opacity: 1;   }
+}
+
+@keyframes edge-motion-pop {
+  0%   { transform: scale(1);   opacity: 1;   }
+  30%  { transform: scale(1.5); opacity: 0.8; }
+  60%  { transform: scale(0.9); opacity: 1;   }
+  100% { transform: scale(1);   opacity: 1;   }
+}
+
+@keyframes edge-motion-glow {
+  0%   { opacity: 0.3; filter: brightness(1);   }
+  50%  { opacity: 1;   filter: brightness(1.6); }
+  100% { opacity: 0.3; filter: brightness(1);   }
+}
+
+/* ============================================================
+   Edge stroke animation (CDT motionType, pathLength=1)
+   ============================================================ */
+
+.edge-stroke-anim {
+  animation-duration: var(--edge-stroke-duration, 1.5s);
+  animation-iteration-count: infinite;
+}
+
+.edge-stroke-flow {
+  animation-name: edge-stroke-flow;
+  animation-timing-function: linear;
+}
+
+@keyframes edge-stroke-flow {
+  from { stroke-dashoffset: 0; }
+  to   { stroke-dashoffset: -0.24; }
+}
+
+.edge-stroke-extend {
+  animation-name: edge-stroke-extend;
+  animation-timing-function: ease-in-out;
+}
+
+@keyframes edge-stroke-extend {
+  0%, 100% { stroke-opacity: 0.35; }
+  50%      { stroke-opacity: 1; }
+}
+
+.edge-stroke-impact {
+  animation-name: edge-stroke-impact;
+  animation-timing-function: ease-in-out;
+}
+
+@keyframes edge-stroke-impact {
+  0%, 100% { stroke-opacity: 1; stroke-dashoffset: 0; }
+  25%      { stroke-opacity: 0.4; }
+  50%      { stroke-opacity: 1; stroke-dashoffset: -0.07; }
+  75%      { stroke-opacity: 0.5; }
+}
+
+.edge-stroke-wave {
+  animation-name: edge-stroke-wave;
+  animation-timing-function: ease-in-out;
+}
+
+@keyframes edge-stroke-wave {
+  0%, 100% { stroke-dashoffset: 0; }
+  50%      { stroke-dashoffset: -0.12; }
+}
+
+.edge-stroke-converge {
+  animation-name: edge-stroke-converge;
+  animation-timing-function: ease-in-out;
+}
+
+@keyframes edge-stroke-converge {
+  0%, 100% { stroke-dashoffset: 0.15; stroke-opacity: 0.5; }
+  50%      { stroke-dashoffset: 0; stroke-opacity: 1; }
+}
+
+.edge-stroke-diverge {
+  animation-name: edge-stroke-diverge;
+  animation-timing-function: ease-in-out;
+}
+
+@keyframes edge-stroke-diverge {
+  0%, 100% { stroke-dashoffset: 0; stroke-opacity: 1; }
+  50%      { stroke-dashoffset: 0.2; stroke-opacity: 0.45; }
+}
+
+.edge-stroke-pop {
+  animation-name: edge-stroke-pop;
+  animation-timing-function: ease-out;
+}
+
+@keyframes edge-stroke-pop {
+  0%, 100% { stroke-width: var(--edge-stroke-width, 2px); stroke-opacity: 0.85; }
+  35%      { stroke-width: calc(var(--edge-stroke-width, 2px) * 1.75); stroke-opacity: 1; }
+  60%      { stroke-width: calc(var(--edge-stroke-width, 2px) * 0.95); }
+}
+
+.edge-stroke-glow {
+  animation-name: edge-stroke-glow-line;
+  animation-timing-function: ease-in-out;
+}
+
+@keyframes edge-stroke-glow-line {
+  0%, 100% { stroke-opacity: 0.4; }
+  50%      { stroke-opacity: 1; }
+}
+
+.edge-stroke-glow-underlay {
+  animation-name: edge-stroke-glow-underlay;
+  animation-duration: var(--edge-stroke-duration, 3s);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+@keyframes edge-stroke-glow-underlay {
+  0%, 100% { stroke-opacity: 0.2; }
+  50%      { stroke-opacity: 0.55; }
+}

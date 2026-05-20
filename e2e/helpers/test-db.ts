@@ -69,6 +69,7 @@ async function deleteGraphHistoriesForRecord(recordId: string) {
 export async function deleteTestTopicSpace(topicSpaceId: string) {
   await deleteGraphHistoriesForRecord(topicSpaceId);
 
+  await testDb.edgeMotionAnnotation.deleteMany({ where: { topicSpaceId } });
   await testDb.graphEditProposal.deleteMany({ where: { topicSpaceId } });
   await testDb.graphRelationship.deleteMany({ where: { topicSpaceId } });
   await testDb.graphNode.deleteMany({ where: { topicSpaceId } });

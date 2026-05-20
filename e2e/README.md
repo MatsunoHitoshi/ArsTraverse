@@ -41,3 +41,6 @@ npm run test:e2e:kg
 | `kg/fuse-graphs.unit.spec.ts` | unit | `fuseGraphs` のエッジ重複除去 |
 | `kg/apply-graph-changes.integration.spec.ts` | integration | インシデントエッジ削除、topicSpaceId スコープ、端点スキップ、skipDuplicates |
 | `kg/rollback-graph.integration.spec.ts` | integration | ADD/REMOVE ロールバック |
+| `kg/edge-cdt-animation.unit.spec.ts` | unit | CDT 8カテゴリ定数・正規化 |
+| `kg/edge-motion-classification.unit.spec.ts` | unit | LLM プロンプトが述語のみ（ノード情報なし） |
+| `kg/classify-edge-motion.integration.spec.ts` | integration | `classifyEdgeMotion` DBキャッシュ・LLM分類（要 OPENAI_API_KEY） |

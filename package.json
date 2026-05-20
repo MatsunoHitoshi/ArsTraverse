@@ -2,6 +2,9 @@
   "name": "graph-vis-with-llm",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "scripts": {
     "build": "next build",
@@ -15,6 +18,7 @@
     "start": "next start",
     "test:e2e": "playwright test",
     "test:e2e:kg": "playwright test e2e/kg",
+    "test:e2e:edge-motion": "playwright test e2e/kg/edge-cdt-animation.unit.spec.ts e2e/kg/edge-motion-classification.unit.spec.ts e2e/kg/classify-edge-motion.integration.spec.ts",
     "test:e2e:ui": "playwright test --ui",
     "mcp:i": "sudo npx @modelcontextprotocol/inspector",
     "kg:align": "tsx scripts/kg-alignment-agent/index.ts"

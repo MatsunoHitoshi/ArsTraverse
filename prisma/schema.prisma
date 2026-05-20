@@ -834,3 +834,26 @@ model CommunityStory {
   
   @@index([metaNodeId])
 }
+
+// エッジ意味アニメーション: CDT分類結果のキャッシュ
+model EdgeMotionAnnotation {
+  id           String   @id @default(cuid())
+
+  // エッジ識別子（RelationshipTypeForFrontend.id）
+  edgeId       String
+
+  // TopicSpace のスコープ
+  topicSpaceId String
+
+  // CDT分類カテゴリ（PTRANS / ATRANS / PROPEL / MOVE / INGEST / EXPEL / SPEAK / MENTAL）
+  cdtCategory  String
+
+  // EdgeMotionConfig を JSON で保存（color, motionType, iconName, speed, durationMs）
+  motionConfig Json
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([edgeId, topicSpaceId])
+  @@index([topicSpaceId])
+}
