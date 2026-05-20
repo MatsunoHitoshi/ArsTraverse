@@ -2,7 +2,7 @@ import type React from "react";
 import type { CustomLinkType, CustomNodeType } from "@/app/const/types";
 import { getEdgeCompositeKeyFromLink } from "@/app/const/story-segment";
 import { getMaxEdgeLabelFontSizeByLength } from "@/app/_utils/graph-label-utils";
-import { getDirectionalKey } from "../utils/graph-utils";
+import { calcEdgeLabelPos, getDirectionalKey } from "../utils/graph-utils";
 import type { EdgeMotionConfig } from "@/app/const/edge-cdt-animation";
 import { CdtAnimatedEdgePath, CdtEdgeGlowFilterDef } from "./cdt-animated-edge-path";
 import { EdgeSemanticPictogram } from "./edge-semantic-pictogram";
@@ -18,6 +18,8 @@ type CommunityDisplay = {
 };
 
 export function StoryGraphContent(props: {
+  /** DOM 直接操作用: StoryGraphContent 最上位 <g> に attach する ref */
+  graphContentRef?: React.RefObject<SVGGElement>;
   shouldRunSteadyAnim: boolean;
   edgeFlowStops: Array<{ offset: string; opacity: number }> | null;
   pathItemsWithFocusIndex: Array<{
@@ -32,8 +34,12 @@ export function StoryGraphContent(props: {
   onCommunityTitleClick?: (communityId: string) => void;
   hasExplicitEdges: boolean;
   segmentBranch: boolean;
-  displayProgress: number;
-  fadeProgress: number;
+  /**
+   * エッジ線描画の進行度（0–1）。
+   * カメラ遷移中は 0、post-focus フェーズまたは segmentProgress から算出した値を受け取る。
+   * 内部で `freeExploreMode ? 1` や `showFullGraph ? overviewEdgeProgress` に分岐する。
+   */
+  edgeRevealProgress: number;
   freeExploreMode: boolean;
   overviewEdgeProgress: number;
   linkDistanceRange: { minDistance: number; distanceRange: number };
@@ -71,6 +77,7 @@ export function StoryGraphContent(props: {
   getEdgeMotionConfig?: (edgeId: string) => EdgeMotionConfig | null;
 }) {
   const {
+    graphContentRef,
     shouldRunSteadyAnim,
     edgeFlowStops,
     pathItemsWithFocusIndex,
@@ -81,8 +88,7 @@ export function StoryGraphContent(props: {
     onCommunityTitleClick,
     hasExplicitEdges,
     segmentBranch,
-    displayProgress,
-    fadeProgress,
+    edgeRevealProgress,
     freeExploreMode,
     overviewEdgeProgress,
     linkDistanceRange,
@@ -118,7 +124,7 @@ export function StoryGraphContent(props: {
   );
 
   return (
-    <g>
+    <g ref={graphContentRef}>
       {hasCdtEdges && (
         <defs>
           <CdtEdgeGlowFilterDef />
@@ -192,6 +198,7 @@ export function StoryGraphContent(props: {
         </>
       )}
 
+      {/* 1. エッジパスをすべて先に描画（同一方向は1本に集約） */}
       {pathItemsWithFocusIndex.map((item, i) => {
         const link = item.link;
         const source = link.source as CustomNodeType;
@@ -202,39 +209,40 @@ export function StoryGraphContent(props: {
         const dirKey = getDirectionalKey(link);
         const pathD = `M ${sx} ${sy} L ${tx} ${ty}`;
         const isFocusEdge = item.hasFocus;
-        const edgeProgress = segmentBranch ? displayProgress : (fadeProgress < 1 ? fadeProgress : displayProgress);
-        const effectiveEdgeProgress = freeExploreMode ? 1 : showFullGraph && isFocusEdge ? overviewEdgeProgress : edgeProgress;
+        /** freeExploreMode では常に全線表示。showFullGraph 時は専用の overview progress を使用 */
+        const effectiveEdgeProgress = freeExploreMode
+          ? 1
+          : showFullGraph && isFocusEdge
+            ? overviewEdgeProgress
+            : edgeRevealProgress;
 
         if (hasExplicitEdges && isFocusEdge) {
-          const focusStrokeOpacity =
-            freeExploreMode
-              ? edgeOpacities.focus
-              : showFullGraph
-                ? (() => {
-                    const layoutDx = target.x - source.x;
-                    const layoutDy = target.y - source.y;
-                    const distance = Math.sqrt(layoutDx * layoutDx + layoutDy * layoutDy);
-                    const normalizedDistance =
-                      linkDistanceRange.distanceRange > 0
-                        ? (distance - linkDistanceRange.minDistance) / linkDistanceRange.distanceRange
-                        : 0;
-                    return 0.6 - normalizedDistance * 0.59;
-                  })()
-                : edgeOpacities.focus;
+          const focusStrokeOpacity = freeExploreMode
+            ? edgeOpacities.focus
+            : showFullGraph
+              ? (() => {
+                const layoutDx = target.x - source.x;
+                const layoutDy = target.y - source.y;
+                const distance = Math.sqrt(layoutDx * layoutDx + layoutDy * layoutDy);
+                const normalizedDistance =
+                  linkDistanceRange.distanceRange > 0
+                    ? (distance - linkDistanceRange.minDistance) / linkDistanceRange.distanceRange
+                    : 0;
+                return 0.6 - normalizedDistance * 0.59;
+              })()
+              : edgeOpacities.focus;
           const useFlowGrad =
             shouldRunSteadyAnim &&
             edgeFlowStops != null &&
             (!segmentBranch || (segmentProgress ?? 1) >= 1) &&
             !getEdgeMotionConfig?.(link.id);
 
-          // CDTアニメーション設定（取得できた場合にエッジ色・線アニメを上書き）
           const motionConfig = getEdgeMotionConfig?.(link.id) ?? null;
           const edgeMidX = (sx + tx) / 2;
           const edgeMidY = (sy + ty) / 2;
           const edgeFullyRevealed = effectiveEdgeProgress >= 1;
           const steadyCdtAnim =
-            motionConfig != null &&
-            (useFlowGrad || edgeFullyRevealed || freeExploreMode);
+            motionConfig != null && (useFlowGrad || edgeFullyRevealed || freeExploreMode);
 
           return (
             <g key={`path-${dirKey}-${i}`}>
@@ -249,6 +257,7 @@ export function StoryGraphContent(props: {
                 />
               ) : useFlowGrad ? (
                 <path
+                  data-edge-key={dirKey}
                   d={pathD}
                   fill="none"
                   stroke={`url(#edge-flow-${item.focusGradientIndex})`}
@@ -257,6 +266,7 @@ export function StoryGraphContent(props: {
                 />
               ) : (
                 <path
+                  data-edge-key={dirKey}
                   d={pathD}
                   fill="none"
                   stroke="#94a3b8"
@@ -295,23 +305,31 @@ export function StoryGraphContent(props: {
             ? baseEdgeOpacity
             : showFullGraph
               ? (() => {
-                  const layoutDx = target.x - source.x;
-                  const layoutDy = target.y - source.y;
-                  const distance = Math.sqrt(layoutDx * layoutDx + layoutDy * layoutDy);
-                  const normalizedDistance =
-                    linkDistanceRange.distanceRange > 0
-                      ? (distance - linkDistanceRange.minDistance) / linkDistanceRange.distanceRange
-                      : 0;
-                  return 0.6 - normalizedDistance * 0.59;
-                })()
+                const layoutDx = target.x - source.x;
+                const layoutDy = target.y - source.y;
+                const distance = Math.sqrt(layoutDx * layoutDx + layoutDy * layoutDy);
+                const normalizedDistance =
+                  linkDistanceRange.distanceRange > 0
+                    ? (distance - linkDistanceRange.minDistance) / linkDistanceRange.distanceRange
+                    : 0;
+                return 0.6 - normalizedDistance * 0.59;
+              })()
               : baseEdgeOpacity;
         return (
           <g key={`path-${dirKey}-${i}`}>
-            <path d={pathD} fill="none" stroke="#94a3b8" strokeWidth={edgeStrokeWidthNormal} strokeOpacity={edgeOpacity} />
+            <path
+              data-edge-key={dirKey}
+              d={pathD}
+              fill="none"
+              stroke="#94a3b8"
+              strokeWidth={edgeStrokeWidthNormal}
+              strokeOpacity={edgeOpacity}
+            />
           </g>
         );
       })}
 
+      {/* 2. エッジラベルをパスの前面に描画（ノード対ごとに1つだけ） */}
       {Array.from(linksByNodePair.entries()).map(([pairKey, linksInPair]) => {
         const link = linksInPair[0];
         if (!link) return null;
@@ -326,24 +344,10 @@ export function StoryGraphContent(props: {
 
         const [sx, sy] = toView(source.x, source.y);
         const [tx, ty] = toView(target.x, target.y);
-        const dx = tx - sx;
-        const dy = ty - sy;
-        const len = Math.sqrt(dx * dx + dy * dy) || 1;
-        const labelOffsetPx = hasExplicitEdges && isFocusEdge ? 8 : 4;
-        const rawAngleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
-        const perpSign = rawAngleDeg > 90 && rawAngleDeg <= 270 ? -1 : 1;
-        const is90To180 = rawAngleDeg > -180 && rawAngleDeg <= -90;
-        const extraOffsetPx = is90To180 ? (hasExplicitEdges && isFocusEdge ? 8 : 4) : 0;
-        const effectiveOffsetPx = labelOffsetPx + extraOffsetPx;
-        const perpX = (dy / len) * effectiveOffsetPx * perpSign;
-        const perpY = (-dx / len) * effectiveOffsetPx * perpSign;
-        let angle = rawAngleDeg;
-        if (angle > 90) angle -= 180;
-        else if (angle < -90) angle += 180;
-        const labelX = (sx + tx) / 2 + perpX;
-        const labelY = (sy + ty) / 2 + perpY;
-        const labelTransform = `rotate(${angle}, ${labelX}, ${labelY})`;
-        const effectiveEdgeProgress = freeExploreMode ? 1 : (segmentBranch ? displayProgress : (fadeProgress < 1 ? fadeProgress : displayProgress));
+        const len = Math.sqrt((tx - sx) ** 2 + (ty - sy) ** 2) || 1;
+
+        const { x: labelX, y: labelY, angle } = calcEdgeLabelPos(sx, sy, tx, ty, hasExplicitEdges, isFocusEdge);
+
         const labelTextLength =
           expandedEdgePairKey === pairKey && pairCount > 1
             ? Math.max(...typesInPair.map((t) => t.length))
@@ -356,34 +360,40 @@ export function StoryGraphContent(props: {
         const handleLabelClick =
           pairCount > 1
             ? (e: React.MouseEvent) => {
-                e.stopPropagation();
-                setExpandedEdgePairKey((prev) => (prev === pairKey ? null : pairKey));
-              }
+              e.stopPropagation();
+              setExpandedEdgePairKey((prev) => (prev === pairKey ? null : pairKey));
+            }
             : undefined;
+
+        const labelContent =
+          expandedEdgePairKey === pairKey && pairCount > 1
+            ? typesInPair.map((t, j) => (
+              <tspan key={`${t}-${j}`} x={0} dy={j === 0 ? 0 : `${j * 1.2}em`}>
+                {t}
+              </tspan>
+            ))
+            : pairCount > 1
+              ? `${typesInPair[0]} …`
+              : typesInPair[0];
 
         if (hasExplicitEdges && isFocusEdge) {
           return (
-            <g key={`label-${pairKey}`}>
+            <g
+              key={`label-${pairKey}`}
+              data-edge-label-key={pairKey}
+              transform={`translate(${labelX},${labelY}) rotate(${angle})`}
+            >
               <text
-                x={labelX}
-                y={labelY}
+                x={0}
+                y={0}
                 textAnchor="middle"
                 fill="#94a3b8"
                 fontSize={effectiveEdgeLabelFontSize}
                 className={pairCount > 1 ? "cursor-pointer" : "pointer-events-none"}
-                transform={labelTransform}
-                opacity={Math.max(0, Math.min(1, effectiveEdgeProgress * 2 - 0.5))}
+                opacity={Math.max(0, Math.min(1, edgeRevealProgress * 2 - 0.5))}
                 onClick={handleLabelClick}
               >
-                {expandedEdgePairKey === pairKey && pairCount > 1
-                  ? typesInPair.map((t, j) => (
-                      <tspan key={`${t}-${j}`} x={labelX} y={labelY} dy={j === 0 ? 0 : `${j * 1.2}em`}>
-                        {t}
-                      </tspan>
-                    ))
-                  : pairCount > 1
-                    ? `${typesInPair[0]} …`
-                    : typesInPair[0]}
+                {labelContent}
               </text>
             </g>
           );
@@ -402,47 +412,43 @@ export function StoryGraphContent(props: {
             ? baseEdgeOpacity
             : showFullGraph
               ? (() => {
-                  const layoutDx = target.x - source.x;
-                  const layoutDy = target.y - source.y;
-                  const distance = Math.sqrt(layoutDx * layoutDx + layoutDy * layoutDy);
-                  const normalizedDistance =
-                    linkDistanceRange.distanceRange > 0
-                      ? (distance - linkDistanceRange.minDistance) / linkDistanceRange.distanceRange
-                      : 0;
-                  return 0.6 - normalizedDistance * 0.59;
-                })()
+                const layoutDx = target.x - source.x;
+                const layoutDy = target.y - source.y;
+                const distance = Math.sqrt(layoutDx * layoutDx + layoutDy * layoutDy);
+                const normalizedDistance =
+                  linkDistanceRange.distanceRange > 0
+                    ? (distance - linkDistanceRange.minDistance) / linkDistanceRange.distanceRange
+                    : 0;
+                return 0.6 - normalizedDistance * 0.59;
+              })()
               : baseEdgeOpacity;
         return (
-          <g key={`label-${pairKey}`}>
+          <g
+            key={`label-${pairKey}`}
+            data-edge-label-key={pairKey}
+            transform={`translate(${labelX},${labelY}) rotate(${angle})`}
+          >
             <text
-              x={labelX}
-              y={labelY}
+              x={0}
+              y={0}
               textAnchor="middle"
               fill="#646368"
               fontSize={effectiveEdgeLabelFontSize}
               className={pairCount > 1 ? "cursor-pointer" : "pointer-events-none"}
-              transform={labelTransform}
               style={{
                 opacity: edgeOpacity,
                 ...(segmentProgress != null ? undefined : !isPc && { transition: "opacity 100ms ease-out" }),
               }}
-              opacity={effectiveEdgeProgress}
+              opacity={edgeRevealProgress}
               onClick={handleLabelClick}
             >
-              {expandedEdgePairKey === pairKey && pairCount > 1
-                ? typesInPair.map((t, j) => (
-                    <tspan key={`${t}-${j}`} x={labelX} y={labelY} dy={j === 0 ? 0 : `${j * 1.2}em`}>
-                      {t}
-                    </tspan>
-                  ))
-                : pairCount > 1
-                  ? `${typesInPair[0]} …`
-                  : typesInPair[0]}
+              {labelContent}
             </text>
           </g>
         );
       })}
 
+      {/* 3. ノードをエッジ・ラベルの前面に描画 */}
       {visibleNodesToRender.map((node) => {
         if (node.x == null || node.y == null) return null;
         const isFocusNode = focusNodeIdSet.has(node.id);
@@ -464,7 +470,7 @@ export function StoryGraphContent(props: {
         return (
           <g
             key={node.id}
-            data-node-id={freeExploreMode ? node.id : undefined}
+            data-node-id={node.id}
             transform={`translate(${vx}, ${vy})`}
             style={{
               opacity,

@@ -22,6 +22,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 import { filterGraphByLayoutInstruction } from "@/app/_utils/kg/filter-graph-by-layout-instruction";
 import { getNodeByIdForFrontend } from "@/app/_utils/kg/filter";
 import {
+  calcEdgeLabelPos,
   easeInOutCubic,
   easeOutCubic,
   estimateLabelMarginLayout,
@@ -31,7 +32,12 @@ import {
   isCustomNodeType,
   isLineSegmentInViewport,
 } from "./storytelling-graph/utils/graph-utils";
-import { FOCUS_TRANSITION_MS, useTransitionProgress } from "./storytelling-graph/hooks/use-transition-progress";
+import {
+  FOCUS_TRANSITION_MS,
+  useFocusTransition,
+  type EdgeViewCoords,
+  type EdgeLabelCoords,
+} from "./storytelling-graph/hooks/use-focus-transition";
 import { useSteadyAnimation } from "./storytelling-graph/hooks/use-steady-animation";
 import { useEdgeSemanticAnimation } from "./storytelling-graph/hooks/use-edge-semantic-animation";
 import { StoryGraphViewportLayer } from "./storytelling-graph/components/story-graph-viewport-layer";
@@ -298,69 +304,47 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   const [links, setLinks] = useState<CustomLinkType[]>(initLinks);
   const simulationRef = useRef<Simulation<CustomNodeType, CustomLinkType> | null>(null);
 
-  // フォーカス遷移: 経過時間でビュー用・フェード用の進捗を導出（ビュー先行・フェード遅延）
-  const lastFocusNodeIdsRef = useRef<string[]>(focusNodeIds);
-  const lastFocusEdgeIdsRef = useRef<string[]>(focusEdgeIds);
-  const lastShowFullGraphRef = useRef(showFullGraph);
-  const [transitionFromNodeIds, setTransitionFromNodeIds] = useState<string[]>(focusNodeIds);
-  /** 遷移開始からの経過 ms。遷移中でないときは FOCUS_TRANSITION_MS 以上にして viewProgress/fadeProgress を 1 にする */
-  const [transitionElapsedMs, setTransitionElapsedMs] = useState(FOCUS_TRANSITION_MS);
-  const rafRef = useRef<number | null>(null);
-  const startTimeRef = useRef<number>(0);
+  // ── レイアウト transform（useFocusTransition の onFocusWillChange から参照するため先に宣言） ──
+  const [transitionFromLayoutTransform, setTransitionFromLayoutTransform] = useState<{
+    scale: number;
+    centerX: number;
+    centerY: number;
+  }>({ scale: 1, centerX: 0, centerY: 0 });
+  const lastLayoutTransformRef = useRef<{
+    scale: number;
+    centerX: number;
+    centerY: number;
+  }>({ scale: 1, centerX: 0, centerY: 0 });
 
-  useEffect(() => {
-    const prevNodeIds = lastFocusNodeIdsRef.current;
-    const prevEdgeIds = lastFocusEdgeIdsRef.current;
-    const prevShowFullGraph = lastShowFullGraphRef.current;
-    const nodeIdsEqual =
-      prevNodeIds.length === focusNodeIds.length &&
-      prevNodeIds.every((id, i) => id === focusNodeIds[i]);
-    const edgeIdsEqual =
-      prevEdgeIds.length === focusEdgeIds.length &&
-      prevEdgeIds.every((id, i) => id === focusEdgeIds[i]);
-    const showFullGraphUnchanged = prevShowFullGraph === showFullGraph;
-
-    if (nodeIdsEqual && edgeIdsEqual && showFullGraphUnchanged) {
-      return;
-    }
-
-    setTransitionFromLayoutTransform(lastLayoutTransformRef.current);
-    setTransitionFromNodeIds(prevNodeIds);
-    lastFocusNodeIdsRef.current = focusNodeIds;
-    lastFocusEdgeIdsRef.current = focusEdgeIds;
-    lastShowFullGraphRef.current = showFullGraph;
-    setTransitionElapsedMs(0);
-    startTimeRef.current = performance.now();
-
-    const tick = (now: number) => {
-      const elapsed = now - startTimeRef.current;
-      setTransitionElapsedMs(Math.min(elapsed, FOCUS_TRANSITION_MS));
-      if (elapsed < FOCUS_TRANSITION_MS) {
-        rafRef.current = requestAnimationFrame(tick);
-      }
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (rafRef.current != null) {
-        cancelAnimationFrame(rafRef.current);
-      }
-    };
-  }, [focusNodeIds, focusEdgeIds, showFullGraph]);
-
-  const { isTransitionComplete, viewProgress, fadeProgress } =
-    useTransitionProgress(transitionElapsedMs);
-
-  // 遷移完了時に親へ通知（録画シーケンサーが遷移完了を検知するために使用）
-  const onTransitionCompleteRef = useRef(onTransitionComplete);
-  onTransitionCompleteRef.current = onTransitionComplete;
-  const prevTransitionCompleteRef = useRef(isTransitionComplete);
-  useEffect(() => {
-    // false → true に変わった瞬間のみコールバックを呼ぶ
-    if (isTransitionComplete && !prevTransitionCompleteRef.current) {
-      onTransitionCompleteRef.current?.();
-    }
-    prevTransitionCompleteRef.current = isTransitionComplete;
-  }, [isTransitionComplete]);
+  // ── フォーカス遷移ライフサイクル管理 ──
+  const {
+    transitionElapsedMs,
+    transitionFromNodeIds,
+    isTransitionComplete,
+    postFocusFadeActive,
+    postFocusFadeProgress,
+    viewProgress,
+    fadeProgress,
+    lastFocusNodeIdsRef,
+    lastFocusEdgeIdsRef,
+    graphContentRef,
+    fromLayoutRef,
+    transitionNodeViewCoordsRef,
+    transitionEdgeViewCoordsRef,
+    transitionEdgeLabelCoordsRef,
+    transitionNodeOpacityRef,
+  } = useFocusTransition({
+    focusNodeIds,
+    focusEdgeIds,
+    showFullGraph,
+    freeExploreMode,
+    onFocusWillChange: () => {
+      // フォーカス変更直前に「from」レイアウトをキャプチャする（React 状態と DOM 直接操作用 ref の両方）
+      setTransitionFromLayoutTransform(lastLayoutTransformRef.current);
+      fromLayoutRef.current = lastLayoutTransformRef.current;
+    },
+    onTransitionComplete,
+  });
 
   const { shouldRunSteadyAnim, nodePulseScale, edgeFlowStops } =
     useSteadyAnimation({
@@ -374,17 +358,6 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     enabled: showEdgeSemanticAnimation,
     topicSpaceId,
   });
-
-  const [transitionFromLayoutTransform, setTransitionFromLayoutTransform] = useState<{
-    scale: number;
-    centerX: number;
-    centerY: number;
-  }>({ scale: 1, centerX: 0, centerY: 0 });
-  const lastLayoutTransformRef = useRef<{
-    scale: number;
-    centerX: number;
-    centerY: number;
-  }>({ scale: 1, centerX: 0, centerY: 0 });
 
   useEffect(() => {
     if (!initNodes.length) {
@@ -596,13 +569,14 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     return () => {
       simulation.stop();
     };
+  // height はレイアウト計算に使わず REF_LAYOUT 固定のため依存から除外。
+  // リサイズ時に effect が再実行されると setNodes でノードが再計算され、一瞬グラフが消える現象を防ぐ。
   }, [
     initNodes,
     initLinks,
     useCommunityLayout,
     communityMap,
     narrativeFlow,
-    height,
   ]);
 
   const progress = Math.max(0, Math.min(1, animationProgress * 2));
@@ -635,6 +609,23 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     : effectiveProgress;
 
   fadeProgressRef.current = fadeProgress;
+
+  /**
+   * エッジ線描画の進行度（0–1）。StoryGraphContent の edgeRevealProgress として渡す。
+   *
+   * - カメラ遷移中（DOM 直接操作フェーズ）: 0 に固定。React 管理のエッジ描画と競合しない。
+   * - post-focus フェードフェーズ: postFocusFadeProgress でエッジを描画アニメ。
+   * - segmentBranch / 通常遷移完了後: displayProgress を使用。
+   * - freeExploreMode: 常に 1（探索モードでは即座に全線表示）。
+   */
+  const effectiveEdgeProgressSource =
+    freeExploreMode
+      ? 1
+      : !freeExploreMode && transitionElapsedMs < FOCUS_TRANSITION_MS
+        ? 0
+        : postFocusFadeActive
+          ? postFocusFadeProgress
+          : displayProgress;
 
   const transitionFromNodeIdSet = useMemo(
     () => new Set(transitionFromNodeIds),
@@ -1468,6 +1459,100 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     }));
   }, [linksForPathRendering]);
 
+  // ── DOM 直接操作用 遷移座標収集（transitionElapsedMs === 0 のフレームで実行） ──
+  // Effect ではなく render 内で行うことで、RAF が次フレームで要素を収集する前に座標が確定する。
+  if (!freeExploreMode && transitionElapsedMs === 0) {
+    const fromL = fromLayoutRef.current;
+    const toL = layoutTransform;
+    const toViewFromL = (
+      L: { scale: number; centerX: number; centerY: number },
+      x: number,
+      y: number,
+    ): [number, number] => [
+      width / 2 + (x - L.centerX) * L.scale,
+      height / 2 + (y - L.centerY) * L.scale,
+    ];
+
+    // ノード座標・opacity
+    transitionNodeViewCoordsRef.current = new Map(
+      visibleNodesToRender.map((n) => {
+        const x = n.x ?? 0;
+        const y = n.y ?? 0;
+        return [n.id, { from: toViewFromL(fromL, x, y), to: toViewFromL(toL, x, y) }];
+      }),
+    );
+    transitionNodeOpacityRef.current = new Map(
+      visibleNodesToRender.map((n) => [
+        n.id,
+        {
+          opacity0: getTargetNodeOpacityForProgress(n, 0),
+          opacity1: getTargetNodeOpacityForProgress(n, 1),
+        },
+      ]),
+    );
+
+    // エッジ座標（同一方向キーで重複排除）
+    const edgeByDir = new Map<string, CustomLinkType>();
+    for (const link of visibleLinksToRender) {
+      const key = getDirectionalKey(link);
+      if (!edgeByDir.has(key)) edgeByDir.set(key, link);
+    }
+    const edgeCoords = new Map<string, EdgeViewCoords>();
+    edgeByDir.forEach((link, key) => {
+      const src = link.source as CustomNodeType;
+      const tgt = link.target as CustomNodeType;
+      if (src?.x == null || src?.y == null || tgt?.x == null || tgt?.y == null) return;
+      edgeCoords.set(key, {
+        from: {
+          sx: toViewFromL(fromL, src.x, src.y)[0],
+          sy: toViewFromL(fromL, src.x, src.y)[1],
+          tx: toViewFromL(fromL, tgt.x, tgt.y)[0],
+          ty: toViewFromL(fromL, tgt.x, tgt.y)[1],
+        },
+        to: {
+          sx: toViewFromL(toL, src.x, src.y)[0],
+          sy: toViewFromL(toL, src.x, src.y)[1],
+          tx: toViewFromL(toL, tgt.x, tgt.y)[0],
+          ty: toViewFromL(toL, tgt.x, tgt.y)[1],
+        },
+      });
+    });
+    transitionEdgeViewCoordsRef.current = edgeCoords;
+
+    // エッジラベル座標（ノード対ごとに1つ）
+    const labelByPair = new Map<string, CustomLinkType>();
+    for (const link of visibleLinksToRender) {
+      const key = getNodePairKey(link);
+      if (!labelByPair.has(key)) labelByPair.set(key, link);
+    }
+    const labelCoords = new Map<string, EdgeLabelCoords>();
+    labelByPair.forEach((link, pairKey) => {
+      const src = link.source as CustomNodeType;
+      const tgt = link.target as CustomNodeType;
+      if (src?.x == null || src?.y == null || tgt?.x == null || tgt?.y == null) return;
+      const isFocusEdge = focusEdgeIdSet.has(getEdgeCompositeKeyFromLink(link));
+      labelCoords.set(pairKey, {
+        from: calcEdgeLabelPos(
+          toViewFromL(fromL, src.x, src.y)[0],
+          toViewFromL(fromL, src.x, src.y)[1],
+          toViewFromL(fromL, tgt.x, tgt.y)[0],
+          toViewFromL(fromL, tgt.x, tgt.y)[1],
+          hasExplicitEdges,
+          isFocusEdge,
+        ),
+        to: calcEdgeLabelPos(
+          toViewFromL(toL, src.x, src.y)[0],
+          toViewFromL(toL, src.x, src.y)[1],
+          toViewFromL(toL, tgt.x, tgt.y)[0],
+          toViewFromL(toL, tgt.x, tgt.y)[1],
+          hasExplicitEdges,
+          isFocusEdge,
+        ),
+      });
+    });
+    transitionEdgeLabelCoordsRef.current = labelCoords;
+  }
+
   if (!baseGraph || baseGraph.nodes.length === 0) {
     return (
       <div
@@ -1499,6 +1584,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         setZoomY={setZoomY}
       >
         <StoryGraphContent
+          graphContentRef={graphContentRef}
           shouldRunSteadyAnim={shouldRunSteadyAnim}
           edgeFlowStops={edgeFlowStops}
           pathItemsWithFocusIndex={pathItemsWithFocusIndex}
@@ -1509,8 +1595,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
           onCommunityTitleClick={onCommunityTitleClick}
           hasExplicitEdges={hasExplicitEdges}
           segmentBranch={segmentBranch}
-          displayProgress={displayProgress}
-          fadeProgress={fadeProgress}
+          edgeRevealProgress={effectiveEdgeProgressSource}
           freeExploreMode={freeExploreMode}
           overviewEdgeProgress={overviewEdgeProgress}
           linkDistanceRange={linkDistanceRange}
