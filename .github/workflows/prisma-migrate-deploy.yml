@@ -42,7 +42,7 @@ jobs:
           npm -v
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --include=optional
 
       - name: Run Prisma migrate deploy
         run: npx prisma migrate deploy
