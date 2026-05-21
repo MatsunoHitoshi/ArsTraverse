@@ -163,11 +163,40 @@ type StoryRelationship = {
   type: string;
 };
 
+function buildCommunityNodeIdsMap(
+  communityMap: Record<string, string>,
+): Map<string, string[]> {
+  const byCommunity = new Map<string, string[]>();
+  for (const [nodeId, communityId] of Object.entries(communityMap)) {
+    const list = byCommunity.get(communityId);
+    if (list) list.push(nodeId);
+    else byCommunity.set(communityId, [nodeId]);
+  }
+  return byCommunity;
+}
+
+function buildRelationshipIndexes(relationships: StoryRelationship[]) {
+  const relByCompositeKey = new Map<string, StoryRelationship>();
+  const incidentByNodeId = new Map<string, StoryRelationship[]>();
+
+  for (const rel of relationships) {
+    relByCompositeKey.set(getEdgeCompositeKeyFromLink(rel), rel);
+    for (const nodeId of [rel.sourceId, rel.targetId]) {
+      const list = incidentByNodeId.get(nodeId);
+      if (list) list.push(rel);
+      else incidentByNodeId.set(nodeId, [rel]);
+    }
+  }
+
+  return { relByCompositeKey, incidentByNodeId };
+}
+
 /** コミュニティのみ指定のステップを、グラフ表示時と同様に nodeIds/edgeIds へ展開する */
 export function resolveScrollStepGraphFocus(
   step: ScrollStepGraphFocus,
   relationships: StoryRelationship[],
   communityMap?: Record<string, string>,
+  communityNodeIds?: Map<string, string[]>,
 ): { nodeIds: string[]; edgeIds: string[] } {
   if (step.id === "__overview__") {
     return { nodeIds: [], edgeIds: [] };
@@ -182,9 +211,11 @@ export function resolveScrollStepGraphFocus(
     step.communityId &&
     communityMap
   ) {
-    nodeIds = Object.entries(communityMap)
-      .filter(([, cid]) => cid === step.communityId)
-      .map(([nodeId]) => nodeId);
+    nodeIds =
+      communityNodeIds?.get(step.communityId) ??
+      Object.entries(communityMap)
+        .filter(([, cid]) => cid === step.communityId)
+        .map(([nodeId]) => nodeId);
     const nodeSet = new Set(nodeIds);
     edgeIds = relationships
       .filter((rel) => nodeSet.has(rel.sourceId) && nodeSet.has(rel.targetId))
@@ -192,6 +223,23 @@ export function resolveScrollStepGraphFocus(
   }
 
   return { nodeIds, edgeIds };
+}
+
+function addIntraFocusEdgesForStep(
+  focusNodeSet: Set<string>,
+  edgeSet: Set<string>,
+  incidentByNodeId: Map<string, StoryRelationship[]>,
+): void {
+  const visitedRel = new Set<StoryRelationship>();
+  for (const nodeId of focusNodeSet) {
+    for (const rel of incidentByNodeId.get(nodeId) ?? []) {
+      if (visitedRel.has(rel)) continue;
+      visitedRel.add(rel);
+      if (focusNodeSet.has(rel.sourceId) && focusNodeSet.has(rel.targetId)) {
+        edgeSet.add(getEdgeCompositeKeyFromLink(rel));
+      }
+    }
+  }
 }
 
 /**
@@ -204,6 +252,10 @@ export function getLayoutFocusEdgeIdsFromScrollSteps(
   communityMap?: Record<string, string>,
 ): string[] {
   const edgeSet = new Set<string>();
+  const { relByCompositeKey, incidentByNodeId } = buildRelationshipIndexes(relationships);
+  const communityNodeIds = communityMap
+    ? buildCommunityNodeIdsMap(communityMap)
+    : undefined;
 
   for (const step of steps) {
     if (step.id === "__overview__") continue;
@@ -212,23 +264,20 @@ export function getLayoutFocusEdgeIdsFromScrollSteps(
       step,
       relationships,
       communityMap,
+      communityNodeIds,
     );
 
     const focusNodeSet = new Set(stepNodeIds);
     for (const key of stepEdgeIds) {
       edgeSet.add(key);
-      const rel = relationships.find((r) => getEdgeCompositeKeyFromLink(r) === key);
+      const rel = relByCompositeKey.get(key);
       if (rel) {
         focusNodeSet.add(rel.sourceId);
         focusNodeSet.add(rel.targetId);
       }
     }
 
-    for (const rel of relationships) {
-      if (focusNodeSet.has(rel.sourceId) && focusNodeSet.has(rel.targetId)) {
-        edgeSet.add(getEdgeCompositeKeyFromLink(rel));
-      }
-    }
+    addIntraFocusEdgesForStep(focusNodeSet, edgeSet, incidentByNodeId);
   }
 
   return Array.from(edgeSet);
