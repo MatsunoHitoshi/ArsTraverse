@@ -4,6 +4,11 @@ import { getEdgeCompositeKeyFromLink } from "@/app/const/story-segment";
 import { getMaxEdgeLabelFontSizeByLength } from "@/app/_utils/graph-label-utils";
 import { calcEdgeLabelPos, getDirectionalKey } from "../utils/graph-utils";
 import type { EdgeMotionConfig } from "@/app/const/edge-cdt-animation";
+import {
+  layoutPosWithNodePair,
+  nodePairOffsetLayoutScale,
+  type NodePairTransform,
+} from "@/app/const/edge-cdt-node-pair-animation";
 import { CdtAnimatedEdgePath, CdtEdgeGlowFilterDef } from "./cdt-animated-edge-path";
 import { EdgeSemanticPictogram } from "./edge-semantic-pictogram";
 
@@ -75,6 +80,8 @@ export function StoryGraphContent(props: {
   draggingNodeId: string | null;
   /** CDT分類済みエッジのアニメーション設定を取得する関数。null なら標準描画 */
   getEdgeMotionConfig?: (edgeId: string) => EdgeMotionConfig | null;
+  /** CDTカテゴリに基づくノードペアのビュー空間オフセット+スケール */
+  getNodePairTransform?: (nodeId: string) => NodePairTransform | null;
 }) {
   const {
     graphContentRef,
@@ -117,11 +124,26 @@ export function StoryGraphContent(props: {
     effectiveScaleForLabels,
     draggingNodeId,
     getEdgeMotionConfig,
+    getNodePairTransform,
   } = props;
 
   const hasCdtEdges = pathItemsWithFocusIndex.some(
     (item) => item.hasFocus && getEdgeMotionConfig?.(item.link.id),
   );
+
+  /** レイアウト座標にペアオフセットを加えてからビュー座標へ（エッジ端点・ノード・ラベルで共通） */
+  const pairLayoutScale = nodePairOffsetLayoutScale(displayScale);
+  const nodeViewWithPair = (node: CustomNodeType): [number, number] => {
+    const pair = getNodePairTransform?.(node.id) ?? null;
+    const layout = layoutPosWithNodePair(
+      node.x ?? 0,
+      node.y ?? 0,
+      pair,
+      pairLayoutScale,
+    );
+    const [vx, vy] = toView(layout.x, layout.y);
+    return [vx, vy];
+  };
 
   return (
     <g ref={graphContentRef}>
@@ -139,8 +161,8 @@ export function StoryGraphContent(props: {
               const src = link.source as CustomNodeType;
               const tgt = link.target as CustomNodeType;
               if (!src || !tgt || src.x == null || src.y == null || tgt.x == null || tgt.y == null) return null;
-              const [gsx, gsy] = toView(src.x, src.y);
-              const [gtx, gty] = toView(tgt.x, tgt.y);
+              const [gsx, gsy] = nodeViewWithPair(src);
+              const [gtx, gty] = nodeViewWithPair(tgt);
               return (
                 <linearGradient key={`edge-flow-${i}`} id={`edge-flow-${i}`} gradientUnits="userSpaceOnUse" x1={gsx} y1={gsy} x2={gtx} y2={gty}>
                   {edgeFlowStops.map((stop, j) => (
@@ -204,8 +226,8 @@ export function StoryGraphContent(props: {
         const source = link.source as CustomNodeType;
         const target = link.target as CustomNodeType;
         if (!source || !target || source.x == null || source.y == null || target.x == null || target.y == null) return null;
-        const [sx, sy] = toView(source.x, source.y);
-        const [tx, ty] = toView(target.x, target.y);
+        const [sx, sy] = nodeViewWithPair(source);
+        const [tx, ty] = nodeViewWithPair(target);
         const dirKey = getDirectionalKey(link);
         const pathD = `M ${sx} ${sy} L ${tx} ${ty}`;
         const isFocusEdge = item.hasFocus;
@@ -342,8 +364,8 @@ export function StoryGraphContent(props: {
         const showThisEdgeLabel = typesInPair.length > 0 && (showEdgeLabels || (isFocusEdge && !freeExploreMode && !showFullGraph));
         if (!showThisEdgeLabel) return null;
 
-        const [sx, sy] = toView(source.x, source.y);
-        const [tx, ty] = toView(target.x, target.y);
+        const [sx, sy] = nodeViewWithPair(source);
+        const [tx, ty] = nodeViewWithPair(target);
         const len = Math.sqrt((tx - sx) ** 2 + (ty - sy) ** 2) || 1;
 
         const { x: labelX, y: labelY, angle } = calcEdgeLabelPos(sx, sy, tx, ty, hasExplicitEdges, isFocusEdge);
@@ -452,10 +474,12 @@ export function StoryGraphContent(props: {
       {visibleNodesToRender.map((node) => {
         if (node.x == null || node.y == null) return null;
         const isFocusNode = focusNodeIdSet.has(node.id);
-        const [vx, vy] = toView(node.x, node.y);
+        const [vx, vy] = nodeViewWithPair(node);
         const opacity = getNodeOpacity(node);
         const baseR = getNodeRadius(node) * (0.8 / Math.max(1, scaleForSize));
-        const pulseScale = focusNodeIdSet.has(node.id) ? nodePulseScale : 1;
+        const pairXform = getNodePairTransform?.(node.id) ?? null;
+        const basePulse = focusNodeIdSet.has(node.id) ? nodePulseScale : 1;
+        const combinedScale = basePulse * (pairXform?.scale ?? 1);
         const imageUrl = node.properties?.imageUrl as string | undefined;
         const showImage = imageUrl && !failedImageNodeIds.has(node.id);
         const rRaw = imageUrl ? baseR * 2.5 : baseR;
@@ -480,7 +504,7 @@ export function StoryGraphContent(props: {
               }),
             }}
           >
-            <g transform={pulseScale !== 1 ? `scale(${pulseScale})` : undefined}>
+            <g transform={combinedScale !== 1 ? `scale(${combinedScale})` : undefined}>
               {showImage ? (
                 <>
                   <defs>
