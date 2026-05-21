@@ -11,7 +11,11 @@ import React, {
 import type { GraphDocumentForFrontend } from "@/app/const/types";
 import type { MetaGraphStoryData } from "@/app/_hooks/use-meta-graph-story";
 import { StorytellingGraphUnified } from "./storytelling-graph-unified";
-import { buildScrollStepsFromMetaGraphStoryData, getSegmentNodeIdsFromMetaGraphStoryData } from "@/app/_utils/story-scroll-utils";
+import {
+  buildScrollStepsFromMetaGraphStoryData,
+  getLayoutFocusEdgeIdsFromScrollSteps,
+  getSegmentNodeIdsFromMetaGraphStoryData,
+} from "@/app/_utils/story-scroll-utils";
 import { getEdgeCompositeKeyFromLink } from "@/app/const/story-segment";
 import { createSvgToCanvasRenderer } from "@/app/_utils/video/svg-to-canvas";
 import type { SvgToCanvasRenderer as SvgToCanvasRendererType } from "@/app/_utils/video/svg-to-canvas";
@@ -154,6 +158,16 @@ export const StorytellingGraphRecorder = forwardRef<
   const segmentNodeIds = useMemo(
     () => getSegmentNodeIdsFromMetaGraphStoryData(metaGraphData),
     [metaGraphData],
+  );
+
+  const layoutFocusEdgeIds = useMemo(
+    () =>
+      getLayoutFocusEdgeIdsFromScrollSteps(
+        steps,
+        graphDocument?.relationships ?? [],
+        metaGraphData.communityMap,
+      ),
+    [steps, graphDocument?.relationships, metaGraphData.communityMap],
   );
 
   // 実際の録画処理（SVGがマウントされた後に呼ばれる）
@@ -356,6 +370,7 @@ export const StorytellingGraphRecorder = forwardRef<
             onTransitionComplete={handleTransitionComplete}
             onSvgRef={onSvgRef}
             forRecording
+            layoutFocusEdgeIds={layoutFocusEdgeIds}
           />
         </div>
       )}
