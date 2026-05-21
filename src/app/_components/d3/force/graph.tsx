@@ -29,6 +29,9 @@ import {
   CdtEdgeGlowFilterDef,
 } from "./storytelling-graph/components/cdt-animated-edge-path";
 import { GraphLinkEdgeSemanticPictogram } from "./graph-link-edge-semantic-pictogram";
+import { useNodePairSemanticMotion } from "./storytelling-graph/hooks/use-node-pair-semantic-motion";
+import { layoutPosWithNodePair } from "@/app/const/edge-cdt-node-pair-animation";
+import type { NodePairTransform } from "@/app/const/edge-cdt-node-pair-animation";
 
 /** 同一ノード対のエッジをグループ化するキー（ソース・ターゲットの順序を正規化） */
 function getNodePairKey(link: CustomLinkType): string {
@@ -77,6 +80,7 @@ const GraphNodeCircle = memo(function GraphNodeCircle({
   nodeRef,
   isSelectionMode,
   onNodeSelectionToggle,
+  pairTransform,
 }: {
   graphNode: CustomNodeType;
   isFocused: boolean;
@@ -99,6 +103,7 @@ const GraphNodeCircle = memo(function GraphNodeCircle({
   nodeRef: React.RefObject<SVGSVGElement>;
   isSelectionMode?: boolean;
   onNodeSelectionToggle?: (node: CustomNodeType) => void;
+  pairTransform?: NodePairTransform | null;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
 
@@ -157,7 +162,7 @@ const GraphNodeCircle = memo(function GraphNodeCircle({
       key={graphNode.id}
       ref={nodeRef}
       className={`${graphIdentifier}-node cursor-pointer`}
-      transform={`translate(${graphNode.x}, ${graphNode.y})`}
+      transform={`translate(${(graphNode.x ?? 0) + (pairTransform?.dx ?? 0)}, ${(graphNode.y ?? 0) + (pairTransform?.dy ?? 0)})`}
       onClick={() => {
         if (isSelectionMode) {
           onNodeSelectionToggle?.(graphNode);
@@ -174,6 +179,7 @@ const GraphNodeCircle = memo(function GraphNodeCircle({
         onNodeContextMenu?.(graphNode);
       }}
     >
+      <g transform={pairTransform && pairTransform.scale !== 1 ? `scale(${pairTransform.scale})` : undefined}>
       {showImage ? (
         <>
           <defs>
@@ -240,6 +246,7 @@ const GraphNodeCircle = memo(function GraphNodeCircle({
           {graphNode.name}
         </text>
       )}
+      </g>
     </g>
   );
 });
@@ -375,6 +382,12 @@ export const D3ForceGraph = ({
     links: linksForEdgeSemanticAnimation,
     enabled: showEdgeSemanticAnimation,
     topicSpaceId,
+  });
+
+  const { getNodePairTransform } = useNodePairSemanticMotion({
+    enabled: showEdgeSemanticAnimation,
+    links: linksForEdgeSemanticAnimation,
+    getEdgeMotionConfig,
   });
 
   const [currentTransformX, setCurrentTransformX] = useState<number>(
@@ -906,6 +919,23 @@ export const D3ForceGraph = ({
                   // );
                   // console.log(gradientFrom, " -> ", gradientTo);
 
+                  const srcPair = showEdgeSemanticAnimation
+                    ? getNodePairTransform(modSource.id)
+                    : null;
+                  const tgtPair = showEdgeSemanticAnimation
+                    ? getNodePairTransform(modTarget.id)
+                    : null;
+                  const srcPos = layoutPosWithNodePair(
+                    modSource.x ?? 0,
+                    modSource.y ?? 0,
+                    srcPair,
+                  );
+                  const tgtPos = layoutPosWithNodePair(
+                    modTarget.x ?? 0,
+                    modTarget.y ?? 0,
+                    tgtPair,
+                  );
+
                   return (
                     <g
                       className="link cursor-pointer"
@@ -924,7 +954,7 @@ export const D3ForceGraph = ({
                     >
                       {cdtMotionConfig ? (
                         <CdtAnimatedEdgePath
-                          pathD={`M ${modSource.x} ${modSource.y} L ${modTarget.x} ${modTarget.y}`}
+                          pathD={`M ${srcPos.x} ${srcPos.y} L ${tgtPos.x} ${tgtPos.y}`}
                           motionConfig={cdtMotionConfig}
                           strokeWidth={
                             ((graphLink.isAddedInHistory ??
@@ -983,10 +1013,10 @@ export const D3ForceGraph = ({
                               linkMagnification *
                               1.5
                           }
-                          x1={modSource.x}
-                          y1={modSource.y}
-                          x2={modTarget.x}
-                          y2={modTarget.y}
+                          x1={srcPos.x}
+                          y1={srcPos.y}
+                          x2={tgtPos.x}
+                          y2={tgtPos.y}
                         />
                       )}
                       {isDirectedLinks && (
@@ -995,10 +1025,10 @@ export const D3ForceGraph = ({
                             stroke={"orange"}
                             strokeWidth={(isFocused ? 2 : 1.2) * 1.5}
                             strokeOpacity={0.1}
-                            x1={modSource.x}
-                            y1={modSource.y}
-                            x2={modTarget.x}
-                            y2={modTarget.y}
+                            x1={srcPos.x}
+                            y1={srcPos.y}
+                            x2={tgtPos.x}
+                            y2={tgtPos.y}
                           >
                             <animate
                               attributeName="stroke-dasharray"
@@ -1022,6 +1052,7 @@ export const D3ForceGraph = ({
                           graphLink={graphLink}
                           getEdgeMotionConfig={getEdgeMotionConfig}
                           displayScale={currentScale}
+                          getNodePairTransform={getNodePairTransform}
                         />
                       )}
                     </g>
@@ -1056,10 +1087,26 @@ export const D3ForceGraph = ({
                       .filter(Boolean);
                     if (typesInPair.length === 0) return null;
 
-                    const labelX = (modSource.x + modTarget.x) / 2;
-                    const labelY = (modSource.y + modTarget.y) / 2;
-                    const dx = modTarget.x - modSource.x;
-                    const dy = modTarget.y - modSource.y;
+                    const srcPair = showEdgeSemanticAnimation
+                      ? getNodePairTransform(modSource.id)
+                      : null;
+                    const tgtPair = showEdgeSemanticAnimation
+                      ? getNodePairTransform(modTarget.id)
+                      : null;
+                    const srcPos = layoutPosWithNodePair(
+                      modSource.x ?? 0,
+                      modSource.y ?? 0,
+                      srcPair,
+                    );
+                    const tgtPos = layoutPosWithNodePair(
+                      modTarget.x ?? 0,
+                      modTarget.y ?? 0,
+                      tgtPair,
+                    );
+                    const labelX = (srcPos.x + tgtPos.x) / 2;
+                    const labelY = (srcPos.y + tgtPos.y) / 2;
+                    const dx = tgtPos.x - srcPos.x;
+                    const dy = tgtPos.y - srcPos.y;
                     const len = Math.sqrt(dx * dx + dy * dy) || 1;
                     const labelTextLength =
                       expandedEdgePairKey === pairKey && pairCount > 1
@@ -1172,6 +1219,7 @@ export const D3ForceGraph = ({
                       nodeRef={nodeRef}
                       isSelectionMode={isSelectionMode}
                       onNodeSelectionToggle={onNodeSelectionToggle}
+                      pairTransform={showEdgeSemanticAnimation ? getNodePairTransform(graphNode.id) : null}
                     />
                   );
                 })}
@@ -1223,6 +1271,7 @@ export const D3ForceGraph = ({
                       nodeRef={nodeRef}
                       isSelectionMode={isSelectionMode}
                       onNodeSelectionToggle={onNodeSelectionToggle}
+                      pairTransform={showEdgeSemanticAnimation ? getNodePairTransform(graphNode.id) : null}
                     />
                   );
                 })}

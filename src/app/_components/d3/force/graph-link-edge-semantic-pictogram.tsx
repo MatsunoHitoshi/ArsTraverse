@@ -2,12 +2,17 @@
 
 import type { CustomLinkType, CustomNodeType } from "@/app/const/types";
 import type { EdgeMotionConfig } from "@/app/const/edge-cdt-animation";
+import {
+  layoutPosWithNodePair,
+  type NodePairTransform,
+} from "@/app/const/edge-cdt-node-pair-animation";
 import { EdgeSemanticPictogram } from "./storytelling-graph/components/edge-semantic-pictogram";
 
 export type GraphLinkEdgeSemanticPictogramProps = {
   graphLink: CustomLinkType;
   getEdgeMotionConfig: (edgeId: string) => EdgeMotionConfig | null;
   displayScale: number;
+  getNodePairTransform?: (nodeId: string) => NodePairTransform | null;
 };
 
 /**
@@ -18,14 +23,25 @@ export function GraphLinkEdgeSemanticPictogram({
   graphLink,
   getEdgeMotionConfig,
   displayScale,
+  getNodePairTransform,
 }: GraphLinkEdgeSemanticPictogramProps) {
   const motionConfig = getEdgeMotionConfig(graphLink.id);
   if (!motionConfig) return null;
 
   const modSource = graphLink.source as CustomNodeType;
   const modTarget = graphLink.target as CustomNodeType;
-  const midX = ((modSource.x ?? 0) + (modTarget.x ?? 0)) / 2;
-  const midY = ((modSource.y ?? 0) + (modTarget.y ?? 0)) / 2;
+  const src = layoutPosWithNodePair(
+    modSource.x ?? 0,
+    modSource.y ?? 0,
+    getNodePairTransform?.(modSource.id) ?? null,
+  );
+  const tgt = layoutPosWithNodePair(
+    modTarget.x ?? 0,
+    modTarget.y ?? 0,
+    getNodePairTransform?.(modTarget.id) ?? null,
+  );
+  const midX = (src.x + tgt.x) / 2;
+  const midY = (src.y + tgt.y) / 2;
 
   return (
     <EdgeSemanticPictogram

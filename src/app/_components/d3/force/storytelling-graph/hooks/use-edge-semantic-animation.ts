@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useEffect } from "react";
+import { useCallback, useMemo, useRef, useEffect, useState } from "react";
 import { api } from "@/trpc/react";
 import type { CustomLinkType } from "@/app/const/types";
 import {
@@ -14,6 +14,13 @@ import {
  * 呼び出し元はフォーカス中のエッジのみを links に渡すこと（全エッジ一括分類を避ける）。
  * links（フォーカス集合）が変わったときのみ未分類分をバッチ分類し、結果をメモ化する。
  */
+export type UseEdgeSemanticAnimationResult = {
+  getEdgeMotionConfig: (edgeId: string) => EdgeMotionConfig | null;
+  isLoading: boolean;
+  /** 分類キャッシュ更新のたびに増加（ノードペアモーションの再計算トリガー） */
+  edgeMotionCacheVersion: number;
+};
+
 export function useEdgeSemanticAnimation({
   links,
   enabled,
@@ -22,15 +29,13 @@ export function useEdgeSemanticAnimation({
   links: CustomLinkType[];
   enabled: boolean;
   topicSpaceId?: string;
-}): {
-  getEdgeMotionConfig: (edgeId: string) => EdgeMotionConfig | null;
-  isLoading: boolean;
-} {
+}): UseEdgeSemanticAnimationResult {
   // enabled=false または topicSpaceId 未設定の場合は空を返す
   const isActive = enabled && !!topicSpaceId;
 
   // エッジID → motionConfig のキャッシュ（セッション中に積み上げる）
   const cacheRef = useRef<Map<string, EdgeMotionConfig>>(new Map());
+  const [edgeMotionCacheVersion, setEdgeMotionCacheVersion] = useState(0);
 
   // リクエスト対象のエッジリスト（type が空のものは除外）
   const edgesToClassify = useMemo(() => {
@@ -49,6 +54,7 @@ export function useEdgeSemanticAnimation({
           CDT_ANIMATION_MAP[cdtCategory] ?? CDT_ANIMATION_MAP.MENTAL;
         cacheRef.current.set(result.edgeId, config);
       }
+      setEdgeMotionCacheVersion((v) => v + 1);
     },
   });
 
@@ -64,17 +70,17 @@ export function useEdgeSemanticAnimation({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [edgesToClassify, isActive, topicSpaceId]);
 
-  const getEdgeMotionConfig = useMemo<
-    (edgeId: string) => EdgeMotionConfig | null
-  >(() => {
-    if (!isActive) return () => null;
-    return (edgeId: string) => cacheRef.current.get(edgeId) ?? null;
-    // cacheRef.current の変化を依存に含めるため mutation.isSuccess を加える
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, mutation.isSuccess, mutation.isPending]);
+  const getEdgeMotionConfig = useCallback(
+    (edgeId: string): EdgeMotionConfig | null => {
+      if (!isActive) return null;
+      return cacheRef.current.get(edgeId) ?? null;
+    },
+    [isActive, edgeMotionCacheVersion],
+  );
 
   return {
     getEdgeMotionConfig,
     isLoading: mutation.isPending,
+    edgeMotionCacheVersion,
   };
 }

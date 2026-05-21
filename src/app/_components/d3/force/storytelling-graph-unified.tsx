@@ -40,6 +40,7 @@ import {
 } from "./storytelling-graph/hooks/use-focus-transition";
 import { useSteadyAnimation } from "./storytelling-graph/hooks/use-steady-animation";
 import { useEdgeSemanticAnimation } from "./storytelling-graph/hooks/use-edge-semantic-animation";
+import { useNodePairSemanticMotion } from "./storytelling-graph/hooks/use-node-pair-semantic-motion";
 import { StoryGraphViewportLayer } from "./storytelling-graph/components/story-graph-viewport-layer";
 import { StoryGraphSvgFrame } from "./storytelling-graph/components/story-graph-svg-frame";
 import { StoryGraphContent } from "./storytelling-graph/components/story-graph-content";
@@ -49,6 +50,23 @@ export { easeOutCubic } from "./storytelling-graph/utils/graph-utils";
 
 const NODE_RADIUS = 3;
 const LINK_DISTANCE = 80;
+/** forceLink: 通常エッジの結合強度（0–1） */
+const LINK_STRENGTH_DEFAULT = 0.3;
+/** forceLink: フォーカスエッジの結合強度（通常より強め） */
+const LINK_STRENGTH_FOCUS = 0.5;
+/** コミュニティレイアウト時の同一コミュニティ内エッジ */
+const LINK_STRENGTH_COMMUNITY_INTRA = 0.2;
+/** フォーカス時はリンク距離をやや短くして端点を引き寄せる */
+const LINK_DISTANCE_FOCUS_RATIO = 0.8;
+
+function isFocusLinkForForce(
+  link: CustomLinkType,
+  focusEdgeIdSet: Set<string>,
+  applyFocusForce: boolean,
+): boolean {
+  if (!applyFocusForce) return false;
+  return focusEdgeIdSet.has(getEdgeCompositeKeyFromLink(link));
+}
 /** フォーカスが1点のとき scale が暴れないよう cap する */
 const MAX_VIEW_SCALE = 3;
 /** レイアウト計算用の固定サイズ。冒頭・セグメントで同一シミュレーション結果を使い回すため、実ビューサイズに依存しない */
@@ -290,18 +308,20 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     [effectiveFocusEdgeIds],
   );
   const hasExplicitEdges = effectiveFocusEdgeIds.length > 0;
-
-  /** エッジ意味アニメーションの分類対象（フォーカスエッジのみ。LLM負荷抑制） */
-  const linksForEdgeSemanticAnimation = useMemo(
-    () =>
-      initLinks.filter((link) =>
-        focusEdgeIdSet.has(getEdgeCompositeKeyFromLink(link)),
-      ),
-    [initLinks, focusEdgeIdSet],
-  );
+  /** セグメント表示時のみフォーカスエッジの forceLink を強化（オーバービューでは全エッジが focus 扱いになるため除外） */
+  const applyFocusLinkForce = hasExplicitEdges && !showFullGraph;
 
   const [nodes, setNodes] = useState<CustomNodeType[]>(initNodes);
   const [links, setLinks] = useState<CustomLinkType[]>(initLinks);
+
+  /** エッジ意味アニメーションの分類対象（フォーカスエッジのみ。シミュレーション後の links を使用） */
+  const linksForEdgeSemanticAnimation = useMemo(
+    () =>
+      links.filter((link) =>
+        focusEdgeIdSet.has(getEdgeCompositeKeyFromLink(link)),
+      ),
+    [links, focusEdgeIdSet],
+  );
   const simulationRef = useRef<Simulation<CustomNodeType, CustomLinkType> | null>(null);
 
   // ── レイアウト transform（useFocusTransition の onFocusWillChange から参照するため先に宣言） ──
@@ -353,10 +373,20 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
       showFullGraph,
     });
 
-  const { getEdgeMotionConfig } = useEdgeSemanticAnimation({
+  const edgeSemanticAnimation = useEdgeSemanticAnimation({
     links: linksForEdgeSemanticAnimation,
     enabled: showEdgeSemanticAnimation,
     topicSpaceId,
+  });
+
+  const { getNodePairTransform } = useNodePairSemanticMotion({
+    enabled:
+      showEdgeSemanticAnimation &&
+      isTransitionComplete &&
+      !freeExploreMode &&
+      !showFullGraph,
+    links: linksForEdgeSemanticAnimation,
+    getEdgeMotionConfig: edgeSemanticAnimation.getEdgeMotionConfig,
   });
 
   useEffect(() => {
@@ -498,14 +528,21 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
           "link",
           forceLink<CustomNodeType, CustomLinkType>(allLinks)
             .id((d) => d.id)
-            .distance(30)
+            .distance((link) => {
+              const base = 30;
+              return isFocusLinkForForce(link, focusEdgeIdSet, applyFocusLinkForce)
+                ? base * LINK_DISTANCE_FOCUS_RATIO
+                : base;
+            })
             .strength((link) => {
               const source = link.source as CustomNodeType;
               const target = link.target as CustomNodeType;
               const srcC = communityMap[source.id];
               const tgtC = communityMap[target.id];
               if (srcC && tgtC && srcC !== tgtC) return 0.01;
-              return 0.2;
+              return isFocusLinkForForce(link, focusEdgeIdSet, applyFocusLinkForce)
+                ? LINK_STRENGTH_FOCUS
+                : LINK_STRENGTH_COMMUNITY_INTRA;
             }),
         )
         .force("charge", forceManyBody().strength(-200))
@@ -552,8 +589,16 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         "link",
         forceLink<CustomNodeType, CustomLinkType>(allLinks)
           .id((d) => d.id)
-          .distance(LINK_DISTANCE)
-          .strength(0.3),
+          .distance((link) =>
+            isFocusLinkForForce(link, focusEdgeIdSet, applyFocusLinkForce)
+              ? LINK_DISTANCE * LINK_DISTANCE_FOCUS_RATIO
+              : LINK_DISTANCE,
+          )
+          .strength((link) =>
+            isFocusLinkForForce(link, focusEdgeIdSet, applyFocusLinkForce)
+              ? LINK_STRENGTH_FOCUS
+              : LINK_STRENGTH_DEFAULT,
+          ),
       )
       .force("charge", forceManyBody().strength(-120))
       .force("center", forceCenter(REF_LAYOUT_WIDTH / 2, REF_LAYOUT_HEIGHT / 2))
@@ -569,14 +614,16 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     return () => {
       simulation.stop();
     };
-  // height はレイアウト計算に使わず REF_LAYOUT 固定のため依存から除外。
-  // リサイズ時に effect が再実行されると setNodes でノードが再計算され、一瞬グラフが消える現象を防ぐ。
+    // height はレイアウト計算に使わず REF_LAYOUT 固定のため依存から除外。
+    // リサイズ時に effect が再実行されると setNodes でノードが再計算され、一瞬グラフが消える現象を防ぐ。
   }, [
     initNodes,
     initLinks,
     useCommunityLayout,
     communityMap,
     narrativeFlow,
+    focusEdgeIdSet,
+    applyFocusLinkForce,
   ]);
 
   const progress = Math.max(0, Math.min(1, animationProgress * 2));
@@ -1469,9 +1516,9 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
       x: number,
       y: number,
     ): [number, number] => [
-      width / 2 + (x - L.centerX) * L.scale,
-      height / 2 + (y - L.centerY) * L.scale,
-    ];
+        width / 2 + (x - L.centerX) * L.scale,
+        height / 2 + (y - L.centerY) * L.scale,
+      ];
 
     // ノード座標・opacity
     transitionNodeViewCoordsRef.current = new Map(
@@ -1629,7 +1676,10 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
           getNodeLabelFontSize={getNodeLabelFontSize}
           effectiveScaleForLabels={effectiveScaleForLabels}
           draggingNodeId={draggingNodeId}
-          getEdgeMotionConfig={showEdgeSemanticAnimation ? getEdgeMotionConfig : undefined}
+          getEdgeMotionConfig={
+            showEdgeSemanticAnimation ? edgeSemanticAnimation.getEdgeMotionConfig : undefined
+          }
+          getNodePairTransform={showEdgeSemanticAnimation ? getNodePairTransform : undefined}
         />
       </StoryGraphViewportLayer>
     </StoryGraphSvgFrame>
