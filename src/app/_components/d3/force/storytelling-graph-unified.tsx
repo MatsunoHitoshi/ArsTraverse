@@ -59,13 +59,12 @@ const LINK_STRENGTH_COMMUNITY_INTRA = 0.2;
 /** フォーカス時はリンク距離をやや短くして端点を引き寄せる */
 const LINK_DISTANCE_FOCUS_RATIO = 0.8;
 
-function isFocusLinkForForce(
+/** 初回レイアウト用: 全セグメント union のフォーカスエッジか（描画フォーカスとは別） */
+function isLayoutFocusLinkForForce(
   link: CustomLinkType,
-  focusEdgeIdSet: Set<string>,
-  applyFocusForce: boolean,
+  layoutFocusEdgeIdSet: Set<string>,
 ): boolean {
-  if (!applyFocusForce) return false;
-  return focusEdgeIdSet.has(getEdgeCompositeKeyFromLink(link));
+  return layoutFocusEdgeIdSet.has(getEdgeCompositeKeyFromLink(link));
 }
 /** フォーカスが1点のとき scale が暴れないよう cap する */
 const MAX_VIEW_SCALE = 3;
@@ -132,6 +131,8 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   forRecording = false,
   showEdgeSemanticAnimation = false,
   topicSpaceId,
+  /** 初回 force レイアウトで strength/distance を強めるエッジ（全セグメント分の union）。未指定なら強化なし */
+  layoutFocusEdgeIds,
 }: {
   graphDocument: GraphDocumentForFrontend;
   focusNodeIds: string[];
@@ -171,6 +172,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
   showEdgeSemanticAnimation?: boolean;
   /** エッジ分類キャッシュに使用する TopicSpace ID */
   topicSpaceId?: string;
+  layoutFocusEdgeIds?: string[];
 }) {
   const showBottomFadeGradient = !isPc;
   // PC版のフェードは親コンテナ（CSS Overlay）で行うため、ここでは SVG Mask を生成しない（描画負荷軽減）
@@ -308,8 +310,16 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     [effectiveFocusEdgeIds],
   );
   const hasExplicitEdges = effectiveFocusEdgeIds.length > 0;
-  /** セグメント表示時のみフォーカスエッジの forceLink を強化（オーバービューでは全エッジが focus 扱いになるため除外） */
-  const applyFocusLinkForce = hasExplicitEdges && !showFullGraph;
+
+  /** 初回シミュレーションのみ: 全セグメントのフォーカスエッジ union（セグメント切替では再計算しない） */
+  const layoutFocusEdgeIdSet = useMemo(
+    () => new Set(layoutFocusEdgeIds ?? []),
+    [layoutFocusEdgeIds],
+  );
+  const layoutFocusEdgeIdsKey = useMemo(
+    () => (layoutFocusEdgeIds ?? []).join("|"),
+    [layoutFocusEdgeIds],
+  );
 
   const [nodes, setNodes] = useState<CustomNodeType[]>(initNodes);
   const [links, setLinks] = useState<CustomLinkType[]>(initLinks);
@@ -530,7 +540,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
             .id((d) => d.id)
             .distance((link) => {
               const base = 30;
-              return isFocusLinkForForce(link, focusEdgeIdSet, applyFocusLinkForce)
+              return isLayoutFocusLinkForForce(link, layoutFocusEdgeIdSet)
                 ? base * LINK_DISTANCE_FOCUS_RATIO
                 : base;
             })
@@ -540,7 +550,7 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
               const srcC = communityMap[source.id];
               const tgtC = communityMap[target.id];
               if (srcC && tgtC && srcC !== tgtC) return 0.01;
-              return isFocusLinkForForce(link, focusEdgeIdSet, applyFocusLinkForce)
+              return isLayoutFocusLinkForForce(link, layoutFocusEdgeIdSet)
                 ? LINK_STRENGTH_FOCUS
                 : LINK_STRENGTH_COMMUNITY_INTRA;
             }),
@@ -590,12 +600,12 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
         forceLink<CustomNodeType, CustomLinkType>(allLinks)
           .id((d) => d.id)
           .distance((link) =>
-            isFocusLinkForForce(link, focusEdgeIdSet, applyFocusLinkForce)
+            isLayoutFocusLinkForForce(link, layoutFocusEdgeIdSet)
               ? LINK_DISTANCE * LINK_DISTANCE_FOCUS_RATIO
               : LINK_DISTANCE,
           )
           .strength((link) =>
-            isFocusLinkForForce(link, focusEdgeIdSet, applyFocusLinkForce)
+            isLayoutFocusLinkForForce(link, layoutFocusEdgeIdSet)
               ? LINK_STRENGTH_FOCUS
               : LINK_STRENGTH_DEFAULT,
           ),
@@ -614,16 +624,14 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     return () => {
       simulation.stop();
     };
-    // height はレイアウト計算に使わず REF_LAYOUT 固定のため依存から除外。
-    // リサイズ時に effect が再実行されると setNodes でノードが再計算され、一瞬グラフが消える現象を防ぐ。
+    // height / focusEdgeIdSet は依存に含めない（セグメント切替でレイアウト座標を再計算しない）。
   }, [
     initNodes,
     initLinks,
     useCommunityLayout,
     communityMap,
     narrativeFlow,
-    focusEdgeIdSet,
-    applyFocusLinkForce,
+    layoutFocusEdgeIdsKey,
   ]);
 
   const progress = Math.max(0, Math.min(1, animationProgress * 2));

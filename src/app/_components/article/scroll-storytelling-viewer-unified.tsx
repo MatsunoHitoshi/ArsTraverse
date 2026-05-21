@@ -12,6 +12,7 @@ import {
 } from "../d3/force/storytelling-graph-unified";
 import {
   buildScrollStepsFromMetaGraphStoryData,
+  getLayoutFocusEdgeIdsFromScrollSteps,
   getSegmentNodeIdsFromMetaGraphStoryData,
   type ScrollStep,
 } from "@/app/_utils/story-scroll-utils";
@@ -411,6 +412,16 @@ export function ScrollStorytellingViewerUnified({
     [metaGraphData],
   );
 
+  const layoutFocusEdgeIds = useMemo(
+    () =>
+      getLayoutFocusEdgeIdsFromScrollSteps(
+        steps,
+        graphDocument?.relationships ?? [],
+        metaGraphData.communityMap,
+      ),
+    [steps, graphDocument?.relationships, metaGraphData.communityMap],
+  );
+
   const animationProgress =
     isFreeExploreMode
       ? 1
@@ -636,6 +647,7 @@ export function ScrollStorytellingViewerUnified({
         onCommunityTitleClick={goToFirstSegmentOfCommunity}
         showEdgeSemanticAnimation={showEdgeSemanticAnimation}
         topicSpaceId={topicSpaceId}
+        layoutFocusEdgeIds={layoutFocusEdgeIds}
       />
 
       {/* グラフの端をフェードさせる軽量な CSS Overlay (SVG Mask の代わり)。PCのみ */}
