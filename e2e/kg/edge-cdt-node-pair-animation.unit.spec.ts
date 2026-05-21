@@ -7,6 +7,8 @@ import {
   NODE_PAIR_MOTION_MODES,
   computeNodePairOffset,
   getNodePairDurationMs,
+  layoutPosWithNodePair,
+  nodePairOffsetLayoutScale,
   type NodePairMotionSpec,
 } from "@/app/const/edge-cdt-node-pair-animation";
 
@@ -106,6 +108,17 @@ test.describe("edge-cdt-node-pair-animation", () => {
       expect(r.dx).toBe(0);
       expect(r.dy).toBe(0);
     }
+  });
+
+  test("nodePairOffsetLayoutScale は zoom の逆数を返す", () => {
+    expect(nodePairOffsetLayoutScale(2)).toBe(0.5);
+    expect(nodePairOffsetLayoutScale(0)).toBe(1);
+  });
+
+  test("layoutPosWithNodePair は viewScale でオフセットをレイアウト座標に換算する", () => {
+    const pos = layoutPosWithNodePair(10, 20, { dx: 8, dy: 0, scale: 1 }, 0.5);
+    expect(pos.x).toBe(14);
+    expect(pos.y).toBe(20);
   });
 
   test("斜め方向の edgeVec でもオフセットが計算される", () => {

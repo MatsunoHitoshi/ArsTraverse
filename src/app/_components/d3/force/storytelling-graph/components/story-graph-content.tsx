@@ -6,6 +6,7 @@ import { calcEdgeLabelPos, getDirectionalKey } from "../utils/graph-utils";
 import type { EdgeMotionConfig } from "@/app/const/edge-cdt-animation";
 import {
   layoutPosWithNodePair,
+  nodePairOffsetLayoutScale,
   type NodePairTransform,
 } from "@/app/const/edge-cdt-node-pair-animation";
 import { CdtAnimatedEdgePath, CdtEdgeGlowFilterDef } from "./cdt-animated-edge-path";
@@ -131,9 +132,15 @@ export function StoryGraphContent(props: {
   );
 
   /** レイアウト座標にペアオフセットを加えてからビュー座標へ（エッジ端点・ノード・ラベルで共通） */
+  const pairLayoutScale = nodePairOffsetLayoutScale(displayScale);
   const nodeViewWithPair = (node: CustomNodeType): [number, number] => {
     const pair = getNodePairTransform?.(node.id) ?? null;
-    const layout = layoutPosWithNodePair(node.x ?? 0, node.y ?? 0, pair);
+    const layout = layoutPosWithNodePair(
+      node.x ?? 0,
+      node.y ?? 0,
+      pair,
+      pairLayoutScale,
+    );
     const [vx, vy] = toView(layout.x, layout.y);
     return [vx, vy];
   };

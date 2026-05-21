@@ -135,6 +135,14 @@ export function getNodePairDurationMs(category: CdtCategory): number {
   return CDT_ANIMATION_MAP[category].durationMs;
 }
 
+/**
+ * amplitudePx（画面ピクセル）をレイアウト座標へ載せるときの係数。
+ * SVG の zoom scale が zoomScale のとき、layout 上は 1/zoomScale 倍する。
+ */
+export function nodePairOffsetLayoutScale(zoomScale: number): number {
+  return zoomScale > 0 ? 1 / zoomScale : 1;
+}
+
 /** レイアウト座標にペアオフセットを加算（エッジ端点・ラベル位置用） */
 export function layoutPosWithNodePair(
   x: number,

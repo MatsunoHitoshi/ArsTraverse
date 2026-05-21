@@ -30,7 +30,10 @@ import {
 } from "./storytelling-graph/components/cdt-animated-edge-path";
 import { GraphLinkEdgeSemanticPictogram } from "./graph-link-edge-semantic-pictogram";
 import { useNodePairSemanticMotion } from "./storytelling-graph/hooks/use-node-pair-semantic-motion";
-import { layoutPosWithNodePair } from "@/app/const/edge-cdt-node-pair-animation";
+import {
+  layoutPosWithNodePair,
+  nodePairOffsetLayoutScale,
+} from "@/app/const/edge-cdt-node-pair-animation";
 import type { NodePairTransform } from "@/app/const/edge-cdt-node-pair-animation";
 
 /** 同一ノード対のエッジをグループ化するキー（ソース・ターゲットの順序を正規化） */
@@ -157,12 +160,14 @@ const GraphNodeCircle = memo(function GraphNodeCircle({
         ? 2.5
         : 0;
 
+  const pairLayoutScale = nodePairOffsetLayoutScale(currentScale);
+
   return (
     <g
       key={graphNode.id}
       ref={nodeRef}
       className={`${graphIdentifier}-node cursor-pointer`}
-      transform={`translate(${(graphNode.x ?? 0) + (pairTransform?.dx ?? 0)}, ${(graphNode.y ?? 0) + (pairTransform?.dy ?? 0)})`}
+      transform={`translate(${(graphNode.x ?? 0) + (pairTransform?.dx ?? 0) * pairLayoutScale}, ${(graphNode.y ?? 0) + (pairTransform?.dy ?? 0) * pairLayoutScale})`}
       onClick={() => {
         if (isSelectionMode) {
           onNodeSelectionToggle?.(graphNode);
@@ -925,15 +930,18 @@ export const D3ForceGraph = ({
                   const tgtPair = showEdgeSemanticAnimation
                     ? getNodePairTransform(modTarget.id)
                     : null;
+                  const pairLayoutScale = nodePairOffsetLayoutScale(currentScale);
                   const srcPos = layoutPosWithNodePair(
                     modSource.x ?? 0,
                     modSource.y ?? 0,
                     srcPair,
+                    pairLayoutScale,
                   );
                   const tgtPos = layoutPosWithNodePair(
                     modTarget.x ?? 0,
                     modTarget.y ?? 0,
                     tgtPair,
+                    pairLayoutScale,
                   );
 
                   return (
@@ -1093,15 +1101,18 @@ export const D3ForceGraph = ({
                     const tgtPair = showEdgeSemanticAnimation
                       ? getNodePairTransform(modTarget.id)
                       : null;
+                    const pairLayoutScale = nodePairOffsetLayoutScale(currentScale);
                     const srcPos = layoutPosWithNodePair(
                       modSource.x ?? 0,
                       modSource.y ?? 0,
                       srcPair,
+                      pairLayoutScale,
                     );
                     const tgtPos = layoutPosWithNodePair(
                       modTarget.x ?? 0,
                       modTarget.y ?? 0,
                       tgtPair,
+                      pairLayoutScale,
                     );
                     const labelX = (srcPos.x + tgtPos.x) / 2;
                     const labelY = (srcPos.y + tgtPos.y) / 2;
