@@ -98,7 +98,7 @@ ArsTraverse follows a monolithic Next.js architecture with clear separation of c
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 24.x（`.nvmrc` 参照）
 - Docker (for local database)
 - PostgreSQL 15+ (if not using Docker)
 

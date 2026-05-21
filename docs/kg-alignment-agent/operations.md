@@ -2,7 +2,7 @@
 
 ## 1. 事前準備
 
-- [ ] Node.js と依存関係（`npm install`）
+- [ ] Node.js 24.x（`.nvmrc`）と依存関係（`npm install`）
 - [ ] `.env` に `OPENAI_API_KEY`, `DATABASE_URL` 等
 - [ ] `npm run dev` で開発サーバー起動
 - [ ] ブラウザでアプリにログインし、対象 TopicSpace の admin であること
