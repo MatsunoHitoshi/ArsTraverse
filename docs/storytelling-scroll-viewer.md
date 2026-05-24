@@ -49,8 +49,47 @@
 
 グラフ上のコントロールから切替。有効時は `frozenGraphIndexRef` で**当時のセグメント index** にグラフ表示を固定し、`StorytellingGraphUnified` に `freeExploreMode` を渡す。
 
+## ステップ構築とレイアウト用フォーカスエッジ
+
+スクロール各ステップの `nodeIds` / `edgeIds` と、D3 の**初回** force レイアウトで強めるリンク集合は別物。前者は現在セグメントの**描画フォーカス**、後者は全セグメントを踏まえた**レイアウト安定化用の union**（セグメント切替ではシミュレーションを回し直さない設計）。
+
+### `buildScrollStepsFromMetaGraphStoryData`（`story-scroll-utils.ts`）
+
+- `narrativeFlow` を `order` でソートし、各コミュニティの `detailedStories` 内の Tiptap **paragraph** を 1 ステップにする。
+- 段落の attrs から `segmentNodeIds` / `segmentEdgeIds` を読む（空ならそのステップはコミュニティ全体フォーカス相当の「ノード・エッジ未指定」）。
+- `detailedStories` が欠ける・文字列のみ・段落が無い場合はサマリー等でフォールバック 1 ステップ。
+- トランジション専用ステップの追加ロジックはソース上コメントアウト済み（独立 `isTransition` ステップは現状出さない）。
+
+### エッジ ID の表現（複合キー）
+
+`internalEdgesDetailed` 等に安定したエッジ `id` が無い前提のため、リンクは **`sourceId|targetId|type`** の文字列で同一視する（`getEdgeCompositeKeyFromLink` / `story-segment.ts`）。`segmentEdgeIds` もこの形式を想定する。
+
+### `resolveScrollStepGraphFocus`
+
+- 引数 `step` は `ScrollStepGraphFocus`（`id`, `communityId`, `nodeIds`, `edgeIds` のみ必須）で足りる。
+- `step.id === "__overview__"` のときは `{ nodeIds: [], edgeIds: [] }` を返す（オーバービューはレイアウト union からも除外される）。
+- **`nodeIds` と `edgeIds` がどちらも空**で `communityMap` が渡されているとき、その `communityId` に属する全ノード ID に展開し、**両端点がその集合に含まれる**関係だけを `edgeIds` に含める（コミュニティ内サブグラフ）。
+
+### `getLayoutFocusEdgeIdsFromScrollSteps` / `getLayoutFocusEdgeIdsFromMetaGraphStoryData`
+
+- 全ステップ（`__overview__` を除く）について `resolveScrollStepGraphFocus` でノード・明示エッジを求める。
+- 各ステップで、明示 `edgeIds` に含まれるリンクの端点をフォーカスノード集合にマージしたうえで、**フォーカス集合内の両端点を結ぶ全リンク**の複合キーを集合に追加する（`addIntraFocusEdgesForStep`）。ノードだけ指定された段落でも、ステップ内サブグラフの辺がレイアウト対象に入る。
+- 返り値は全ステップの**和集合**（重複は `Set` で除去）。`getLayoutFocusEdgeIdsFromMetaGraphStoryData` は `buildScrollStepsFromMetaGraphStoryData` の結果に対して同じ union をかける。
+
+### `StorytellingGraphUnified` との接続
+
+- 親（`scroll-storytelling-viewer-unified.tsx` / `storytelling-graph-recorder.tsx`）が `getLayoutFocusEdgeIdsFromScrollSteps(steps, graphDocument.relationships, metaGraphData.communityMap)` を `layoutFocusEdgeIds` として渡す。
+- グラフ側では `layoutFocusEdgeIdSet` に含まれるリンクだけ `forceLink` の **distance** を `LINK_DISTANCE * 0.8`、**strength** を `0.5`（通常 `0.3`）に寄せる（`isLayoutFocusLinkForForce`）。意図は初回配置でストーリー上重要な辺をやや短く強く結び、セグメントを変えても**同じシミュレーション結果座標を使い回す**こと（`useEffect` の依存に `layoutFocusEdgeIdsKey` は入るが、描画フォーカスの `focusEdgeIdSet` や `height` は意図的に含めない）。
+
+### 検証用テスト
+
+- `e2e/kg/story-scroll-layout-focus.unit.spec.ts` — コミュニティのみステップの展開、複数ステップにまたがる辺の union、`__overview__` の除外。
+
 ## 関連実装ファイル
 
 - `src/app/_components/article/scroll-storytelling-viewer-unified.tsx` — 本ビュー本体
 - `src/app/_components/d3/force/storytelling-graph-unified.tsx` — D3 側のフォーカス・アニメーション
+- `src/app/_components/d3/force/storytelling-graph-recorder.tsx` — 録画時も同じ `layoutFocusEdgeIds` を渡す経路
 - `src/app/_utils/story-scroll-utils.ts` — `buildScrollStepsFromMetaGraphStoryData` などステップ構築
+- `src/app/const/story-segment.ts` — エッジ複合キー `getEdgeCompositeKeyFromLink`
+- `e2e/kg/story-scroll-layout-focus.unit.spec.ts` — レイアウト union のユニットテスト
