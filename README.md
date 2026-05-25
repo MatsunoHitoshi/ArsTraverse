@@ -36,7 +36,7 @@ The ultimate goal is to democratize cultural knowledge creation and make the ric
 
 ### Core Framework
 
-- **Next.js 14.2** - React framework with App Router
+- **Next.js 15** (`^15.5.x` in `package.json`) - React framework with App Router
 - **TypeScript** - Type-safe development
 - **Tailwind CSS** - Utility-first styling
 
