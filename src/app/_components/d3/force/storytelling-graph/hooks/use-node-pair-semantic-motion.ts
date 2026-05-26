@@ -21,17 +21,27 @@ export function useNodePairSemanticMotion({
   enabled,
   links,
   getEdgeMotionConfig,
+  activeEdgeIds,
+  sharedEndpointId,
 }: {
   enabled: boolean;
   links: CustomLinkType[];
   /** 分類キャッシュ更新時に参照が変わること（useEdgeSemanticAnimation の useCallback 依存） */
   getEdgeMotionConfig: (edgeId: string) => EdgeMotionConfig | null;
+  /** 指定時はこのエッジ群の端点だけを動かす（順次/グループ再生用） */
+  activeEdgeIds?: Set<string> | null;
+  /** グループ再生時の共有端点。位置は固定し、scale pulse のみ与える */
+  sharedEndpointId?: string | null;
 }): {
   getNodePairTransform: (nodeId: string) => NodePairTransform | null;
 } {
   const rafRef = useRef<number | null>(null);
   const startRef = useRef<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const activeEdgeKey = useMemo(
+    () => (activeEdgeIds ? [...activeEdgeIds].sort().join("|") : ""),
+    [activeEdgeIds],
+  );
 
   /** nodeId → { category, role, durationMs, edgeVec } for each endpoint of active edges */
   const activeEntries = useMemo(() => {
@@ -44,10 +54,13 @@ export function useNodePairSemanticMotion({
         role: "source" | "target";
         durationMs: number;
         edgeVec: { ux: number; uy: number };
+        isSharedEndpoint: boolean;
       }
     >();
 
     for (const link of links) {
+      if (activeEdgeIds != null && !activeEdgeIds.has(link.id)) continue;
+
       const config = getEdgeMotionConfig(link.id);
       if (!config) continue;
 
@@ -61,17 +74,31 @@ export function useNodePairSemanticMotion({
       if (len < 1) continue;
       const edgeVec = { ux: dx / len, uy: dy / len };
       const durationMs = getNodePairDurationMs(config.category);
+      const sourceIsShared = src.id === sharedEndpointId;
+      const targetIsShared = tgt.id === sharedEndpointId;
 
       if (!entries.has(src.id)) {
-        entries.set(src.id, { category: config.category, role: "source", durationMs, edgeVec });
+        entries.set(src.id, {
+          category: config.category,
+          role: "source",
+          durationMs,
+          edgeVec,
+          isSharedEndpoint: sourceIsShared,
+        });
       }
       if (!entries.has(tgt.id)) {
-        entries.set(tgt.id, { category: config.category, role: "target", durationMs, edgeVec });
+        entries.set(tgt.id, {
+          category: config.category,
+          role: "target",
+          durationMs,
+          edgeVec,
+          isSharedEndpoint: targetIsShared,
+        });
       }
     }
 
     return entries.size > 0 ? entries : null;
-  }, [enabled, links, getEdgeMotionConfig]);
+  }, [enabled, links, getEdgeMotionConfig, activeEdgeIds, sharedEndpointId]);
 
   const shouldAnimate = activeEntries != null;
 
@@ -85,6 +112,9 @@ export function useNodePairSemanticMotion({
       setElapsedMs(0);
       return;
     }
+
+    startRef.current = null;
+    setElapsedMs(0);
 
     const tick = (now: number) => {
       if (startRef.current == null) {
@@ -101,7 +131,7 @@ export function useNodePairSemanticMotion({
         rafRef.current = null;
       }
     };
-  }, [shouldAnimate]);
+  }, [shouldAnimate, activeEdgeKey]);
 
   const getNodePairTransform = useMemo<
     (nodeId: string) => NodePairTransform | null
@@ -111,6 +141,12 @@ export function useNodePairSemanticMotion({
     return (nodeId: string) => {
       const entry = activeEntries.get(nodeId);
       if (!entry) return null;
+
+      if (entry.isSharedEndpoint) {
+        const t = (elapsedMs % entry.durationMs) / entry.durationMs;
+        const pulse = Math.abs(Math.sin(Math.PI * 2 * t));
+        return { dx: 0, dy: 0, scale: 1 + 0.06 * pulse };
+      }
 
       const spec = CDT_NODE_PAIR_MAP[entry.category];
       const t = (elapsedMs % entry.durationMs) / entry.durationMs;
