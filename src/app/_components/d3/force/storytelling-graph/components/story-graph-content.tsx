@@ -80,6 +80,8 @@ export function StoryGraphContent(props: {
   draggingNodeId: string | null;
   /** CDT分類済みエッジのアニメーション設定を取得する関数。null なら標準描画 */
   getEdgeMotionConfig?: (edgeId: string) => EdgeMotionConfig | null;
+  /** 指定時はこの CDT エッジ群だけをフルアニメーションし、他の CDT エッジは静止表示 */
+  activeSemanticEdgeIds?: Set<string> | null;
   /** CDTカテゴリに基づくノードペアのビュー空間オフセット+スケール */
   getNodePairTransform?: (nodeId: string) => NodePairTransform | null;
 }) {
@@ -124,6 +126,7 @@ export function StoryGraphContent(props: {
     effectiveScaleForLabels,
     draggingNodeId,
     getEdgeMotionConfig,
+    activeSemanticEdgeIds,
     getNodePairTransform,
   } = props;
 
@@ -263,8 +266,18 @@ export function StoryGraphContent(props: {
           const edgeMidX = (sx + tx) / 2;
           const edgeMidY = (sy + ty) / 2;
           const edgeFullyRevealed = effectiveEdgeProgress >= 1;
+          const isSequencedCdtEdge =
+            motionConfig != null && activeSemanticEdgeIds != null;
+          const isActiveCdtEdge =
+            !isSequencedCdtEdge || activeSemanticEdgeIds.has(link.id);
+          const cdtStrokeOpacity =
+            motionConfig != null && !isActiveCdtEdge
+              ? Math.max(0.18, focusStrokeOpacity * 0.35)
+              : focusStrokeOpacity;
           const steadyCdtAnim =
-            motionConfig != null && (useFlowGrad || edgeFullyRevealed || freeExploreMode);
+            motionConfig != null &&
+            isActiveCdtEdge &&
+            (useFlowGrad || edgeFullyRevealed || freeExploreMode);
 
           return (
             <g key={`path-${dirKey}-${i}`}>
@@ -272,8 +285,12 @@ export function StoryGraphContent(props: {
                 <CdtAnimatedEdgePath
                   pathD={pathD}
                   motionConfig={motionConfig}
-                  strokeWidth={edgeStrokeWidthFocus}
-                  strokeOpacity={focusStrokeOpacity}
+                  strokeWidth={
+                    isActiveCdtEdge
+                      ? edgeStrokeWidthFocus
+                      : edgeStrokeWidthFocus * 0.85
+                  }
+                  strokeOpacity={cdtStrokeOpacity}
                   revealProgress={edgeFullyRevealed ? undefined : effectiveEdgeProgress}
                   steadyAnimate={steadyCdtAnim}
                 />
@@ -301,7 +318,7 @@ export function StoryGraphContent(props: {
                   strokeWidth={edgeStrokeWidthFocus}
                 />
               )}
-              {motionConfig && (
+              {motionConfig && isActiveCdtEdge && (
                 <EdgeSemanticPictogram
                   config={motionConfig}
                   cx={edgeMidX}

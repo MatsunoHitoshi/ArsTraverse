@@ -6,6 +6,7 @@ import type {
   GraphDocumentForFrontend,
   LayoutInstruction,
 } from "@/app/const/types";
+import type { CdtCategory } from "@/app/const/edge-cdt-animation";
 import { getEdgeCompositeKeyFromLink } from "@/app/const/story-segment";
 import {
   forceSimulation,
@@ -96,6 +97,188 @@ const CULLING_VIEWPORT_MARGIN = 80;
 /** ビューポートカリング: このノード数以上でカリングを有効化 */
 const CULLING_THRESHOLD = 120;
 
+/** CDTエッジの順次イントロ: 1グループにつきカテゴリの1周期以上を確保 */
+const SEMANTIC_EDGE_SEQUENCE_MIN_MS = 900;
+const SEMANTIC_EDGE_SEQUENCE_GAP_MS = 220;
+const SEMANTIC_EDGE_SEQUENCE_MAX_GROUP_SIZE = 4;
+const GROUPABLE_CDT_CATEGORIES = new Set<CdtCategory>([
+  "PTRANS",
+  "ATRANS",
+  "INGEST",
+  "EXPEL",
+  "MENTAL",
+]);
+
+type SemanticMotionGroup = {
+  id: string;
+  edgeIds: string[];
+  category: CdtCategory;
+  firstOrder: number;
+  sharedEndpointId: string | null;
+  sharedEndpointRole: "source" | "target" | null;
+};
+
+type ClassifiedSemanticLink = {
+  link: CustomLinkType;
+  category: CdtCategory;
+  predicate: string;
+  order: number;
+  sourceId: string;
+  targetId: string;
+};
+
+function clampSemanticEdgeSequenceMs(durationMs: number): number {
+  return Math.max(
+    SEMANTIC_EDGE_SEQUENCE_MIN_MS,
+    durationMs,
+  );
+}
+
+function chunkSemanticLinks(
+  links: ClassifiedSemanticLink[],
+  size = SEMANTIC_EDGE_SEQUENCE_MAX_GROUP_SIZE,
+): ClassifiedSemanticLink[][] {
+  const chunks: ClassifiedSemanticLink[][] = [];
+  for (let i = 0; i < links.length; i += size) {
+    chunks.push(links.slice(i, i + size));
+  }
+  return chunks;
+}
+
+function createSemanticMotionGroup({
+  links,
+  category,
+  bucketKey,
+  sharedEndpointId,
+  sharedEndpointRole,
+  suffix,
+}: {
+  links: ClassifiedSemanticLink[];
+  category: CdtCategory;
+  bucketKey: string;
+  sharedEndpointId: string | null;
+  sharedEndpointRole: "source" | "target" | null;
+  suffix: string;
+}): SemanticMotionGroup {
+  return {
+    id: `${bucketKey}|${sharedEndpointRole ?? "single"}:${sharedEndpointId ?? "none"}|${suffix}`,
+    edgeIds: links.map((item) => item.link.id),
+    category,
+    firstOrder: Math.min(...links.map((item) => item.order)),
+    sharedEndpointId,
+    sharedEndpointRole,
+  };
+}
+
+function buildSemanticMotionGroups(
+  classifiedLinks: ClassifiedSemanticLink[],
+): SemanticMotionGroup[] {
+  const buckets = new Map<string, ClassifiedSemanticLink[]>();
+  for (const item of classifiedLinks) {
+    const key = `${item.category}|${item.predicate}`;
+    const bucket = buckets.get(key);
+    if (bucket) {
+      bucket.push(item);
+    } else {
+      buckets.set(key, [item]);
+    }
+  }
+
+  const groups: SemanticMotionGroup[] = [];
+  for (const [bucketKey, bucketLinks] of buckets) {
+    const category = bucketLinks[0]?.category;
+    if (!category) continue;
+
+    if (!GROUPABLE_CDT_CATEGORIES.has(category) || bucketLinks.length < 2) {
+      groups.push(
+        ...bucketLinks.map((item) =>
+          createSemanticMotionGroup({
+            links: [item],
+            category,
+            bucketKey,
+            sharedEndpointId: null,
+            sharedEndpointRole: null,
+            suffix: item.link.id,
+          }),
+        ),
+      );
+      continue;
+    }
+
+    const bySource = new Map<string, ClassifiedSemanticLink[]>();
+    const byTarget = new Map<string, ClassifiedSemanticLink[]>();
+    for (const item of bucketLinks) {
+      const sourceGroup = bySource.get(item.sourceId);
+      if (sourceGroup) sourceGroup.push(item);
+      else bySource.set(item.sourceId, [item]);
+
+      const targetGroup = byTarget.get(item.targetId);
+      if (targetGroup) targetGroup.push(item);
+      else byTarget.set(item.targetId, [item]);
+    }
+
+    const sourceMax = Math.max(0, ...[...bySource.values()].map((items) => items.length));
+    const targetMax = Math.max(0, ...[...byTarget.values()].map((items) => items.length));
+    const sharedRole =
+      sourceMax > targetMax && sourceMax >= 2
+        ? "source"
+        : targetMax > sourceMax && targetMax >= 2
+          ? "target"
+          : null;
+
+    if (sharedRole == null) {
+      groups.push(
+        ...bucketLinks.map((item) =>
+          createSemanticMotionGroup({
+            links: [item],
+            category,
+            bucketKey,
+            sharedEndpointId: null,
+            sharedEndpointRole: null,
+            suffix: item.link.id,
+          }),
+        ),
+      );
+      continue;
+    }
+
+    const selectedIds = new Set<string>();
+    const endpointGroups = sharedRole === "source" ? bySource : byTarget;
+    for (const [endpointId, endpointLinks] of endpointGroups) {
+      if (endpointLinks.length < 2) continue;
+
+      for (const [chunkIndex, chunk] of chunkSemanticLinks(endpointLinks).entries()) {
+        groups.push(
+          createSemanticMotionGroup({
+            links: chunk,
+            category,
+            bucketKey,
+            sharedEndpointId: endpointId,
+            sharedEndpointRole: sharedRole,
+            suffix: `${endpointId}:${chunkIndex}`,
+          }),
+        );
+        chunk.forEach((item) => selectedIds.add(item.link.id));
+      }
+    }
+
+    const leftovers = bucketLinks.filter((item) => !selectedIds.has(item.link.id));
+    groups.push(
+      ...leftovers.map((item) =>
+        createSemanticMotionGroup({
+          links: [item],
+          category,
+          bucketKey,
+          sharedEndpointId: null,
+          sharedEndpointRole: null,
+          suffix: item.link.id,
+        }),
+      ),
+    );
+  }
+
+  return groups.sort((a, b) => a.firstOrder - b.firstOrder);
+}
 
 /** 出る側ノードのフェードイン完了までに使う progress の割合 (0–1) */
 const SOURCE_FADE_END = 0.35;
@@ -181,6 +364,8 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
     communityMap != null &&
     narrativeFlow != null &&
     (narrativeFlow?.some((n) => n.order != null) ?? false);
+  const shouldUseEdgeSemanticAnimation =
+    showEdgeSemanticAnimation && !showFullGraph;
   const svgRef = useRef<SVGSVGElement>(null);
   // 外部から SVG 要素にアクセスできるよう ref をコールバックで通知
   const onSvgRefStable = useRef(onSvgRef);
@@ -385,18 +570,110 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
 
   const edgeSemanticAnimation = useEdgeSemanticAnimation({
     links: linksForEdgeSemanticAnimation,
-    enabled: showEdgeSemanticAnimation,
+    enabled: shouldUseEdgeSemanticAnimation,
     topicSpaceId,
   });
+  const getSemanticEdgeMotionConfig = edgeSemanticAnimation.getEdgeMotionConfig;
+
+  const semanticMotionGroups = useMemo(() => {
+    if (
+      !shouldUseEdgeSemanticAnimation ||
+      !isTransitionComplete ||
+      freeExploreMode ||
+      showFullGraph
+    ) {
+      return [];
+    }
+
+    const classifiedLinks: ClassifiedSemanticLink[] = [];
+    linksForEdgeSemanticAnimation.forEach((link, order) => {
+      const config = getSemanticEdgeMotionConfig(link.id);
+      if (!config) return;
+
+      const source = link.source as CustomNodeType;
+      const target = link.target as CustomNodeType;
+      if (!source?.id || !target?.id) return;
+
+      classifiedLinks.push({
+        link,
+        category: config.category,
+        predicate: link.type ?? "",
+        order,
+        sourceId: source.id,
+        targetId: target.id,
+      });
+    });
+
+    return buildSemanticMotionGroups(classifiedLinks);
+  }, [
+    shouldUseEdgeSemanticAnimation,
+    isTransitionComplete,
+    freeExploreMode,
+    showFullGraph,
+    linksForEdgeSemanticAnimation,
+    getSemanticEdgeMotionConfig,
+  ]);
+
+  const semanticMotionGroupKey = useMemo(
+    () => semanticMotionGroups.map((group) => group.id).join("|"),
+    [semanticMotionGroups],
+  );
+  const [activeSemanticGroupIndex, setActiveSemanticGroupIndex] = useState(0);
+
+  useEffect(() => {
+    setActiveSemanticGroupIndex(0);
+  }, [semanticMotionGroupKey]);
+
+  const activeSemanticMotionGroup =
+    semanticMotionGroups.length > 0
+      ? semanticMotionGroups[
+        activeSemanticGroupIndex % semanticMotionGroups.length
+      ] ?? null
+      : null;
+  const activeSemanticEdgeIds = useMemo(
+    () =>
+      activeSemanticMotionGroup
+        ? new Set(activeSemanticMotionGroup.edgeIds)
+        : null,
+    [activeSemanticMotionGroup],
+  );
+
+  useEffect(() => {
+    if (semanticMotionGroups.length <= 1 || !activeSemanticMotionGroup) return;
+
+    const groupDurationMs = activeSemanticMotionGroup.edgeIds.reduce(
+      (maxDuration, edgeId) => {
+        const config = getSemanticEdgeMotionConfig(edgeId);
+        return Math.max(maxDuration, config?.durationMs ?? 1200);
+      },
+      0,
+    );
+    const dwellMs =
+      clampSemanticEdgeSequenceMs(groupDurationMs || 1200) +
+      SEMANTIC_EDGE_SEQUENCE_GAP_MS;
+
+    const timeoutId = window.setTimeout(() => {
+      setActiveSemanticGroupIndex((index) => index + 1);
+    }, dwellMs);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    activeSemanticMotionGroup,
+    semanticMotionGroups.length,
+    semanticMotionGroupKey,
+    getSemanticEdgeMotionConfig,
+  ]);
 
   const { getNodePairTransform } = useNodePairSemanticMotion({
     enabled:
-      showEdgeSemanticAnimation &&
+      shouldUseEdgeSemanticAnimation &&
       isTransitionComplete &&
       !freeExploreMode &&
       !showFullGraph,
     links: linksForEdgeSemanticAnimation,
-    getEdgeMotionConfig: edgeSemanticAnimation.getEdgeMotionConfig,
+    getEdgeMotionConfig: getSemanticEdgeMotionConfig,
+    activeEdgeIds: activeSemanticEdgeIds,
+    sharedEndpointId: activeSemanticMotionGroup?.sharedEndpointId ?? null,
   });
 
   useEffect(() => {
@@ -1685,9 +1962,10 @@ export const StorytellingGraphUnified = memo(function StorytellingGraphUnified({
           effectiveScaleForLabels={effectiveScaleForLabels}
           draggingNodeId={draggingNodeId}
           getEdgeMotionConfig={
-            showEdgeSemanticAnimation ? edgeSemanticAnimation.getEdgeMotionConfig : undefined
+            shouldUseEdgeSemanticAnimation ? getSemanticEdgeMotionConfig : undefined
           }
-          getNodePairTransform={showEdgeSemanticAnimation ? getNodePairTransform : undefined}
+          activeSemanticEdgeIds={activeSemanticEdgeIds}
+          getNodePairTransform={shouldUseEdgeSemanticAnimation ? getNodePairTransform : undefined}
         />
       </StoryGraphViewportLayer>
     </StoryGraphSvgFrame>

@@ -645,7 +645,9 @@ export function ScrollStorytellingViewerUnified({
         hasSpecificSegmentFocus={!segmentHasNoFocus}
         communityTitles={communityTitles}
         onCommunityTitleClick={goToFirstSegmentOfCommunity}
-        showEdgeSemanticAnimation={showEdgeSemanticAnimation}
+        showEdgeSemanticAnimation={
+          displayStep?.id !== "__overview__" && showEdgeSemanticAnimation
+        }
         topicSpaceId={topicSpaceId}
         layoutFocusEdgeIds={layoutFocusEdgeIds}
       />
