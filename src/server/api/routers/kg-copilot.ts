@@ -2833,6 +2833,10 @@ Order ${idx + 1}: Community ${c.communityId}
           z.object({
             edgeId: z.string(),
             edgeType: z.string(),
+            sourceName: z.string().optional(),
+            sourceLabel: z.string().optional(),
+            targetName: z.string().optional(),
+            targetLabel: z.string().optional(),
           }),
         ),
       }),

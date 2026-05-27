@@ -42,7 +42,18 @@ export function useEdgeSemanticAnimation({
     if (!isActive) return [];
     return links
       .filter((l) => l.id && l.type && !cacheRef.current.has(l.id))
-      .map((l) => ({ edgeId: l.id, edgeType: l.type }));
+      .map((l) => {
+        const source = typeof l.source === "object" ? l.source : null;
+        const target = typeof l.target === "object" ? l.target : null;
+        return {
+          edgeId: l.id,
+          edgeType: l.type,
+          sourceName: source?.name,
+          sourceLabel: source?.label,
+          targetName: target?.name,
+          targetLabel: target?.label,
+        };
+      });
   }, [links, isActive]);
 
   const mutation = api.kg.classifyEdgeMotion.useMutation({
@@ -50,8 +61,12 @@ export function useEdgeSemanticAnimation({
       for (const result of data.results) {
         if (!result) continue;
         const cdtCategory = result.motionConfig.category;
-        const config: EdgeMotionConfig =
+        const fallbackConfig: EdgeMotionConfig =
           CDT_ANIMATION_MAP[cdtCategory] ?? CDT_ANIMATION_MAP.MENTAL;
+        const config: EdgeMotionConfig = {
+          ...fallbackConfig,
+          ...result.motionConfig,
+        };
         cacheRef.current.set(result.edgeId, config);
       }
       setEdgeMotionCacheVersion((v) => v + 1);

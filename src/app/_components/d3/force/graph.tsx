@@ -39,11 +39,15 @@ import type { NodePairTransform } from "@/app/const/edge-cdt-node-pair-animation
 /** 同一ノード対のエッジをグループ化するキー（ソース・ターゲットの順序を正規化） */
 function getNodePairKey(link: CustomLinkType): string {
   const a =
-    typeof link.source === "object" && link.source !== null && "id" in link.source
+    typeof link.source === "object" &&
+    link.source !== null &&
+    "id" in link.source
       ? link.source.id
       : link.sourceId;
   const b =
-    typeof link.target === "object" && link.target !== null && "id" in link.target
+    typeof link.target === "object" &&
+    link.target !== null &&
+    "id" in link.target
       ? link.target.id
       : link.targetId;
   return a < b ? `${a}|${b}` : `${b}|${a}`;
@@ -137,24 +141,22 @@ const GraphNodeCircle = memo(function GraphNodeCircle({
                   : isClustered && graphNode.nodeColor
                     ? graphNode.nodeColor
                     : "whitesmoke";
-  const opacity =
-    graphNode.isExistingContext
-      ? 0.3
-      : isNodeFiltered(graphNode, filterOption)
-        ? 0.9
-        : 0.6;
-  const stroke =
-    graphNode.isAddedInHistory
-      ? "#10b981"
-      : graphNode.isRemovedInHistory
-        ? "#ef4444"
-        : graphNode.isMergeTarget
-          ? "#10b981"
-          : "#eae80c";
+  const opacity = graphNode.isExistingContext
+    ? 0.3
+    : isNodeFiltered(graphNode, filterOption)
+      ? 0.9
+      : 0.6;
+  const stroke = graphNode.isAddedInHistory
+    ? "#10b981"
+    : graphNode.isRemovedInHistory
+      ? "#ef4444"
+      : graphNode.isMergeTarget
+        ? "#10b981"
+        : "#eae80c";
   const strokeWidth =
     (graphNode.isAddedInHistory ??
-      graphNode.isRemovedInHistory ??
-      graphNode.isMergeTarget)
+    graphNode.isRemovedInHistory ??
+    graphNode.isMergeTarget)
       ? 2.5
       : queryFiltered
         ? 2.5
@@ -184,73 +186,79 @@ const GraphNodeCircle = memo(function GraphNodeCircle({
         onNodeContextMenu?.(graphNode);
       }}
     >
-      <g transform={pairTransform && pairTransform.scale !== 1 ? `scale(${pairTransform.scale})` : undefined}>
-      {showImage ? (
-        <>
-          <defs>
-            <clipPath id={`graph-node-image-clip-${graphNode.id}`}>
-              <circle r={r} />
-            </clipPath>
-          </defs>
-          <g clipPath={`url(#graph-node-image-clip-${graphNode.id})`}>
-            <image
-              x={-r}
-              y={-r}
-              width={r * 2}
-              height={r * 2}
-              href={imageUrl}
-              preserveAspectRatio="xMidYMid slice"
-              onError={() => setImageFailed(true)}
+      <g
+        transform={
+          pairTransform && pairTransform.scale !== 1
+            ? `scale(${pairTransform.scale})`
+            : undefined
+        }
+      >
+        {showImage ? (
+          <>
+            <defs>
+              <clipPath id={`graph-node-image-clip-${graphNode.id}`}>
+                <circle r={r} />
+              </clipPath>
+            </defs>
+            <g clipPath={`url(#graph-node-image-clip-${graphNode.id})`}>
+              <image
+                x={-r}
+                y={-r}
+                width={r * 2}
+                height={r * 2}
+                href={imageUrl}
+                preserveAspectRatio="xMidYMid slice"
+                onError={() => setImageFailed(true)}
+              />
+            </g>
+            <circle
+              r={r}
+              fill="none"
+              stroke={fill}
+              strokeWidth={strokeWidth || 1}
+              data-node-id={graphNode.id}
+              data-is-added={graphNode.isAddedInHistory}
+              data-is-removed={graphNode.isRemovedInHistory}
             />
-          </g>
+          </>
+        ) : (
           <circle
             r={r}
-            fill="none"
-            stroke={fill}
-            strokeWidth={strokeWidth || 1}
             data-node-id={graphNode.id}
             data-is-added={graphNode.isAddedInHistory}
             data-is-removed={graphNode.isRemovedInHistory}
+            fill={fill}
+            opacity={opacity}
+            stroke={stroke}
+            strokeWidth={strokeWidth}
           />
-        </>
-      ) : (
-        <circle
-          r={r}
-          data-node-id={graphNode.id}
-          data-is-added={graphNode.isAddedInHistory}
-          data-is-removed={graphNode.isRemovedInHistory}
-          fill={fill}
-          opacity={opacity}
-          stroke={stroke}
-          strokeWidth={strokeWidth}
-        />
-      )}
-      {(currentScale > 0.7 || isGraphFullScreen) && (
-        <text
-          x={0}
-          y={0}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fill={
-            isFocused
-              ? "whitesmoke"
-              : queryFiltered
-                ? "#eab000"
-                : nodeMagnification >= 2.3
-                  ? "#ef7234"
-                  : isClustered
-                    ? "whitesmoke"
-                    : "dimgray"
-          }
-          fontSize={
-            (currentScale > 4 ? 3 : currentScale > 4 ? 4 : 6) *
-            nodeMagnification
-          }
-          fontWeight={nodeMagnification >= 2.3 ? "bold" : "normal"}
-        >
-          {graphNode.name}
-        </text>
-      )}
+        )}
+        {(currentScale > 0.7 || isGraphFullScreen) && (
+          <text
+            x={0}
+            y={0}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill={
+              isFocused
+                ? "whitesmoke"
+                : queryFiltered
+                  ? "#eab000"
+                  : nodeMagnification >= 2.3
+                    ? "#ef7234"
+                    : isClustered
+                      ? "whitesmoke"
+                      : "dimgray"
+            }
+            fontSize={
+              (currentScale > 4 ? 3 : currentScale > 4 ? 4 : 6) *
+              nodeMagnification
+            }
+            fontWeight={nodeMagnification >= 2.3 ? "bold" : "normal"}
+          >
+            {graphNode.name}
+          </text>
+        )}
       </g>
     </g>
   );
@@ -738,14 +746,14 @@ export const D3ForceGraph = ({
         // link.sourceとlink.targetはCustomNodeType型なので、直接idにアクセス可能
         const sourceId =
           typeof link.source === "object" &&
-            link.source !== null &&
-            "id" in link.source
+          link.source !== null &&
+          "id" in link.source
             ? link.source.id
             : link.sourceId;
         const targetId =
           typeof link.target === "object" &&
-            link.target !== null &&
-            "id" in link.target
+          link.target !== null &&
+          "id" in link.target
             ? link.target.id
             : link.targetId;
         const sourceNode = nodeMapForLinks.get(sourceId);
@@ -930,7 +938,8 @@ export const D3ForceGraph = ({
                   const tgtPair = showEdgeSemanticAnimation
                     ? getNodePairTransform(modTarget.id)
                     : null;
-                  const pairLayoutScale = nodePairOffsetLayoutScale(currentScale);
+                  const pairLayoutScale =
+                    nodePairOffsetLayoutScale(currentScale);
                   const srcPos = layoutPosWithNodePair(
                     modSource.x ?? 0,
                     modSource.y ?? 0,
@@ -966,7 +975,7 @@ export const D3ForceGraph = ({
                           motionConfig={cdtMotionConfig}
                           strokeWidth={
                             ((graphLink.isAddedInHistory ??
-                              graphLink.isRemovedInHistory)
+                            graphLink.isRemovedInHistory)
                               ? 2.5
                               : 2) *
                             linkMagnification *
@@ -997,7 +1006,7 @@ export const D3ForceGraph = ({
                           data-is-removed={graphLink.isRemovedInHistory}
                           strokeOpacity={
                             (graphLink.isAddedInHistory ??
-                              graphLink.isRemovedInHistory)
+                            graphLink.isRemovedInHistory)
                               ? 0.8 // ハイライトエッジは少し濃く
                               : isFocused
                                 ? 1
@@ -1008,18 +1017,19 @@ export const D3ForceGraph = ({
                                     : isGradient
                                       ? 0.04
                                       : (distance(graphLink) ? 0.6 : 0.4) /
-                                      (distance(graphLink) *
-                                        distance(graphLink) || 1)
+                                        (distance(graphLink) *
+                                          distance(graphLink) || 1)
                           }
                           strokeWidth={
                             (graphLink.isAddedInHistory ??
-                              graphLink.isRemovedInHistory)
+                            graphLink.isRemovedInHistory)
                               ? 2.5 // ハイライトエッジは太く
-                              : (isFocused || (isSelectionMode && isSelectedLink)
-                                ? 2
-                                : 1.2) *
-                              linkMagnification *
-                              1.5
+                              : (isFocused ||
+                                (isSelectionMode && isSelectedLink)
+                                  ? 2
+                                  : 1.2) *
+                                linkMagnification *
+                                1.5
                           }
                           x1={srcPos.x}
                           y1={srcPos.y}
@@ -1053,15 +1063,6 @@ export const D3ForceGraph = ({
                             />
                           </line>
                         </g>
-                      )}
-
-                      {showEdgeSemanticAnimation && (
-                        <GraphLinkEdgeSemanticPictogram
-                          graphLink={graphLink}
-                          getEdgeMotionConfig={getEdgeMotionConfig}
-                          displayScale={currentScale}
-                          getNodePairTransform={getNodePairTransform}
-                        />
                       )}
                     </g>
                   );
@@ -1101,7 +1102,8 @@ export const D3ForceGraph = ({
                     const tgtPair = showEdgeSemanticAnimation
                       ? getNodePairTransform(modTarget.id)
                       : null;
-                    const pairLayoutScale = nodePairOffsetLayoutScale(currentScale);
+                    const pairLayoutScale =
+                      nodePairOffsetLayoutScale(currentScale);
                     const srcPos = layoutPosWithNodePair(
                       modSource.x ?? 0,
                       modSource.y ?? 0,
@@ -1124,7 +1126,7 @@ export const D3ForceGraph = ({
                         ? Math.max(...typesInPair.map((t) => t.length))
                         : pairCount > 1
                           ? (typesInPair[0]?.length ?? 0) + 3
-                          : typesInPair[0]?.length ?? 1;
+                          : (typesInPair[0]?.length ?? 1);
                     const baseFontSize = 2.5;
                     const maxFontSizeByEdge = getMaxEdgeLabelFontSizeByLength(
                       len,
@@ -1138,18 +1140,20 @@ export const D3ForceGraph = ({
                     const handleLabelClick =
                       pairCount > 1
                         ? (e: React.MouseEvent) => {
-                          e.stopPropagation();
-                          setExpandedEdgePairKey((prev) =>
-                            prev === pairKey ? null : pairKey,
-                          );
-                        }
+                            e.stopPropagation();
+                            setExpandedEdgePairKey((prev) =>
+                              prev === pairKey ? null : pairKey,
+                            );
+                          }
                         : undefined;
 
                     return (
                       <g
                         key={`edge-label-${pairKey}`}
                         className={
-                          pairCount > 1 ? "cursor-pointer" : "pointer-events-none"
+                          pairCount > 1
+                            ? "cursor-pointer"
+                            : "pointer-events-none"
                         }
                         onClick={handleLabelClick}
                       >
@@ -1161,22 +1165,20 @@ export const D3ForceGraph = ({
                           fill="darkgray"
                           fontSize={effectiveFontSize}
                         >
-                          {expandedEdgePairKey === pairKey && pairCount > 1 ? (
-                            typesInPair.map((t, j) => (
-                              <tspan
-                                key={`${t}-${j}`}
-                                x={labelX}
-                                y={labelY}
-                                dy={j === 0 ? 0 : `${j * 1.2}em`}
-                              >
-                                {t}
-                              </tspan>
-                            ))
-                          ) : pairCount > 1 ? (
-                            `${typesInPair[0]} …`
-                          ) : (
-                            typesInPair[0]
-                          )}
+                          {expandedEdgePairKey === pairKey && pairCount > 1
+                            ? typesInPair.map((t, j) => (
+                                <tspan
+                                  key={`${t}-${j}`}
+                                  x={labelX}
+                                  y={labelY}
+                                  dy={j === 0 ? 0 : `${j * 1.2}em`}
+                                >
+                                  {t}
+                                </tspan>
+                              ))
+                            : pairCount > 1
+                              ? `${typesInPair[0]} …`
+                              : typesInPair[0]}
                         </text>
                       </g>
                     );
@@ -1230,7 +1232,11 @@ export const D3ForceGraph = ({
                       nodeRef={nodeRef}
                       isSelectionMode={isSelectionMode}
                       onNodeSelectionToggle={onNodeSelectionToggle}
-                      pairTransform={showEdgeSemanticAnimation ? getNodePairTransform(graphNode.id) : null}
+                      pairTransform={
+                        showEdgeSemanticAnimation
+                          ? getNodePairTransform(graphNode.id)
+                          : null
+                      }
                     />
                   );
                 })}
@@ -1282,10 +1288,24 @@ export const D3ForceGraph = ({
                       nodeRef={nodeRef}
                       isSelectionMode={isSelectionMode}
                       onNodeSelectionToggle={onNodeSelectionToggle}
-                      pairTransform={showEdgeSemanticAnimation ? getNodePairTransform(graphNode.id) : null}
+                      pairTransform={
+                        showEdgeSemanticAnimation
+                          ? getNodePairTransform(graphNode.id)
+                          : null
+                      }
                     />
                   );
                 })}
+              {showEdgeSemanticAnimation &&
+                graphLinks.map((graphLink) => (
+                  <GraphLinkEdgeSemanticPictogram
+                    key={`semantic-motion-scene-${graphLink.id}`}
+                    graphLink={graphLink}
+                    getEdgeMotionConfig={getEdgeMotionConfig}
+                    displayScale={currentScale}
+                    getNodePairTransform={getNodePairTransform}
+                  />
+                ))}
               {isEditor && (
                 <>
                   <line

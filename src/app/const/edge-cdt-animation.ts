@@ -8,6 +8,8 @@
  * Reference: DancingBoard: Automated Storyboarding with Motion Pictograms (IUI 2025)
  */
 
+import type { GenerativeMotionPlan } from "./generative-motion-plan";
+
 export const CDT_CATEGORIES = [
   "PTRANS",
   "ATRANS",
@@ -43,6 +45,8 @@ export type EdgeMotionConfig = {
   speed: number;
   /** アニメーション継続時間(ms): 1000 / speed */
   durationMs: number;
+  /** LLM/フォールバックで生成した、論文の atomic operations に基づく具象モーション計画 */
+  generativeMotionPlan?: GenerativeMotionPlan;
 };
 
 /**

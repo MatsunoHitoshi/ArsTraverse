@@ -1,6 +1,7 @@
 import { ChatOpenAI } from "@langchain/openai";
 import type { PrismaClient } from "@prisma/client";
 import type { EdgeMotionConfig } from "@/app/const/edge-cdt-animation";
+import { GENERATIVE_MOTION_PLAN_RENDERER_VERSION } from "@/app/const/generative-motion-plan";
 import {
   buildClassifyEdgeMotionUserPrompt,
   buildMotionConfigFromCategory,
@@ -31,7 +32,225 @@ type CachedAnnotation = {
 type LlmClassificationItem = {
   edgeId?: string;
   cdtCategory?: string;
+  motionPlan?: unknown;
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getCachedMotionPlanRendererVersion(
+  motionConfig: unknown,
+): number | null {
+  if (!isRecord(motionConfig)) return null;
+  const plan = motionConfig.generativeMotionPlan;
+  if (!isRecord(plan)) return null;
+  return typeof plan.rendererVersion === "number" ? plan.rendererVersion : null;
+}
+
+function isFreshMotionPlanCache(motionConfig: unknown): boolean {
+  return (
+    getCachedMotionPlanRendererVersion(motionConfig) ===
+    GENERATIVE_MOTION_PLAN_RENDERER_VERSION
+  );
+}
+
+function extractJsonObjectText(raw: string): string {
+  let jsonText = raw.trim();
+  if (jsonText.includes("```json")) {
+    jsonText =
+      jsonText.split("```json")[1]?.split("```")[0]?.trim() ?? jsonText;
+  } else if (jsonText.includes("```")) {
+    jsonText = jsonText.split("```")[1]?.split("```")[0]?.trim() ?? jsonText;
+  }
+
+  const firstBrace = jsonText.indexOf("{");
+  const lastBrace = jsonText.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    jsonText = jsonText.slice(firstBrace, lastBrace + 1);
+  }
+  return jsonText;
+}
+
+function balanceJsonDelimiters(jsonText: string): string {
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+
+  for (const char of jsonText) {
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+
+    if (char === "{") stack.push("}");
+    if (char === "[") stack.push("]");
+    if ((char === "}" || char === "]") && stack[stack.length - 1] === char) {
+      stack.pop();
+    }
+  }
+
+  return `${jsonText}${stack.reverse().join("")}`;
+}
+
+function repairMissingClassificationItemClosers(jsonText: string): string {
+  return jsonText
+    .replace(
+      /("playback"\s*:\s*\{[^{}]*\}\s*\})(\s*),(?=\s*\{\s*"edgeId"\s*:)/g,
+      "$1}$2,",
+    )
+    .replace(/("playback"\s*:\s*\{[^{}]*\}\s*\})(\s*)(?=\]\s*\}?$)/g, "$1}$2");
+}
+
+function repairLlmJsonText(jsonText: string): string {
+  const repaired = jsonText
+    .replace(/^\uFEFF/, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/.*$/gm, "$1")
+    .replace(/,\s*([}\]])/g, "$1")
+    .replace(/([{,]\s*)([A-Za-z_$][\w$-]*)(\s*:)/g, '$1"$2"$3')
+    .replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_, value: string) =>
+      JSON.stringify(value.replace(/\\"/g, '"')),
+    );
+  return balanceJsonDelimiters(
+    repairMissingClassificationItemClosers(repaired),
+  );
+}
+
+function parseJsonObject<T>(jsonText: string): T {
+  return JSON.parse(jsonText) as T;
+}
+
+function extractBalancedJsonObjects(jsonText: string): string[] {
+  const objects: string[] = [];
+  const classificationsIndex = jsonText.indexOf('"classifications"');
+  const arrayStart =
+    classificationsIndex >= 0
+      ? jsonText.indexOf("[", classificationsIndex)
+      : jsonText.indexOf("[");
+  if (arrayStart < 0) return objects;
+
+  let index = arrayStart + 1;
+  while (index < jsonText.length) {
+    const objectStart = jsonText.indexOf("{", index);
+    if (objectStart < 0) break;
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let cursor = objectStart; cursor < jsonText.length; cursor += 1) {
+      const char = jsonText[cursor];
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (char === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
+
+      if (char === "{") depth += 1;
+      if (char === "}") depth -= 1;
+      if (depth === 0) {
+        objects.push(jsonText.slice(objectStart, cursor + 1));
+        index = cursor + 1;
+        break;
+      }
+    }
+
+    if (index <= objectStart) break;
+  }
+
+  return objects;
+}
+
+function parseRecoverableClassificationItems(
+  jsonText: string,
+): LlmClassificationItem[] {
+  return extractBalancedJsonObjects(jsonText)
+    .map((objectText) => {
+      try {
+        return parseJsonObject<LlmClassificationItem>(objectText);
+      } catch {
+        try {
+          return parseJsonObject<LlmClassificationItem>(
+            repairLlmJsonText(objectText),
+          );
+        } catch {
+          return null;
+        }
+      }
+    })
+    .filter((item): item is LlmClassificationItem => item != null);
+}
+
+export function parseLlmClassificationJson(raw: string): {
+  classifications?: LlmClassificationItem[];
+} {
+  const jsonText = extractJsonObjectText(raw);
+  try {
+    return parseJsonObject<{ classifications?: LlmClassificationItem[] }>(
+      jsonText,
+    );
+  } catch (firstError) {
+    const repaired = repairLlmJsonText(jsonText);
+    try {
+      const parsed = parseJsonObject<{
+        classifications?: LlmClassificationItem[];
+      }>(repaired);
+      console.warn("[kg.classifyEdgeMotion.repairedLlmJson]", {
+        reason:
+          firstError instanceof Error ? firstError.message : String(firstError),
+      });
+      return parsed;
+    } catch (repairError) {
+      const recovered = parseRecoverableClassificationItems(repaired);
+      if (recovered.length > 0) {
+        console.warn(
+          "[kg.classifyEdgeMotion.recoveredPartialLlmJson]",
+          JSON.stringify({
+            recoveredCount: recovered.length,
+            reason:
+              repairError instanceof Error
+                ? repairError.message
+                : String(repairError),
+          }),
+        );
+        return { classifications: recovered };
+      }
+
+      console.error(
+        "[kg.classifyEdgeMotion.unparseableLlmJson]",
+        JSON.stringify({
+          firstError:
+            firstError instanceof Error
+              ? firstError.message
+              : String(firstError),
+          repairError:
+            repairError instanceof Error
+              ? repairError.message
+              : String(repairError),
+          snippet: jsonText.slice(0, 1200),
+        }),
+      );
+      throw firstError;
+    }
+  }
+}
 
 async function classifyPredicateBatchWithLlm(
   llm: ChatOpenAI,
@@ -44,17 +263,7 @@ async function classifyPredicateBatchWithLlm(
     { role: "user", content: userPrompt },
   ]);
 
-  let jsonText = (response.content as string).trim();
-  if (jsonText.includes("```json")) {
-    jsonText =
-      jsonText.split("```json")[1]?.split("```")[0]?.trim() ?? jsonText;
-  } else if (jsonText.includes("```")) {
-    jsonText = jsonText.split("```")[1]?.split("```")[0]?.trim() ?? jsonText;
-  }
-
-  const parsed = JSON.parse(jsonText) as {
-    classifications?: LlmClassificationItem[];
-  };
+  const parsed = parseLlmClassificationJson(response.content as string);
 
   return parsed.classifications ?? [];
 }
@@ -71,6 +280,56 @@ function resolveCategoryForEdge(
   return (
     inferCdtCategoryFromPredicate(edgeType) ??
     normalizeCdtCategory(undefined, edgeType)
+  );
+}
+
+function logGeneratedMotionPlan({
+  source,
+  topicSpaceId,
+  edgeIds,
+  representative,
+  category,
+  motionConfig,
+  rawMotionPlanProvided,
+}: {
+  source: "llm" | "fallback";
+  topicSpaceId: string;
+  edgeIds: string[];
+  representative: EdgeMotionClassificationInput;
+  category: EdgeMotionConfig["category"];
+  motionConfig: EdgeMotionConfig;
+  rawMotionPlanProvided: boolean;
+}) {
+  const plan = motionConfig.generativeMotionPlan;
+  if (!plan) return;
+
+  console.info(
+    "[kg.classifyEdgeMotion.motionPlan]",
+    JSON.stringify(
+      {
+        source,
+        topicSpaceId,
+        edgeIds,
+        representative: {
+          edgeId: representative.edgeId,
+          predicate: representative.edgeType,
+          sourceName: representative.sourceName,
+          sourceLabel: representative.sourceLabel,
+          targetName: representative.targetName,
+          targetLabel: representative.targetLabel,
+        },
+        cdtCategory: category,
+        rendererVersion: plan.rendererVersion,
+        rawMotionPlanProvided,
+        preset: plan.recipe.preset,
+        asset: plan.asset,
+        participants: plan.participants,
+        playback: plan.playback,
+        operations: plan.recipe.operations,
+      },
+      null,
+      2,
+    ),
   );
 }
 
@@ -94,12 +353,28 @@ export async function classifyEdgeMotion(
     },
   });
 
-  const cachedMap = new Map<string, CachedAnnotation>(
-    cached.map((c) => [
-      c.edgeId,
-      { edgeId: c.edgeId, motionConfig: c.motionConfig },
-    ]),
-  );
+  const cachedMap = new Map<string, CachedAnnotation>();
+  for (const annotation of cached) {
+    if (isFreshMotionPlanCache(annotation.motionConfig)) {
+      cachedMap.set(annotation.edgeId, {
+        edgeId: annotation.edgeId,
+        motionConfig: annotation.motionConfig,
+      });
+      continue;
+    }
+
+    console.info(
+      "[kg.classifyEdgeMotion.motionPlanCacheStale]",
+      JSON.stringify({
+        topicSpaceId,
+        edgeId: annotation.edgeId,
+        cachedRendererVersion: getCachedMotionPlanRendererVersion(
+          annotation.motionConfig,
+        ),
+        currentRendererVersion: GENERATIVE_MOTION_PLAN_RENDERER_VERSION,
+      }),
+    );
+  }
 
   const uncachedEdges = edges.filter((e) => !cachedMap.has(e.edgeId));
 
@@ -131,7 +406,30 @@ export async function classifyEdgeMotion(
           representative.edgeType,
           llmItems,
         );
-        const motionConfig = buildMotionConfigFromCategory(category);
+        const llmItem = llmItems.find(
+          (item) => item.edgeId === representative.edgeId,
+        );
+        const rawMotionPlanProvided = llmItem?.motionPlan != null;
+        const motionConfig = buildMotionConfigFromCategory(
+          category,
+          representative.edgeType,
+          llmItem?.motionPlan,
+          {
+            sourceName: representative.sourceName,
+            sourceLabel: representative.sourceLabel,
+            targetName: representative.targetName,
+            targetLabel: representative.targetLabel,
+          },
+        );
+        logGeneratedMotionPlan({
+          source: rawMotionPlanProvided ? "llm" : "fallback",
+          topicSpaceId,
+          edgeIds,
+          representative,
+          category,
+          motionConfig,
+          rawMotionPlanProvided,
+        });
 
         for (const edgeId of edgeIds) {
           await db.edgeMotionAnnotation.upsert({
@@ -166,7 +464,26 @@ export async function classifyEdgeMotion(
       if (cachedMap.has(edge.edgeId)) continue;
       const edgeType = edgeTypeById.get(edge.edgeId) ?? edge.edgeType;
       const category = normalizeCdtCategory(undefined, edgeType);
-      const motionConfig = buildMotionConfigFromCategory(category);
+      const motionConfig = buildMotionConfigFromCategory(
+        category,
+        edgeType,
+        undefined,
+        {
+          sourceName: edge.sourceName,
+          sourceLabel: edge.sourceLabel,
+          targetName: edge.targetName,
+          targetLabel: edge.targetLabel,
+        },
+      );
+      logGeneratedMotionPlan({
+        source: "fallback",
+        topicSpaceId,
+        edgeIds: [edge.edgeId],
+        representative: edge,
+        category,
+        motionConfig,
+        rawMotionPlanProvided: false,
+      });
 
       await db.edgeMotionAnnotation.upsert({
         where: {
@@ -198,9 +515,22 @@ export async function classifyEdgeMotion(
     .map((e) => {
       const annotation = cachedMap.get(e.edgeId);
       if (!annotation) return null;
+      const cachedMotionConfig = annotation.motionConfig as EdgeMotionConfig;
+      const category = normalizeCdtCategory(
+        cachedMotionConfig.category,
+        e.edgeType,
+      );
+      const motionConfig = cachedMotionConfig.generativeMotionPlan
+        ? cachedMotionConfig
+        : buildMotionConfigFromCategory(category, e.edgeType, undefined, {
+            sourceName: e.sourceName,
+            sourceLabel: e.sourceLabel,
+            targetName: e.targetName,
+            targetLabel: e.targetLabel,
+          });
       return {
         edgeId: e.edgeId,
-        motionConfig: annotation.motionConfig as EdgeMotionConfig,
+        motionConfig,
       };
     })
     .filter((r): r is NonNullable<typeof r> => r != null);

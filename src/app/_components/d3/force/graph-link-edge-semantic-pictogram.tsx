@@ -7,7 +7,7 @@ import {
   nodePairOffsetLayoutScale,
   type NodePairTransform,
 } from "@/app/const/edge-cdt-node-pair-animation";
-import { EdgeSemanticPictogram } from "./storytelling-graph/components/edge-semantic-pictogram";
+import { EdgeSemanticMotionScene } from "./storytelling-graph/components/edge-semantic-pictogram";
 
 export type GraphLinkEdgeSemanticPictogramProps = {
   graphLink: CustomLinkType;
@@ -17,7 +17,7 @@ export type GraphLinkEdgeSemanticPictogramProps = {
 };
 
 /**
- * D3ForceGraph のリンク map 内から呼び出す、エッジ中点の CDT ピクトグラム。
+ * D3ForceGraph のリンク map 内から呼び出す、ノードペア全体の CDT モーション scene。
  * map 内の IIFE を避け、可読性のために切り出している。
  */
 export function GraphLinkEdgeSemanticPictogram({
@@ -31,27 +31,35 @@ export function GraphLinkEdgeSemanticPictogram({
 
   const modSource = graphLink.source as CustomNodeType;
   const modTarget = graphLink.target as CustomNodeType;
+  if (
+    modSource.x == null ||
+    modSource.y == null ||
+    modTarget.x == null ||
+    modTarget.y == null
+  ) {
+    return null;
+  }
+
   const pairLayoutScale = nodePairOffsetLayoutScale(displayScale);
   const src = layoutPosWithNodePair(
-    modSource.x ?? 0,
-    modSource.y ?? 0,
+    modSource.x,
+    modSource.y,
     getNodePairTransform?.(modSource.id) ?? null,
     pairLayoutScale,
   );
   const tgt = layoutPosWithNodePair(
-    modTarget.x ?? 0,
-    modTarget.y ?? 0,
+    modTarget.x,
+    modTarget.y,
     getNodePairTransform?.(modTarget.id) ?? null,
     pairLayoutScale,
   );
-  const midX = (src.x + tgt.x) / 2;
-  const midY = (src.y + tgt.y) / 2;
-
   return (
-    <EdgeSemanticPictogram
+    <EdgeSemanticMotionScene
       config={motionConfig}
-      cx={midX}
-      cy={midY}
+      sourceX={src.x}
+      sourceY={src.y}
+      targetX={tgt.x}
+      targetY={tgt.y}
       displayScale={displayScale}
     />
   );
