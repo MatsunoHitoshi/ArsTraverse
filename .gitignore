@@ -50,11 +50,11 @@ yarn-error.log*
 .idea
 
 
-# temporal document file
-/public/documents
-/public/json
-/public/speech
-/public/tmp
+# temporal document file (any workspace app)
+**/public/documents
+**/public/json
+**/public/speech
+**/public/tmp
 
 
 # electron
