@@ -1,65 +1,59 @@
-import type { Prisma, PrismaClient } from "@prisma/client";
-import { DocumentType, WorkspaceStatus } from "@prisma/client";
-import type { SearchPublishedNodesInput, PublishedNodeMatch } from "@/server/api/schemas/scan";
+import type { PrismaClient } from "@prisma/client";
+import { WorkspaceStatus } from "@prisma/client";
+import type {
+  SearchPublishedNodesInput,
+  PublishedNodeMatch,
+} from "@/server/api/schemas/scan";
 
 type SearchCtx = {
   db: PrismaClient;
 };
 
-export async function searchPublishedNodes(
-  ctx: SearchCtx,
-  input: SearchPublishedNodesInput,
-): Promise<PublishedNodeMatch[]> {
-  const workspaces = await ctx.db.workspace.findMany({
-    where: {
-      status: WorkspaceStatus.PUBLISHED,
-      isDeleted: false,
-      ...(input.workspaceId ? { id: input.workspaceId } : {}),
-    },
-    select: {
-      id: true,
-      name: true,
-      referencedTopicSpaces: {
-        select: {
-          id: true,
-          name: true,
-          graphNodes: {
-            where: {
-              deletedAt: null,
-              name: {
-                contains: input.query,
-                mode: "insensitive",
-              },
-            },
-            select: {
-              id: true,
-              name: true,
-              label: true,
-            },
-            take: input.limit,
-          },
-        },
-      },
-    },
-  });
+type PublishedNodeRow = {
+  id: string;
+  name: string;
+  label: string;
+  topicSpace: {
+    id: string;
+    name: string;
+    referencedByWorkspaces: Array<{ id: string; name: string }>;
+  } | null;
+};
 
+function publishedWorkspaceFilter(workspaceId?: string) {
+  return {
+    status: WorkspaceStatus.PUBLISHED,
+    isDeleted: false,
+    ...(workspaceId ? { id: workspaceId } : {}),
+  };
+}
+
+function mapNodesToMatches(
+  nodes: PublishedNodeRow[],
+  limit: number,
+): PublishedNodeMatch[] {
   const matches: PublishedNodeMatch[] = [];
+  const seenNodeIds = new Set<string>();
 
-  for (const workspace of workspaces) {
-    for (const topicSpace of workspace.referencedTopicSpaces) {
-      for (const node of topicSpace.graphNodes) {
-        matches.push({
-          nodeId: node.id,
-          name: node.name,
-          label: node.label,
-          workspaceId: workspace.id,
-          workspaceName: workspace.name,
-          topicSpaceId: topicSpace.id,
-          topicSpaceName: topicSpace.name,
-        });
-        if (matches.length >= input.limit) {
-          return matches;
-        }
+  for (const node of nodes) {
+    if (!node.topicSpace) continue;
+
+    for (const workspace of node.topicSpace.referencedByWorkspaces) {
+      if (seenNodeIds.has(node.id)) continue;
+      seenNodeIds.add(node.id);
+
+      matches.push({
+        nodeId: node.id,
+        name: node.name,
+        label: node.label,
+        workspaceId: workspace.id,
+        workspaceName: workspace.name,
+        topicSpaceId: node.topicSpace.id,
+        topicSpaceName: node.topicSpace.name,
+      });
+
+      if (matches.length >= limit) {
+        return matches;
       }
     }
   }
@@ -67,30 +61,92 @@ export async function searchPublishedNodes(
   return matches;
 }
 
+export async function searchPublishedNodes(
+  ctx: SearchCtx,
+  input: SearchPublishedNodesInput,
+): Promise<PublishedNodeMatch[]> {
+  const workspaceFilter = publishedWorkspaceFilter(input.workspaceId);
+
+  const nodes = await ctx.db.graphNode.findMany({
+    where: {
+      deletedAt: null,
+      name: {
+        contains: input.query,
+        mode: "insensitive",
+      },
+      topicSpace: {
+        referencedByWorkspaces: {
+          some: workspaceFilter,
+        },
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      label: true,
+      topicSpace: {
+        select: {
+          id: true,
+          name: true,
+          referencedByWorkspaces: {
+            where: workspaceFilter,
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      },
+    },
+    take: input.limit,
+  });
+
+  return mapNodesToMatches(nodes, input.limit);
+}
+
 export async function searchPublishedNodesByNames(
   ctx: SearchCtx,
   nodeNames: string[],
   limit = 20,
 ): Promise<PublishedNodeMatch[]> {
-  const uniqueNames = [...new Set(nodeNames.map((name) => name.trim()).filter(Boolean))];
-  const matches: PublishedNodeMatch[] = [];
-  const seenNodeIds = new Set<string>();
+  const uniqueNames = [
+    ...new Set(nodeNames.map((name) => name.trim()).filter(Boolean)),
+  ];
+  if (uniqueNames.length === 0) return [];
 
-  for (const name of uniqueNames) {
-    if (matches.length >= limit) break;
+  const nodes = await ctx.db.graphNode.findMany({
+    where: {
+      deletedAt: null,
+      name: {
+        in: uniqueNames,
+        mode: "insensitive",
+      },
+      topicSpace: {
+        referencedByWorkspaces: {
+          some: publishedWorkspaceFilter(),
+        },
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      label: true,
+      topicSpace: {
+        select: {
+          id: true,
+          name: true,
+          referencedByWorkspaces: {
+            where: publishedWorkspaceFilter(),
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      },
+    },
+    take: limit,
+  });
 
-    const batch = await searchPublishedNodes(ctx, {
-      query: name,
-      limit: Math.min(5, limit - matches.length),
-    });
-
-    for (const match of batch) {
-      if (seenNodeIds.has(match.nodeId)) continue;
-      seenNodeIds.add(match.nodeId);
-      matches.push(match);
-      if (matches.length >= limit) break;
-    }
-  }
-
-  return matches;
+  return mapNodesToMatches(nodes, limit);
 }

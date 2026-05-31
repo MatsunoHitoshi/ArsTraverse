@@ -73,6 +73,11 @@ file_size_limit = "50MiB"
 [storage.image_transformation]
 enabled = true
 
+[storage.buckets.input-scan]
+public = true
+file_size_limit = "50MiB"
+allowed_mime_types = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+
 # Uncomment to configure local storage buckets
 # [storage.buckets.images]
 # public = false
