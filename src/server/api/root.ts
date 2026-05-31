@@ -17,6 +17,7 @@ import { userRouter } from "./routers/user";
 import { imageRouter } from "./routers/image";
 import { storyRouter } from "./routers/story";
 import { printRouter } from "./routers/print";
+import { scanRouter } from "./routers/scan";
 
 /**
  * This is the primary router for your server.
@@ -42,6 +43,7 @@ export const appRouter = createTRPCRouter({
   image: imageRouter,
   story: storyRouter,
   print: printRouter,
+  scan: scanRouter,
 });
 
 // export type definition of API

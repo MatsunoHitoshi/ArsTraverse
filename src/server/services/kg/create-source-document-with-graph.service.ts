@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient, Prisma } from "@prisma/client";
 import { DocumentType } from "@prisma/client";
 import type {
   NodeTypeForFrontend,
@@ -12,6 +12,9 @@ export type CreateSourceDocumentWithGraphInput = {
   name: string;
   url: string;
   dataJson: z.infer<typeof KnowledgeGraphInputSchema>;
+  documentType?: DocumentType;
+  sourceImageUrl?: string | null;
+  ocrMetadata?: Prisma.InputJsonValue;
 };
 
 type CreateWithGraphCtx = {
@@ -23,9 +26,15 @@ export async function createSourceDocumentWithGraph(
   ctx: CreateWithGraphCtx,
   input: CreateSourceDocumentWithGraphInput,
 ) {
-  const docFileType = await inspectFileTypeFromUrl(input.url);
-  if (!docFileType) {
-    throw new Error("ファイルタイプを判定できませんでした");
+  let documentType = input.documentType;
+
+  if (!documentType) {
+    const docFileType = await inspectFileTypeFromUrl(input.url);
+    if (!docFileType) {
+      throw new Error("ファイルタイプを判定できませんでした");
+    }
+    documentType =
+      docFileType === "pdf" ? DocumentType.INPUT_PDF : DocumentType.INPUT_TXT;
   }
 
   const nodes = input.dataJson.nodes as NodeTypeForFrontend[];
@@ -78,10 +87,9 @@ export async function createSourceDocumentWithGraph(
       data: {
         name: input.name,
         url: input.url,
-        documentType:
-          docFileType === "pdf"
-            ? DocumentType.INPUT_PDF
-            : DocumentType.INPUT_TXT,
+        documentType,
+        sourceImageUrl: input.sourceImageUrl ?? null,
+        ocrMetadata: input.ocrMetadata ?? undefined,
         user: { connect: { id: ctx.session.user.id } },
       },
     });

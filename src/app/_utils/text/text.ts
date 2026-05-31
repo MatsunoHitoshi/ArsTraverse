@@ -11,7 +11,7 @@ export const getTextFromDocumentFile = async (
     const loader = new PDFLoader(localFilePath);
     const documents = await loader.load();
     return documents.map((doc) => doc.pageContent).join("\n");
-  } else {
-    return await fetch(url).then((res) => res.text());
   }
+
+  return await fetch(url).then((res) => res.text());
 };

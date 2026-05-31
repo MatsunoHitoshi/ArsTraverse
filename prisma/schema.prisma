@@ -95,6 +95,8 @@ model SourceDocument {
   id        String   @id @default(cuid())
   name      String
   url       String
+  sourceImageUrl String?
+  ocrMetadata    Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   isDeleted Boolean  @default(false)
@@ -114,6 +116,7 @@ model SourceDocument {
 enum DocumentType {
   INPUT_PDF
   INPUT_TXT
+  INPUT_SCAN
 }
 
 model DocumentGraph {

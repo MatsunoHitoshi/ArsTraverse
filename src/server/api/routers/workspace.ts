@@ -20,6 +20,8 @@ import {
   type StoryWithRelations,
 } from "@/server/lib/meta-graph-converter";
 import { DEFAULT_EMPTY_WORKSPACE_CONTENT } from "@/app/_constants/workspace-default-content";
+import { SearchPublishedNodesInputSchema } from "@/server/api/schemas/scan";
+import { searchPublishedNodes } from "@/server/services/workspace/search-published-nodes.service";
 
 export const TiptapContentSchema = z.object({
   type: z.string(),
@@ -1144,5 +1146,11 @@ export const workspaceRouter = createTRPCRouter({
         graphDocument,
         metaGraphData,
       };
+    }),
+
+  searchPublishedNodes: protectedProcedure
+    .input(SearchPublishedNodesInputSchema)
+    .query(async ({ ctx, input }) => {
+      return searchPublishedNodes(ctx, input);
     }),
 });
