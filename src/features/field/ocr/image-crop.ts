@@ -1,0 +1,50 @@
+import type { NormalizedOcrRegion } from "@/features/field/ocr/region-types";
+import { clampRegion } from "@/features/field/ocr/region-types";
+
+export async function loadImageBitmapFromFile(file: File): Promise<ImageBitmap> {
+  return createImageBitmap(file, { imageOrientation: "from-image" });
+}
+
+export function cropRegionFromBitmap(
+  bitmap: ImageBitmap,
+  region: NormalizedOcrRegion,
+): HTMLCanvasElement {
+  const clamped = clampRegion(region);
+  const sx = Math.round(clamped.x * bitmap.width);
+  const sy = Math.round(clamped.y * bitmap.height);
+  const sw = Math.max(1, Math.round(clamped.w * bitmap.width));
+  const sh = Math.max(1, Math.round(clamped.h * bitmap.height));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = sw;
+  canvas.height = sh;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("Canvas が利用できません");
+  }
+
+  ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, sw, sh);
+  return canvas;
+}
+
+export async function cropRegionToBlob(
+  bitmap: ImageBitmap,
+  region: NormalizedOcrRegion,
+  mimeType = "image/png",
+): Promise<Blob> {
+  const canvas = cropRegionFromBitmap(bitmap, region);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          resolve(blob);
+          return;
+        }
+        reject(new Error("切り出し画像の生成に失敗しました"));
+      },
+      mimeType,
+      0.92,
+    );
+  });
+}

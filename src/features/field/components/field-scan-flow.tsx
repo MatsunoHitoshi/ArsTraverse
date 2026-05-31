@@ -9,9 +9,14 @@ import { Button } from "@/app/_components/button/button";
 import { FadeIn } from "@/app/_components/animation/fade-in";
 import { BUCKETS } from "@/app/_utils/supabase/const";
 import { storageUtils } from "@/app/_utils/supabase/supabase";
+import { ScanRegionSelector } from "@/features/field/components/scan-region-selector";
+import {
+  DEFAULT_OCR_REGION,
+  type NormalizedOcrRegion,
+} from "@/features/field/ocr/region-types";
 import {
   getOcrStatusLabel,
-  runOcr,
+  runOcrOnRegions,
   type OcrLanguage,
   type OcrProgressUpdate,
 } from "@/features/field/ocr/tesseract-client";
@@ -30,6 +35,9 @@ export function FieldScanFlow() {
   const [fileName, setFileName] = useState("");
   const [sessionName, setSessionName] = useState("");
   const [plainText, setPlainText] = useState("");
+  const [ocrRegions, setOcrRegions] = useState<NormalizedOcrRegion[]>([
+    DEFAULT_OCR_REGION,
+  ]);
   const [language, setLanguage] = useState<OcrLanguage>("jpn");
   const [ocrProgress, setOcrProgress] = useState<OcrProgressUpdate | null>(
     null,
@@ -59,8 +67,11 @@ export function FieldScanFlow() {
   }, [previewUrl]);
 
   const canSubmit = useMemo(
-    () => sessionName.trim().length > 0 && plainText.trim().length > 0,
-    [sessionName, plainText],
+    () =>
+      sessionName.trim().length > 0 &&
+      plainText.trim().length > 0 &&
+      ocrRegions.length > 0,
+    [sessionName, plainText, ocrRegions.length],
   );
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -76,6 +87,7 @@ export function FieldScanFlow() {
     setPlainText("");
     setOcrMetadata(undefined);
     setOcrProgress(null);
+    setOcrRegions([DEFAULT_OCR_REGION]);
 
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
@@ -97,17 +109,27 @@ export function FieldScanFlow() {
       return;
     }
 
+    if (ocrRegions.length === 0) {
+      setErrorMessage("OCR する文字領域を指定してください");
+      return;
+    }
+
     setIsRunningOcr(true);
     setErrorMessage(null);
     setOcrProgress({ progress: 0, status: "loading tesseract core" });
 
     try {
-      const result = await runOcr(imageFile, language, setOcrProgress);
+      const result = await runOcrOnRegions(
+        imageFile,
+        ocrRegions,
+        language,
+        setOcrProgress,
+      );
       setPlainText(result.plainText);
       setOcrMetadata(result.ocrMetadata);
       if (!result.plainText) {
         setErrorMessage(
-          "テキストを認識できませんでした。言語設定を変えるか、画像を見直してください。",
+          "テキストを認識できませんでした。領域や言語設定を見直してください。",
         );
       }
     } catch (error) {
@@ -179,7 +201,7 @@ export function FieldScanFlow() {
           <div>
             <h1 className="text-xl font-bold text-slate-50">新規スキャン</h1>
             <p className="text-sm text-slate-400">
-              資料を撮影し、OCR → グラフ化 → 公開参照まで進めます
+              資料を撮影し、文字領域を指定 → OCR → グラフ化
             </p>
           </div>
           <Link href="/field" className="text-sm text-sky-400 hover:underline">
@@ -201,19 +223,24 @@ export function FieldScanFlow() {
           {fileName && (
             <p className="mt-2 text-xs text-slate-400">選択中: {fileName}</p>
           )}
-          {previewUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={previewUrl}
-              alt="スキャンプレビュー"
-              className="mt-3 max-h-64 w-full rounded-lg object-contain bg-slate-900"
-            />
-          )}
         </section>
+
+        {previewUrl && (
+          <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+            <label className="mb-2 block text-sm font-medium text-slate-200">
+              2. 文字領域を指定
+            </label>
+            <ScanRegionSelector
+              imageUrl={previewUrl}
+              regions={ocrRegions}
+              onRegionsChange={setOcrRegions}
+            />
+          </section>
+        )}
 
         <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
           <label className="mb-2 block text-sm font-medium text-slate-200">
-            2. OCR 言語
+            3. OCR 言語
           </label>
           <select
             value={language}
@@ -232,18 +259,18 @@ export function FieldScanFlow() {
           <div className="mt-3">
             <Button
               onClick={handleRunOcr}
-              disabled={!imageFile || isRunningOcr}
+              disabled={!imageFile || isRunningOcr || ocrRegions.length === 0}
               isLoading={isRunningOcr}
               className="w-full bg-slate-700 text-white"
             >
-              OCR を実行
+              選択領域で OCR を実行
             </Button>
           </div>
 
           {ocrProgress && (
             <div className="mt-3">
               <div className="mb-1 text-xs text-slate-400">
-                {getOcrStatusLabel(ocrProgress.status)}
+                {getOcrStatusLabel(ocrProgress)}
                 {ocrProgress.status === "recognizing text"
                   ? ` ${Math.round(ocrProgress.progress * 100)}%`
                   : null}
@@ -270,7 +297,7 @@ export function FieldScanFlow() {
             htmlFor="session-name"
             className="mb-2 block text-sm font-medium text-slate-200"
           >
-            3. セッション名
+            4. セッション名
           </label>
           <input
             id="session-name"
@@ -284,7 +311,7 @@ export function FieldScanFlow() {
             htmlFor="ocr-text"
             className="mb-2 block text-sm font-medium text-slate-200"
           >
-            4. OCR テキスト（編集可）
+            5. OCR テキスト（編集可）
           </label>
           <textarea
             id="ocr-text"

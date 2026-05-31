@@ -9,6 +9,8 @@ import { Button } from "@/app/_components/button/button";
 import { FadeIn } from "@/app/_components/animation/fade-in";
 import { GraphSummary } from "@/features/field/components/graph-summary";
 import { PublishedNodeMatches } from "@/features/field/components/published-node-matches";
+import { ScanImageWithRegions } from "@/features/field/components/scan-image-with-regions";
+import type { OcrRegion } from "@/server/api/schemas/scan";
 
 type FieldScanDetailProps = {
   sessionId: string;
@@ -41,6 +43,18 @@ export function FieldScanDetail({ sessionId }: FieldScanDetailProps) {
     }
     return data?.matchCandidates ?? [];
   }, [debouncedQuery, searchResults, data?.matchCandidates]);
+
+  const ocrRegions = useMemo((): OcrRegion[] => {
+    const raw = data?.ocrMetadata?.regions;
+    if (!Array.isArray(raw)) return [];
+    return raw.filter(
+      (item): item is OcrRegion =>
+        typeof item === "object" &&
+        item != null &&
+        "x" in item &&
+        typeof item.x === "number",
+    );
+  }, [data?.ocrMetadata?.regions]);
 
   if (isLoading) {
     return (
@@ -79,11 +93,9 @@ export function FieldScanDetail({ sessionId }: FieldScanDetailProps) {
         </div>
 
         {data.sourceImageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={data.sourceImageUrl}
-            alt="スキャン画像"
-            className="max-h-72 w-full rounded-xl object-contain bg-slate-900"
+          <ScanImageWithRegions
+            imageUrl={data.sourceImageUrl}
+            regions={ocrRegions}
           />
         )}
 

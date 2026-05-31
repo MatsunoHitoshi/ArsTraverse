@@ -10,11 +10,19 @@ import { FadeIn } from "@/app/_components/animation/fade-in";
 
 export function FieldSessionList() {
   const router = useRouter();
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const { data, isLoading, error } = api.scan.listSessions.useQuery(
     { page: 1, limit: 30 },
     { enabled: !!session },
   );
+
+  if (status === "loading") {
+    return (
+      <div className="mx-auto flex w-full max-w-lg flex-col px-4 py-8">
+        <p className="text-center text-sm text-slate-400">読み込み中...</p>
+      </div>
+    );
+  }
 
   if (!session) {
     return (
