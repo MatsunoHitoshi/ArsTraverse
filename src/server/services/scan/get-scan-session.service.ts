@@ -38,7 +38,7 @@ export async function getScanSession(
 
   const graphRecord = formDocumentGraphForFrontend(
     document.graph,
-    ctx.session.user.preferredLocale as LocaleEnum,
+    (ctx.session.user.preferredLocale ?? "ja") as LocaleEnum,
   );
   const plainText = await getTextFromDocumentFile(
     document.url,

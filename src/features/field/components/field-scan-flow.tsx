@@ -1,16 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn, useSession } from "next-auth/react";
 import { api } from "@/trpc/react";
 import { Button } from "@/app/_components/button/button";
 import { FadeIn } from "@/app/_components/animation/fade-in";
+import { BUCKETS } from "@/app/_utils/supabase/const";
+import { storageUtils } from "@/app/_utils/supabase/supabase";
 import {
-  readFileAsDataUrl,
+  getOcrStatusLabel,
   runOcr,
   type OcrLanguage,
+  type OcrProgressUpdate,
 } from "@/features/field/ocr/tesseract-client";
 
 const LANGUAGE_OPTIONS: { value: OcrLanguage; label: string }[] = [
@@ -22,17 +25,21 @@ const LANGUAGE_OPTIONS: { value: OcrLanguage; label: string }[] = [
 export function FieldScanFlow() {
   const router = useRouter();
   const { data: session } = useSession();
-  const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [fileName, setFileName] = useState("");
   const [sessionName, setSessionName] = useState("");
   const [plainText, setPlainText] = useState("");
   const [language, setLanguage] = useState<OcrLanguage>("jpn");
-  const [ocrProgress, setOcrProgress] = useState<number | null>(null);
+  const [ocrProgress, setOcrProgress] = useState<OcrProgressUpdate | null>(
+    null,
+  );
   const [ocrMetadata, setOcrMetadata] = useState<
     Record<string, unknown> | undefined
   >();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRunningOcr, setIsRunningOcr] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const createFromScan = api.scan.createFromScan.useMutation({
     onSuccess: (result) => {
@@ -43,48 +50,59 @@ export function FieldScanFlow() {
     },
   });
 
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
   const canSubmit = useMemo(
     () => sessionName.trim().length > 0 && plainText.trim().length > 0,
     [sessionName, plainText],
   );
 
-  const handleImageChange = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setErrorMessage("画像ファイルを選択してください。");
+      return;
+    }
 
     setErrorMessage(null);
     setPlainText("");
     setOcrMetadata(undefined);
     setOcrProgress(null);
 
-    try {
-      const dataUrl = await readFileAsDataUrl(file);
-      setImageDataUrl(dataUrl);
-      setFileName(file.name);
-      if (!sessionName) {
-        setSessionName(file.name.replace(/\.[^.]+$/, "") || "現地スキャン");
-      }
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "画像の読み込みに失敗しました",
-      );
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    setImageFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
+    setFileName(file.name);
+
+    if (!sessionName) {
+      const baseName = file.name.replace(/\.[^.]+$/, "");
+      setSessionName(baseName.length > 0 ? baseName : "現地スキャン");
     }
   };
 
   const handleRunOcr = async () => {
-    if (!imageDataUrl) {
+    if (!imageFile) {
       setErrorMessage("先に画像を選択してください");
       return;
     }
 
     setIsRunningOcr(true);
     setErrorMessage(null);
-    setOcrProgress(0);
+    setOcrProgress({ progress: 0, status: "loading tesseract core" });
 
     try {
-      const result = await runOcr(imageDataUrl, language, setOcrProgress);
+      const result = await runOcr(imageFile, language, setOcrProgress);
       setPlainText(result.plainText);
       setOcrMetadata(result.ocrMetadata);
       if (!result.plainText) {
@@ -102,15 +120,38 @@ export function FieldScanFlow() {
     }
   };
 
-  const handleSubmit = () => {
-    if (!canSubmit) return;
+  const handleSubmit = async () => {
+    if (!canSubmit || isSubmitting) return;
 
-    createFromScan.mutate({
-      name: sessionName.trim(),
-      plainText: plainText.trim(),
-      imageDataUrl: imageDataUrl ?? undefined,
-      ocrMetadata,
-    });
+    setIsSubmitting(true);
+    setErrorMessage(null);
+
+    try {
+      let sourceImageUrl: string | undefined;
+      if (imageFile) {
+        const uploadedUrl = await storageUtils.upload(
+          imageFile,
+          BUCKETS.PATH_TO_INPUT_SCAN,
+        );
+        if (!uploadedUrl) {
+          throw new Error("スキャン画像のアップロードに失敗しました");
+        }
+        sourceImageUrl = uploadedUrl;
+      }
+
+      await createFromScan.mutateAsync({
+        name: sessionName.trim(),
+        plainText: plainText.trim(),
+        sourceImageUrl,
+        ocrMetadata,
+      });
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "グラフ作成に失敗しました",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (!session) {
@@ -160,10 +201,10 @@ export function FieldScanFlow() {
           {fileName && (
             <p className="mt-2 text-xs text-slate-400">選択中: {fileName}</p>
           )}
-          {imageDataUrl && (
+          {previewUrl && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={imageDataUrl}
+              src={previewUrl}
               alt="スキャンプレビュー"
               className="mt-3 max-h-64 w-full rounded-lg object-contain bg-slate-900"
             />
@@ -191,7 +232,7 @@ export function FieldScanFlow() {
           <div className="mt-3">
             <Button
               onClick={handleRunOcr}
-              disabled={!imageDataUrl || isRunningOcr}
+              disabled={!imageFile || isRunningOcr}
               isLoading={isRunningOcr}
               className="w-full bg-slate-700 text-white"
             >
@@ -199,15 +240,25 @@ export function FieldScanFlow() {
             </Button>
           </div>
 
-          {ocrProgress !== null && (
+          {ocrProgress && (
             <div className="mt-3">
               <div className="mb-1 text-xs text-slate-400">
-                認識中 {Math.round(ocrProgress * 100)}%
+                {getOcrStatusLabel(ocrProgress.status)}
+                {ocrProgress.status === "recognizing text"
+                  ? ` ${Math.round(ocrProgress.progress * 100)}%`
+                  : null}
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-slate-700">
                 <div
                   className="h-full bg-orange-400 transition-all"
-                  style={{ width: `${Math.round(ocrProgress * 100)}%` }}
+                  style={{
+                    width: `${Math.round(
+                      Math.max(
+                        ocrProgress.progress * 100,
+                        ocrProgress.status === "recognizing text" ? 0 : 8,
+                      ),
+                    )}%`,
+                  }}
                 />
               </div>
             </div>
@@ -252,9 +303,9 @@ export function FieldScanFlow() {
         )}
 
         <Button
-          onClick={handleSubmit}
-          disabled={!canSubmit}
-          isLoading={createFromScan.isPending}
+          onClick={() => void handleSubmit()}
+          disabled={!canSubmit || isSubmitting}
+          isLoading={isSubmitting}
           className="w-full bg-orange-400 text-white hover:bg-orange-500 disabled:opacity-50"
         >
           グラフを作成

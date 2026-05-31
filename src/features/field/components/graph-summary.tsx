@@ -5,6 +5,8 @@ type GraphSummaryProps = {
 };
 
 export function GraphSummary({ graph }: GraphSummaryProps) {
+  const nodesMap = new Map(graph.nodes.map((node) => [node.id, node]));
+
   return (
     <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
       <div className="mb-3 flex items-center justify-between">
@@ -39,12 +41,8 @@ export function GraphSummary({ graph }: GraphSummaryProps) {
           </h3>
           <ul className="flex flex-col gap-2">
             {graph.relationships.map((relationship) => {
-              const source = graph.nodes.find(
-                (node) => node.id === relationship.sourceId,
-              );
-              const target = graph.nodes.find(
-                (node) => node.id === relationship.targetId,
-              );
+              const source = nodesMap.get(relationship.sourceId);
+              const target = nodesMap.get(relationship.targetId);
               return (
                 <li
                   key={relationship.id}

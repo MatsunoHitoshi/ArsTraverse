@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
 import { api } from "@/trpc/react";
 import { Button } from "@/app/_components/button/button";
@@ -17,23 +17,30 @@ type FieldScanDetailProps = {
 export function FieldScanDetail({ sessionId }: FieldScanDetailProps) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const { data, isLoading, error, refetch } = api.scan.getSession.useQuery({
     id: sessionId,
   });
 
-  const trimmedQuery = searchQuery.trim();
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery.trim());
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   const { data: searchResults, isFetching: isSearching } =
     api.workspace.searchPublishedNodes.useQuery(
-      { query: trimmedQuery, limit: 10 },
-      { enabled: trimmedQuery.length >= 2 },
+      { query: debouncedQuery, limit: 10 },
+      { enabled: debouncedQuery.length >= 2 },
     );
 
   const displayedMatches = useMemo(() => {
-    if (trimmedQuery.length >= 2 && searchResults) {
+    if (debouncedQuery.length >= 2 && searchResults) {
       return searchResults;
     }
     return data?.matchCandidates ?? [];
-  }, [trimmedQuery, searchResults, data?.matchCandidates]);
+  }, [debouncedQuery, searchResults, data?.matchCandidates]);
 
   if (isLoading) {
     return (
@@ -112,7 +119,7 @@ export function FieldScanDetail({ sessionId }: FieldScanDetailProps) {
           <PublishedNodeMatches
             matches={displayedMatches}
             title={
-              trimmedQuery.length >= 2
+              debouncedQuery.length >= 2
                 ? "検索結果"
                 : "公開グラフとの一致候補"
             }

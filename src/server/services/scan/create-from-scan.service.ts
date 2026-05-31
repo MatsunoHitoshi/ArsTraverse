@@ -37,7 +37,9 @@ export async function createFromScan(
   }
 
   let sourceImageUrl: string | null = null;
-  if (input.imageDataUrl) {
+  if (input.sourceImageUrl) {
+    sourceImageUrl = input.sourceImageUrl;
+  } else if (input.imageDataUrl) {
     sourceImageUrl = await storageUtils.uploadFromDataURL(
       input.imageDataUrl,
       BUCKETS.PATH_TO_INPUT_SCAN,

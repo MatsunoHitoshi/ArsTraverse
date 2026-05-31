@@ -13,6 +13,9 @@ export const CreateFromScanInputSchema = z.object({
   name: z.string().min(1),
   plainText: z.string().min(1),
   ocrMetadata: OcrMetadataSchema.optional(),
+  /** Pre-uploaded scan image URL (preferred — avoids large tRPC payloads). */
+  sourceImageUrl: z.string().url().optional(),
+  /** @deprecated Prefer uploading client-side and passing sourceImageUrl. */
   imageDataUrl: z.string().optional(),
   topicSpaceId: z.string().optional(),
 });

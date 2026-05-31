@@ -7,7 +7,24 @@ export type OcrResult = {
   ocrMetadata: OcrMetadata;
 };
 
-export type OcrProgressHandler = (progress: number) => void;
+export type OcrProgressUpdate = {
+  progress: number;
+  status: string;
+};
+
+export type OcrProgressHandler = (update: OcrProgressUpdate) => void;
+
+const OCR_STATUS_LABELS: Record<string, string> = {
+  "loading tesseract core": "OCR エンジンを読み込み中",
+  "initializing tesseract": "OCR を初期化中",
+  "loading language traineddata": "言語データを読み込み中",
+  "initializing api": "OCR API を初期化中",
+  "recognizing text": "文字を認識中",
+};
+
+export function getOcrStatusLabel(status: string): string {
+  return OCR_STATUS_LABELS[status] ?? "OCR を準備中";
+}
 
 export async function runOcr(
   imageSource: string | File,
@@ -17,9 +34,10 @@ export async function runOcr(
   const { createWorker } = await import("tesseract.js");
   const worker = await createWorker(language, 1, {
     logger: (message) => {
-      if (message.status === "recognizing text") {
-        onProgress?.(message.progress);
-      }
+      onProgress?.({
+        progress: message.progress ?? 0,
+        status: message.status,
+      });
     },
   });
 
@@ -39,19 +57,4 @@ export async function runOcr(
   } finally {
     await worker.terminate();
   }
-}
-
-export function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        resolve(reader.result);
-        return;
-      }
-      reject(new Error("画像の読み込みに失敗しました"));
-    };
-    reader.onerror = () => reject(new Error("画像の読み込みに失敗しました"));
-    reader.readAsDataURL(file);
-  });
 }
