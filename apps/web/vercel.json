@@ -1,5 +1,5 @@
 {
-  "installCommand": "npm install --include=optional",
+  "installCommand": "cd ../.. && npm install --include=optional",
   "functions": {
     "app/api/**/*": {
       "maxDuration": 300

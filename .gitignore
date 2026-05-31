@@ -77,6 +77,5 @@ yarn-error.log*
 
 # Monorepo
 apps/web/.next
-apps/web/tsconfig.tsbuildinfo
 
 packages/db/prisma/logs
