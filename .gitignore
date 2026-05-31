@@ -74,3 +74,9 @@ yarn-error.log*
 
 # KG alignment agent — local run logs and test reports
 .alignment-runs/
+
+# Monorepo
+apps/web/.next
+apps/web/tsconfig.tsbuildinfo
+
+packages/db/prisma/logs

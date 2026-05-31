@@ -1,0 +1,20 @@
+{
+  "name": "@repo/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types/graph": "./src/types/graph.ts",
+    "./kg/diff": "./src/kg/diff.ts",
+    "./kg/find-duplicate-edge-groups": "./src/kg/find-duplicate-edge-groups.ts",
+    "./kg/find-exact-duplicate-node-groups": "./src/kg/find-exact-duplicate-node-groups.ts",
+    "./kg/get-nodes-and-relationships-from-result": "./src/kg/get-nodes-and-relationships-from-result.ts",
+    "./cuid": "./src/cuid.ts",
+    "./edge-cdt-animation": "./src/edge-cdt-animation.ts"
+  },
+  "dependencies": {
+    "@paralleldrive/cuid2": "^2.2.2",
+    "@prisma/client": "^5.14.0"
+  }
+}

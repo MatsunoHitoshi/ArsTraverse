@@ -13,7 +13,7 @@ import { createId } from "@/app/_utils/cuid/cuid";
 import type {
   Relationship,
   Node,
-} from "node_modules/@langchain/community/dist/graphs/document";
+} from "@langchain/community/graphs/document";
 
 export class LangChainExtractor implements Extractor {
   async extract(

@@ -1,9 +1,9 @@
 import type { GraphChangeType, Prisma } from "@prisma/client";
-import { createId } from "../cuid/cuid";
+import { createId } from "../cuid";
 import type {
   NodeTypeForFrontend,
   RelationshipTypeForFrontend,
-} from "@/app/const/types";
+} from "../types/graph";
 
 export type PropertyTypeForFrontend = {
   [K in string]: string;
@@ -83,9 +83,6 @@ export const getNodesAndRelationshipsFromResult = (result: string) => {
     .match(new RegExp(internalRegex, "g"))
     ?.map((relationship) => relationship.split(","));
 
-  console.log("nodes: ", nodes);
-  console.log("relationships: ", relationships);
-
   const nodesJson = nodes?.map((node, index) => {
     const properties = extractProperties(node.slice(2));
     return {
@@ -119,9 +116,6 @@ export const getNodesAndRelationshipsFromResult = (result: string) => {
       properties: properties,
     };
   });
-
-  console.log("nodesJson: ", nodesJson);
-  console.log("relationshipsJson: ", relationshipsJson);
 
   return {
     nodes: nodesJson ?? [],

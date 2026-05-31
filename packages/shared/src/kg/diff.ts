@@ -1,7 +1,7 @@
 import type {
   NodeTypeForFrontend,
   RelationshipTypeForFrontend,
-} from "@/app/const/types";
+} from "../types/graph";
 import { GraphChangeType } from "@prisma/client";
 import type {
   NodeDiffType,

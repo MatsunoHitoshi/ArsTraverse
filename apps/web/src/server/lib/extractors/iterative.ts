@@ -18,7 +18,7 @@ import type {
   GraphDocument,
   Node,
   Relationship,
-} from "node_modules/@langchain/community/dist/graphs/document";
+} from "@langchain/community/graphs/document";
 import type { Document } from "@langchain/core/documents";
 
 export class IterativeGraphExtractor implements Extractor {

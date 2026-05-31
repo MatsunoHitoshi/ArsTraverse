@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { LayoutInstruction, FilterCondition } from "@/app/const/types";
+import type { LayoutInstruction, FilterCondition } from "@repo/shared/types/graph";
 
 // ノードのプロパティスキーマ
 const PropertyTypeSchema = z.record(z.string(), z.string());

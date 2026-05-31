@@ -8,8 +8,12 @@ import createNextIntlPlugin from "next-intl/plugin";
 
 const withNextIntl = createNextIntlPlugin();
 
+const monorepoRoot = new URL("../..", import.meta.url).pathname;
+
 /** @type {import("next").NextConfig} */
 const config = {
+  transpilePackages: ["@repo/db", "@repo/shared", "@repo/validators"],
+  outputFileTracingRoot: monorepoRoot,
   images: {
     domains: ["matsuno.caric.jp"],
     remotePatterns: [

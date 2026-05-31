@@ -1,0 +1,14 @@
+{
+  "name": "@repo/validators",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./knowledge-graph": "./src/knowledge-graph.ts",
+    "./meta-graph-story": "./src/meta-graph-story.ts"
+  },
+  "dependencies": {
+    "@repo/shared": "*",
+    "zod": "^3.23.3"
+  }
+}
