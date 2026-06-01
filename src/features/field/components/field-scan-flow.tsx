@@ -323,7 +323,6 @@ export function FieldScanFlow() {
       setErrorMessage(
         error instanceof Error ? error.message : "グラフ作成に失敗しました",
       );
-    } finally {
       setIsSubmitting(false);
     }
   };

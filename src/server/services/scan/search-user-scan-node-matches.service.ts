@@ -20,10 +20,12 @@ export async function searchUserScanNodeMatchesByNames(
   const nodes = await ctx.db.graphNode.findMany({
     where: {
       deletedAt: null,
-      name: {
-        in: uniqueNames,
-        mode: "insensitive",
-      },
+      OR: uniqueNames.map((name) => ({
+        name: {
+          equals: name,
+          mode: "insensitive" as const,
+        },
+      })),
       documentGraph: {
         sourceDocument: {
           userId: ctx.session.user.id,
