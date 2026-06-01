@@ -36,6 +36,8 @@ const emptyDocument: DocumentResponse = {
   id: "",
   name: "",
   url: "",
+  sourceImageUrl: null,
+  ocrMetadata: null,
   userId: "",
   graph: null,
   createdAt: new Date(),
