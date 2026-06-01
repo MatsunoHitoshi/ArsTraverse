@@ -15,12 +15,14 @@ const CAMERA_STARTUP_ERROR =
 type LiveCameraScannerProps = {
   onCapture: (file: File) => void;
   onOpenFilePicker: () => void;
+  onOpenNativeCamera: () => void;
   onBack: () => void;
 };
 
 export function LiveCameraScanner({
   onCapture,
   onOpenFilePicker,
+  onOpenNativeCamera,
   onBack,
 }: LiveCameraScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -127,22 +129,31 @@ export function LiveCameraScanner({
           </p>
         )}
 
-        <div className="pointer-events-auto flex items-center justify-between px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3">
-          <Button
-            onClick={onOpenFilePicker}
-            className="min-w-[7.5rem] bg-black/45 px-3 py-2 text-xs text-white backdrop-blur-sm hover:bg-black/60"
-            size="small"
-          >
-            ファイルから追加
-          </Button>
+        <div className="pointer-events-auto flex items-end justify-between px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 sm:px-6">
+          <div className="flex min-w-[6.5rem] flex-col gap-2">
+            <Button
+              onClick={onOpenFilePicker}
+              className="bg-black/45 px-3 py-2 text-xs text-white backdrop-blur-sm hover:bg-black/60"
+              size="small"
+            >
+              ファイルから追加
+            </Button>
+            <Button
+              onClick={onOpenNativeCamera}
+              className="bg-black/45 px-3 py-2 text-xs text-white backdrop-blur-sm hover:bg-black/60"
+              size="small"
+            >
+              システムカメラ
+            </Button>
+          </div>
           <button
             type="button"
             onClick={() => void handleCapture()}
             disabled={!canCapture}
-            aria-label="撮影する"
+            aria-label="ライブプレビューで撮影する"
             className="h-[4.5rem] w-[4.5rem] shrink-0 rounded-full border-4 border-white bg-orange-400 shadow-lg transition disabled:cursor-not-allowed disabled:opacity-50"
           />
-          <div className="min-w-[7.5rem]" aria-hidden />
+          <div className="min-w-[6.5rem]" aria-hidden />
         </div>
       </div>
 

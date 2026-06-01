@@ -42,6 +42,7 @@ export function FieldScanFlow() {
   const router = useRouter();
   const { data: session } = useSession();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const nativeCameraInputRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState<ScanStep>("camera");
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -177,6 +178,10 @@ export function FieldScanFlow() {
 
   const handleOpenFilePicker = () => {
     fileInputRef.current?.click();
+  };
+
+  const handleOpenNativeCamera = () => {
+    nativeCameraInputRef.current?.click();
   };
 
   const handleCapture = (file: File) => {
@@ -418,6 +423,13 @@ export function FieldScanFlow() {
         ref={fileInputRef}
         type="file"
         accept="image/jpeg,image/png,image/webp,image/gif"
+        onChange={handleImageChange}
+        className="hidden"
+      />
+      <input
+        ref={nativeCameraInputRef}
+        type="file"
+        accept="image/*"
         capture="environment"
         onChange={handleImageChange}
         className="hidden"
@@ -427,6 +439,7 @@ export function FieldScanFlow() {
         <LiveCameraScanner
           onCapture={handleCapture}
           onOpenFilePicker={handleOpenFilePicker}
+          onOpenNativeCamera={handleOpenNativeCamera}
           onBack={() => router.push("/field")}
         />
       )}
