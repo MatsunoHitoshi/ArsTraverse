@@ -213,7 +213,7 @@ export const DocumentForm = ({
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    let fileUrl: string | undefined;
+    let fileUrl: string | null | undefined;
     const reader = new FileReader();
 
     if (isPlaneTextMode) {

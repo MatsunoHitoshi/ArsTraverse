@@ -1,9 +1,10 @@
 import type { PrismaClient } from "@prisma/client";
 import { DocumentType } from "@prisma/client";
 import { formDocumentGraphForFrontend } from "@/app/_utils/kg/frontend-properties";
-import { getTextFromDocumentFile } from "@/app/_utils/text/text";
 import type { LocaleEnum } from "@/app/const/types";
 import type { OcrMetadata } from "@/server/api/schemas/scan";
+import { resolveScanPlainText } from "@/server/services/scan/resolve-scan-plain-text";
+import { searchUserScanNodeMatchesByNames } from "@/server/services/scan/search-user-scan-node-matches.service";
 import { searchPublishedNodesByNames } from "@/server/services/workspace/search-published-nodes.service";
 
 type GetScanSessionCtx = {
@@ -40,14 +41,22 @@ export async function getScanSession(
     document.graph,
     (ctx.session.user.preferredLocale ?? "ja") as LocaleEnum,
   );
-  const plainText = await getTextFromDocumentFile(
+  const ocrMetadata = document.ocrMetadata as OcrMetadata | null;
+  const plainText = await resolveScanPlainText(
     document.url,
     document.documentType,
+    ocrMetadata,
   );
   const matchCandidates = await searchPublishedNodesByNames(
     ctx,
     graphRecord.dataJson.nodes.map((node) => node.name),
-    20,
+    Math.min(Math.max(graphRecord.dataJson.nodes.length * 5, 20), 100),
+  );
+  const sourceDocumentMatches = await searchUserScanNodeMatchesByNames(
+    ctx,
+    graphRecord.dataJson.nodes.map((node) => node.name),
+    sourceDocumentId,
+    Math.min(Math.max(graphRecord.dataJson.nodes.length * 5, 20), 100),
   );
 
   return {
@@ -55,10 +64,10 @@ export async function getScanSession(
     name: document.name,
     createdAt: document.createdAt,
     sourceImageUrl: document.sourceImageUrl,
-    ocrMetadata: document.ocrMetadata as OcrMetadata | null,
+    ocrMetadata,
     plainText,
     graph: graphRecord.dataJson,
     graphId: document.graph.id,
-    matchCandidates,
+    matchCandidates: [...matchCandidates, ...sourceDocumentMatches],
   };
 }

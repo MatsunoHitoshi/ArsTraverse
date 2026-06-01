@@ -78,27 +78,96 @@ export function clientPointToNormalized(
   };
 }
 
-export function normalizedRectFromPoints(
-  start: { x: number; y: number },
-  end: { x: number; y: number },
-): NormalizedOcrRegion | null {
-  const x = Math.min(start.x, end.x);
-  const y = Math.min(start.y, end.y);
-  const w = Math.abs(end.x - start.x);
-  const h = Math.abs(end.y - start.y);
+export type RegionCorner = "tl" | "tr" | "br" | "bl";
 
-  if (w < 0.03 || h < 0.03) {
-    return null;
+const MIN_REGION_SIZE = 0.03;
+
+export function getRegionCorners(
+  region: NormalizedOcrRegion,
+): Record<RegionCorner, { x: number; y: number }> {
+  return {
+    tl: { x: region.x, y: region.y },
+    tr: { x: region.x + region.w, y: region.y },
+    br: { x: region.x + region.w, y: region.y + region.h },
+    bl: { x: region.x, y: region.y + region.h },
+  };
+}
+
+export function updateRegionCorner(
+  region: NormalizedOcrRegion,
+  corner: RegionCorner,
+  point: { x: number; y: number },
+): NormalizedOcrRegion {
+  const right = region.x + region.w;
+  const bottom = region.y + region.h;
+  let x = region.x;
+  let y = region.y;
+  let w = region.w;
+  let h = region.h;
+
+  switch (corner) {
+    case "tl":
+      x = point.x;
+      y = point.y;
+      w = right - x;
+      h = bottom - y;
+      break;
+    case "tr":
+      y = point.y;
+      w = point.x - region.x;
+      h = bottom - y;
+      break;
+    case "br":
+      w = point.x - region.x;
+      h = point.y - region.y;
+      break;
+    case "bl":
+      x = point.x;
+      w = right - x;
+      h = point.y - region.y;
+      break;
+  }
+
+  if (w < 0) {
+    x += w;
+    w = -w;
+  }
+  if (h < 0) {
+    y += h;
+    h = -h;
   }
 
   return clampRegion({ x, y, w, h });
 }
 
+export function moveRegion(
+  region: NormalizedOcrRegion,
+  delta: { dx: number; dy: number },
+): NormalizedOcrRegion {
+  return clampRegion({
+    x: region.x + delta.dx,
+    y: region.y + delta.dy,
+    w: region.w,
+    h: region.h,
+  });
+}
+
+export function createOffsetDefaultRegion(index: number): NormalizedOcrRegion {
+  const offset = Math.min(0.05 * index, 0.15);
+  return clampRegion({
+    x: DEFAULT_OCR_REGION.x + offset,
+    y: DEFAULT_OCR_REGION.y + offset,
+    w: DEFAULT_OCR_REGION.w,
+    h: DEFAULT_OCR_REGION.h,
+  });
+}
+
 export function clampRegion(region: NormalizedOcrRegion): NormalizedOcrRegion {
-  const x = Math.max(0, Math.min(1, region.x));
-  const y = Math.max(0, Math.min(1, region.y));
-  const w = Math.max(0.01, Math.min(1 - x, region.w));
-  const h = Math.max(0.01, Math.min(1 - y, region.h));
+  let { x, y, w, h } = region;
+  w = Math.max(MIN_REGION_SIZE, Math.min(1, w));
+  h = Math.max(MIN_REGION_SIZE, Math.min(1, h));
+  x = Math.max(0, Math.min(1 - w, x));
+  y = Math.max(0, Math.min(1 - h, y));
   return { x, y, w, h };
 }
 
@@ -112,4 +181,17 @@ export function regionToOverlayStyle(
     width: region.w * layout.displayWidth,
     height: region.h * layout.displayHeight,
   };
+}
+
+export function cornerToRegionStyle(corner: RegionCorner): CSSProperties {
+  switch (corner) {
+    case "tl":
+      return { left: 0, top: 0 };
+    case "tr":
+      return { left: "100%", top: 0 };
+    case "br":
+      return { left: "100%", top: "100%" };
+    case "bl":
+      return { left: 0, top: "100%" };
+  }
 }

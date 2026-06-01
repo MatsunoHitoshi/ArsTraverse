@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn, useSession } from "next-auth/react";
 import { api } from "@/trpc/react";
@@ -9,6 +8,12 @@ import { Button } from "@/app/_components/button/button";
 import { FadeIn } from "@/app/_components/animation/fade-in";
 import { BUCKETS } from "@/app/_utils/supabase/const";
 import { storageUtils } from "@/app/_utils/supabase/supabase";
+import type { GraphDocumentForFrontend } from "@/app/const/types";
+import { GraphPreview } from "@/app/_components/curators-writing-workspace/graph-preview";
+import { LinkButton } from "@/app/_components/button/link-button";
+import { ChevronLeftIcon } from "@/app/_components/icons";
+import { GraphSummary } from "@/features/field/components/graph-summary";
+import { LiveCameraScanner } from "@/features/field/components/live-camera-scanner";
 import { ScanRegionSelector } from "@/features/field/components/scan-region-selector";
 import {
   DEFAULT_OCR_REGION,
@@ -27,14 +32,22 @@ const LANGUAGE_OPTIONS: { value: OcrLanguage; label: string }[] = [
   { value: "eng", label: "English" },
 ];
 
+type ScanStep = "camera" | "trim" | "processing" | "preview";
+type PipelineStage = "ocr" | "normalize" | "graph" | null;
+
 export function FieldScanFlow() {
   const router = useRouter();
   const { data: session } = useSession();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [step, setStep] = useState<ScanStep>("camera");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [fileName, setFileName] = useState("");
   const [sessionName, setSessionName] = useState("");
   const [plainText, setPlainText] = useState("");
+  const [graphPreview, setGraphPreview] = useState<GraphDocumentForFrontend | null>(
+    null,
+  );
   const [ocrRegions, setOcrRegions] = useState<NormalizedOcrRegion[]>([
     DEFAULT_OCR_REGION,
   ]);
@@ -47,7 +60,11 @@ export function FieldScanFlow() {
   >();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRunningOcr, setIsRunningOcr] = useState(false);
+  const [isNormalizingText, setIsNormalizingText] = useState(false);
+  const [isRunningGraph, setIsRunningGraph] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pipelineStage, setPipelineStage] = useState<PipelineStage>(null);
+  const [pipelineProgress, setPipelineProgress] = useState(0);
 
   const createFromScan = api.scan.createFromScan.useMutation({
     onSuccess: (result) => {
@@ -57,6 +74,22 @@ export function FieldScanFlow() {
       setErrorMessage(error.message ?? "グラフ作成に失敗しました");
     },
   });
+  const normalizeOcrText = api.scan.normalizeOcrText.useMutation();
+  const extractGraphFromPlainText = api.kg.extractKGFromPlainText.useMutation();
+  const previewMatchNodeNames = useMemo(
+    () => graphPreview?.nodes.map((node) => node.name).filter(Boolean) ?? [],
+    [graphPreview],
+  );
+  const { data: previewMatchCandidates = [] } =
+    api.scan.searchNodeMatchesByNames.useQuery(
+      {
+        nodeNames: previewMatchNodeNames,
+        limit: Math.min(Math.max(previewMatchNodeNames.length * 5, 20), 100),
+      },
+      {
+        enabled: step === "preview" && previewMatchNodeNames.length > 0,
+      },
+    );
 
   useEffect(() => {
     return () => {
@@ -70,14 +103,28 @@ export function FieldScanFlow() {
     () =>
       sessionName.trim().length > 0 &&
       plainText.trim().length > 0 &&
-      ocrRegions.length > 0,
-    [sessionName, plainText, ocrRegions.length],
+      graphPreview != null,
+    [sessionName, plainText, graphPreview],
   );
+  const isPipelineRunning =
+    isRunningOcr || isNormalizingText || isRunningGraph || pipelineStage != null;
 
-  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const pipelineLabel = useMemo(() => {
+    if (pipelineStage === "ocr") {
+      return ocrProgress
+        ? `${getOcrStatusLabel(ocrProgress)}${
+            ocrProgress.status === "recognizing text"
+              ? ` ${Math.round(ocrProgress.progress * 100)}%`
+              : ""
+          }`
+        : "OCR を実行中...";
+    }
+    if (pipelineStage === "normalize") return "AIでテキストを整形中...";
+    if (pipelineStage === "graph") return "グラフを抽出中...";
+    return "";
+  }, [pipelineStage, ocrProgress]);
 
+  const setSelectedImage = (file: File) => {
     if (!file.type.startsWith("image/")) {
       setErrorMessage("画像ファイルを選択してください。");
       return;
@@ -85,6 +132,7 @@ export function FieldScanFlow() {
 
     setErrorMessage(null);
     setPlainText("");
+    setGraphPreview(null);
     setOcrMetadata(undefined);
     setOcrProgress(null);
     setOcrRegions([DEFAULT_OCR_REGION]);
@@ -95,7 +143,7 @@ export function FieldScanFlow() {
 
     setImageFile(file);
     setPreviewUrl(URL.createObjectURL(file));
-    setFileName(file.name);
+    setStep("trim");
 
     if (!sessionName) {
       const baseName = file.name.replace(/\.[^.]+$/, "");
@@ -103,7 +151,22 @@ export function FieldScanFlow() {
     }
   };
 
-  const handleRunOcr = async () => {
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setSelectedImage(file);
+    event.currentTarget.value = "";
+  };
+
+  const handleOpenFilePicker = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleCapture = (file: File) => {
+    setSelectedImage(file);
+  };
+
+  const handleRunPipeline = async () => {
     if (!imageFile) {
       setErrorMessage("先に画像を選択してください");
       return;
@@ -114,31 +177,102 @@ export function FieldScanFlow() {
       return;
     }
 
-    setIsRunningOcr(true);
+    setStep("processing");
     setErrorMessage(null);
+    setIsRunningOcr(true);
+    setIsRunningGraph(true);
+    setPipelineStage("ocr");
+    setPipelineProgress(3);
     setOcrProgress({ progress: 0, status: "loading tesseract core" });
 
     try {
-      const result = await runOcrOnRegions(
+      const ocrResult = await runOcrOnRegions(
         imageFile,
         ocrRegions,
         language,
-        setOcrProgress,
+        (update) => {
+          setOcrProgress(update);
+          if (update.status === "recognizing text") {
+            setPipelineProgress(5 + Math.round(update.progress * 60));
+          } else {
+            setPipelineProgress(8);
+          }
+        },
       );
-      setPlainText(result.plainText);
-      setOcrMetadata(result.ocrMetadata);
-      if (!result.plainText) {
-        setErrorMessage(
-          "テキストを認識できませんでした。領域や言語設定を見直してください。",
-        );
+      setOcrMetadata(ocrResult.ocrMetadata);
+      if (!ocrResult.plainText.trim()) {
+        throw new Error("テキストを認識できませんでした。");
       }
+
+      setPipelineStage("normalize");
+      setPipelineProgress(72);
+      setIsNormalizingText(true);
+      const normalized = await normalizeOcrText.mutateAsync({
+        plainText: ocrResult.plainText,
+        language,
+      });
+      setIsNormalizingText(false);
+      setPipelineProgress(86);
+
+      const normalizedText = normalized.correctedText.trim();
+      setPlainText(normalizedText);
+
+      setPipelineStage("graph");
+      setPipelineProgress(90);
+      const graphResult = await extractGraphFromPlainText.mutateAsync({
+        plainText: normalizedText,
+      });
+      const graph = graphResult.data?.graph;
+      if (!graph) {
+        throw new Error(graphResult.data?.error ?? "グラフ抽出に失敗しました");
+      }
+
+      setGraphPreview(graph as GraphDocumentForFrontend);
+      setPipelineProgress(100);
+      setStep("preview");
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : "OCR に失敗しました",
+        error instanceof Error ? error.message : "処理に失敗しました",
       );
+      setStep("trim");
     } finally {
       setIsRunningOcr(false);
+      setIsNormalizingText(false);
+      setIsRunningGraph(false);
       setOcrProgress(null);
+      setPipelineStage(null);
+      setTimeout(() => setPipelineProgress(0), 150);
+    }
+  };
+
+  const handleReExtractGraph = async () => {
+    const inputText = plainText.trim();
+    if (!inputText) {
+      setErrorMessage("再抽出するテキストが空です");
+      return;
+    }
+    setErrorMessage(null);
+    setIsRunningGraph(true);
+    setPipelineStage("graph");
+    setPipelineProgress(90);
+    try {
+      const graphResult = await extractGraphFromPlainText.mutateAsync({
+        plainText: inputText,
+      });
+      const graph = graphResult.data?.graph;
+      if (!graph) {
+        throw new Error(graphResult.data?.error ?? "グラフ再抽出に失敗しました");
+      }
+      setGraphPreview(graph as GraphDocumentForFrontend);
+      setPipelineProgress(100);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "グラフ再抽出に失敗しました",
+      );
+    } finally {
+      setIsRunningGraph(false);
+      setPipelineStage(null);
+      setTimeout(() => setPipelineProgress(0), 150);
     }
   };
 
@@ -149,6 +283,18 @@ export function FieldScanFlow() {
     setErrorMessage(null);
 
     try {
+      const trimmedPlainText = plainText.trim();
+      const textBlob = new Blob([trimmedPlainText], {
+        type: "text/plain;charset=utf-8",
+      });
+      const sourceTextUrl = await storageUtils.uploadFromBlob(
+        textBlob,
+        BUCKETS.PATH_TO_INPUT_TXT,
+      );
+      if (!sourceTextUrl) {
+        throw new Error("OCR テキストのアップロードに失敗しました");
+      }
+
       let sourceImageUrl: string | undefined;
       if (imageFile) {
         const uploadedUrl = await storageUtils.upload(
@@ -163,7 +309,9 @@ export function FieldScanFlow() {
 
       await createFromScan.mutateAsync({
         name: sessionName.trim(),
-        plainText: plainText.trim(),
+        plainText: trimmedPlainText,
+        graphDocument: graphPreview ?? undefined,
+        sourceTextUrl,
         sourceImageUrl,
         ocrMetadata,
       });
@@ -174,6 +322,21 @@ export function FieldScanFlow() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleBackToCamera = () => {
+    setStep("camera");
+    setGraphPreview(null);
+    setPlainText("");
+    setErrorMessage(null);
+  };
+
+  const handleCancelRegionAdjust = () => {
+    if (graphPreview) {
+      setStep("preview");
+      return;
+    }
+    setStep("camera");
   };
 
   if (!session) {
@@ -197,35 +360,40 @@ export function FieldScanFlow() {
   return (
     <FadeIn>
       <div className="mx-auto flex w-full max-w-lg flex-col gap-5 px-4 py-6 pb-24">
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-start gap-3">
+          <LinkButton
+            href="/field"
+            className="flex !h-8 !w-8 shrink-0 items-center justify-center"
+          >
+            <div className="h-4 w-4">
+              <ChevronLeftIcon width={16} height={16} color="white" />
+            </div>
+          </LinkButton>
           <div>
             <h1 className="text-xl font-bold text-slate-50">新規スキャン</h1>
             <p className="text-sm text-slate-400">
-              資料を撮影し、文字領域を指定 → OCR → グラフ化
+              撮影 → 領域指定 → OCR → AI整形 → グラフプレビュー
             </p>
           </div>
-          <Link href="/field" className="text-sm text-sky-400 hover:underline">
-            一覧
-          </Link>
         </div>
 
-        <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
-          <label className="mb-2 block text-sm font-medium text-slate-200">
-            1. 画像を選択
-          </label>
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif"
-            capture="environment"
-            onChange={handleImageChange}
-            className="block w-full text-sm text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-slate-700 file:px-3 file:py-2 file:text-slate-100"
-          />
-          {fileName && (
-            <p className="mt-2 text-xs text-slate-400">選択中: {fileName}</p>
-          )}
-        </section>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          capture="environment"
+          onChange={handleImageChange}
+          className="hidden"
+        />
 
-        {previewUrl && (
+        {step === "camera" && (
+          <LiveCameraScanner
+            onCapture={handleCapture}
+            onOpenFilePicker={handleOpenFilePicker}
+          />
+        )}
+
+        {previewUrl && (step === "trim" || step === "processing") && (
           <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
             <label className="mb-2 block text-sm font-medium text-slate-200">
               2. 文字領域を指定
@@ -234,109 +402,163 @@ export function FieldScanFlow() {
               imageUrl={previewUrl}
               regions={ocrRegions}
               onRegionsChange={setOcrRegions}
+              defaultFullscreen
+              requireFullscreenChangeToComplete={graphPreview != null}
+              onCancelFullscreen={handleCancelRegionAdjust}
             />
+            <div className="mt-3 flex gap-2">
+              <Button
+                onClick={handleBackToCamera}
+                className="w-1/2 bg-slate-700 text-white"
+                disabled={step === "processing"}
+              >
+                撮り直す
+              </Button>
+              <Button
+                onClick={handleRunPipeline}
+                disabled={
+                  !imageFile ||
+                  step === "processing" ||
+                  isRunningOcr ||
+                  ocrRegions.length === 0
+                }
+                isLoading={step === "processing" || isRunningOcr}
+                className="w-1/2 bg-orange-400 text-white hover:bg-orange-500"
+              >
+                この範囲で解析
+              </Button>
+            </div>
           </section>
         )}
 
-        <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
-          <label className="mb-2 block text-sm font-medium text-slate-200">
-            3. OCR 言語
-          </label>
-          <select
-            value={language}
-            onChange={(event) =>
-              setLanguage(event.target.value as OcrLanguage)
-            }
-            className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-          >
-            {LANGUAGE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-
-          <div className="mt-3">
-            <Button
-              onClick={handleRunOcr}
-              disabled={!imageFile || isRunningOcr || ocrRegions.length === 0}
-              isLoading={isRunningOcr}
-              className="w-full bg-slate-700 text-white"
+        {(step === "trim" || step === "processing") && (
+          <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+            <label className="mb-2 block text-sm font-medium text-slate-200">
+              3. OCR 言語
+            </label>
+            <select
+              value={language}
+              onChange={(event) =>
+                setLanguage(event.target.value as OcrLanguage)
+              }
+              className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
             >
-              選択領域で OCR を実行
-            </Button>
-          </div>
+              {LANGUAGE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
 
-          {ocrProgress && (
-            <div className="mt-3">
-              <div className="mb-1 text-xs text-slate-400">
-                {getOcrStatusLabel(ocrProgress)}
-                {ocrProgress.status === "recognizing text"
-                  ? ` ${Math.round(ocrProgress.progress * 100)}%`
-                  : null}
+            {isPipelineRunning && pipelineStage && (
+              <div className="mt-3">
+                <div className="mb-1 text-xs text-slate-400">
+                  {pipelineLabel}
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-slate-700">
+                  <div
+                    className="h-full bg-orange-400 transition-all"
+                    style={{
+                      width: `${pipelineProgress}%`,
+                    }}
+                  />
+                </div>
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-slate-700">
-                <div
-                  className="h-full bg-orange-400 transition-all"
-                  style={{
-                    width: `${Math.round(
-                      Math.max(
-                        ocrProgress.progress * 100,
-                        ocrProgress.status === "recognizing text" ? 0 : 8,
-                      ),
-                    )}%`,
-                  }}
+            )}
+          </section>
+        )}
+
+        {step === "preview" && graphPreview && (
+          <>
+            <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+              <label
+                htmlFor="session-name"
+                className="mb-2 block text-sm font-medium text-slate-200"
+              >
+                4. セッション名
+              </label>
+              <input
+                id="session-name"
+                value={sessionName}
+                onChange={(event) => setSessionName(event.target.value)}
+                placeholder="例: 展覧会パンフレット p.3"
+                className="mb-4 w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+              />
+
+              <label
+                htmlFor="ocr-text"
+                className="mb-2 block text-sm font-medium text-slate-200"
+              >
+                5. OCR テキスト（AI整形済み）
+              </label>
+              <textarea
+                id="ocr-text"
+                value={plainText}
+                onChange={(event) => setPlainText(event.target.value)}
+                rows={8}
+                className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+              />
+
+              {isPipelineRunning && pipelineStage && (
+                <div className="mt-3">
+                  <div className="mb-1 text-xs text-slate-400">
+                    {pipelineLabel}
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-slate-700">
+                    <div
+                      className="h-full bg-orange-400 transition-all"
+                      style={{ width: `${pipelineProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-3 flex gap-2">
+                <Button
+                  onClick={() => setStep("trim")}
+                  className="w-1/3 bg-slate-700 text-white"
+                >
+                  領域を再調整
+                </Button>
+                <Button
+                  onClick={() => void handleReExtractGraph()}
+                  isLoading={isRunningGraph}
+                  disabled={!plainText.trim() || isRunningGraph}
+                  className="w-1/3 bg-slate-700 text-white"
+                >
+                  再抽出して更新
+                </Button>
+                <Button
+                  onClick={() => void handleSubmit()}
+                  disabled={!canSubmit || isSubmitting}
+                  isLoading={isSubmitting}
+                  className="w-1/3 bg-orange-400 text-white hover:bg-orange-500 disabled:opacity-50"
+                >
+                  保存して詳細へ
+                </Button>
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+              <h2 className="mb-2 text-sm font-semibold text-slate-200">
+                6. グラフプレビュー
+              </h2>
+              <GraphPreview graphData={graphPreview} />
+              <div className="mt-4">
+                <GraphSummary
+                  graph={graphPreview}
+                  matchCandidates={previewMatchCandidates}
                 />
               </div>
-            </div>
-          )}
-        </section>
-
-        <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
-          <label
-            htmlFor="session-name"
-            className="mb-2 block text-sm font-medium text-slate-200"
-          >
-            4. セッション名
-          </label>
-          <input
-            id="session-name"
-            value={sessionName}
-            onChange={(event) => setSessionName(event.target.value)}
-            placeholder="例: 展覧会パンフレット p.3"
-            className="mb-4 w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-          />
-
-          <label
-            htmlFor="ocr-text"
-            className="mb-2 block text-sm font-medium text-slate-200"
-          >
-            5. OCR テキスト（編集可）
-          </label>
-          <textarea
-            id="ocr-text"
-            value={plainText}
-            onChange={(event) => setPlainText(event.target.value)}
-            rows={8}
-            placeholder="OCR 結果がここに表示されます。必要に応じて修正してください。"
-            className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-          />
-        </section>
+            </section>
+          </>
+        )}
 
         {errorMessage && (
           <p className="rounded-lg border border-red-500/40 bg-red-950/40 px-3 py-2 text-sm text-red-300">
             {errorMessage}
           </p>
         )}
-
-        <Button
-          onClick={() => void handleSubmit()}
-          disabled={!canSubmit || isSubmitting}
-          isLoading={isSubmitting}
-          className="w-full bg-orange-400 text-white hover:bg-orange-500 disabled:opacity-50"
-        >
-          グラフを作成
-        </Button>
       </div>
     </FadeIn>
   );

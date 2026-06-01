@@ -2,19 +2,46 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { signIn, useSession } from "next-auth/react";
 import dayjs from "dayjs";
 import { api } from "@/trpc/react";
 import { Button } from "@/app/_components/button/button";
 import { FadeIn } from "@/app/_components/animation/fade-in";
+import { ScanSessionMenu } from "@/features/field/components/scan-session-menu";
+import { ScanSessionRenameModal } from "@/features/field/components/scan-session-rename-modal";
+import { ScanSessionDeleteModal } from "@/features/field/components/scan-session-delete-modal";
+
+type SessionTarget = {
+  id: string;
+  name: string;
+};
 
 export function FieldSessionList() {
   const router = useRouter();
   const { data: session, status } = useSession();
-  const { data, isLoading, error } = api.scan.listSessions.useQuery(
+  const [renameTarget, setRenameTarget] = useState<SessionTarget | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SessionTarget | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const {
+    data,
+    isLoading,
+    error,
+    refetch,
+  } = api.scan.listSessions.useQuery(
     { page: 1, limit: 30 },
     { enabled: !!session },
   );
+  const deleteSession = api.scan.deleteSession.useMutation({
+    onSuccess: () => {
+      setDeleteTarget(null);
+      setDeleteError(null);
+      void refetch();
+    },
+    onError: (mutationError) => {
+      setDeleteError(mutationError.message ?? "削除に失敗しました");
+    },
+  });
 
   if (status === "loading") {
     return (
@@ -84,10 +111,13 @@ export function FieldSessionList() {
         {data && data.items.length > 0 && (
           <ul className="flex flex-col gap-3">
             {data.items.map((item) => (
-              <li key={item.id}>
+              <li
+                key={item.id}
+                className="flex items-center gap-1 rounded-xl border border-slate-700 bg-slate-800/70 transition hover:border-orange-400/60"
+              >
                 <Link
                   href={`/field/scan/${item.id}`}
-                  className="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-800/70 p-3 transition hover:border-orange-400/60"
+                  className="flex min-w-0 flex-1 items-center gap-3 p-3"
                 >
                   {item.sourceImageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -111,10 +141,46 @@ export function FieldSessionList() {
                     </div>
                   </div>
                 </Link>
+                <ScanSessionMenu
+                  className="mr-2 shrink-0"
+                  ariaLabel={`${item.name} の操作メニュー`}
+                  onRename={() => setRenameTarget({ id: item.id, name: item.name })}
+                  onDelete={() => {
+                    setDeleteError(null);
+                    setDeleteTarget({ id: item.id, name: item.name });
+                  }}
+                />
               </li>
             ))}
           </ul>
         )}
+
+        <ScanSessionRenameModal
+          isOpen={renameTarget != null}
+          setIsOpen={(open) => {
+            if (!open) setRenameTarget(null);
+          }}
+          sessionId={renameTarget?.id ?? null}
+          initialName={renameTarget?.name}
+          onSuccess={() => void refetch()}
+        />
+
+        <ScanSessionDeleteModal
+          isOpen={deleteTarget != null}
+          setIsOpen={(open) => {
+            if (!open) {
+              setDeleteTarget(null);
+              setDeleteError(null);
+            }
+          }}
+          sessionName={deleteTarget?.name}
+          errorMessage={deleteError}
+          isPending={deleteSession.isPending}
+          onConfirm={() => {
+            if (!deleteTarget) return;
+            deleteSession.mutate({ id: deleteTarget.id });
+          }}
+        />
       </div>
     </FadeIn>
   );

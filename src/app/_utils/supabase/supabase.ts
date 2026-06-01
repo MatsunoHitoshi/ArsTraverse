@@ -7,15 +7,39 @@ export const supabase = createClient(
   env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
 );
 
+function resolveUploadContentType(file: File | Blob): string | undefined {
+  if (file instanceof File && file.type) {
+    return file.type;
+  }
+
+  if (file.type) {
+    return file.type;
+  }
+
+  return undefined;
+}
+
 export const storageUtils = {
   upload: async (file: File | Blob, bucket: string) => {
-    const { data } = await supabase.storage
+    const objectKey = createId();
+    const contentType = resolveUploadContentType(file);
+    const { data, error } = await supabase.storage
       .from(bucket)
-      .upload(createId(), file);
+      .upload(objectKey, file, contentType ? { contentType } : undefined);
+
+    if (error ?? !data?.path) {
+      console.error("[storageUtils.upload] failed", {
+        bucket,
+        objectKey,
+        error: error?.message,
+      });
+      return null;
+    }
+
     const { data: uploaded } = supabase.storage
       .from(bucket)
-      .getPublicUrl(data?.path ?? "");
-    return uploaded.publicUrl;
+      .getPublicUrl(data.path);
+    return uploaded.publicUrl || null;
   },
   uploadFromDataURL: async (dataURL: string, bucket: string) => {
     const blob = await fetch(dataURL).then((r) => r.blob());
