@@ -45,8 +45,8 @@ export async function normalizeOcrTextWithLlm(
 
   const language = input.language ?? "jpn";
   const llm = new ChatOpenAI({
-    model: "gpt-5-nano",
-    reasoning: { effort: "minimal" },
+    model: "gpt-4o-mini",
+    temperature: 0,
   });
 
   const prompt = `You clean OCR output for downstream knowledge-graph extraction.

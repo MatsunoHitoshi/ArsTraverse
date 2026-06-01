@@ -77,7 +77,11 @@ export function FieldScanFlow() {
   const normalizeOcrText = api.scan.normalizeOcrText.useMutation();
   const extractGraphFromPlainText = api.kg.extractKGFromPlainText.useMutation();
   const previewMatchNodeNames = useMemo(
-    () => graphPreview?.nodes.map((node) => node.name).filter(Boolean) ?? [],
+    () =>
+      (graphPreview?.nodes.map((node) => node.name).filter(Boolean) ?? []).slice(
+        0,
+        200,
+      ),
     [graphPreview],
   );
   const { data: previewMatchCandidates = [] } =
@@ -287,7 +291,7 @@ export function FieldScanFlow() {
       const textBlob = new Blob([trimmedPlainText], {
         type: "text/plain;charset=utf-8",
       });
-      const sourceTextUrl = await storageUtils.uploadFromBlob(
+      const sourceTextUrl = await storageUtils.upload(
         textBlob,
         BUCKETS.PATH_TO_INPUT_TXT,
       );

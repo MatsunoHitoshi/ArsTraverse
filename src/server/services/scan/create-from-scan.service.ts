@@ -30,7 +30,7 @@ async function resolveTextUploadUrl(
   const textBlob = new Blob([plainText], {
     type: "text/plain; charset=utf-8",
   });
-  const uploadedUrl = await storageUtils.uploadFromBlob(
+  const uploadedUrl = await storageUtils.upload(
     textBlob,
     BUCKETS.PATH_TO_INPUT_TXT,
   );

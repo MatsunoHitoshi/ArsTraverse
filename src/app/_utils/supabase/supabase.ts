@@ -8,15 +8,7 @@ export const supabase = createClient(
 );
 
 function resolveUploadContentType(file: File | Blob): string | undefined {
-  if (file instanceof File && file.type) {
-    return file.type;
-  }
-
-  if (file.type) {
-    return file.type;
-  }
-
-  return undefined;
+  return file.type || undefined;
 }
 
 export const storageUtils = {

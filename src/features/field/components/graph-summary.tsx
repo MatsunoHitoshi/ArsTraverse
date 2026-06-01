@@ -10,8 +10,8 @@ type GraphSummaryProps = {
   matchCandidates?: PublishedNodeMatch[];
 };
 
-function normalizeNodeName(name: string): string {
-  return name.trim().toLowerCase();
+function normalizeNodeName(name: string | undefined | null): string {
+  return (name ?? "").trim().toLowerCase();
 }
 
 function groupMatchesByName(
