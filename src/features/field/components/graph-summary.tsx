@@ -30,11 +30,14 @@ function groupMatchesByName(
 }
 
 function NodeMatchPreview({ matches }: { matches: PublishedNodeMatch[] }) {
-  const workspaceMatches = matches.filter(
-    (match) => match.sourceType === "workspace",
+  const topicSpaceMatches = matches.filter(
+    (match) => match.sourceType === "topicSpace",
   );
   const sourceDocumentMatches = matches.filter(
     (match) => match.sourceType === "sourceDocument",
+  );
+  const workspaceMatches = matches.filter(
+    (match) => match.sourceType === "workspace",
   );
 
   return (
@@ -45,17 +48,36 @@ function NodeMatchPreview({ matches }: { matches: PublishedNodeMatch[] }) {
       <ul className="flex flex-col gap-2">
         {matches.map((match) => (
           <li
-            key={`${match.sourceType}-${match.nodeId}-${match.workspaceId ?? match.sourceDocumentId ?? "unknown"}`}
+            key={`${match.sourceType}-${match.nodeId}-${match.workspaceId ?? match.sourceDocumentId ?? match.topicSpaceId ?? "unknown"}`}
             className="rounded-md border border-slate-700/80 bg-slate-900/70 p-3"
           >
             <div className="text-sm font-medium text-slate-100">{match.name}</div>
             <div className="mt-1 text-xs text-slate-400">
               {match.label}
-              {match.sourceType === "workspace" && match.topicSpaceName
+              {match.sourceType === "topicSpace" && match.topicSpaceName
                 ? ` · ${match.topicSpaceName}`
                 : ""}
             </div>
-            {match.sourceType === "workspace" && match.workspaceId ? (
+            {match.sourceType === "topicSpace" && match.topicSpaceId ? (
+              <Link
+                href={`/topic-spaces/${match.topicSpaceId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-block text-sm text-emerald-300 underline-offset-2 hover:underline"
+              >
+                {match.topicSpaceName ?? "トピックスペース"} を開く
+              </Link>
+            ) : match.sourceType === "sourceDocument" &&
+              match.sourceDocumentId ? (
+              <Link
+                href={`/documents/${match.sourceDocumentId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-block text-sm text-orange-300 underline-offset-2 hover:underline"
+              >
+                {match.sourceDocumentName ?? "ドキュメント"} を開く
+              </Link>
+            ) : match.sourceType === "workspace" && match.workspaceId ? (
               <Link
                 href={`/workspaces/${match.workspaceId}`}
                 target="_blank"
@@ -64,24 +86,19 @@ function NodeMatchPreview({ matches }: { matches: PublishedNodeMatch[] }) {
               >
                 {match.workspaceName ?? "ワークスペース"} を開く
               </Link>
-            ) : match.sourceType === "sourceDocument" &&
-              match.sourceDocumentId ? (
-              <Link
-                href={`/field/scan/${match.sourceDocumentId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2 inline-block text-sm text-orange-300 underline-offset-2 hover:underline"
-              >
-                {match.sourceDocumentName ?? "スキャン"} を開く
-              </Link>
             ) : null}
           </li>
         ))}
       </ul>
-      {(workspaceMatches.length > 0 || sourceDocumentMatches.length > 0) && (
+      {(topicSpaceMatches.length > 0 ||
+        sourceDocumentMatches.length > 0 ||
+        workspaceMatches.length > 0) && (
         <p className="mt-2 text-xs text-slate-400">
-          公開グラフ {workspaceMatches.length} 件 / 他スキャン{" "}
+          トピックスペース {topicSpaceMatches.length} 件 / ドキュメント{" "}
           {sourceDocumentMatches.length} 件
+          {workspaceMatches.length > 0
+            ? ` / 公開グラフ ${workspaceMatches.length} 件`
+            : ""}
         </p>
       )}
     </div>
@@ -132,12 +149,12 @@ export function GraphSummary({
               const hasSourceDocumentMatch = matches.some(
                 (match) => match.sourceType === "sourceDocument",
               );
-              const hasWorkspaceMatch = matches.some(
-                (match) => match.sourceType === "workspace",
+              const hasTopicSpaceMatch = matches.some(
+                (match) => match.sourceType === "topicSpace",
               );
               const highlightTone = hasSourceDocumentMatch
                 ? "orange"
-                : hasWorkspaceMatch
+                : hasTopicSpaceMatch
                   ? "emerald"
                   : "none";
 

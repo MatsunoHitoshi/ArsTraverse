@@ -10,9 +10,7 @@ import { KnowledgeGraphInputSchema } from "@/server/api/schemas/knowledge-graph"
 import { runExtractKGFromPlainText } from "@/server/api/routers/kg-extraction";
 import { createSourceDocumentWithGraph } from "@/server/services/kg/create-source-document-with-graph.service";
 import { attachDocumentsToTopicSpace } from "@/server/services/kg/attach-documents.service";
-import {
-  searchPublishedNodesByNames,
-} from "@/server/services/workspace/search-published-nodes.service";
+import { searchUserNodeMatchesByNames } from "@/server/services/scan/search-user-node-matches.service";
 
 type CreateFromScanCtx = {
   db: PrismaClient;
@@ -155,9 +153,10 @@ export async function createFromScan(
     include: { graphNodes: true, graphRelationships: true },
   });
   const graph = formDocumentGraphForFrontend(graphRecord);
-  const matchCandidates = await searchPublishedNodesByNames(
+  const matchCandidates = await searchUserNodeMatchesByNames(
     ctx,
     resolvedDataJson.nodes.map((node) => node.name),
+    sourceDocument.id,
     Math.min(Math.max(resolvedDataJson.nodes.length * 5, 20), 100),
   );
 
