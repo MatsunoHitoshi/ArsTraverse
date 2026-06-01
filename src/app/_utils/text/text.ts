@@ -14,7 +14,7 @@ async function extractPdfTextFromLocalFile(filePath: string): Promise<string> {
   const pdfParse = require("pdf-parse/lib/pdf-parse.js") as (
     buffer: Buffer,
   ) => Promise<PdfParseResult>;
-  const dataBuffer = fs.readFileSync(filePath);
+  const dataBuffer = await fs.promises.readFile(filePath);
   const pdfData = await pdfParse(dataBuffer);
   return pdfData.text.trim();
 }

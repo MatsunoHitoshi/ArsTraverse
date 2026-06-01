@@ -6,21 +6,22 @@ import { Button } from "@/app/_components/button/button";
 import { TextInput } from "@/app/_components/input/text-input";
 import type { PropertyTypeForFrontend } from "@/app/const/types";
 
-function getDescription(properties: PropertyTypeForFrontend): string {
-  return properties.description?.trim() ?? "";
+function getDescription(properties: PropertyTypeForFrontend | undefined): string {
+  return properties?.description?.trim() ?? "";
 }
 
 function withDescription(
-  properties: PropertyTypeForFrontend,
+  properties: PropertyTypeForFrontend | undefined,
   description: string,
 ): PropertyTypeForFrontend {
   const trimmed = description.trim();
+  const safeProperties = properties ?? {};
   if (!trimmed) {
-    const next = { ...properties };
+    const next = { ...safeProperties };
     delete next.description;
     return next;
   }
-  return { ...properties, description: trimmed };
+  return { ...safeProperties, description: trimmed };
 }
 
 export type GraphNodeEditPayload = {

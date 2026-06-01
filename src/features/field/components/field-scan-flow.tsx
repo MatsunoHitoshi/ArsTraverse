@@ -82,7 +82,7 @@ export function FieldScanFlow() {
       ),
     [graphPreview],
   );
-  const { data: previewMatchCandidates = [], refetch: refetchPreviewMatches } =
+  const { data: previewMatchCandidates = [] } =
     api.scan.searchNodeMatchesByNames.useQuery(
       {
         nodeNames: previewMatchNodeNames,
@@ -634,10 +634,6 @@ export function FieldScanFlow() {
                 graph={graphPreview}
                 matchCandidates={previewMatchCandidates}
                 onGraphChange={setGraphPreview}
-                onRefreshNodeMatches={() => {
-                  if (previewMatchNodeNames.length === 0) return;
-                  void refetchPreviewMatches();
-                }}
               />
 
             </>
