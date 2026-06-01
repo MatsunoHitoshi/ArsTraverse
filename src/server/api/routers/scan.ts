@@ -12,8 +12,7 @@ import { getScanSession } from "@/server/services/scan/get-scan-session.service"
 import { deleteScanSession } from "@/server/services/scan/delete-scan-session.service";
 import { renameScanSession } from "@/server/services/scan/rename-scan-session.service";
 import { normalizeOcrTextWithLlm } from "@/server/services/scan/normalize-ocr-text.service";
-import { searchUserScanNodeMatchesByNames } from "@/server/services/scan/search-user-scan-node-matches.service";
-import { searchPublishedNodesByNames } from "@/server/services/workspace/search-published-nodes.service";
+import { searchUserNodeMatchesByNames } from "@/server/services/scan/search-user-node-matches.service";
 
 type RenameSessionInput = z.infer<typeof RenameScanSessionInputSchema>;
 type SearchNodeMatchesByNamesInput = z.infer<
@@ -74,17 +73,11 @@ export const scanRouter = createTRPCRouter({
       const validated: SearchNodeMatchesByNamesInput =
         SearchNodeMatchesByNamesInputSchema.parse(input);
       const limit = validated.limit;
-      const publishedMatches = await searchPublishedNodesByNames(
-        ctx,
-        validated.nodeNames,
-        limit,
-      );
-      const sourceDocumentMatches = await searchUserScanNodeMatchesByNames(
+      return searchUserNodeMatchesByNames(
         ctx,
         validated.nodeNames,
         validated.excludeSourceDocumentId,
         limit,
       );
-      return [...publishedMatches, ...sourceDocumentMatches];
     }),
 });

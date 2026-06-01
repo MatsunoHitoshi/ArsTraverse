@@ -61,7 +61,7 @@ export const PublishedNodeMatchSchema = z.object({
   nodeId: z.string(),
   name: z.string(),
   label: z.string(),
-  sourceType: z.enum(["workspace", "sourceDocument"]),
+  sourceType: z.enum(["workspace", "sourceDocument", "topicSpace"]),
   workspaceId: z.string().optional(),
   workspaceName: z.string().optional(),
   topicSpaceId: z.string().optional(),
