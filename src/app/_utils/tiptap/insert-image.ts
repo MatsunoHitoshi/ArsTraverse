@@ -15,7 +15,7 @@ const getImageStoragePath = async (path: string) => {
     base64Image[0]!,
     BUCKETS.PATH_TO_RICH_TEXT_IMAGES,
   );
-  return pathSupabase;
+  return pathSupabase ?? "";
 };
 
 export const insertImageNode = (
@@ -48,6 +48,10 @@ export const insertImageNode = (
             .run();
 
           const imageURL = await getImageStoragePath(fileReaderResult);
+          if (!imageURL) {
+            reject(new Error("画像URLの取得に失敗しました"));
+            return;
+          }
           editor.commands.deleteNode("paragraph");
           editor.commands.setImage({
             src: imageURL,

@@ -1,6 +1,8 @@
 import { DocumentType } from "@prisma/client";
+import { isFetchableStoragePublicUrl } from "../supabase/storage-url";
 import { writeLocalFileFromUrl } from "../sys/file";
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
+import { BUCKETS } from "../supabase/const";
 
 export const getTextFromDocumentFile = async (
   url: string,
@@ -13,5 +15,21 @@ export const getTextFromDocumentFile = async (
     return documents.map((doc) => doc.pageContent).join("\n");
   }
 
-  return await fetch(url).then((res) => res.text());
+  if (!isFetchableStoragePublicUrl(url, BUCKETS.PATH_TO_INPUT_TXT)) {
+    throw new Error("ドキュメント本文の取得に失敗しました");
+  }
+
+  const response = await fetch(url);
+  const text = await response.text();
+
+  if (
+    !response.ok ||
+    (text.startsWith("{") &&
+      text.includes('"InvalidKey"') &&
+      text.includes('"statusCode"'))
+  ) {
+    throw new Error("ドキュメント本文の取得に失敗しました");
+  }
+
+  return text;
 };

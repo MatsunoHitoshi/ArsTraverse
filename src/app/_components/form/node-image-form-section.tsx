@@ -96,6 +96,10 @@ export const NodeImageFormSection = ({
         { dataUrl, topicSpaceId },
         {
           onSuccess: (res) => {
+            if (!res.url) {
+              alert("画像URLの取得に失敗しました。");
+              return;
+            }
             setImageUrl(res.url);
             const nextProperties = {
               ...buildImageProperties(),

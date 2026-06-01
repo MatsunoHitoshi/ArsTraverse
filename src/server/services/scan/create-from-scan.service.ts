@@ -2,7 +2,10 @@ import { DocumentType, type Prisma, type PrismaClient } from "@prisma/client";
 import { BUCKETS } from "@/app/_utils/supabase/const";
 import { storageUtils } from "@/app/_utils/supabase/supabase";
 import { formDocumentGraphForFrontend } from "@/app/_utils/kg/frontend-properties";
-import type { CreateFromScanInput } from "@/server/api/schemas/scan";
+import {
+  CreateFromScanInputSchema,
+  type CreateFromScanInput,
+} from "@/server/api/schemas/scan";
 import { KnowledgeGraphInputSchema } from "@/server/api/schemas/knowledge-graph";
 import { runExtractKGFromPlainText } from "@/server/api/routers/kg-extraction";
 import { createSourceDocumentWithGraph } from "@/server/services/kg/create-source-document-with-graph.service";
@@ -16,32 +19,83 @@ type CreateFromScanCtx = {
   session: { user: { id: string } };
 };
 
-export async function createFromScan(
-  ctx: CreateFromScanCtx,
-  input: CreateFromScanInput,
-) {
-  const plainText = input.plainText.trim();
-  if (!plainText) {
-    throw new Error("OCR テキストが空です");
+async function resolveTextUploadUrl(
+  plainText: string,
+  preUploadedUrl?: string,
+): Promise<string> {
+  if (preUploadedUrl) {
+    return preUploadedUrl;
   }
 
   const textBlob = new Blob([plainText], {
     type: "text/plain; charset=utf-8",
   });
-  const textUrl = await storageUtils.uploadFromBlob(
+  const uploadedUrl = await storageUtils.upload(
     textBlob,
     BUCKETS.PATH_TO_INPUT_TXT,
   );
-  if (!textUrl) {
+  if (!uploadedUrl) {
     throw new Error("OCR テキストのアップロードに失敗しました");
   }
 
+  return uploadedUrl;
+}
+
+type ParsedCreateFromScanInput = {
+  name: string;
+  plainText: string;
+  graphDocument?: CreateFromScanInput["graphDocument"];
+  sourceTextUrl?: string;
+  sourceImageUrl?: string;
+  imageDataUrl?: string;
+  ocrMetadata?: CreateFromScanInput["ocrMetadata"];
+  topicSpaceId?: string;
+};
+
+function normalizePropertiesToString(
+  properties: Record<string, string | number | boolean | null> | undefined,
+): Record<string, string> {
+  if (!properties) return {};
+  return Object.fromEntries(
+    Object.entries(properties).map(([key, value]) => [key, String(value ?? "")]),
+  );
+}
+
+export async function createFromScan(
+  ctx: CreateFromScanCtx,
+  input: CreateFromScanInput,
+) {
+  const validated: ParsedCreateFromScanInput =
+    CreateFromScanInputSchema.parse(input);
+  const {
+    name,
+    plainText: rawPlainText,
+    graphDocument,
+    sourceTextUrl,
+    sourceImageUrl: uploadedImageUrl,
+    imageDataUrl,
+    ocrMetadata: inputOcrMetadata,
+    topicSpaceId,
+  } = validated;
+
+  const plainText = rawPlainText.trim();
+  if (!plainText) {
+    throw new Error("OCR テキストが空です");
+  }
+
+  const textUrl = await resolveTextUploadUrl(plainText, sourceTextUrl);
+
+  const ocrMetadata = {
+    ...(inputOcrMetadata ?? {}),
+    plainText,
+  };
+
   let sourceImageUrl: string | null = null;
-  if (input.sourceImageUrl) {
-    sourceImageUrl = input.sourceImageUrl;
-  } else if (input.imageDataUrl) {
+  if (uploadedImageUrl) {
+    sourceImageUrl = uploadedImageUrl;
+  } else if (imageDataUrl) {
     sourceImageUrl = await storageUtils.uploadFromDataURL(
-      input.imageDataUrl,
+      imageDataUrl,
       BUCKETS.PATH_TO_INPUT_SCAN,
     );
     if (!sourceImageUrl) {
@@ -49,27 +103,49 @@ export async function createFromScan(
     }
   }
 
-  const extracted = await runExtractKGFromPlainText(plainText);
-  if (!extracted) {
-    throw new Error("知識グラフの抽出に失敗しました");
-  }
-  const dataJson = KnowledgeGraphInputSchema.parse(extracted);
+  const resolvedDataJson = graphDocument
+    ? KnowledgeGraphInputSchema.parse({
+        nodes: graphDocument.nodes.map((node) => ({
+          id: node.id,
+          name: node.name,
+          label: node.label,
+          properties: normalizePropertiesToString(node.properties),
+          topicSpaceId: node.topicSpaceId,
+          documentGraphId: node.documentGraphId,
+        })),
+        relationships: graphDocument.relationships.map((relationship) => ({
+          id: relationship.id,
+          type: relationship.type,
+          properties: normalizePropertiesToString(relationship.properties),
+          sourceId: relationship.sourceId,
+          targetId: relationship.targetId,
+          topicSpaceId: relationship.topicSpaceId,
+          documentGraphId: relationship.documentGraphId,
+        })),
+      })
+    : await (async () => {
+        const extracted = await runExtractKGFromPlainText(plainText);
+        if (!extracted) {
+          throw new Error("知識グラフの抽出に失敗しました");
+        }
+        return KnowledgeGraphInputSchema.parse(extracted);
+      })();
 
   const { documentGraph, sourceDocument } = await createSourceDocumentWithGraph(
     ctx,
     {
-      name: input.name,
+      name,
       url: textUrl,
-      dataJson,
+      dataJson: resolvedDataJson,
       documentType: DocumentType.INPUT_SCAN,
       sourceImageUrl,
-      ocrMetadata: (input.ocrMetadata ?? undefined) as Prisma.InputJsonValue | undefined,
+      ocrMetadata: ocrMetadata as Prisma.InputJsonValue,
     },
   );
 
-  if (input.topicSpaceId) {
+  if (topicSpaceId) {
     await attachDocumentsToTopicSpace(ctx, {
-      id: input.topicSpaceId,
+      id: topicSpaceId,
       documentIds: [sourceDocument.id],
     });
   }
@@ -81,8 +157,8 @@ export async function createFromScan(
   const graph = formDocumentGraphForFrontend(graphRecord);
   const matchCandidates = await searchPublishedNodesByNames(
     ctx,
-    dataJson.nodes.map((node) => node.name),
-    20,
+    resolvedDataJson.nodes.map((node) => node.name),
+    Math.min(Math.max(resolvedDataJson.nodes.length * 5, 20), 100),
   );
 
   return {

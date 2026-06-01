@@ -46,6 +46,7 @@ function mapNodesToMatches(
         nodeId: node.id,
         name: node.name,
         label: node.label,
+        sourceType: "workspace",
         workspaceId: workspace.id,
         workspaceName: workspace.name,
         topicSpaceId: node.topicSpace.id,

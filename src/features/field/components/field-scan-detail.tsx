@@ -2,15 +2,19 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import dayjs from "dayjs";
 import { api } from "@/trpc/react";
 import { Button } from "@/app/_components/button/button";
 import { FadeIn } from "@/app/_components/animation/fade-in";
 import { GraphSummary } from "@/features/field/components/graph-summary";
-import { PublishedNodeMatches } from "@/features/field/components/published-node-matches";
 import { ScanImageWithRegions } from "@/features/field/components/scan-image-with-regions";
+import { ScanSessionMenu } from "@/features/field/components/scan-session-menu";
+import { ScanSessionRenameModal } from "@/features/field/components/scan-session-rename-modal";
+import { ScanSessionDeleteModal } from "@/features/field/components/scan-session-delete-modal";
 import type { OcrRegion } from "@/server/api/schemas/scan";
+import { ChevronLeftIcon } from "@/app/_components/icons";
+import { LinkButton } from "@/app/_components/button/link-button";
 
 type FieldScanDetailProps = {
   sessionId: string;
@@ -18,31 +22,21 @@ type FieldScanDetailProps = {
 
 export function FieldScanDetail({ sessionId }: FieldScanDetailProps) {
   const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [isRenameOpen, setIsRenameOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const { data, isLoading, error, refetch } = api.scan.getSession.useQuery({
     id: sessionId,
   });
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedQuery(searchQuery.trim());
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
-  const { data: searchResults, isFetching: isSearching } =
-    api.workspace.searchPublishedNodes.useQuery(
-      { query: debouncedQuery, limit: 10 },
-      { enabled: debouncedQuery.length >= 2 },
-    );
-
-  const displayedMatches = useMemo(() => {
-    if (debouncedQuery.length >= 2 && searchResults) {
-      return searchResults;
-    }
-    return data?.matchCandidates ?? [];
-  }, [debouncedQuery, searchResults, data?.matchCandidates]);
+  const deleteSession = api.scan.deleteSession.useMutation({
+    onSuccess: () => {
+      setIsDeleteOpen(false);
+      router.push("/field");
+    },
+    onError: (mutationError) => {
+      setDeleteError(mutationError.message ?? "削除に失敗しました");
+    },
+  });
 
   const ocrRegions = useMemo((): OcrRegion[] => {
     const raw = data?.ocrMetadata?.regions;
@@ -81,15 +75,32 @@ export function FieldScanDetail({ sessionId }: FieldScanDetailProps) {
     <FadeIn>
       <div className="mx-auto flex w-full max-w-lg flex-col gap-5 px-4 py-6 pb-24">
         <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-bold text-slate-50">{data.name}</h1>
-            <p className="mt-1 text-xs text-slate-400">
-              {dayjs(data.createdAt).format("YYYY/MM/DD HH:mm")}
-            </p>
+          <div className="flex min-w-0 flex-1 items-start gap-3">
+            <LinkButton
+              href="/field"
+              className="flex !h-8 !w-8 shrink-0 items-center justify-center"
+            >
+              <div className="h-4 w-4">
+                <ChevronLeftIcon width={16} height={16} color="white" />
+              </div>
+            </LinkButton>
+            <div className="min-w-0">
+              <h1 className="truncate text-xl font-bold text-slate-50">
+                {data.name}
+              </h1>
+              <p className="mt-1 text-xs text-slate-400">
+                {dayjs(data.createdAt).format("YYYY/MM/DD HH:mm")}
+              </p>
+            </div>
           </div>
-          <Link href="/field" className="shrink-0 text-sm text-sky-400 hover:underline">
-            一覧
-          </Link>
+          <ScanSessionMenu
+            className="shrink-0"
+            onRename={() => setIsRenameOpen(true)}
+            onDelete={() => {
+              setDeleteError(null);
+              setIsDeleteOpen(true);
+            }}
+          />
         </div>
 
         {data.sourceImageUrl && (
@@ -113,30 +124,10 @@ export function FieldScanDetail({ sessionId }: FieldScanDetailProps) {
           </pre>
         </section>
 
-        <GraphSummary graph={data.graph} />
-
-        <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
-          <h2 className="mb-2 text-sm font-semibold text-slate-200">
-            公開ノードを検索
-          </h2>
-          <input
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="ノード名の一部を入力（2文字以上）"
-            className="mb-3 w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-          />
-          {isSearching && (
-            <p className="mb-2 text-xs text-slate-400">検索中...</p>
-          )}
-          <PublishedNodeMatches
-            matches={displayedMatches}
-            title={
-              debouncedQuery.length >= 2
-                ? "検索結果"
-                : "公開グラフとの一致候補"
-            }
-          />
-        </section>
+        <GraphSummary
+          graph={data.graph}
+          matchCandidates={data.matchCandidates}
+        />
 
         <div className="flex flex-col gap-3">
           <Button
@@ -145,12 +136,6 @@ export function FieldScanDetail({ sessionId }: FieldScanDetailProps) {
           >
             フルグラフビューで開く
           </Button>
-          <Button
-            onClick={() => void refetch()}
-            className="w-full bg-slate-800 text-slate-100"
-          >
-            一致候補を再取得
-          </Button>
           <Link
             href="/field/scan"
             className="text-center text-sm text-orange-300 hover:underline"
@@ -158,6 +143,23 @@ export function FieldScanDetail({ sessionId }: FieldScanDetailProps) {
             新しいスキャンを追加
           </Link>
         </div>
+
+        <ScanSessionRenameModal
+          isOpen={isRenameOpen}
+          setIsOpen={setIsRenameOpen}
+          sessionId={sessionId}
+          initialName={data.name}
+          onSuccess={() => void refetch()}
+        />
+
+        <ScanSessionDeleteModal
+          isOpen={isDeleteOpen}
+          setIsOpen={setIsDeleteOpen}
+          sessionName={data.name}
+          errorMessage={deleteError}
+          isPending={deleteSession.isPending}
+          onConfirm={() => deleteSession.mutate({ id: sessionId })}
+        />
       </div>
     </FadeIn>
   );

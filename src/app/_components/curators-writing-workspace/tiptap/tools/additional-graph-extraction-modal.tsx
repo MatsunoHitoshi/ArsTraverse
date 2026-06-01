@@ -132,6 +132,9 @@ export const AdditionalGraphExtractionModal: React.FC<
           blob,
           BUCKETS.PATH_TO_INPUT_TXT,
         );
+        if (!fileUrl) {
+          throw new Error("テキストファイルのアップロードに失敗しました");
+        }
 
         extractKG.mutate(
           {
