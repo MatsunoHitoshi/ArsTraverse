@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/app/_components/button/button";
 import { ChevronLeftIcon } from "@/app/_components/icons";
+import {
+  captureStillPhotoFromStream,
+  openCameraStreamWithFallback,
+  stopCameraStream,
+} from "@/features/field/ocr/camera-capture";
 
 type LiveCameraScannerProps = {
   onCapture: (file: File) => void;
@@ -16,14 +21,14 @@ export function LiveCameraScanner({
   onBack,
 }: LiveCameraScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [isStarting, setIsStarting] = useState(true);
+  const [isCapturing, setIsCapturing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const canCapture = useMemo(
-    () => !isStarting && !errorMessage,
-    [isStarting, errorMessage],
+    () => !isStarting && !isCapturing && !errorMessage,
+    [isStarting, isCapturing, errorMessage],
   );
 
   useEffect(() => {
@@ -33,14 +38,9 @@ export function LiveCameraScanner({
       try {
         setIsStarting(true);
         setErrorMessage(null);
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: "environment" },
-          },
-          audio: false,
-        });
+        const stream = await openCameraStreamWithFallback();
         if (!isActive) {
-          stream.getTracks().forEach((track) => track.stop());
+          stopCameraStream(stream);
           return;
         }
 
@@ -64,38 +64,27 @@ export function LiveCameraScanner({
 
     return () => {
       isActive = false;
-      streamRef.current?.getTracks().forEach((track) => track.stop());
+      stopCameraStream(streamRef.current);
       streamRef.current = null;
     };
   }, []);
 
-  const handleCapture = () => {
+  const handleCapture = async () => {
     const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas || !canCapture) return;
+    const stream = streamRef.current;
+    if (!video || !stream || !canCapture) return;
 
-    const width = video.videoWidth;
-    const height = video.videoHeight;
-    if (width <= 0 || height <= 0) return;
+    setIsCapturing(true);
+    setErrorMessage(null);
 
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    ctx.drawImage(video, 0, 0, width, height);
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) return;
-        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-        const file = new File([blob], `scan-${timestamp}.jpg`, {
-          type: "image/jpeg",
-        });
-        onCapture(file);
-      },
-      "image/jpeg",
-      0.92,
-    );
+    try {
+      const file = await captureStillPhotoFromStream(stream, video);
+      onCapture(file);
+    } catch {
+      setErrorMessage("撮影に失敗しました。もう一度お試しください。");
+    } finally {
+      setIsCapturing(false);
+    }
   };
 
   return (
@@ -144,7 +133,7 @@ export function LiveCameraScanner({
           </Button>
           <button
             type="button"
-            onClick={handleCapture}
+            onClick={() => void handleCapture()}
             disabled={!canCapture}
             aria-label="撮影する"
             className="h-[4.5rem] w-[4.5rem] shrink-0 rounded-full border-4 border-white bg-orange-400 shadow-lg transition disabled:cursor-not-allowed disabled:opacity-50"
@@ -153,7 +142,6 @@ export function LiveCameraScanner({
         </div>
       </div>
 
-      <canvas ref={canvasRef} className="hidden" />
     </div>
   );
 }
