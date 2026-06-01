@@ -9,6 +9,9 @@ import {
   stopCameraStream,
 } from "@/features/field/ocr/camera-capture";
 
+const CAMERA_STARTUP_ERROR =
+  "カメラを起動できませんでした。ファイル選択から画像を追加してください。";
+
 type LiveCameraScannerProps = {
   onCapture: (file: File) => void;
   onOpenFilePicker: () => void;
@@ -27,7 +30,10 @@ export function LiveCameraScanner({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const canCapture = useMemo(
-    () => !isStarting && !isCapturing && !errorMessage,
+    () =>
+      !isStarting &&
+      !isCapturing &&
+      errorMessage !== CAMERA_STARTUP_ERROR,
     [isStarting, isCapturing, errorMessage],
   );
 
@@ -50,9 +56,7 @@ export function LiveCameraScanner({
           await videoRef.current.play();
         }
       } catch {
-        setErrorMessage(
-          "カメラを起動できませんでした。ファイル選択から画像を追加してください。",
-        );
+        setErrorMessage(CAMERA_STARTUP_ERROR);
       } finally {
         if (isActive) {
           setIsStarting(false);

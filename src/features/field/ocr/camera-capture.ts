@@ -33,9 +33,16 @@ const CAMERA_CONSTRAINT_CANDIDATES: MediaStreamConstraints[] = [
   },
 ];
 
+function extensionForMimeType(mimeType: string): string {
+  if (mimeType === "image/png") return "png";
+  if (mimeType === "image/webp") return "webp";
+  return "jpg";
+}
+
 function createScanImageFile(blob: Blob, mimeType: string): File {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  return new File([blob], `scan-${timestamp}.jpg`, { type: mimeType });
+  const extension = extensionForMimeType(mimeType);
+  return new File([blob], `scan-${timestamp}.${extension}`, { type: mimeType });
 }
 
 function isImageCaptureSupported(): boolean {
@@ -159,6 +166,11 @@ export async function captureStillPhotoFromStream(
 
   if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
     await new Promise<void>((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        cleanup();
+        reject(new Error("カメラ映像の準備がタイムアウトしました"));
+      }, 5000);
+
       const onReady = () => {
         cleanup();
         resolve();
@@ -168,6 +180,7 @@ export async function captureStillPhotoFromStream(
         reject(new Error("カメラ映像の準備に失敗しました"));
       };
       const cleanup = () => {
+        clearTimeout(timeoutId);
         video.removeEventListener("loadeddata", onReady);
         video.removeEventListener("error", onError);
       };
