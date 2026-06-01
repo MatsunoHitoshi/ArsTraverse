@@ -15,7 +15,25 @@ export const Header = () => {
   const isLoginProhibited = loginProhibited(pathname);
   const isSpAllowed = spAllowed(pathname);
   const [isVisible, setIsVisible] = useState(true);
+  const [isFieldCameraActive, setIsFieldCameraActive] = useState(false);
   const lastScrollYRef = useRef(0);
+
+  useEffect(() => {
+    const syncFieldCamera = () => {
+      setIsFieldCameraActive(
+        document.body.dataset.fieldCameraActive === "true",
+      );
+    };
+
+    syncFieldCamera();
+    const observer = new MutationObserver(syncFieldCamera);
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["data-field-camera-active"],
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!isSpAllowed) {
@@ -51,6 +69,10 @@ export const Header = () => {
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, [isSpAllowed]);
+
+  if (isFieldCameraActive) {
+    return null;
+  }
 
   return (
     <div

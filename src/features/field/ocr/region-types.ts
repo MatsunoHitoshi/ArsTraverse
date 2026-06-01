@@ -162,6 +162,29 @@ export function createOffsetDefaultRegion(index: number): NormalizedOcrRegion {
   });
 }
 
+/** Rotate a normalized ROI 90° counter-clockwise with the image. */
+export function rotateRegion90CounterClockwise(
+  region: NormalizedOcrRegion,
+): NormalizedOcrRegion {
+  const corners = getRegionCorners(region);
+  const transformed = (Object.values(corners) as { x: number; y: number }[]).map(
+    ({ x, y }) => ({
+      x: y,
+      y: 1 - x,
+    }),
+  );
+
+  const xs = transformed.map((point) => point.x);
+  const ys = transformed.map((point) => point.y);
+
+  return clampRegion({
+    x: Math.min(...xs),
+    y: Math.min(...ys),
+    w: Math.max(...xs) - Math.min(...xs),
+    h: Math.max(...ys) - Math.min(...ys),
+  });
+}
+
 export function clampRegion(region: NormalizedOcrRegion): NormalizedOcrRegion {
   let { x, y, w, h } = region;
   w = Math.max(MIN_REGION_SIZE, Math.min(1, w));

@@ -55,7 +55,7 @@ export function FieldSessionList() {
     return (
       <FadeIn>
         <div className="mx-auto flex w-full max-w-lg flex-col gap-6 px-4 py-8">
-          <div className="text-center">
+          <div className="">
             <h1 className="mb-2 text-2xl font-bold text-slate-50">
               フィールドリサーチ
             </h1>
@@ -82,7 +82,7 @@ export function FieldSessionList() {
             フィールドリサーチ
           </h1>
           <p className="text-sm text-slate-300">
-            スキャンセッションの一覧です。新しい資料はカメラから追加できます。
+            資料のテキストや、解説パネルのテキストをスキャンしてみましょう。そのテキスト内で言及されている関係性を素早く構造化して調査できます。
           </p>
         </div>
 

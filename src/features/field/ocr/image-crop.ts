@@ -5,6 +5,46 @@ export async function loadImageBitmapFromFile(file: File): Promise<ImageBitmap> 
   return createImageBitmap(file, { imageOrientation: "from-image" });
 }
 
+export async function rotateImageFile90CounterClockwise(
+  file: File,
+  mimeType = "image/jpeg",
+): Promise<File> {
+  const bitmap = await loadImageBitmapFromFile(file);
+
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.height;
+    canvas.height = bitmap.width;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      throw new Error("Canvas が利用できません");
+    }
+
+    ctx.translate(0, canvas.height);
+    ctx.rotate(-Math.PI / 2);
+    ctx.drawImage(bitmap, 0, 0);
+
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (result) => {
+          if (result) {
+            resolve(result);
+            return;
+          }
+          reject(new Error("回転画像の生成に失敗しました"));
+        },
+        mimeType,
+        0.92,
+      );
+    });
+
+    return new File([blob], file.name, { type: mimeType });
+  } finally {
+    bitmap.close();
+  }
+}
+
 export function cropRegionFromBitmap(
   bitmap: ImageBitmap,
   region: NormalizedOcrRegion,

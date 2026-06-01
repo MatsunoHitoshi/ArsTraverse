@@ -15,8 +15,10 @@ import { ChevronLeftIcon } from "@/app/_components/icons";
 import { GraphSummary } from "@/features/field/components/graph-summary";
 import { LiveCameraScanner } from "@/features/field/components/live-camera-scanner";
 import { ScanRegionSelector } from "@/features/field/components/scan-region-selector";
+import { rotateImageFile90CounterClockwise } from "@/features/field/ocr/image-crop";
 import {
   DEFAULT_OCR_REGION,
+  rotateRegion90CounterClockwise,
   type NormalizedOcrRegion,
 } from "@/features/field/ocr/region-types";
 import {
@@ -63,6 +65,7 @@ export function FieldScanFlow() {
   const [isNormalizingText, setIsNormalizingText] = useState(false);
   const [isRunningGraph, setIsRunningGraph] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRotatingImage, setIsRotatingImage] = useState(false);
   const [pipelineStage, setPipelineStage] = useState<PipelineStage>(null);
   const [pipelineProgress, setPipelineProgress] = useState(0);
 
@@ -95,6 +98,22 @@ export function FieldScanFlow() {
       }
     };
   }, [previewUrl]);
+
+  useEffect(() => {
+    if (step !== "camera") {
+      delete document.body.dataset.fieldCameraActive;
+      document.body.style.overflow = "";
+      return;
+    }
+
+    document.body.dataset.fieldCameraActive = "true";
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      delete document.body.dataset.fieldCameraActive;
+      document.body.style.overflow = "";
+    };
+  }, [step]);
 
   const canSubmit = useMemo(
     () =>
@@ -161,6 +180,43 @@ export function FieldScanFlow() {
 
   const handleCapture = (file: File) => {
     setSelectedImage(file);
+  };
+
+  const handleRotateImage = async () => {
+    if (!imageFile || isRotatingImage) return;
+
+    setIsRotatingImage(true);
+    setErrorMessage(null);
+
+    try {
+      const mimeType = imageFile.type.startsWith("image/")
+        ? imageFile.type
+        : "image/jpeg";
+      const rotated = await rotateImageFile90CounterClockwise(
+        imageFile,
+        mimeType,
+      );
+
+      setOcrRegions((prev) =>
+        prev.map((region) => rotateRegion90CounterClockwise(region)),
+      );
+
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+
+      setImageFile(rotated);
+      setPreviewUrl(URL.createObjectURL(rotated));
+      setPlainText("");
+      setGraphPreview(null);
+      setOcrMetadata(undefined);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "画像の回転に失敗しました",
+      );
+    } finally {
+      setIsRotatingImage(false);
+    }
   };
 
   const handleRunPipeline = async () => {
@@ -357,7 +413,25 @@ export function FieldScanFlow() {
 
   return (
     <FadeIn>
-      <div className="mx-auto flex w-full max-w-lg flex-col gap-5 px-4 py-6 pb-24">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        capture="environment"
+        onChange={handleImageChange}
+        className="hidden"
+      />
+
+      {step === "camera" && (
+        <LiveCameraScanner
+          onCapture={handleCapture}
+          onOpenFilePicker={handleOpenFilePicker}
+          onBack={() => router.push("/field")}
+        />
+      )}
+
+      {step !== "camera" && (
+      <div className="mx-auto flex w-full max-w-lg flex-col gap-5 px-4 py-6 pb-24 pt-14">
         <div className="flex items-start justify-start gap-3">
           <LinkButton
             href="/field"
@@ -375,22 +449,6 @@ export function FieldScanFlow() {
           </div>
         </div>
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif"
-          capture="environment"
-          onChange={handleImageChange}
-          className="hidden"
-        />
-
-        {step === "camera" && (
-          <LiveCameraScanner
-            onCapture={handleCapture}
-            onOpenFilePicker={handleOpenFilePicker}
-          />
-        )}
-
         {previewUrl && (step === "trim" || step === "processing") && (
           <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
             <label className="mb-2 block text-sm font-medium text-slate-200">
@@ -403,6 +461,8 @@ export function FieldScanFlow() {
               defaultFullscreen
               requireFullscreenChangeToComplete={graphPreview != null}
               onCancelFullscreen={handleCancelRegionAdjust}
+              onRotateImage={() => void handleRotateImage()}
+              isRotatingImage={isRotatingImage}
             />
             <div className="mt-3 flex gap-2">
               <Button
@@ -558,6 +618,7 @@ export function FieldScanFlow() {
           </p>
         )}
       </div>
+      )}
     </FadeIn>
   );
 }

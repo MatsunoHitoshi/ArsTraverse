@@ -2,17 +2,18 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/app/_components/button/button";
+import { ChevronLeftIcon } from "@/app/_components/icons";
 
 type LiveCameraScannerProps = {
   onCapture: (file: File) => void;
   onOpenFilePicker: () => void;
-  className?: string;
+  onBack: () => void;
 };
 
 export function LiveCameraScanner({
   onCapture,
   onOpenFilePicker,
-  className = "",
+  onBack,
 }: LiveCameraScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -98,51 +99,61 @@ export function LiveCameraScanner({
   };
 
   return (
-    <section
-      className={`rounded-xl border border-slate-700 bg-slate-800/60 p-4 ${className}`}
-    >
-      <label className="mb-2 block text-sm font-medium text-slate-200">
-        1. カメラで撮影
-      </label>
+    <div className="fixed inset-0 z-50 flex flex-col bg-black">
+      <video
+        ref={videoRef}
+        className="absolute inset-0 h-full w-full object-cover"
+        playsInline
+        muted
+        autoPlay
+      />
 
-      <div className="relative aspect-[3/4] w-full overflow-hidden rounded-lg bg-slate-900">
-        <video
-          ref={videoRef}
-          className="h-full w-full object-cover"
-          playsInline
-          muted
-          autoPlay
-        />
-        {isStarting && (
-          <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-300">
-            カメラを起動中...
-          </div>
-        )}
-      </div>
-
-      {errorMessage && (
-        <p className="mt-2 text-xs text-red-300">{errorMessage}</p>
+      {isStarting && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 text-sm text-slate-200">
+          カメラを起動中...
+        </div>
       )}
 
-      <div className="mt-3 flex items-center justify-between rounded-lg bg-slate-900/70 px-3 py-2">
-        <Button
-          onClick={onOpenFilePicker}
-          className="bg-slate-700 px-2 py-1 text-xs text-white"
-          size="small"
-        >
-          ファイルから追加
-        </Button>
-        <button
-          type="button"
-          onClick={handleCapture}
-          disabled={!canCapture}
-          aria-label="撮影する"
-          className="h-14 w-14 rounded-full border-4 border-white bg-orange-400 transition disabled:cursor-not-allowed disabled:opacity-50"
-        />
-        <div className="w-[88px]" />
+      <div className="pointer-events-none absolute inset-0 z-20 flex flex-col">
+        <div className="pointer-events-auto flex px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="戻る"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition hover:bg-black/60"
+          >
+            <ChevronLeftIcon width={20} height={20} color="white" />
+          </button>
+        </div>
+
+        <div className="pointer-events-none flex-1" />
+
+        {errorMessage && (
+          <p className="pointer-events-auto mx-4 mb-2 rounded-lg bg-red-950/80 px-3 py-2 text-center text-xs text-red-200 backdrop-blur-sm">
+            {errorMessage}
+          </p>
+        )}
+
+        <div className="pointer-events-auto flex items-center justify-between px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3">
+          <Button
+            onClick={onOpenFilePicker}
+            className="min-w-[7.5rem] bg-black/45 px-3 py-2 text-xs text-white backdrop-blur-sm hover:bg-black/60"
+            size="small"
+          >
+            ファイルから追加
+          </Button>
+          <button
+            type="button"
+            onClick={handleCapture}
+            disabled={!canCapture}
+            aria-label="撮影する"
+            className="h-[4.5rem] w-[4.5rem] shrink-0 rounded-full border-4 border-white bg-orange-400 shadow-lg transition disabled:cursor-not-allowed disabled:opacity-50"
+          />
+          <div className="min-w-[7.5rem]" aria-hidden />
+        </div>
       </div>
 
       <canvas ref={canvasRef} className="hidden" />
-    </section>
+    </div>
   );
 }

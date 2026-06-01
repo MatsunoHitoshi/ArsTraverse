@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/app/_components/button/button";
-import { CrossLargeIcon } from "@/app/_components/icons";
+import { CrossLargeIcon, RotateCounterClockwiseIcon } from "@/app/_components/icons";
 import {
   clientPointToNormalized,
   cornerToRegionStyle,
@@ -26,6 +26,8 @@ type ScanRegionSelectorProps = {
   requireFullscreenChangeToComplete?: boolean;
   onCancelFullscreen?: () => void;
   onCompleteFullscreen?: () => void;
+  onRotateImage?: () => void;
+  isRotatingImage?: boolean;
 };
 
 type ScanRegionSelectorCanvasProps = {
@@ -63,12 +65,43 @@ const REGION_HELP_TEXT =
 type RegionControlsProps = {
   regions: NormalizedOcrRegion[];
   onRegionsChange: (regions: NormalizedOcrRegion[]) => void;
+  onRotateImage?: () => void;
+  isRotatingImage?: boolean;
 };
 
-function RegionControls({ regions, onRegionsChange }: RegionControlsProps) {
+function ImageRotateButton({
+  onRotateImage,
+  isRotatingImage,
+}: Pick<RegionControlsProps, "onRotateImage" | "isRotatingImage">) {
+  if (!onRotateImage) return null;
+
+  return (
+    <Button
+      onClick={onRotateImage}
+      disabled={isRotatingImage}
+      isLoading={isRotatingImage}
+      className="!h-9 !w-9 !bg-slate-700 !p-2 text-white"
+      size="small"
+      aria-label="画像を90度回転"
+    >
+      <RotateCounterClockwiseIcon width={18} height={18} color="white" />
+    </Button>
+  );
+}
+
+function RegionControls({
+  regions,
+  onRegionsChange,
+  onRotateImage,
+  isRotatingImage,
+}: RegionControlsProps) {
   return (
     <>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <ImageRotateButton
+          onRotateImage={onRotateImage}
+          isRotatingImage={isRotatingImage}
+        />
         <Button
           onClick={() =>
             onRegionsChange([
@@ -306,6 +339,8 @@ export function ScanRegionSelector({
   requireFullscreenChangeToComplete = false,
   onCancelFullscreen,
   onCompleteFullscreen,
+  onRotateImage,
+  isRotatingImage = false,
 }: ScanRegionSelectorProps) {
   const [isFullscreen, setIsFullscreen] = useState(defaultFullscreen);
   const [isMounted, setIsMounted] = useState(false);
@@ -324,7 +359,7 @@ export function ScanRegionSelector({
   useEffect(() => {
     if (!isFullscreen) return;
     setFullscreenBaseline(regions.map((region) => ({ ...region })));
-  }, [isFullscreen]);
+  }, [isFullscreen, imageUrl]);
 
   const hasFullscreenChanges = useMemo(() => {
     if (!fullscreenBaseline) return false;
@@ -427,6 +462,8 @@ export function ScanRegionSelector({
               <RegionControls
                 regions={regions}
                 onRegionsChange={onRegionsChange}
+                onRotateImage={onRotateImage}
+                isRotatingImage={isRotatingImage}
               />
             </div>
           </div>,
@@ -438,13 +475,19 @@ export function ScanRegionSelector({
     <div className="mt-3 flex flex-col gap-2">
       <div className="flex items-start justify-between gap-3">
         <p className="text-xs text-slate-400">{REGION_HELP_TEXT}</p>
-        <Button
-          onClick={() => setIsFullscreen(true)}
-          className="shrink-0 bg-slate-700 px-2 py-1 text-xs text-white"
-          size="small"
-        >
-          全画面で調整
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <ImageRotateButton
+            onRotateImage={onRotateImage}
+            isRotatingImage={isRotatingImage}
+          />
+          <Button
+            onClick={() => setIsFullscreen(true)}
+            className="shrink-0 bg-slate-700 px-2 py-1 text-xs text-white"
+            size="small"
+          >
+            全画面で調整
+          </Button>
+        </div>
       </div>
 
       {!isFullscreen && (
@@ -470,7 +513,12 @@ export function ScanRegionSelector({
       ) : null}
 
       {!isFullscreen && (
-        <RegionControls regions={regions} onRegionsChange={onRegionsChange} />
+        <RegionControls
+          regions={regions}
+          onRegionsChange={onRegionsChange}
+          onRotateImage={onRotateImage}
+          isRotatingImage={isRotatingImage}
+        />
       )}
 
       {fullscreenOverlay}
