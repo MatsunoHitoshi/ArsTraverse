@@ -15,6 +15,7 @@ import { ChevronLeftIcon } from "@/app/_components/icons";
 import { GraphSummary } from "@/features/field/components/graph-summary";
 import { LiveCameraScanner } from "@/features/field/components/live-camera-scanner";
 import { ScanRegionSelector } from "@/features/field/components/scan-region-selector";
+import { ScanImageWithRegions } from "@/features/field/components/scan-image-with-regions";
 import { rotateImageFile90CounterClockwise } from "@/features/field/ocr/image-crop";
 import {
   DEFAULT_OCR_REGION,
@@ -461,6 +462,9 @@ export function FieldScanFlow() {
               defaultFullscreen
               requireFullscreenChangeToComplete={graphPreview != null}
               onCancelFullscreen={handleCancelRegionAdjust}
+              onCompleteFullscreen={() => {
+                if (graphPreview) setStep("preview");
+              }}
               onRotateImage={() => void handleRotateImage()}
               isRotatingImage={isRotatingImage}
             />
@@ -528,6 +532,22 @@ export function FieldScanFlow() {
 
         {step === "preview" && graphPreview && (
           <>
+            {previewUrl && (
+              <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+                <label className="mb-2 block text-sm font-medium text-slate-200">
+                  2. 指定した文字領域
+                </label>
+                <ScanImageWithRegions
+                  imageUrl={previewUrl}
+                  regions={ocrRegions}
+                  alt="指定した文字領域"
+                />
+                <p className="mt-2 text-xs text-slate-500">
+                  領域の変更は「領域を再調整」から全画面で行えます。
+                </p>
+              </section>
+            )}
+
             <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
               <label
                 htmlFor="session-name"

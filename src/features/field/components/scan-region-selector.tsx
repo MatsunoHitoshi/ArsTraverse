@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/app/_components/button/button";
 import { CrossLargeIcon, RotateCounterClockwiseIcon } from "@/app/_components/icons";
+import { ScanImageWithRegions } from "@/features/field/components/scan-image-with-regions";
 import {
   clientPointToNormalized,
   cornerToRegionStyle,
@@ -39,16 +40,16 @@ type ScanRegionSelectorCanvasProps = {
 
 type DragState =
   | {
-      kind: "corner";
-      regionIndex: number;
-      corner: RegionCorner;
-    }
+    kind: "corner";
+    regionIndex: number;
+    corner: RegionCorner;
+  }
   | {
-      kind: "move";
-      regionIndex: number;
-      startPoint: { x: number; y: number };
-      startRegion: NormalizedOcrRegion;
-    };
+    kind: "move";
+    regionIndex: number;
+    startPoint: { x: number; y: number };
+    startRegion: NormalizedOcrRegion;
+  };
 
 const CORNER_LABELS: Record<RegionCorner, string> = {
   tl: "左上",
@@ -61,6 +62,8 @@ const CORNERS: RegionCorner[] = ["tl", "tr", "br", "bl"];
 
 const REGION_HELP_TEXT =
   "四隅のポイントをドラッグして文字部分に合わせてください。枠内をドラッグすると領域全体を移動できます。";
+
+const REGION_VIEW_TEXT = "指定した文字領域のプレビューです。";
 
 type RegionControlsProps = {
   regions: NormalizedOcrRegion[];
@@ -80,7 +83,7 @@ function ImageRotateButton({
       onClick={onRotateImage}
       disabled={isRotatingImage}
       isLoading={isRotatingImage}
-      className="!h-9 !w-9 !bg-slate-700 !p-2 text-white"
+      className="!h-9 !w-9 !bg-slate-700 !p-2 !pl-2.5 text-white"
       size="small"
       aria-label="画像を90度回転"
     >
@@ -417,108 +420,96 @@ export function ScanRegionSelector({
   const fullscreenOverlay =
     isFullscreen && isMounted
       ? createPortal(
-          <div
-            className="fixed inset-0 z-50 flex flex-col bg-slate-950"
-            role="dialog"
-            aria-modal="true"
-            aria-label="文字領域を全画面で指定"
-          >
-            <div className="flex shrink-0 items-center justify-between border-b border-slate-800 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={handleCancelFullscreen}
-                  className="!h-8 !w-8 !bg-transparent !p-2 hover:!bg-slate-50/10"
-                  size="small"
-                >
-                  <CrossLargeIcon width={16} height={16} color="white" />
-                </Button>
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-100">
-                    文字領域を指定
-                  </h3>
-                  <p className="mt-1 text-xs text-slate-400">{REGION_HELP_TEXT}</p>
-                </div>
-              </div>
+        <div
+          className="fixed inset-0 z-50 flex flex-col bg-slate-950"
+          role="dialog"
+          aria-modal="true"
+          aria-label="文字領域を全画面で指定"
+        >
+          <div className="flex shrink-0 items-center justify-between border-b border-slate-800 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+            <div className="flex items-center gap-2">
               <Button
-                onClick={handleCompleteFullscreen}
-                className="!h-9 shrink-0 bg-slate-700 px-3 text-xs text-white"
+                onClick={handleCancelFullscreen}
+                className="!h-8 !w-8 !bg-transparent !p-2 hover:!bg-slate-50/10"
                 size="small"
-                disabled={
-                  requireFullscreenChangeToComplete && !hasFullscreenChanges
-                }
               >
-                完了
+                <CrossLargeIcon width={16} height={16} color="white" />
               </Button>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-100">
+                  文字領域を指定
+                </h3>
+                <p className="mt-1 text-xs text-slate-400">{REGION_HELP_TEXT}</p>
+              </div>
             </div>
+            <Button
+              onClick={handleCompleteFullscreen}
+              className="!h-9 shrink-0 bg-slate-700 px-3 text-xs text-white"
+              size="small"
+              disabled={
+                requireFullscreenChangeToComplete && !hasFullscreenChanges
+              }
+            >
+              完了
+            </Button>
+          </div>
 
-            <div className="min-h-0 flex-1 px-3 py-3">
-              <ScanRegionSelectorCanvas
-                {...canvasProps}
-                containerClassName="relative h-full w-full overflow-hidden rounded-lg bg-slate-900"
-              />
-            </div>
+          <div className="min-h-0 flex-1 px-3 py-3">
+            <ScanRegionSelectorCanvas
+              {...canvasProps}
+              containerClassName="relative h-full w-full overflow-hidden rounded-lg bg-slate-900"
+            />
+          </div>
 
-            <div className="flex shrink-0 flex-col gap-2 border-t border-slate-800 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
-              <RegionControls
-                regions={regions}
-                onRegionsChange={onRegionsChange}
-                onRotateImage={onRotateImage}
-                isRotatingImage={isRotatingImage}
-              />
-            </div>
-          </div>,
-          document.body,
-        )
+          <div className="flex shrink-0 flex-col gap-2 border-t border-slate-800 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+            <RegionControls
+              regions={regions}
+              onRegionsChange={onRegionsChange}
+              onRotateImage={onRotateImage}
+              isRotatingImage={isRotatingImage}
+            />
+          </div>
+        </div>,
+        document.body,
+      )
       : null;
 
   return (
     <div className="mt-3 flex flex-col gap-2">
       <div className="flex items-start justify-between gap-3">
-        <p className="text-xs text-slate-400">{REGION_HELP_TEXT}</p>
-        <div className="flex shrink-0 items-center gap-2">
-          <ImageRotateButton
-            onRotateImage={onRotateImage}
-            isRotatingImage={isRotatingImage}
-          />
+        <p className="text-xs text-slate-400">
+          {isFullscreen ? REGION_HELP_TEXT : REGION_VIEW_TEXT}
+        </p>
+        {!isFullscreen && (
           <Button
             onClick={() => setIsFullscreen(true)}
-            className="shrink-0 bg-slate-700 px-2 py-1 text-xs text-white"
+            className="shrink-0 bg-slate-700 px-2 py-1 text-sm text-white"
             size="small"
           >
-            全画面で調整
+            範囲調整
           </Button>
-        </div>
+        )}
       </div>
 
       {!isFullscreen && (
-        <ScanRegionSelectorCanvas
-          {...canvasProps}
-          containerClassName="relative aspect-[3/4] max-h-80 w-full overflow-hidden rounded-lg bg-slate-900"
+        <ScanImageWithRegions
+          imageUrl={imageUrl}
+          regions={regions}
+          alt="OCR 領域プレビュー"
         />
       )}
 
-      {isFullscreen ? (
+      {isFullscreen && (
         <div className="relative aspect-[3/4] max-h-80 w-full overflow-hidden rounded-lg border border-dashed border-slate-700 bg-slate-900/50">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={imageUrl}
-            alt="OCR 領域選択プレビュー"
-            className="absolute inset-0 h-full w-full object-contain opacity-40"
-            draggable={false}
+          <ScanImageWithRegions
+            imageUrl={imageUrl}
+            regions={regions}
+            alt="OCR 領域プレビュー"
           />
-          <span className="absolute inset-0 flex items-center justify-center text-xs text-slate-300">
+          <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-950/40 text-xs text-slate-200">
             全画面モードで調整中…
           </span>
         </div>
-      ) : null}
-
-      {!isFullscreen && (
-        <RegionControls
-          regions={regions}
-          onRegionsChange={onRegionsChange}
-          onRotateImage={onRotateImage}
-          isRotatingImage={isRotatingImage}
-        />
       )}
 
       {fullscreenOverlay}
