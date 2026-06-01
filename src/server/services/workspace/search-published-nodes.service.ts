@@ -118,10 +118,12 @@ export async function searchPublishedNodesByNames(
   const nodes = await ctx.db.graphNode.findMany({
     where: {
       deletedAt: null,
-      name: {
-        in: uniqueNames,
-        mode: "insensitive",
-      },
+      OR: uniqueNames.map((name) => ({
+        name: {
+          equals: name,
+          mode: "insensitive" as const,
+        },
+      })),
       topicSpace: {
         referencedByWorkspaces: {
           some: publishedWorkspaceFilter(),

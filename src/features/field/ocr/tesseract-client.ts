@@ -83,54 +83,57 @@ export async function runOcrOnRegions(
     regions.length > 0 ? regions : [DEFAULT_OCR_REGION];
 
   const bitmap = await loadImageBitmapFromFile(file);
-  const { createWorker } = await import("tesseract.js");
-  const worker = await createWorker(language, 1, {
-    logger: (message) => {
-      onProgress?.({
-        progress: message.progress ?? 0,
-        status: message.status,
-      });
-    },
-  });
-
   try {
-    const textParts: string[] = [];
-    let confidenceSum = 0;
-    let recognizedCount = 0;
-
-    for (let index = 0; index < effectiveRegions.length; index++) {
-      const region = effectiveRegions[index]!;
-      onProgress?.({
-        progress: 0,
-        status: "recognizing text",
-        regionIndex: index,
-        regionCount: effectiveRegions.length,
-      });
-
-      const blob = await cropRegionToBlob(bitmap, region);
-      const { data } = await worker.recognize(blob);
-
-      const text = data.text.trim();
-      if (text) {
-        textParts.push(text);
-      }
-      confidenceSum += data.confidence;
-      recognizedCount += 1;
-    }
-
-    return {
-      plainText: textParts.join("\n\n"),
-      ocrMetadata: {
-        engine: "tesseract.js",
-        language,
-        confidence:
-          recognizedCount > 0 ? confidenceSum / recognizedCount : undefined,
-        regions: effectiveRegions,
-        processedAt: new Date().toISOString(),
+    const { createWorker } = await import("tesseract.js");
+    const worker = await createWorker(language, 1, {
+      logger: (message) => {
+        onProgress?.({
+          progress: message.progress ?? 0,
+          status: message.status,
+        });
       },
-    };
+    });
+
+    try {
+      const textParts: string[] = [];
+      let confidenceSum = 0;
+      let recognizedCount = 0;
+
+      for (let index = 0; index < effectiveRegions.length; index++) {
+        const region = effectiveRegions[index]!;
+        onProgress?.({
+          progress: 0,
+          status: "recognizing text",
+          regionIndex: index,
+          regionCount: effectiveRegions.length,
+        });
+
+        const blob = await cropRegionToBlob(bitmap, region);
+        const { data } = await worker.recognize(blob);
+
+        const text = data.text.trim();
+        if (text) {
+          textParts.push(text);
+        }
+        confidenceSum += data.confidence;
+        recognizedCount += 1;
+      }
+
+      return {
+        plainText: textParts.join("\n\n"),
+        ocrMetadata: {
+          engine: "tesseract.js",
+          language,
+          confidence:
+            recognizedCount > 0 ? confidenceSum / recognizedCount : undefined,
+          regions: effectiveRegions,
+          processedAt: new Date().toISOString(),
+        },
+      };
+    } finally {
+      await worker.terminate();
+    }
   } finally {
-    await worker.terminate();
     bitmap.close();
   }
 }
