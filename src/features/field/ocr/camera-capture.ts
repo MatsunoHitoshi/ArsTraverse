@@ -192,6 +192,13 @@ export async function captureStillPhotoFromStream(
   return captureFromVideoElement(video);
 }
 
-export function stopCameraStream(stream: MediaStream | null): void {
+export function stopCameraStream(
+  stream: MediaStream | null,
+  video?: HTMLVideoElement | null,
+): void {
   stream?.getTracks().forEach((track) => track.stop());
+  if (video) {
+    video.pause();
+    video.srcObject = null;
+  }
 }

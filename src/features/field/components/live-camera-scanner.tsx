@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/app/_components/button/button";
 import { ChevronLeftIcon } from "@/app/_components/icons";
 import {
@@ -39,6 +39,11 @@ export function LiveCameraScanner({
     [isStarting, isCapturing, errorMessage],
   );
 
+  const releaseCamera = useCallback(() => {
+    stopCameraStream(streamRef.current, videoRef.current);
+    streamRef.current = null;
+  }, []);
+
   useEffect(() => {
     let isActive = true;
 
@@ -70,10 +75,9 @@ export function LiveCameraScanner({
 
     return () => {
       isActive = false;
-      stopCameraStream(streamRef.current);
-      streamRef.current = null;
+      releaseCamera();
     };
-  }, []);
+  }, [releaseCamera]);
 
   const handleCapture = async () => {
     const video = videoRef.current;
@@ -85,12 +89,18 @@ export function LiveCameraScanner({
 
     try {
       const file = await captureStillPhotoFromStream(stream, video);
+      releaseCamera();
       onCapture(file);
     } catch {
       setErrorMessage("撮影に失敗しました。もう一度お試しください。");
     } finally {
       setIsCapturing(false);
     }
+  };
+
+  const handleBack = () => {
+    releaseCamera();
+    onBack();
   };
 
   return (
@@ -113,7 +123,7 @@ export function LiveCameraScanner({
         <div className="pointer-events-auto flex px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
           <button
             type="button"
-            onClick={onBack}
+            onClick={handleBack}
             aria-label="戻る"
             className="flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition hover:bg-black/60"
           >

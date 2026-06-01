@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useSession } from "next-auth/react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type {
+  GraphDocumentForFrontend,
+  LocaleEnum,
+  NodeTypeForFrontend,
+} from "@/app/const/types";
 import dayjs from "dayjs";
 import { api } from "@/trpc/react";
 import { Button } from "@/app/_components/button/button";
@@ -21,14 +27,86 @@ type FieldScanDetailProps = {
   sessionId: string;
 };
 
+function normalizePropertiesToString(
+  properties: Record<string, string | number | boolean | null> | undefined,
+): Record<string, string> {
+  if (!properties) return {};
+  return Object.fromEntries(
+    Object.entries(properties).map(([key, value]) => [key, String(value ?? "")]),
+  );
+}
+
+function syncNodeNameWithLocaleProperties(
+  node: NodeTypeForFrontend,
+  locale: LocaleEnum,
+): NodeTypeForFrontend {
+  const properties = normalizePropertiesToString(node.properties);
+  properties[`name_${locale}`] = node.name;
+  return { ...node, properties };
+}
+
+function toDocumentGraphMutationPayload(
+  graph: GraphDocumentForFrontend,
+  locale: LocaleEnum,
+): GraphDocumentForFrontend {
+  return {
+    nodes: graph.nodes.map((node) => syncNodeNameWithLocaleProperties(node, locale)),
+    relationships: graph.relationships.map((relationship) => ({
+      ...relationship,
+      properties: normalizePropertiesToString(relationship.properties),
+    })),
+  };
+}
+
 export function FieldScanDetail({ sessionId }: FieldScanDetailProps) {
   const router = useRouter();
+  const { data: authSession } = useSession();
+  const preferredLocale = (authSession?.user?.preferredLocale ?? "ja") as LocaleEnum;
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [graphEditError, setGraphEditError] = useState<string | null>(null);
+  const [editedGraph, setEditedGraph] =
+    useState<GraphDocumentForFrontend | null>(null);
+  const graphSyncedSessionRef = useRef<string | null>(null);
   const { data, isLoading, error, refetch } = api.scan.getSession.useQuery({
     id: sessionId,
   });
+
+  const applyServerGraph = (graph: GraphDocumentForFrontend) => {
+    setEditedGraph(graph);
+  };
+
+  const syncGraphFromServer = async () => {
+    const result = await refetch();
+    if (result.data?.graph) {
+      applyServerGraph(result.data.graph);
+    }
+    return result;
+  };
+
+  const updateGraph = api.documentGraph.updateGraph.useMutation({
+    onSuccess: async () => {
+      setGraphEditError(null);
+      await syncGraphFromServer();
+    },
+    onError: async (mutationError) => {
+      setGraphEditError(mutationError.message ?? "グラフの保存に失敗しました");
+      await syncGraphFromServer();
+    },
+  });
+
+  useEffect(() => {
+    graphSyncedSessionRef.current = null;
+    setEditedGraph(null);
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!data?.graph) return;
+    if (graphSyncedSessionRef.current === sessionId) return;
+    applyServerGraph(data.graph);
+    graphSyncedSessionRef.current = sessionId;
+  }, [data?.graph, sessionId]);
   const deleteSession = api.scan.deleteSession.useMutation({
     onSuccess: () => {
       setIsDeleteOpen(false);
@@ -58,6 +136,19 @@ export function FieldScanDetail({ sessionId }: FieldScanDetailProps) {
       </div>
     );
   }
+
+  const displayGraph = editedGraph ?? data?.graph ?? null;
+
+  const handleGraphChange = (nextGraph: GraphDocumentForFrontend) => {
+    if (!data?.graphId) return;
+    setGraphEditError(null);
+    const payload = toDocumentGraphMutationPayload(nextGraph, preferredLocale);
+    setEditedGraph(payload);
+    updateGraph.mutate({
+      id: data.graphId,
+      dataJson: payload,
+    });
+  };
 
   if (error != null || data == null) {
     return (
@@ -125,14 +216,29 @@ export function FieldScanDetail({ sessionId }: FieldScanDetailProps) {
           </pre>
         </section>
 
-        <section className="">
-          <GraphPreview graphData={data.graph} />
-        </section>
+        {displayGraph && (
+          <section className="">
+            <GraphPreview graphData={displayGraph} />
+          </section>
+        )}
 
-        <GraphSummary
-          graph={data.graph}
-          matchCandidates={data.matchCandidates}
-        />
+        {displayGraph && (
+          <GraphSummary
+            graph={displayGraph}
+            matchCandidates={data.matchCandidates}
+            onGraphChange={handleGraphChange}
+            onRefreshNodeMatches={() => {
+              if (updateGraph.isPending) return;
+              void syncGraphFromServer();
+            }}
+          />
+        )}
+
+        {graphEditError && (
+          <p className="rounded-lg border border-red-500/40 bg-red-950/40 px-3 py-2 text-sm text-red-300">
+            {graphEditError}
+          </p>
+        )}
 
         <div className="flex flex-col gap-3">
           <Button

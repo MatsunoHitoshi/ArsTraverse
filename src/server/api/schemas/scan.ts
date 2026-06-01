@@ -1,3 +1,4 @@
+import { DocumentType } from "@prisma/client";
 import { z } from "zod";
 import { GraphDocumentFrontendSchema } from "@/server/api/schemas/knowledge-graph";
 
@@ -68,6 +69,7 @@ export const PublishedNodeMatchSchema = z.object({
   topicSpaceName: z.string().optional(),
   sourceDocumentId: z.string().optional(),
   sourceDocumentName: z.string().optional(),
+  sourceDocumentType: z.nativeEnum(DocumentType).optional(),
 });
 
 export type OcrMetadata = z.infer<typeof OcrMetadataSchema>;

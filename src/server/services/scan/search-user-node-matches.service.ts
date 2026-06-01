@@ -88,7 +88,11 @@ export async function searchUserSourceDocumentNodeMatchesByNames(
           userId: ctx.session.user.id,
           isDeleted: false,
           documentType: {
-            in: [DocumentType.INPUT_PDF, DocumentType.INPUT_TXT],
+            in: [
+              DocumentType.INPUT_PDF,
+              DocumentType.INPUT_TXT,
+              DocumentType.INPUT_SCAN,
+            ],
           },
           ...(excludeSourceDocumentId
             ? {
@@ -110,6 +114,7 @@ export async function searchUserSourceDocumentNodeMatchesByNames(
             select: {
               id: true,
               name: true,
+              documentType: true,
             },
           },
         },
@@ -130,6 +135,7 @@ export async function searchUserSourceDocumentNodeMatchesByNames(
       sourceType: "sourceDocument",
       sourceDocumentId: sourceDocument.id,
       sourceDocumentName: sourceDocument.name,
+      sourceDocumentType: sourceDocument.documentType,
     });
   }
 

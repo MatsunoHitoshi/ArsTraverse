@@ -7,6 +7,7 @@ import { signIn, useSession } from "next-auth/react";
 import dayjs from "dayjs";
 import { api } from "@/trpc/react";
 import { Button } from "@/app/_components/button/button";
+import { PlusIcon } from "@/app/_components/icons";
 import { FadeIn } from "@/app/_components/animation/fade-in";
 import { ScanSessionMenu } from "@/features/field/components/scan-session-menu";
 import { ScanSessionRenameModal } from "@/features/field/components/scan-session-rename-modal";
@@ -88,9 +89,10 @@ export function FieldSessionList() {
 
         <Button
           onClick={() => router.push("/field/scan")}
-          className="w-full bg-orange-400 text-white hover:bg-orange-500"
+          className="flex w-full flex-row items-center justify-center gap-1 bg-orange-400 text-white hover:bg-orange-500"
         >
-          新規スキャン
+          <PlusIcon width={16} height={16} color="white" />
+          <div className="text-sm">新規スキャン</div>
         </Button>
 
         {isLoading && (
