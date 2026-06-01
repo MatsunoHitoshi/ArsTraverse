@@ -6,7 +6,7 @@ export const TextInput = ({
   value,
   onChange,
   placeholder = "",
-  defaultValue = "",
+  defaultValue,
   autoFocus = false,
   required = false,
 }: {
@@ -18,6 +18,8 @@ export const TextInput = ({
   autoFocus?: boolean;
   required?: boolean;
 }) => {
+  const isControlled = value !== undefined;
+
   return (
     <Input
       type="text"
@@ -28,8 +30,9 @@ export const TextInput = ({
         "block w-full rounded-lg border-none bg-white/5 px-3 py-1.5 text-sm/6",
         "focus:outline-none data-[focus]:outline-1 data-[focus]:-outline-offset-2 data-[focus]:outline-slate-400",
       )}
-      value={value}
-      defaultValue={defaultValue}
+      {...(isControlled
+        ? { value }
+        : { defaultValue: defaultValue ?? "" })}
       onChange={(e) => onChange(e.target.value)}
       required={required}
     />

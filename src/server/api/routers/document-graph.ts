@@ -11,7 +11,7 @@ import type {
   NodeTypeForFrontend,
   RelationshipTypeForFrontend,
 } from "@/app/const/types";
-import { getTextFromDocumentFile } from "@/app/_utils/text/text";
+import { resolveSourceDocumentPlainText } from "@/server/services/scan/resolve-source-document-plain-text";
 import { formGraphDataForFrontend } from "@/app/_utils/kg/frontend-properties";
 import { KnowledgeGraphInputSchema } from "../schemas/knowledge-graph";
 import { updateDocumentGraph } from "@/server/services/kg/update-document-graph.service";
@@ -53,10 +53,11 @@ export const documentGraphRouter = createTRPCRouter({
         }),
         sourceDocument: {
           ...graph.sourceDocument,
-          text: await getTextFromDocumentFile(
-            graph.sourceDocument.url,
-            graph.sourceDocument.documentType,
-          ),
+          text: await resolveSourceDocumentPlainText({
+            url: graph.sourceDocument.url,
+            documentType: graph.sourceDocument.documentType,
+            ocrMetadata: graph.sourceDocument.ocrMetadata,
+          }),
         },
       };
     }),

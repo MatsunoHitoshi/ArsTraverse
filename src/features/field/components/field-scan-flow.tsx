@@ -130,11 +130,10 @@ export function FieldScanFlow() {
   const pipelineLabel = useMemo(() => {
     if (pipelineStage === "ocr") {
       return ocrProgress
-        ? `${getOcrStatusLabel(ocrProgress)}${
-            ocrProgress.status === "recognizing text"
-              ? ` ${Math.round(ocrProgress.progress * 100)}%`
-              : ""
-          }`
+        ? `${getOcrStatusLabel(ocrProgress)}${ocrProgress.status === "recognizing text"
+          ? ` ${Math.round(ocrProgress.progress * 100)}%`
+          : ""
+        }`
         : "OCR を実行中...";
     }
     if (pipelineStage === "normalize") return "AIでテキストを整形中...";
@@ -445,150 +444,82 @@ export function FieldScanFlow() {
       )}
 
       {step !== "camera" && (
-      <div className="mx-auto flex w-full max-w-lg flex-col gap-5 px-4 py-6 pb-24 pt-14">
-        <div className="flex items-start justify-start gap-3">
-          <LinkButton
-            href="/field"
-            className="flex !h-8 !w-8 shrink-0 items-center justify-center"
-          >
-            <div className="h-4 w-4">
-              <ChevronLeftIcon width={16} height={16} color="white" />
-            </div>
-          </LinkButton>
-          <div>
-            <h1 className="text-xl font-bold text-slate-50">新規スキャン</h1>
-            <p className="text-sm text-slate-400">
-              撮影 → 領域指定 → OCR → AI整形 → グラフプレビュー
-            </p>
-          </div>
-        </div>
-
-        {previewUrl && (step === "trim" || step === "processing") && (
-          <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
-            <label className="mb-2 block text-sm font-medium text-slate-200">
-              2. 文字領域を指定
-            </label>
-            <ScanRegionSelector
-              imageUrl={previewUrl}
-              regions={ocrRegions}
-              onRegionsChange={setOcrRegions}
-              defaultFullscreen
-              requireFullscreenChangeToComplete={graphPreview != null}
-              onCancelFullscreen={handleCancelRegionAdjust}
-              onCompleteFullscreen={() => {
-                if (graphPreview) setStep("preview");
-              }}
-              onRotateImage={() => void handleRotateImage()}
-              isRotatingImage={isRotatingImage}
-            />
-            <div className="mt-3 flex gap-2">
-              <Button
-                onClick={handleBackToCamera}
-                className="w-1/2 bg-slate-700 text-white"
-                disabled={step === "processing"}
-              >
-                撮り直す
-              </Button>
-              <Button
-                onClick={handleRunPipeline}
-                disabled={
-                  !imageFile ||
-                  step === "processing" ||
-                  isRunningOcr ||
-                  ocrRegions.length === 0
-                }
-                isLoading={step === "processing" || isRunningOcr}
-                className="w-1/2 bg-orange-400 text-white hover:bg-orange-500"
-              >
-                この範囲で解析
-              </Button>
-            </div>
-          </section>
-        )}
-
-        {(step === "trim" || step === "processing") && (
-          <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
-            <label className="mb-2 block text-sm font-medium text-slate-200">
-              3. OCR 言語
-            </label>
-            <select
-              value={language}
-              onChange={(event) =>
-                setLanguage(event.target.value as OcrLanguage)
-              }
-              className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+        <div className="mx-auto flex w-full max-w-lg flex-col gap-5 px-4 py-6 pb-24 pt-14">
+          <div className="flex items-start justify-start gap-3">
+            <LinkButton
+              href="/field"
+              className="flex !h-8 !w-8 shrink-0 items-center justify-center"
             >
-              {LANGUAGE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-
-            {isPipelineRunning && pipelineStage && (
-              <div className="mt-3">
-                <div className="mb-1 text-xs text-slate-400">
-                  {pipelineLabel}
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-slate-700">
-                  <div
-                    className="h-full bg-orange-400 transition-all"
-                    style={{
-                      width: `${pipelineProgress}%`,
-                    }}
-                  />
-                </div>
+              <div className="h-4 w-4">
+                <ChevronLeftIcon width={16} height={16} color="white" />
               </div>
-            )}
-          </section>
-        )}
+            </LinkButton>
+            <div>
+              <h1 className="text-xl font-bold text-slate-50">新規スキャン</h1>
+            </div>
+          </div>
 
-        {step === "preview" && graphPreview && (
-          <>
-            {previewUrl && (
-              <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
-                <label className="mb-2 block text-sm font-medium text-slate-200">
-                  2. 指定した文字領域
-                </label>
-                <ScanImageWithRegions
-                  imageUrl={previewUrl}
-                  regions={ocrRegions}
-                  alt="指定した文字領域"
-                />
-                <p className="mt-2 text-xs text-slate-500">
-                  領域の変更は「領域を再調整」から全画面で行えます。
-                </p>
-              </section>
-            )}
-
+          {previewUrl && (step === "trim" || step === "processing") && (
             <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
-              <label
-                htmlFor="session-name"
-                className="mb-2 block text-sm font-medium text-slate-200"
-              >
-                4. セッション名
+              <label className="mb-2 block text-sm font-medium text-slate-200">
+                文字領域を指定
               </label>
-              <input
-                id="session-name"
-                value={sessionName}
-                onChange={(event) => setSessionName(event.target.value)}
-                placeholder="例: 展覧会パンフレット p.3"
-                className="mb-4 w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+              <ScanRegionSelector
+                imageUrl={previewUrl}
+                regions={ocrRegions}
+                onRegionsChange={setOcrRegions}
+                defaultFullscreen
+                requireFullscreenChangeToComplete={graphPreview != null}
+                onCancelFullscreen={handleCancelRegionAdjust}
+                onCompleteFullscreen={() => {
+                  if (graphPreview) setStep("preview");
+                }}
+                onRotateImage={() => void handleRotateImage()}
+                isRotatingImage={isRotatingImage}
               />
+              <div className="mt-3 flex gap-2">
+                <Button
+                  onClick={handleBackToCamera}
+                  className="w-1/2 bg-slate-700 text-white"
+                  disabled={step === "processing"}
+                >
+                  撮り直す
+                </Button>
+                <Button
+                  onClick={handleRunPipeline}
+                  disabled={
+                    !imageFile ||
+                    step === "processing" ||
+                    isRunningOcr ||
+                    ocrRegions.length === 0
+                  }
+                  isLoading={step === "processing" || isRunningOcr}
+                  className="w-1/2 bg-orange-400 text-white hover:bg-orange-500"
+                >
+                  この範囲で解析
+                </Button>
+              </div>
+            </section>
+          )}
 
-              <label
-                htmlFor="ocr-text"
-                className="mb-2 block text-sm font-medium text-slate-200"
-              >
-                5. OCR テキスト（AI整形済み）
+          {(step === "trim" || step === "processing") && (
+            <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+              <label className="mb-2 block text-sm font-medium text-slate-200">
+                OCR 言語
               </label>
-              <textarea
-                id="ocr-text"
-                value={plainText}
-                onChange={(event) => setPlainText(event.target.value)}
-                rows={8}
+              <select
+                value={language}
+                onChange={(event) =>
+                  setLanguage(event.target.value as OcrLanguage)
+                }
                 className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-              />
+              >
+                {LANGUAGE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
 
               {isPipelineRunning && pipelineStage && (
                 <div className="mt-3">
@@ -598,59 +529,122 @@ export function FieldScanFlow() {
                   <div className="h-2 overflow-hidden rounded-full bg-slate-700">
                     <div
                       className="h-full bg-orange-400 transition-all"
-                      style={{ width: `${pipelineProgress}%` }}
+                      style={{
+                        width: `${pipelineProgress}%`,
+                      }}
                     />
                   </div>
                 </div>
               )}
-
-              <div className="mt-3 flex gap-2">
-                <Button
-                  onClick={() => setStep("trim")}
-                  className="w-1/3 bg-slate-700 text-white"
-                >
-                  領域を再調整
-                </Button>
-                <Button
-                  onClick={() => void handleReExtractGraph()}
-                  isLoading={isRunningGraph}
-                  disabled={!plainText.trim() || isRunningGraph}
-                  className="w-1/3 bg-slate-700 text-white"
-                >
-                  再抽出して更新
-                </Button>
-                <Button
-                  onClick={() => void handleSubmit()}
-                  disabled={!canSubmit || isSubmitting}
-                  isLoading={isSubmitting}
-                  className="w-1/3 bg-orange-400 text-white hover:bg-orange-500 disabled:opacity-50"
-                >
-                  保存して詳細へ
-                </Button>
-              </div>
             </section>
+          )}
 
-            <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
-              <h2 className="mb-2 text-sm font-semibold text-slate-200">
-                6. グラフプレビュー
-              </h2>
-              <GraphPreview graphData={graphPreview} />
-              <div className="mt-4">
-                <GraphSummary
-                  graph={graphPreview}
-                  matchCandidates={previewMatchCandidates}
+          {step === "preview" && graphPreview && (
+            <>
+              {previewUrl && (
+                <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+                  <label className="mb-2 block text-sm font-medium text-slate-200">
+                    指定した文字領域
+                  </label>
+                  <ScanImageWithRegions
+                    imageUrl={previewUrl}
+                    regions={ocrRegions}
+                    alt="指定した文字領域"
+                  />
+                  <p className="mt-2 text-xs text-slate-500">
+                    領域の変更は「領域を再調整」から全画面で行えます。
+                  </p>
+                </section>
+              )}
+
+              <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+                <label
+                  htmlFor="session-name"
+                  className="mb-2 block text-sm font-medium text-slate-200"
+                >
+                  セッション名
+                </label>
+                <input
+                  id="session-name"
+                  value={sessionName}
+                  onChange={(event) => setSessionName(event.target.value)}
+                  placeholder="例: 展覧会パンフレット p.3"
+                  className="mb-4 w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
                 />
-              </div>
-            </section>
-          </>
-        )}
 
-        {errorMessage && (
-          <p className="rounded-lg border border-red-500/40 bg-red-950/40 px-3 py-2 text-sm text-red-300">
-            {errorMessage}
-          </p>
-        )}
-      </div>
+                <label
+                  htmlFor="ocr-text"
+                  className="mb-2 block text-sm font-medium text-slate-200"
+                >
+                  OCR テキスト（AI整形済み）
+                </label>
+                <textarea
+                  id="ocr-text"
+                  value={plainText}
+                  onChange={(event) => setPlainText(event.target.value)}
+                  rows={8}
+                  className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                />
+
+                {isPipelineRunning && pipelineStage && (
+                  <div className="mt-3">
+                    <div className="mb-1 text-xs text-slate-400">
+                      {pipelineLabel}
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-700">
+                      <div
+                        className="h-full bg-orange-400 transition-all"
+                        style={{ width: `${pipelineProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    onClick={() => setStep("trim")}
+                    className="w-1/3 bg-slate-700 text-white"
+                  >
+                    領域を再調整
+                  </Button>
+                  <Button
+                    onClick={() => void handleReExtractGraph()}
+                    isLoading={isRunningGraph}
+                    disabled={!plainText.trim() || isRunningGraph}
+                    className="w-1/3 bg-slate-700 text-white"
+                  >
+                    再抽出して更新
+                  </Button>
+                  <Button
+                    onClick={() => void handleSubmit()}
+                    disabled={!canSubmit || isSubmitting}
+                    isLoading={isSubmitting}
+                    className="w-1/3 bg-orange-400 text-white hover:bg-orange-500 disabled:opacity-50"
+                  >
+                    保存して詳細へ
+                  </Button>
+                </div>
+              </section>
+
+
+
+              <GraphPreview graphData={graphPreview} />
+
+              <GraphSummary
+                graph={graphPreview}
+                matchCandidates={previewMatchCandidates}
+                onGraphChange={setGraphPreview}
+              />
+
+            </>
+          )}
+
+          {errorMessage && (
+            <p className="rounded-lg border border-red-500/40 bg-red-950/40 px-3 py-2 text-sm text-red-300">
+              {errorMessage}
+            </p>
+          )}
+        </div>
       )}
     </FadeIn>
   );
