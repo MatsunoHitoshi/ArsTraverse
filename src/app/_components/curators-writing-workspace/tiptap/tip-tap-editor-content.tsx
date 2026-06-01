@@ -195,6 +195,9 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
                       imageData.dataUrl,
                       BUCKETS.PATH_TO_RICH_TEXT_IMAGES,
                     );
+                    if (!imageURL) {
+                      throw new Error("画像URLの取得に失敗しました");
+                    }
 
                     // 読み込み中メッセージを削除して画像を挿入
                     currentEditor.commands.deleteNode("paragraph");

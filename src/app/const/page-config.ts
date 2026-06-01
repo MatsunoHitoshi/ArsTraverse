@@ -1,5 +1,5 @@
 export const pageConfig = {
-  publicLandingPages: ["/about", "/articles"],
+  publicLandingPages: ["/about", "/articles", "/field"],
   loginProhibitedPages: ["/about"],
 };
 
