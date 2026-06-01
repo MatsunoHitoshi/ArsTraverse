@@ -66,14 +66,7 @@ export function FieldScanFlow() {
   const [pipelineStage, setPipelineStage] = useState<PipelineStage>(null);
   const [pipelineProgress, setPipelineProgress] = useState(0);
 
-  const createFromScan = api.scan.createFromScan.useMutation({
-    onSuccess: (result) => {
-      router.push(`/field/scan/${result.sourceDocument.id}`);
-    },
-    onError: (error) => {
-      setErrorMessage(error.message ?? "グラフ作成に失敗しました");
-    },
-  });
+  const createFromScan = api.scan.createFromScan.useMutation();
   const normalizeOcrText = api.scan.normalizeOcrText.useMutation();
   const extractGraphFromPlainText = api.kg.extractKGFromPlainText.useMutation();
   const previewMatchNodeNames = useMemo(
@@ -311,7 +304,7 @@ export function FieldScanFlow() {
         sourceImageUrl = uploadedUrl;
       }
 
-      await createFromScan.mutateAsync({
+      const result = await createFromScan.mutateAsync({
         name: sessionName.trim(),
         plainText: trimmedPlainText,
         graphDocument: graphPreview ?? undefined,
@@ -319,6 +312,8 @@ export function FieldScanFlow() {
         sourceImageUrl,
         ocrMetadata,
       });
+
+      router.push(`/field/scan/${result.sourceDocument.id}`);
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "グラフ作成に失敗しました",
