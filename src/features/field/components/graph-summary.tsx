@@ -105,7 +105,7 @@ export function GraphSummary({
   return (
     <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-slate-200">抽出グラフ</h2>
+        <h2 className="text-sm font-semibold text-slate-200">グラフ</h2>
         <span className="text-xs text-slate-400">
           ノード {graph.nodes.length} · 関係 {graph.relationships.length}
         </span>

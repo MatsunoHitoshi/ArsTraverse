@@ -7,6 +7,7 @@ import dayjs from "dayjs";
 import { api } from "@/trpc/react";
 import { Button } from "@/app/_components/button/button";
 import { FadeIn } from "@/app/_components/animation/fade-in";
+import { GraphPreview } from "@/app/_components/curators-writing-workspace/graph-preview";
 import { GraphSummary } from "@/features/field/components/graph-summary";
 import { ScanImageWithRegions } from "@/features/field/components/scan-image-with-regions";
 import { ScanSessionMenu } from "@/features/field/components/scan-session-menu";
@@ -122,6 +123,10 @@ export function FieldScanDetail({ sessionId }: FieldScanDetailProps) {
           <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-sm text-slate-200">
             {data.plainText}
           </pre>
+        </section>
+
+        <section className="">
+          <GraphPreview graphData={data.graph} />
         </section>
 
         <GraphSummary
