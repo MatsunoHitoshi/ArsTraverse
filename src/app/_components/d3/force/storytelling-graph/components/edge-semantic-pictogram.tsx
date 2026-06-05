@@ -285,6 +285,42 @@ const EASING_BY_PLAN: Record<
   breath: "ease-in-out",
 };
 
+type RunCycle4PhaseKeyframes = {
+  contact: number;
+  down: number;
+  pass: number;
+  up: number;
+};
+
+/** 4-phase 区間ごとに 4 分割 → 16 点。各区間内は cosine ease でサンプルし C1 連続に近づける。 */
+const RUN_CYCLE_STEPS_PER_QUARTER = 4;
+
+function sampleSmoothRunCycle4Phase(kf: RunCycle4PhaseKeyframes): number[] {
+  const anchors = [kf.contact, kf.down, kf.pass, kf.up];
+  const samples: number[] = [];
+  for (let i = 0; i < RUN_CYCLE_STEPS_PER_QUARTER * 4; i++) {
+    const seg = Math.floor(i / RUN_CYCLE_STEPS_PER_QUARTER) % 4;
+    const local = (i % RUN_CYCLE_STEPS_PER_QUARTER) / RUN_CYCLE_STEPS_PER_QUARTER;
+    const from = anchors[seg]!;
+    const to = anchors[(seg + 1) % 4]!;
+    const eased = (1 - Math.cos(Math.PI * local)) / 2;
+    samples.push(from + (to - from) * eased);
+  }
+  return samples;
+}
+
+function runCycle16CssVars(
+  samples: number[],
+  prefix: string,
+  format: (value: number) => string,
+): Partial<Record<`--${string}`, string>> {
+  const vars: Partial<Record<`--${string}`, string>> = {};
+  samples.forEach((value, index) => {
+    vars[`--${prefix}-${String(index).padStart(2, "0")}`] = format(value);
+  });
+  return vars;
+}
+
 type RotationOrigin = "center" | "shoulder" | "hip" | "neck" | "custom";
 
 const TRANSFORM_ORIGIN_BY_PART: Record<HumanPartTarget, string> = {
@@ -425,14 +461,14 @@ function partMotionStyle(
     case "rotation": {
       const i = Math.max(0.25, plan.playback.intensity);
       if (operation.keyframes) {
-        const kf = operation.keyframes;
+        const samples = sampleSmoothRunCycle4Phase(operation.keyframes).map(
+          (value) => value * i,
+        );
         return {
           ...common,
-          animationName: "body-part-rotate-4phase",
-          "--motion-r-contact": `${kf.contact * i}deg`,
-          "--motion-r-down": `${kf.down * i}deg`,
-          "--motion-r-pass": `${kf.pass * i}deg`,
-          "--motion-r-up": `${kf.up * i}deg`,
+          animationName: "body-part-rotate-16phase",
+          animationTimingFunction: "linear",
+          ...runCycle16CssVars(samples, "motion-r", (value) => `${value}deg`),
         };
       }
       const fromDegrees =
@@ -451,19 +487,15 @@ function partMotionStyle(
       const isBody = target === "human.body";
       const isVertical = operation.path === "jitter" || isBody;
       if (operation.keyframes) {
-        const kf = operation.keyframes;
         const amp = isBody ? 2.5 : 1;
+        const samples = sampleSmoothRunCycle4Phase(operation.keyframes).map(
+          (value) => value * amp * intensity,
+        );
         return {
           ...common,
-          animationName: "body-part-translate-4phase",
-          "--motion-tx-contact": "0px",
-          "--motion-ty-contact": `${kf.contact * amp * intensity}px`,
-          "--motion-tx-down": "0px",
-          "--motion-ty-down": `${kf.down * amp * intensity}px`,
-          "--motion-tx-pass": "0px",
-          "--motion-ty-pass": `${kf.pass * amp * intensity}px`,
-          "--motion-tx-up": "0px",
-          "--motion-ty-up": `${kf.up * amp * intensity}px`,
+          animationName: "body-part-translate-16phase",
+          animationTimingFunction: "linear",
+          ...runCycle16CssVars(samples, "motion-ty", (value) => `${value}px`),
         };
       }
       const targetAmplifier = isBody ? 2.5 : 1;
@@ -554,16 +586,18 @@ function flexStyle(
   const toDeg = (operation.toDegrees ?? operation.degrees ?? 12) * flexFactor;
 
   if (explicitFlexOperation && operation.keyframes) {
-    const kf = operation.keyframes;
+    const samples = sampleSmoothRunCycle4Phase(operation.keyframes).map(
+      (value) => value * intensity,
+    );
     return {
       transformBox: "fill-box",
       transformOrigin: pivotOrigin,
       ...operationPlaybackStyle(plan, operation),
-      animationName: "body-part-flex-4phase",
-      "--motion-flex-contact": `${(kf.contact * intensity).toFixed(1)}deg`,
-      "--motion-flex-down": `${(kf.down * intensity).toFixed(1)}deg`,
-      "--motion-flex-pass": `${(kf.pass * intensity).toFixed(1)}deg`,
-      "--motion-flex-up": `${(kf.up * intensity).toFixed(1)}deg`,
+      animationName: "body-part-flex-16phase",
+      animationTimingFunction: "linear",
+      ...runCycle16CssVars(samples, "motion-flex", (value) =>
+        `${value.toFixed(1)}deg`,
+      ),
     };
   }
 
@@ -964,11 +998,10 @@ function HumanRunnerRightSvg({
               style={flexStyle(plan, "human.leftLeg", "knee", "100% 0%")}
             >
               <line x1="29" y1="53.5" x2="26" y2="61.5" />
-              <ellipse
+              <circle
                 cx="25"
                 cy="62"
-                rx="3.1"
-                ry="1.35"
+                r="2"
                 fill={fillSoft}
                 data-testid="motion-foot-left"
               />
@@ -999,11 +1032,10 @@ function HumanRunnerRightSvg({
               style={flexStyle(plan, "human.rightLeg", "knee", "0% 0%")}
             >
               <line x1="35" y1="53.5" x2="38" y2="61.5" />
-              <ellipse
+              <circle
                 cx="39"
                 cy="62"
-                rx="3.1"
-                ry="1.35"
+                r="2"
                 fill={fillSoft}
                 data-testid="motion-foot-right"
               />
@@ -1518,8 +1550,10 @@ export function EdgeSemanticMotionScene({
   );
   const actorAnchor = actorAnchorForPlan(plan);
   const actorPoint = actorAnchor === "target" ? target : source;
-  const shouldRenderActor =
-    plan && (plan.asset.kind === "human" || hasHumanTargets(plan));
+  const humanPlan =
+    plan && (plan.asset.kind === "human" || hasHumanTargets(plan))
+      ? plan
+      : undefined;
   const actorFacesLeft =
     actorAnchor === "source" ? vector.ux < 0 : vector.ux > 0;
   const actorTransform = actorFacesLeft ? "scaleX(-1)" : undefined;
@@ -1550,7 +1584,7 @@ export function EdgeSemanticMotionScene({
         </>
       )}
 
-      {shouldRenderActor && (
+      {humanPlan && (
         <AnchoredForeignObject
           x={actorPoint.x}
           y={actorPoint.y}
@@ -1559,7 +1593,11 @@ export function EdgeSemanticMotionScene({
           className="body-parts-pictogram edge-semantic-actor"
           style={{ transform: actorTransform }}
         >
-          <HumanBodyPartsSvg config={config} size={actorSize} plan={plan} />
+          <HumanBodyPartsSvg
+            config={config}
+            size={actorSize}
+            plan={humanPlan}
+          />
         </AnchoredForeignObject>
       )}
 

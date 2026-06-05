@@ -407,6 +407,67 @@
   }
 }
 
+/* 16-phase smooth run cycle: 4 anchors × 4 subdivisions, linear timing between stops */
+@keyframes body-part-rotate-16phase {
+  0% { transform: rotate(var(--motion-r-00, 0deg)); }
+  6.25% { transform: rotate(var(--motion-r-01, 0deg)); }
+  12.5% { transform: rotate(var(--motion-r-02, 0deg)); }
+  18.75% { transform: rotate(var(--motion-r-03, 0deg)); }
+  25% { transform: rotate(var(--motion-r-04, 0deg)); }
+  31.25% { transform: rotate(var(--motion-r-05, 0deg)); }
+  37.5% { transform: rotate(var(--motion-r-06, 0deg)); }
+  43.75% { transform: rotate(var(--motion-r-07, 0deg)); }
+  50% { transform: rotate(var(--motion-r-08, 0deg)); }
+  56.25% { transform: rotate(var(--motion-r-09, 0deg)); }
+  62.5% { transform: rotate(var(--motion-r-10, 0deg)); }
+  68.75% { transform: rotate(var(--motion-r-11, 0deg)); }
+  75% { transform: rotate(var(--motion-r-12, 0deg)); }
+  81.25% { transform: rotate(var(--motion-r-13, 0deg)); }
+  87.5% { transform: rotate(var(--motion-r-14, 0deg)); }
+  93.75% { transform: rotate(var(--motion-r-15, 0deg)); }
+  100% { transform: rotate(var(--motion-r-00, 0deg)); }
+}
+
+@keyframes body-part-translate-16phase {
+  0% { transform: translate(0, var(--motion-ty-00, 0px)); }
+  6.25% { transform: translate(0, var(--motion-ty-01, 0px)); }
+  12.5% { transform: translate(0, var(--motion-ty-02, 0px)); }
+  18.75% { transform: translate(0, var(--motion-ty-03, 0px)); }
+  25% { transform: translate(0, var(--motion-ty-04, 0px)); }
+  31.25% { transform: translate(0, var(--motion-ty-05, 0px)); }
+  37.5% { transform: translate(0, var(--motion-ty-06, 0px)); }
+  43.75% { transform: translate(0, var(--motion-ty-07, 0px)); }
+  50% { transform: translate(0, var(--motion-ty-08, 0px)); }
+  56.25% { transform: translate(0, var(--motion-ty-09, 0px)); }
+  62.5% { transform: translate(0, var(--motion-ty-10, 0px)); }
+  68.75% { transform: translate(0, var(--motion-ty-11, 0px)); }
+  75% { transform: translate(0, var(--motion-ty-12, 0px)); }
+  81.25% { transform: translate(0, var(--motion-ty-13, 0px)); }
+  87.5% { transform: translate(0, var(--motion-ty-14, 0px)); }
+  93.75% { transform: translate(0, var(--motion-ty-15, 0px)); }
+  100% { transform: translate(0, var(--motion-ty-00, 0px)); }
+}
+
+@keyframes body-part-flex-16phase {
+  0% { transform: rotate(var(--motion-flex-00, 0deg)); }
+  6.25% { transform: rotate(var(--motion-flex-01, 0deg)); }
+  12.5% { transform: rotate(var(--motion-flex-02, 0deg)); }
+  18.75% { transform: rotate(var(--motion-flex-03, 0deg)); }
+  25% { transform: rotate(var(--motion-flex-04, 0deg)); }
+  31.25% { transform: rotate(var(--motion-flex-05, 0deg)); }
+  37.5% { transform: rotate(var(--motion-flex-06, 0deg)); }
+  43.75% { transform: rotate(var(--motion-flex-07, 0deg)); }
+  50% { transform: rotate(var(--motion-flex-08, 0deg)); }
+  56.25% { transform: rotate(var(--motion-flex-09, 0deg)); }
+  62.5% { transform: rotate(var(--motion-flex-10, 0deg)); }
+  68.75% { transform: rotate(var(--motion-flex-11, 0deg)); }
+  75% { transform: rotate(var(--motion-flex-12, 0deg)); }
+  81.25% { transform: rotate(var(--motion-flex-13, 0deg)); }
+  87.5% { transform: rotate(var(--motion-flex-14, 0deg)); }
+  93.75% { transform: rotate(var(--motion-flex-15, 0deg)); }
+  100% { transform: rotate(var(--motion-flex-00, 0deg)); }
+}
+
 /* ============================================================
    Edge stroke animation (CDT motionType, pathLength=1)
    ============================================================ */

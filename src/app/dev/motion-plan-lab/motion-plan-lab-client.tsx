@@ -33,6 +33,8 @@ type PreviewMode = "scene" | "actor";
 type LabPresetId = "run-right" | "wave-right" | "wave-left";
 type RunCyclePhaseId = "contact" | "down" | "pass" | "up";
 
+const RUN_CYCLE_PHASES: RunCyclePhaseId[] = ["contact", "down", "pass", "up"];
+
 const RUN_CYCLE_PHASE_SEEK: Record<RunCyclePhaseId, number> = {
   contact: 0,
   down: 0.25,
@@ -113,6 +115,7 @@ function buildRunningLabPreset({
       // 4-phase FULL cycle (2 steps): Contact(0%) → Down(25%) → Pass(50%) → Up(75%) → Contact(100%)
       // contact: 右足着地 (右前・左後) / down: 右足支持+左足振り上げ / pass: 左足着地 / up: 左足支持+右足振り上げ
       // 右プロファイル: +θ = CW、-θ = CCW (前方＝画面右)。contact↔pass で左右対称 → ループ時ワープなし。
+      // easing: linear — 滑らかさはレンダラ側で 4-phase → 16 点 cosine 細分化。
       operations: [
         {
           type: "pathMovement",
@@ -191,49 +194,50 @@ function buildRunningLabPreset({
           easing: "linear",
           keyframes: { contact: 25, down: 90, pass: 0, up: 45 },
         },
+        // 腕: leftArm を基準に、肩 action は同相で符号反転、肘 effect は半周期シフト（符号はそのまま）
         {
           type: "rotation",
           target: "human.leftArm",
-          degrees: 45,
+          degrees: 55,
           origin: "shoulder",
           role: "action",
           timing: { start: 0, duration: 1 },
           repeat: "loop",
           easing: "linear",
-          keyframes: { contact: -45, down: 0, pass: 45, up: 0 },
+          keyframes: { contact: -50, down: 0, pass: 85, up: 0 },
         },
         {
           type: "rotation",
           target: "human.leftArm",
-          degrees: 60,
+          degrees: 45,
           origin: "custom",
           role: "effect",
           timing: { start: 0, duration: 1 },
           repeat: "loop",
           easing: "linear",
-          keyframes: { contact: -40, down: -60, pass: -80, up: -60 },
+          keyframes: { contact: -35, down: -45, pass: -20, up: -45 },
         },
         {
           type: "rotation",
           target: "human.rightArm",
-          degrees: 45,
+          degrees: 55,
           origin: "shoulder",
           role: "action",
           timing: { start: 0, duration: 1 },
           repeat: "loop",
           easing: "linear",
-          keyframes: { contact: 45, down: 0, pass: -68, up: 0 },
+          keyframes: { contact: 50, down: 0, pass: -85, up: 0 },
         },
         {
           type: "rotation",
           target: "human.rightArm",
-          degrees: 60,
+          degrees: 45,
           origin: "custom",
           role: "effect",
           timing: { start: 0, duration: 1 },
           repeat: "loop",
           easing: "linear",
-          keyframes: { contact: -80, down: 60, pass: -78, up: 60 },
+          keyframes: { contact: -20, down: -45, pass: -35, up: -45 },
         },
       ],
     },
@@ -642,6 +646,9 @@ export function MotionPlanLabClient() {
   const [isLimbColorCodingEnabled, setIsLimbColorCodingEnabled] =
     useState(true);
   const [previewPhaseSeek, setPreviewPhaseSeek] = useState<number | null>(null);
+  const [runRightPhase, setRunRightPhase] = useState<RunCyclePhaseId | null>(
+    null,
+  );
   const [inspectedElement, setInspectedElement] =
     useState<DomInspection | null>(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState(true);
@@ -730,6 +737,7 @@ export function MotionPlanLabClient() {
 
     if (phaseParam && phaseParam in RUN_CYCLE_PHASE_SEEK) {
       setPreviewPhaseSeek(RUN_CYCLE_PHASE_SEEK[phaseParam]);
+      setRunRightPhase(phaseParam);
       setIsPreviewPaused(true);
       setPreviewMode("actor");
     }
@@ -785,6 +793,13 @@ export function MotionPlanLabClient() {
       }),
     );
     setMessage("管理画面確認用の「走る」プリセットを読み込みました。");
+  }
+
+  function setRunRightStaticPhase(phase: RunCyclePhaseId) {
+    setRunRightPhase(phase);
+    setPreviewPhaseSeek(RUN_CYCLE_PHASE_SEEK[phase]);
+    setIsPreviewPaused(true);
+    setPreviewMode("actor");
   }
 
   function applyRightHandWavePreset() {
@@ -1124,6 +1139,32 @@ export function MotionPlanLabClient() {
                   色分け {isLimbColorCodingEnabled ? "ON" : "OFF"}
                 </button>
               </div>
+
+              {previewMode === "actor" &&
+                normalizedPlan.asset.assetId === "human-runner-right" && (
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-[0.18em] text-slate-300">
+                      Phase
+                    </span>
+                    {RUN_CYCLE_PHASES.map((phase) => {
+                      const isActive = runRightPhase === phase;
+                      return (
+                        <button
+                          key={phase}
+                          type="button"
+                          onClick={() => setRunRightStaticPhase(phase)}
+                          className={`rounded-lg px-3 py-2 text-xs font-bold transition ${
+                            isActive
+                              ? "border-orange-300 bg-orange-500 text-slate-950"
+                              : "border-slate-700 bg-slate-950 text-slate-200 hover:bg-slate-800"
+                          }`}
+                        >
+                          {phase}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
 
               {previewMode === "scene" ? (
                 <ScenePreview
