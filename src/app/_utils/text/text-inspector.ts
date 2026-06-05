@@ -20,7 +20,7 @@ const extractTextFromPDF = async (filePath: string): Promise<string[]> => {
   try {
     // pdf-parseを使用（より高精度なテキスト抽出）
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const pdfParse = require("pdf-parse") as PDFParseFunction;
+    const pdfParse = require("pdf-parse/lib/pdf-parse.js") as PDFParseFunction;
     const dataBuffer = fs.readFileSync(filePath);
     const pdfData = await pdfParse(dataBuffer);
 

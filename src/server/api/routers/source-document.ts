@@ -10,7 +10,7 @@ import type { LocaleEnum } from "@/app/const/types";
 import { BUCKETS } from "@/app/_utils/supabase/const";
 import { storageUtils } from "@/app/_utils/supabase/supabase";
 import { env } from "@/env";
-import { getTextFromDocumentFile } from "@/app/_utils/text/text";
+import { resolveSourceDocumentPlainText } from "@/server/services/scan/resolve-source-document-plain-text";
 import type { PrismaClient } from "@prisma/client";
 import { formDocumentGraphForFrontend } from "@/app/_utils/kg/frontend-properties";
 import { extractRelevantSections } from "@/app/_utils/text/extract-relevant-sections";
@@ -61,10 +61,11 @@ export const getTextReference = async (
     throw new Error("Document not found");
   }
 
-  const fullText = await getTextFromDocumentFile(
-    document.url,
-    document.documentType,
-  );
+  const fullText = await resolveSourceDocumentPlainText({
+    url: document.url,
+    documentType: document.documentType,
+    ocrMetadata: document.ocrMetadata,
+  });
 
   console.log("fullText: ", fullText.slice(0, 20));
 
@@ -133,10 +134,11 @@ export const sourceDocumentRouter = createTRPCRouter({
           document.graph,
           ctx.session?.user.preferredLocale as LocaleEnum,
         ),
-        text: await getTextFromDocumentFile(
-          document.url,
-          document.documentType,
-        ),
+        text: await resolveSourceDocumentPlainText({
+          url: document.url,
+          documentType: document.documentType,
+          ocrMetadata: document.ocrMetadata,
+        }),
       };
     }),
 
