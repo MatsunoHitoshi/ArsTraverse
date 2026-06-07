@@ -183,6 +183,7 @@ Concept and flow diagrams for the writing workspace, story generation, auto-high
 - `docs/story-generation-text-mode-flow.md` — text-to-meta-graph pipeline
 - `docs/auto-annotation-information-reference-flow.md` — entity highlight ↔ graph focus
 - `docs/storytelling-scroll-viewer.md` — published article `ScrollStorytellingViewerUnified`, URL params, scroll guards
+- `docs/field-research-scan-flow.md` — mobile field scan (OCR, graph extraction, node matching)
 
 ## Project Structure
 
@@ -253,6 +254,7 @@ supabase/
 - [自動アノテーションと情報参照](./docs/auto-annotation-information-reference-flow.md)
 - [公開記事のストーリーテリングと URL クエリ](./docs/storytelling-public-viewer-and-urls.md)
 - [公開 Unified ビューのスクロール・ガード・レイアウト詳細](./docs/storytelling-scroll-viewer.md)
+- [フィールドリサーチ：現地スキャン（処理フロー）](./docs/field-research-scan-flow.md)
 
 ## Available Scripts
 
