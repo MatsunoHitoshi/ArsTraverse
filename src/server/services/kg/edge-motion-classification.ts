@@ -8,6 +8,16 @@ import {
   normalizeGenerativeMotionPlan,
   type MotionPlanContext,
 } from "@/app/const/generative-motion-plan";
+import {
+  validateHumanMotionPlan,
+  type DirectionHint,
+  type MotionPlanValidationResult,
+} from "@/app/const/motion-intent";
+import type { MotionStoryboardItem } from "./motion-llm-schema";
+
+/** CDT 分類 + generative motionPlan 用 OpenAI モデル（`EDGE_MOTION_LLM_MODEL` で上書き可） */
+export const EDGE_MOTION_LLM_MODEL =
+  process.env.EDGE_MOTION_LLM_MODEL ?? "gpt-5.4";
 
 export const CDT_VALID_CATEGORIES = new Set<string>([
   "PTRANS",
@@ -28,6 +38,8 @@ export type EdgeMotionClassificationInput = {
   sourceLabel?: string;
   targetName?: string;
   targetLabel?: string;
+  /** Scene-derived facing: right/left/auto. LLM must honor this over guessing. */
+  directionHint?: DirectionHint;
 };
 
 /** 1 LLM リクエストあたりの最大述語数（ユニーク述語） */
@@ -202,6 +214,12 @@ motionPlan must follow this whitelist:
 - Use asset.kind "human" ONLY when source.label or target.label is Person/Human/Character/Artist/Creator. If both endpoints are Organization/Event/Place/Project, NEVER use human.* targets.
 - For non-human endpoints, prefer edgeGlyph, transferredObject, sourceNode, targetNode, speechBubble, or thoughtBubble operations.
 - Never include SVG, JavaScript, CSS, HTML, or arbitrary code.
+- motionPlan.motionIntent (optional object): {"style":"run|fight|dance|wave|reach|speak|idle","energy":0.0..1.0,"dominantSide":"left|right|both|none","tempo":"slow|normal|fast","symmetry":"mirror|offset|asymmetric","contactEmphasis":true|false,"directionHint":"right|left|auto|unknown"}
+- When directionHint is provided on the input edge, copy it to motionPlan.motionIntent.directionHint and align dominantSide / body lean accordingly. Do NOT override directionHint with your own guess.
+- For run/locomotion with directionHint "right": use assetId "human-runner-right", preset "bodyPartMotion", prefer 4-phase rotation keyframes on legs/arms/body bob.
+- For fight (PROPEL / ATTACKED / FOUGHT): style "fight", impact easing on dominant arm, body lean, edgeGlyph scale pulse.
+- For dance (DANCED_WITH / PERFORMED): style "dance", stagger phase across limbs, loop repeat, body bob.
+- For wave (WAVED_TO): style "wave", one dominant arm with yoyo, subtle head rotation.
 
 Input edges:
 ${edges
@@ -209,6 +227,7 @@ ${edges
     JSON.stringify({
       edgeId: e.edgeId,
       predicate: e.edgeType,
+      directionHint: e.directionHint ?? "auto",
       source: { name: e.sourceName ?? "", label: e.sourceLabel ?? "" },
       target: { name: e.targetName ?? "", label: e.targetLabel ?? "" },
     }),
@@ -233,6 +252,28 @@ export function buildMotionConfigFromCategory(
       context,
     ),
   };
+}
+
+export function buildMotionConfigWithValidation(
+  category: CdtCategory,
+  predicate = "",
+  rawMotionPlan?: unknown,
+  context?: MotionPlanContext,
+): {
+  motionConfig: EdgeMotionConfig & { category: CdtCategory };
+  validation: MotionPlanValidationResult;
+} {
+  const motionConfig = buildMotionConfigFromCategory(
+    category,
+    predicate,
+    rawMotionPlan,
+    context,
+  );
+  const plan = motionConfig.generativeMotionPlan;
+  const validation = plan
+    ? validateHumanMotionPlan(plan, context)
+    : { ok: false, errors: [], warnings: [] };
+  return { motionConfig, validation };
 }
 
 export const CLASSIFY_EDGE_MOTION_SYSTEM_PROMPT = `You classify knowledge-graph edge predicates into Schank's Conceptual Dependency Theory (CDT).
@@ -288,7 +329,150 @@ Rules:
   - {"predicate":"PARTICIPATED_IN","source":{"label":"Person"},"target":{"label":"Event"}} => cdtCategory "MOVE", asset.kind "human". Sample contralateral walk: rotation human.leftLeg origin "hip" fromDegrees -22 toDegrees 22 phase 0, rotation human.rightArm origin "shoulder" fromDegrees -18 toDegrees 18 phase 0 (same phase 0 as leftLeg), rotation human.rightLeg origin "hip" fromDegrees 22 toDegrees -22 phase 0.5, rotation human.leftArm origin "shoulder" fromDegrees 18 toDegrees -18 phase 0.5 (same phase 0.5 as rightLeg), pathMovement human.body path "jitter" fromOffset -3 toOffset 3.
   - {"predicate":"HELD_AT","source":{"label":"Event"},"target":{"label":"Organization"}} => cdtCategory "PTRANS", asset.kind "object", use edgeGlyph path movement, no human.* targets.
   - {"predicate":"ATTACKED","source":{"label":"Person"},"target":{"label":"Person"}} => cdtCategory "PROPEL", asset.kind "human". Sample: rotation human.rightArm origin "shoulder" fromDegrees -30 toDegrees 48 easing "impact" (punch), rotation human.body origin "hip" fromDegrees -8 toDegrees 10 (lean), scale edgeGlyph from 0.75 to 1.45 easing "impact" (shock), rotation human.leftArm origin "shoulder" fromDegrees 14 toDegrees -14 (counter).
+  - {"predicate":"DANCED_WITH","directionHint":"auto","source":{"label":"Person"},"target":{"label":"Person"}} => cdtCategory "MOVE", motionIntent.style "dance", asset.kind "human". Sample: rotation human.leftArm phase 0, rotation human.rightArm phase 0.25, rotation human.leftLeg phase 0.5, pathMovement human.body jitter loop.
   - {"predicate":"SAID","source":{"label":"Person"},"target":{"label":"Person"}} => cdtCategory "SPEAK", asset.kind "human". Sample: appearance speechBubble mode "popIn", scale speechBubble from 0.85 to 1.18, rotation human.head origin "neck" fromDegrees -4 toDegrees 6, rotation human.rightArm origin "shoulder" fromDegrees 4 toDegrees 24.`;
+
+export const STAGE_A_SYSTEM_PROMPT = `You are a motion director for knowledge-graph edge animations.
+
+Classify each edge into exactly ONE CDT category and describe the performance in natural language.
+Do NOT output numeric angles, operations, or playback values.
+
+CDT categories (uppercase only): PTRANS, ATRANS, PROPEL, MOVE, INGEST, EXPEL, SPEAK, MENTAL
+NEVER use the predicate string as cdtCategory.
+
+motionIntent.style must be one of: run, fight, dance, wave, reach, speak, idle
+- run: locomotion (PARTICIPATED_IN, VISITED, MOVED_TO, etc. by a Person)
+- fight: conflict/force (ATTACKED, FOUGHT, PROPEL)
+- dance: DANCED_WITH, PERFORMED
+- wave: WAVED_TO, SHOOK
+- reach: giving/taking/hosting gestures (ATRANS, FEATURED_IN)
+- speak: SAID, ANNOUNCED, WROTE
+- idle: abstract/low-motion associations
+
+assetHint.kind rules:
+- "human" only when source.label or target.label is Person/Human/Character/Artist/Creator
+- Organization/Event/Place/Project endpoints: object, abstract, speech, thought, or concept
+
+When directionHint is provided on input, copy it to motionIntent.directionHint. Do NOT override.
+
+storyboard: 1-3 sentences describing the visible performance (Japanese or English).
+requiredParts: body parts or targets needed (e.g. rightArm, body, head, edgeGlyph).
+
+Examples:
+- PARTICIPATED_IN Person→Event, directionHint right → cdtCategory MOVE, style run, storyboard "作家が右向きにイベントへ走って参加する"
+- ATTACKED Person→Person → cdtCategory PROPEL, style fight, requiredParts ["rightArm","body","head","edgeGlyph"]
+- HOSTED Organization→Event → cdtCategory ATRANS, assetHint.kind abstract, requiredParts ["edgeGlyph"]`;
+
+export const STAGE_B_FIGHT_SYSTEM_PROMPT = `You convert a fight/impact storyboard into a motionPlan with concrete operations.
+
+Rules:
+- version "motion-plan/v1", rendererVersion ${GENERATIVE_MOTION_PLAN_RENDERER_VERSION}
+- preset "impactMotion", asset.kind "human" when storyboard implies a person actor
+- 3-8 operations with role and timing windows:
+  - anticipation (timing.start 0..0.15): wind-up, head tilt, counter-arm
+  - action (timing.start 0.12..0.35): dominant arm strike, body lean at hip
+  - effect (timing.start 0.2..0.45): edgeGlyph scale pulse with easing "impact"
+- Dominant arm: rotation origin "shoulder", fromDegrees around -30, toDegrees 40-55, easing "impact"
+- Body lean: rotation human.body origin "hip", fromDegrees -10 to 12
+- Counter arm: human.leftArm or human.rightArm opposite side, smaller amplitude
+- ALWAYS include human.head (subtle neck rotation)
+- Do NOT use keyframes (contact/down/pass/up). Use fromDegrees/toDegrees with yoyo or loop.
+- playback: loop true, yoyo true, durationMs 1200-1800, intensity 0.7-0.95
+- Never output SVG, CSS, or code`;
+
+export const STAGE_B_DANCE_SYSTEM_PROMPT = `You convert a dance storyboard into a motionPlan with concrete operations.
+
+Rules:
+- version "motion-plan/v1", rendererVersion ${GENERATIVE_MOTION_PLAN_RENDERER_VERSION}
+- preset "bodyPartMotion", asset.kind "human"
+- 4-8 operations with staggered phase across limbs (0, 0.25, 0.5, 0.75)
+- Include human.leftArm, human.rightArm, human.leftLeg or human.body bob
+- pathMovement human.body path "jitter" amplitude 3-5, repeat loop
+- rotation operations: repeat loop or yoyo, easing easeInOut
+- ALWAYS include human.head
+- Do NOT use keyframes. Use phase offsets and fromDegrees/toDegrees.
+- playback: loop true, durationMs 1400-2000, intensity 0.5-0.8`;
+
+export const STAGE_B_GENERAL_SYSTEM_PROMPT = `You convert a storyboard into a safe motionPlan with concrete operations.
+
+Rules:
+- version "motion-plan/v1", rendererVersion ${GENERATIVE_MOTION_PLAN_RENDERER_VERSION}
+- 3-6 operations using: pathMovement, scale, rotation, flip, appearance, disappearance
+- Targets: sourceNode, targetNode, edgeGlyph, transferredObject, speechBubble, thoughtBubble, human.*
+- human asset: at least 3 distinct human.* targets including human.head
+- wave: one dominant arm yoyo + subtle head rotation
+- speak: speechBubble appearance + scale, head + arm gesture
+- reach/ATRANS: dominant human.rightArm reach + counter leftArm
+- non-human: edgeGlyph/transferredObject path or scale, no human.* targets
+- Do NOT use keyframes (contact/down/pass/up)
+- playback.loop true unless appearance/disappearance lifecycle
+- Never output SVG, CSS, or code`;
+
+export const STAGE_B_NON_HUMAN_SYSTEM_PROMPT = `You convert a storyboard into a motionPlan for non-human assets.
+
+Rules:
+- version "motion-plan/v1", rendererVersion ${GENERATIVE_MOTION_PLAN_RENDERER_VERSION}
+- asset.kind: object, abstract, concept, speech, or thought (never human)
+- 3-5 operations on edgeGlyph, transferredObject, sourceNode, targetNode, speechBubble, thoughtBubble
+- No human.* operation targets
+- Prefer loop/yoyo for continuous edge effects
+- Never output SVG, CSS, or code`;
+
+export function buildStageAUserPrompt(
+  edges: EdgeMotionClassificationInput[],
+): string {
+  return `Classify each edge and produce a motion storyboard (no numeric angles).
+
+Input edges:
+${edges
+  .map((e) =>
+    JSON.stringify({
+      edgeId: e.edgeId,
+      predicate: e.edgeType,
+      directionHint: e.directionHint ?? "auto",
+      source: { name: e.sourceName ?? "", label: e.sourceLabel ?? "" },
+      target: { name: e.targetName ?? "", label: e.targetLabel ?? "" },
+    }),
+  )
+  .join("\n")}`;
+}
+
+export type StageBUserContext = {
+  edgeId: string;
+  predicate: string;
+  directionHint?: DirectionHint;
+  sourceName?: string;
+  sourceLabel?: string;
+  targetName?: string;
+  targetLabel?: string;
+};
+
+export function buildStageBUserPrompt(
+  storyboard: MotionStoryboardItem,
+  edge: StageBUserContext,
+): string {
+  return `Convert this storyboard into a complete motionPlan JSON.
+
+Edge:
+${JSON.stringify({
+  edgeId: edge.edgeId,
+  predicate: edge.predicate,
+  directionHint: edge.directionHint ?? "auto",
+  source: { name: edge.sourceName ?? "", label: edge.sourceLabel ?? "" },
+  target: { name: edge.targetName ?? "", label: edge.targetLabel ?? "" },
+})}
+
+Storyboard:
+${JSON.stringify({
+  cdtCategory: storyboard.cdtCategory,
+  motionIntent: storyboard.motionIntent,
+  storyboard: storyboard.storyboard,
+  requiredParts: storyboard.requiredParts,
+  assetHint: storyboard.assetHint,
+})}`;
+}
+
+export type { MotionStoryboardItem } from "./motion-llm-schema";
 
 export type UniquePredicateGroup = {
   representative: EdgeMotionClassificationInput;
@@ -312,6 +496,7 @@ export function buildUniquePredicateBatches(
       edge.sourceLabel?.trim().toUpperCase() ?? "",
       edge.targetName?.trim().toUpperCase() ?? "",
       edge.targetLabel?.trim().toUpperCase() ?? "",
+      edge.directionHint?.trim().toUpperCase() ?? "",
     ].join("|");
     if (!key) continue;
     const existing = byPredicate.get(key);
@@ -330,6 +515,7 @@ export function buildUniquePredicateBatches(
       sourceLabel: g.sourceLabel,
       targetName: g.targetName,
       targetLabel: g.targetLabel,
+      directionHint: g.directionHint,
     },
     edgeIds: g.edgeIds,
   }));

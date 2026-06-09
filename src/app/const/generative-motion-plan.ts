@@ -1,4 +1,12 @@
 import type { CdtCategory } from "./edge-cdt-animation";
+import {
+  applyDirectionHintToOperations,
+  mergeRunTemplateIntoPlan,
+  resolveMotionIntent,
+  type DirectionHint,
+  type MotionIntent,
+  type MotionStyle,
+} from "./motion-intent";
 
 export const GENERATIVE_MOTION_PLAN_RENDERER_VERSION = 8;
 
@@ -181,6 +189,8 @@ export type GenerativeMotionPlan = {
     easing: "linear" | "easeInOut" | "easeOut" | "impact" | "breath";
     intensity: number;
   };
+  /** Optional high-level choreography intent (LLM or server-inferred). */
+  motionIntent?: MotionIntent;
 };
 
 export type MotionPlanContext = {
@@ -188,6 +198,8 @@ export type MotionPlanContext = {
   sourceLabel?: string;
   targetName?: string;
   targetLabel?: string;
+  directionHint?: DirectionHint;
+  motionIntent?: MotionIntent;
 };
 
 const PRESET_SET = new Set<string>(MOTION_PRESETS);
@@ -1189,6 +1201,166 @@ function enrichSparseOperations(
  * left{Leg/Arm} と right{Leg/Arm} の phase が同じだと「行進」になってしまうため、
  * leftLeg + rightArm を同位相、rightLeg + leftArm を 0.5 位相にずらす。
  */
+const FIGHT_SUPPLEMENTS: MotionOperation[] = [
+  {
+    type: "rotation",
+    target: "human.rightArm",
+    degrees: 42,
+    fromDegrees: -30,
+    toDegrees: 48,
+    origin: "shoulder",
+    role: "action",
+    timing: { start: 0.08, duration: 0.55 },
+    repeat: "yoyo",
+    easing: "impact",
+  },
+  {
+    type: "rotation",
+    target: "human.leftArm",
+    degrees: 14,
+    fromDegrees: 14,
+    toDegrees: -14,
+    origin: "shoulder",
+    role: "anticipation",
+    timing: { start: 0, duration: 0.5 },
+    repeat: "yoyo",
+  },
+  {
+    type: "rotation",
+    target: "human.body",
+    degrees: 10,
+    fromDegrees: -8,
+    toDegrees: 10,
+    origin: "hip",
+    role: "anticipation",
+    timing: { start: 0.05, duration: 0.5 },
+    repeat: "yoyo",
+    easing: "impact",
+  },
+  {
+    type: "scale",
+    target: "edgeGlyph",
+    from: 0.75,
+    to: 1.45,
+    role: "effect",
+    timing: { start: 0.3, duration: 0.35 },
+    repeat: "yoyo",
+    easing: "impact",
+  },
+];
+
+const DANCE_SUPPLEMENTS: MotionOperation[] = [
+  {
+    type: "rotation",
+    target: "human.leftArm",
+    degrees: 28,
+    fromDegrees: -22,
+    toDegrees: 28,
+    origin: "shoulder",
+    role: "action",
+    timing: { start: 0, duration: 1 },
+    repeat: "loop",
+    easing: "easeInOut",
+  },
+  {
+    type: "rotation",
+    target: "human.rightArm",
+    degrees: 24,
+    fromDegrees: 24,
+    toDegrees: -24,
+    origin: "shoulder",
+    phase: 0.25,
+    role: "action",
+    timing: { start: 0, duration: 1 },
+    repeat: "loop",
+    easing: "easeInOut",
+  },
+  {
+    type: "rotation",
+    target: "human.leftLeg",
+    degrees: 18,
+    fromDegrees: -14,
+    toDegrees: 18,
+    origin: "hip",
+    phase: 0.5,
+    role: "action",
+    timing: { start: 0, duration: 1 },
+    repeat: "loop",
+  },
+  {
+    type: "pathMovement",
+    target: "human.body",
+    path: "jitter",
+    amplitude: 3,
+    fromOffset: -3,
+    toOffset: 3,
+    role: "anticipation",
+    timing: { start: 0, duration: 1 },
+    repeat: "loop",
+    easing: "easeInOut",
+  },
+];
+
+function supplementsForMotionStyle(style: MotionStyle): MotionOperation[] {
+  switch (style) {
+    case "fight":
+      return FIGHT_SUPPLEMENTS;
+    case "dance":
+      return DANCE_SUPPLEMENTS;
+    case "run":
+      return WALK_CYCLE_SUPPLEMENTS;
+    default:
+      return [];
+  }
+}
+
+/**
+ * fight / dance など複雑スタイル向けの choreography 補完。
+ * 既存の enrichHumanChoreography（3部位未満）と併用する。
+ */
+function enrichComplexMotionStyle(
+  operations: MotionOperation[],
+  assetKind: GenerativeMotionPlan["asset"]["kind"],
+  style: MotionStyle,
+  dominantSide: MotionIntent["dominantSide"] = "right",
+): MotionOperation[] {
+  if (assetKind !== "human") return operations;
+  if (style !== "fight" && style !== "dance") return operations;
+
+  const usedKeys = new Set(
+    operations.map((op) => `${op.type}:${op.target}:${op.role ?? "action"}`),
+  );
+  let supplements = supplementsForMotionStyle(style).filter(
+    (op) => !usedKeys.has(`${op.type}:${op.target}:${op.role ?? "action"}`),
+  );
+
+  if (style === "fight" && dominantSide === "left") {
+    supplements = supplements.map((op) => {
+      if (op.type !== "rotation" || op.target !== "human.rightArm") return op;
+      return {
+        ...op,
+        target: "human.leftArm",
+        fromDegrees: op.fromDegrees != null ? -op.fromDegrees : undefined,
+        toDegrees: op.toDegrees != null ? -op.toDegrees : undefined,
+      };
+    });
+  }
+
+  return [...operations, ...supplements].slice(0, 16);
+}
+
+function shouldUseRunTemplate(
+  style: MotionStyle,
+  assetKind: GenerativeMotionPlan["asset"]["kind"],
+  operationsCount: number,
+): boolean {
+  return (
+    style === "run" &&
+    assetKind === "human" &&
+    operationsCount < 8
+  );
+}
+
 function enforceContralateralGait(
   operations: MotionOperation[],
   category: CdtCategory,
@@ -1358,27 +1530,48 @@ export function normalizeGenerativeMotionPlan(
     : Array.isArray(raw.operations)
       ? raw.operations
       : [];
+  const motionIntent = resolveMotionIntent(raw, category, predicate, context);
+  const directionHint = context?.directionHint ?? motionIntent.directionHint ?? "auto";
+
   const assetIdRaw =
     typeof asset.assetId === "string" ? asset.assetId : undefined;
+
+  let normalizedOps = operationsForAssetKind(
+    operationsRaw
+      .map((operation) => normalizeMotionOperation(operation, "edgeGlyph"))
+      .filter((operation): operation is MotionOperation => operation != null)
+      .slice(0, 16),
+    assetKind,
+  );
+
+  if (
+    shouldUseRunTemplate(motionIntent.style, assetKind, normalizedOps.length)
+  ) {
+    const runMerged = mergeRunTemplateIntoPlan(
+      {
+        ...fallback,
+        semantic: { ...fallback.semantic, cdtCategory: category, predicate },
+      },
+      predicate,
+      { ...context, directionHint },
+    );
+    normalizedOps = runMerged.recipe.operations;
+  }
+
   const operations = ensureLoopingEdgeOps(
-    enforceContralateralGait(
-      ensureHumanHeadIsAlive(
-        enrichSparseOperations(
-          enrichHumanChoreography(
-            ensureHumanAssetHasBodyMotion(
-              operationsForAssetKind(
-                operationsRaw
-                  .map((operation) =>
-                    normalizeMotionOperation(operation, "edgeGlyph"),
-                  )
-                  .filter(
-                    (operation): operation is MotionOperation =>
-                      operation != null,
-                  )
-                  .slice(0, 16),
+    applyDirectionHintToOperations(
+      enforceContralateralGait(
+        ensureHumanHeadIsAlive(
+          enrichSparseOperations(
+            enrichComplexMotionStyle(
+              enrichHumanChoreography(
+                ensureHumanAssetHasBodyMotion(normalizedOps, assetKind),
                 assetKind,
+                category,
               ),
               assetKind,
+              motionIntent.style,
+              motionIntent.dominantSide,
             ),
             assetKind,
             category,
@@ -1386,14 +1579,19 @@ export function normalizeGenerativeMotionPlan(
           assetKind,
           category,
         ),
-        assetKind,
         category,
+        assetIdRaw ?? (motionIntent.style === "run" ? "human-runner-right" : undefined),
       ),
-      category,
-      assetIdRaw,
+      directionHint,
+      assetIdRaw ?? (motionIntent.style === "run" ? "human-runner-right" : undefined),
     ),
     assetKind,
   );
+
+  const resolvedAssetId =
+    motionIntent.style === "run" && assetKind === "human"
+      ? "human-runner-right"
+      : normalizeAssetIdForKind(asset.assetId, assetKind);
   const humanPartsFromOps = operations
     .map((operation) => operation.target)
     .filter((target): target is MotionTarget => target.startsWith("human."));
@@ -1480,7 +1678,7 @@ export function normalizeGenerativeMotionPlan(
     },
     asset: {
       kind: assetKind,
-      assetId: normalizeAssetIdForKind(asset.assetId, assetKind),
+      assetId: resolvedAssetId,
       ...(requiredParts && requiredParts.length > 0 ? { requiredParts } : {}),
     },
     recipe: {
@@ -1527,6 +1725,10 @@ export function normalizeGenerativeMotionPlan(
         0,
         1,
       ),
+    },
+    motionIntent: {
+      ...motionIntent,
+      directionHint,
     },
   };
 }

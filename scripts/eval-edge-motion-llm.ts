@@ -5,6 +5,7 @@ import {
   buildClassifyEdgeMotionUserPrompt,
   CLASSIFY_EDGE_MOTION_SYSTEM_PROMPT,
   buildMotionConfigFromCategory,
+  EDGE_MOTION_LLM_MODEL,
   type EdgeMotionClassificationInput,
 } from "../src/server/services/kg/edge-motion-classification";
 import { normalizeCdtCategory } from "../src/server/services/kg/edge-motion-classification";
@@ -121,7 +122,7 @@ function isRich(summary: ReturnType<typeof summarize>): boolean {
     console.error("OPENAI_API_KEY missing");
     process.exit(1);
   }
-  const llm = new ChatOpenAI({ temperature: 0, model: "gpt-4o-mini" });
+  const llm = new ChatOpenAI({ temperature: 0, model: EDGE_MOTION_LLM_MODEL });
 
   const userPrompt = buildClassifyEdgeMotionUserPrompt(SCENARIOS);
   const response = await llm.invoke([

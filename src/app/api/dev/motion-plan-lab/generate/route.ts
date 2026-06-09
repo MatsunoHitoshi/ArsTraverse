@@ -1,12 +1,16 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { NextResponse } from "next/server";
+import { normalizeDirectionHint } from "@/app/const/motion-intent";
 import {
   buildClassifyEdgeMotionUserPrompt,
-  buildMotionConfigFromCategory,
+  buildMotionConfigWithValidation,
   CLASSIFY_EDGE_MOTION_SYSTEM_PROMPT,
+  EDGE_MOTION_LLM_MODEL,
   normalizeCdtCategory,
   type EdgeMotionClassificationInput,
 } from "@/server/services/kg/edge-motion-classification";
+import { getEdgeMotionPipelineVersion } from "@/server/services/kg/motion-llm-schema";
+import { generateMotionPlanForEdge } from "@/server/services/kg/motion-llm-pipeline";
 
 type GenerateMotionPlanRequest = {
   edgeType?: string;
@@ -14,6 +18,7 @@ type GenerateMotionPlanRequest = {
   sourceLabel?: string;
   targetName?: string;
   targetLabel?: string;
+  directionHint?: string;
 };
 
 type LlmClassificationItem = {
@@ -79,6 +84,7 @@ export async function POST(request: Request) {
   const body = (await request
     .json()
     .catch(() => ({}))) as GenerateMotionPlanRequest;
+  const directionHint = normalizeDirectionHint(body.directionHint);
   const edge: EdgeMotionClassificationInput = {
     edgeId: "motion-plan-lab-edge",
     edgeType: cleanText(body.edgeType, "PARTICIPATED_IN").toUpperCase(),
@@ -86,12 +92,32 @@ export async function POST(request: Request) {
     sourceLabel: cleanText(body.sourceLabel, "Person"),
     targetName: cleanText(body.targetName, "イベントB"),
     targetLabel: cleanText(body.targetLabel, "Event"),
+    directionHint,
   };
 
   const llm = new ChatOpenAI({
     temperature: 0,
-    model: "gpt-4o-mini",
+    model: EDGE_MOTION_LLM_MODEL,
   });
+
+  const pipelineVersion = getEdgeMotionPipelineVersion();
+
+  if (pipelineVersion === 2) {
+    const result = await generateMotionPlanForEdge(llm, edge);
+    return NextResponse.json({
+      edge,
+      pipelineVersion: 2,
+      stageA: result.stageA,
+      stageB: {
+        source: result.stageBSource,
+        rawMotionPlanProvided: result.rawMotionPlanProvided,
+      },
+      cdtCategory: result.category,
+      motionConfig: result.motionConfig,
+      motionPlan: result.motionConfig.generativeMotionPlan,
+      validation: result.validation,
+    });
+  }
 
   const response = await llm.invoke([
     { role: "system", content: CLASSIFY_EDGE_MOTION_SYSTEM_PROMPT },
@@ -103,24 +129,28 @@ export async function POST(request: Request) {
     (entry) => entry.edgeId === edge.edgeId,
   );
   const category = normalizeCdtCategory(item?.cdtCategory, edge.edgeType);
-  const motionConfig = buildMotionConfigFromCategory(
+  const context = {
+    sourceName: edge.sourceName,
+    sourceLabel: edge.sourceLabel,
+    targetName: edge.targetName,
+    targetLabel: edge.targetLabel,
+    directionHint: edge.directionHint,
+  };
+  const { motionConfig, validation } = buildMotionConfigWithValidation(
     category,
     edge.edgeType,
     item?.motionPlan,
-    {
-      sourceName: edge.sourceName,
-      sourceLabel: edge.sourceLabel,
-      targetName: edge.targetName,
-      targetLabel: edge.targetLabel,
-    },
+    context,
   );
 
   return NextResponse.json({
     edge,
+    pipelineVersion: 1,
     cdtCategory: category,
     rawText,
     rawMotionPlanProvided: item?.motionPlan != null,
     motionConfig,
     motionPlan: motionConfig.generativeMotionPlan,
+    validation,
   });
 }

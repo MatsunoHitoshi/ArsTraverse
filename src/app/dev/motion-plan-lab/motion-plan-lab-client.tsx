@@ -14,18 +14,121 @@ import {
   type MotionOperation,
 } from "@/app/const/generative-motion-plan";
 import {
+  DIRECTION_HINTS,
+  validateHumanMotionPlan,
+  type DirectionHint,
+  type MotionIntent,
+  type MotionPlanValidationResult,
+} from "@/app/const/motion-intent";
+import {
   EdgeSemanticMotionScene,
   GenerativeMotionPictogramRenderer,
 } from "@/app/_components/d3/force/storytelling-graph/components/edge-semantic-pictogram";
 
 type JsonRecord = Record<string, unknown>;
 
+type PipelineStoryboard = {
+  edgeId: string;
+  cdtCategory: string;
+  motionIntent: MotionIntent;
+  storyboard: string;
+  requiredParts: string[];
+  assetHint: { kind: string; assetId?: string };
+};
+
 type LlmGenerateResponse = {
+  pipelineVersion?: 1 | 2;
+  stageA?: PipelineStoryboard;
+  stageB?: { source: "llm" | "template" | "fallback"; rawMotionPlanProvided?: boolean };
   cdtCategory?: CdtCategory;
   rawText?: string;
   rawMotionPlanProvided?: boolean;
   motionPlan?: GenerativeMotionPlan;
+  validation?: MotionPlanValidationResult;
   error?: string;
+};
+
+type LabScenarioId =
+  | "run-right"
+  | "run-left"
+  | "fight-impact"
+  | "fight-defend"
+  | "dance-rhythm"
+  | "wave-greet";
+
+const LAB_SCENARIOS: Record<
+  LabScenarioId,
+  {
+    label: string;
+    predicate: string;
+    sourceName: string;
+    sourceLabel: string;
+    targetName: string;
+    targetLabel: string;
+    directionHint: DirectionHint;
+    category: CdtCategory;
+  }
+> = {
+  "run-right": {
+    label: "走る（右）",
+    predicate: "PARTICIPATED_IN",
+    sourceName: "作家A",
+    sourceLabel: "Person",
+    targetName: "イベントB",
+    targetLabel: "Event",
+    directionHint: "right",
+    category: "MOVE",
+  },
+  "run-left": {
+    label: "走る（左）",
+    predicate: "VISITED",
+    sourceName: "作家A",
+    sourceLabel: "Person",
+    targetName: "美術館",
+    targetLabel: "Place",
+    directionHint: "left",
+    category: "PTRANS",
+  },
+  "fight-impact": {
+    label: "戦う（攻撃）",
+    predicate: "ATTACKED",
+    sourceName: "武士A",
+    sourceLabel: "Person",
+    targetName: "武士B",
+    targetLabel: "Person",
+    directionHint: "right",
+    category: "PROPEL",
+  },
+  "fight-defend": {
+    label: "戦う（防御）",
+    predicate: "FOUGHT",
+    sourceName: "武士B",
+    sourceLabel: "Person",
+    targetName: "武士A",
+    targetLabel: "Person",
+    directionHint: "left",
+    category: "PROPEL",
+  },
+  "dance-rhythm": {
+    label: "踊る",
+    predicate: "DANCED_WITH",
+    sourceName: "舞者A",
+    sourceLabel: "Person",
+    targetName: "舞者B",
+    targetLabel: "Person",
+    directionHint: "auto",
+    category: "MOVE",
+  },
+  "wave-greet": {
+    label: "手を振る",
+    predicate: "WAVED_TO",
+    sourceName: "作家A",
+    sourceLabel: "Person",
+    targetName: "観客",
+    targetLabel: "Person",
+    directionHint: "right",
+    category: "MOVE",
+  },
 };
 
 type PreviewMode = "scene" | "actor";
@@ -87,9 +190,8 @@ function buildRunningLabPreset({
     semantic: {
       cdtCategory: "MOVE",
       predicate,
-      intent: `${sourceName || "actor"} runs to the right toward ${
-        targetName || "target"
-      }`,
+      intent: `${sourceName || "actor"} runs to the right toward ${targetName || "target"
+        }`,
       confidence: 0.95,
     },
     participants: {
@@ -100,7 +202,7 @@ function buildRunningLabPreset({
     },
     asset: {
       kind: "human",
-            assetId: "human-runner-right",
+      assetId: "human-runner-right",
       requiredParts: [
         "human.body",
         "human.head",
@@ -411,9 +513,8 @@ function buildLeftHandWaveLabPreset({
     semantic: {
       cdtCategory: "MOVE",
       predicate,
-      intent: `${sourceName || "actor"} raises the left hand and waves to ${
-        targetName || "target"
-      }`,
+      intent: `${sourceName || "actor"} raises the left hand and waves to ${targetName || "target"
+        }`,
       confidence: 0.95,
     },
     participants: {
@@ -655,6 +756,15 @@ export function MotionPlanLabClient() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [rawLlmText, setRawLlmText] = useState("");
+  const [pipelineVersion, setPipelineVersion] = useState<1 | 2 | null>(null);
+  const [stageAStoryboard, setStageAStoryboard] =
+    useState<PipelineStoryboard | null>(null);
+  const [stageBSource, setStageBSource] = useState<
+    "llm" | "template" | "fallback" | null
+  >(null);
+  const [directionHint, setDirectionHint] = useState<DirectionHint>("auto");
+  const [validationResult, setValidationResult] =
+    useState<MotionPlanValidationResult | null>(null);
   const [planText, setPlanText] = useState(() =>
     formatJson(
       buildDefaultGenerativeMotionPlan("MOVE", DEFAULT_CONTEXT.predicate, {
@@ -668,15 +778,25 @@ export function MotionPlanLabClient() {
 
   const parsedPlan = useMemo(() => parseJsonRecord(planText), [planText]);
   const parseError = parsedPlan ? null : "JSONとして解釈できません";
+  const planContext = useMemo(
+    () => ({
+      sourceName,
+      sourceLabel,
+      targetName,
+      targetLabel,
+      directionHint,
+    }),
+    [directionHint, sourceLabel, sourceName, targetLabel, targetName],
+  );
+
   const normalizedPlan = useMemo(
-    () =>
-      normalizeGenerativeMotionPlan(parsedPlan, category, predicate, {
-        sourceName,
-        sourceLabel,
-        targetName,
-        targetLabel,
-      }),
-    [category, parsedPlan, predicate, sourceLabel, sourceName, targetLabel, targetName],
+    () => normalizeGenerativeMotionPlan(parsedPlan, category, predicate, planContext),
+    [category, parsedPlan, planContext, predicate],
+  );
+
+  const localValidation = useMemo(
+    () => validateHumanMotionPlan(normalizedPlan, planContext),
+    [normalizedPlan, planContext],
   );
   const config = useMemo<EdgeMotionConfig>(
     () => ({
@@ -891,9 +1011,28 @@ export function MotionPlanLabClient() {
     setPlanText(formatJson(base));
   }
 
+  function applyLabScenario(scenarioId: LabScenarioId) {
+    const scenario = LAB_SCENARIOS[scenarioId];
+    setPredicate(scenario.predicate);
+    setSourceName(scenario.sourceName);
+    setSourceLabel(scenario.sourceLabel);
+    setTargetName(scenario.targetName);
+    setTargetLabel(scenario.targetLabel);
+    setDirectionHint(scenario.directionHint);
+    setCategory(scenario.category);
+    setPreviewMode("actor");
+    setSelectedOperationIndex(0);
+    setValidationResult(null);
+    setMessage(`シナリオ「${scenario.label}」を読み込みました。LLM生成で試せます。`);
+  }
+
   async function requestLlmSample() {
     setIsGenerating(true);
     setMessage(null);
+    setValidationResult(null);
+    setStageAStoryboard(null);
+    setStageBSource(null);
+    setPipelineVersion(null);
     try {
       const response = await fetch("/api/dev/motion-plan-lab/generate", {
         method: "POST",
@@ -904,6 +1043,7 @@ export function MotionPlanLabClient() {
           sourceLabel,
           targetName,
           targetLabel,
+          directionHint,
         }),
       });
       const json = (await response.json()) as LlmGenerateResponse;
@@ -913,11 +1053,31 @@ export function MotionPlanLabClient() {
       if (json.cdtCategory) setCategory(json.cdtCategory);
       if (json.motionPlan) replacePlan(json.motionPlan);
       setRawLlmText(json.rawText ?? "");
+      setValidationResult(json.validation ?? null);
+      setPipelineVersion(json.pipelineVersion ?? 1);
+      setStageAStoryboard(json.stageA ?? null);
+      setStageBSource(json.stageB?.source ?? null);
       setSelectedOperationIndex(0);
+      const validationNote =
+        json.validation && !json.validation.ok
+          ? ` 検証警告: ${json.validation.errors.length} errors, ${json.validation.warnings.length} warnings.`
+          : json.validation?.warnings.length
+            ? ` 検証: ${json.validation.warnings.length} warnings.`
+            : "";
+      const pipelineNote =
+        json.pipelineVersion === 2
+          ? ` Pipeline v2 / Stage B: ${json.stageB?.source ?? "unknown"}.`
+          : "";
+      const motionProvided =
+        json.pipelineVersion === 2
+          ? json.stageB?.rawMotionPlanProvided
+          : json.rawMotionPlanProvided;
       setMessage(
-        json.rawMotionPlanProvided
+        (motionProvided
           ? "LLM生成結果を読み込みました。"
-          : "LLM分類は成功しましたが motionPlan はfallbackで補完されました。",
+          : "LLM分類は成功しましたが motionPlan はfallbackで補完されました。") +
+        pipelineNote +
+        validationNote,
       );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
@@ -963,6 +1123,24 @@ export function MotionPlanLabClient() {
               <Input label="predicate / edgeType" value={predicate} onChange={setPredicate} />
               <Input label="targetName" value={targetName} onChange={setTargetName} />
               <Input label="targetLabel" value={targetLabel} onChange={setTargetLabel} />
+
+              <label className="flex flex-col gap-1 text-sm">
+                <span className="text-slate-300">directionHint</span>
+                <select
+                  value={directionHint}
+                  onChange={(event) =>
+                    setDirectionHint(event.target.value as DirectionHint)
+                  }
+                  className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
+                  data-testid="motion-lab-direction-hint"
+                >
+                  {DIRECTION_HINTS.map((hint) => (
+                    <option key={hint} value={hint}>
+                      {hint}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
               <label className="flex flex-col gap-1 text-sm">
                 <span className="text-slate-300">CDT category</span>
@@ -1024,6 +1202,25 @@ export function MotionPlanLabClient() {
                 <p className="mt-2 text-xs leading-relaxed text-orange-100/80">
                   大きい脚振り・強い腕振り・体幹前傾・全身bobを組み合わせた確認用プリセットです。
                 </p>
+              </div>
+
+              <div className="mt-3 rounded-xl border border-sky-400/30 bg-sky-500/10 p-3">
+                <div className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-sky-200">
+                  LLM Test Scenarios
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {(Object.keys(LAB_SCENARIOS) as LabScenarioId[]).map((id) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => applyLabScenario(id)}
+                      className="rounded-lg border border-sky-300/50 bg-sky-500/15 px-2 py-2 text-xs font-semibold text-sky-100 hover:bg-sky-500/25"
+                      data-testid={`motion-lab-scenario-${id}`}
+                    >
+                      {LAB_SCENARIOS[id].label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <button
@@ -1153,11 +1350,10 @@ export function MotionPlanLabClient() {
                           key={phase}
                           type="button"
                           onClick={() => setRunRightStaticPhase(phase)}
-                          className={`rounded-lg px-3 py-2 text-xs font-bold transition ${
-                            isActive
+                          className={`rounded-lg px-3 py-2 text-xs font-bold transition ${isActive
                               ? "border-orange-300 bg-orange-500 text-slate-950"
                               : "border-slate-700 bg-slate-950 text-slate-200 hover:bg-slate-800"
-                          }`}
+                            }`}
                         >
                           {phase}
                         </button>
@@ -1233,6 +1429,50 @@ export function MotionPlanLabClient() {
                 {formatJson(normalizedPlan)}
               </pre>
             </Panel>
+
+            <Panel title="Validation">
+              <ValidationPanel
+                result={validationResult ?? localValidation}
+                motionIntent={normalizedPlan.motionIntent}
+              />
+            </Panel>
+
+            {(stageAStoryboard ?? pipelineVersion === 2) && (
+              <Panel title="Pipeline / Storyboard">
+                <div
+                  className="space-y-2 text-xs"
+                  data-testid="motion-lab-storyboard"
+                >
+                  {pipelineVersion != null && (
+                    <div className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-300">
+                      Pipeline v{pipelineVersion}
+                      {stageBSource
+                        ? ` — Stage B: ${stageBSource}`
+                        : ""}
+                    </div>
+                  )}
+                  {stageAStoryboard && (
+                    <>
+                      <p className="rounded-lg border border-orange-400/30 bg-orange-500/10 px-3 py-2 text-orange-50">
+                        {stageAStoryboard.storyboard}
+                      </p>
+                      <pre className="overflow-auto rounded-lg border border-slate-800 bg-slate-950 p-2 text-slate-300">
+                        {JSON.stringify(
+                          {
+                            cdtCategory: stageAStoryboard.cdtCategory,
+                            motionIntent: stageAStoryboard.motionIntent,
+                            requiredParts: stageAStoryboard.requiredParts,
+                            assetHint: stageAStoryboard.assetHint,
+                          },
+                          null,
+                          2,
+                        )}
+                      </pre>
+                    </>
+                  )}
+                </div>
+              </Panel>
+            )}
 
             {rawLlmText && (
               <Panel title="Raw LLM Response">
@@ -1495,6 +1735,49 @@ function InfoChip({ label, value }: { label: string; value: string }) {
       <div className="mt-1 break-all font-mono text-xs text-slate-200">
         {value}
       </div>
+    </div>
+  );
+}
+
+function ValidationPanel({
+  result,
+  motionIntent,
+}: {
+  result: MotionPlanValidationResult;
+  motionIntent?: MotionIntent;
+}) {
+  return (
+    <div className="space-y-2 text-xs" data-testid="motion-lab-validation">
+      <div
+        className={`rounded-lg px-3 py-2 font-semibold ${result.ok
+            ? "border border-emerald-400/40 bg-emerald-500/10 text-emerald-100"
+            : "border border-red-400/40 bg-red-500/10 text-red-100"
+          }`}
+      >
+        {result.ok ? "OK" : "Issues detected"} — errors: {result.errors.length},
+        warnings: {result.warnings.length}
+      </div>
+      {motionIntent && (
+        <pre className="overflow-auto rounded-lg border border-slate-800 bg-slate-950 p-2 text-slate-300">
+          {JSON.stringify(motionIntent, null, 2)}
+        </pre>
+      )}
+      {result.errors.map((issue) => (
+        <div
+          key={`err-${issue.code}`}
+          className="rounded-lg border border-red-400/30 bg-red-500/10 px-2 py-1 text-red-100"
+        >
+          [{issue.code}] {issue.message}
+        </div>
+      ))}
+      {result.warnings.map((issue) => (
+        <div
+          key={`warn-${issue.code}`}
+          className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-amber-100"
+        >
+          [{issue.code}] {issue.message}
+        </div>
+      ))}
     </div>
   );
 }

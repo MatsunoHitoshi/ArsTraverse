@@ -7,10 +7,13 @@ import {
   buildMotionConfigFromCategory,
   buildUniquePredicateBatches,
   CLASSIFY_EDGE_MOTION_SYSTEM_PROMPT,
+  EDGE_MOTION_LLM_MODEL,
   inferCdtCategoryFromPredicate,
   normalizeCdtCategory,
   type EdgeMotionClassificationInput,
 } from "./edge-motion-classification";
+import { getEdgeMotionPipelineVersion } from "./motion-llm-schema";
+import { classifyPredicateBatchWithPipeline } from "./motion-llm-pipeline";
 
 export type ClassifyEdgeMotionInput = {
   topicSpaceId: string;
@@ -291,6 +294,9 @@ function logGeneratedMotionPlan({
   category,
   motionConfig,
   rawMotionPlanProvided,
+  pipelineVersion,
+  storyboard,
+  stageBSource,
 }: {
   source: "llm" | "fallback";
   topicSpaceId: string;
@@ -299,6 +305,9 @@ function logGeneratedMotionPlan({
   category: EdgeMotionConfig["category"];
   motionConfig: EdgeMotionConfig;
   rawMotionPlanProvided: boolean;
+  pipelineVersion?: 1 | 2;
+  storyboard?: string;
+  stageBSource?: string;
 }) {
   const plan = motionConfig.generativeMotionPlan;
   if (!plan) return;
@@ -308,6 +317,9 @@ function logGeneratedMotionPlan({
     JSON.stringify(
       {
         source,
+        pipelineVersion: pipelineVersion ?? 1,
+        stageBSource,
+        storyboard,
         topicSpaceId,
         edgeIds,
         representative: {
@@ -381,7 +393,7 @@ export async function classifyEdgeMotion(
   if (uncachedEdges.length > 0) {
     const llm = new ChatOpenAI({
       temperature: 0,
-      model: "gpt-4o-mini",
+      model: EDGE_MOTION_LLM_MODEL,
     });
 
     const predicateBatches = buildUniquePredicateBatches(uncachedEdges);
@@ -389,38 +401,66 @@ export async function classifyEdgeMotion(
       uncachedEdges.map((e) => [e.edgeId, e.edgeType] as const),
     );
 
+    const pipelineVersion = getEdgeMotionPipelineVersion();
+
     for (const batch of predicateBatches) {
       const representatives = batch.map((g) => g.representative);
 
       let llmItems: LlmClassificationItem[] = [];
-      try {
-        llmItems = await classifyPredicateBatchWithLlm(llm, representatives);
-      } catch (error) {
-        console.error("Failed to parse CDT classification JSON", error);
+      let pipelineResults: Awaited<
+        ReturnType<typeof classifyPredicateBatchWithPipeline>
+      > = [];
+
+      if (pipelineVersion === 2) {
+        try {
+          pipelineResults = await classifyPredicateBatchWithPipeline(
+            llm,
+            representatives,
+          );
+        } catch (error) {
+          console.error("[kg.classifyEdgeMotion.pipelineV2.failed]", error);
+        }
+      } else {
+        try {
+          llmItems = await classifyPredicateBatchWithLlm(llm, representatives);
+        } catch (error) {
+          console.error("Failed to parse CDT classification JSON", error);
+        }
       }
 
       for (const group of batch) {
         const { representative, edgeIds } = group;
-        const category = resolveCategoryForEdge(
-          representative.edgeId,
-          representative.edgeType,
-          llmItems,
+        const pipelineItem = pipelineResults.find(
+          (item) => item.edgeId === representative.edgeId,
         );
+
+        const category = pipelineItem
+          ? pipelineItem.category
+          : resolveCategoryForEdge(
+              representative.edgeId,
+              representative.edgeType,
+              llmItems,
+            );
         const llmItem = llmItems.find(
           (item) => item.edgeId === representative.edgeId,
         );
-        const rawMotionPlanProvided = llmItem?.motionPlan != null;
-        const motionConfig = buildMotionConfigFromCategory(
-          category,
-          representative.edgeType,
-          llmItem?.motionPlan,
-          {
-            sourceName: representative.sourceName,
-            sourceLabel: representative.sourceLabel,
-            targetName: representative.targetName,
-            targetLabel: representative.targetLabel,
-          },
-        );
+        const rawMotionPlanProvided = pipelineItem
+          ? pipelineItem.rawMotionPlanProvided
+          : llmItem?.motionPlan != null;
+        const motionConfig = pipelineItem
+          ? pipelineItem.motionConfig
+          : buildMotionConfigFromCategory(
+              category,
+              representative.edgeType,
+              llmItem?.motionPlan,
+              {
+                sourceName: representative.sourceName,
+                sourceLabel: representative.sourceLabel,
+                targetName: representative.targetName,
+                targetLabel: representative.targetLabel,
+                directionHint: representative.directionHint,
+              },
+            );
         logGeneratedMotionPlan({
           source: rawMotionPlanProvided ? "llm" : "fallback",
           topicSpaceId,
@@ -429,6 +469,9 @@ export async function classifyEdgeMotion(
           category,
           motionConfig,
           rawMotionPlanProvided,
+          pipelineVersion,
+          storyboard: pipelineItem?.stageA?.storyboard,
+          stageBSource: pipelineItem?.stageBSource,
         });
 
         for (const edgeId of edgeIds) {
@@ -473,6 +516,7 @@ export async function classifyEdgeMotion(
           sourceLabel: edge.sourceLabel,
           targetName: edge.targetName,
           targetLabel: edge.targetLabel,
+          directionHint: edge.directionHint,
         },
       );
       logGeneratedMotionPlan({
@@ -527,6 +571,7 @@ export async function classifyEdgeMotion(
             sourceLabel: e.sourceLabel,
             targetName: e.targetName,
             targetLabel: e.targetLabel,
+            directionHint: e.directionHint,
           });
       return {
         edgeId: e.edgeId,
