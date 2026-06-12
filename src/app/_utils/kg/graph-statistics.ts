@@ -41,7 +41,7 @@ export function calculateGraphStatistics(graph: GraphDocumentForFrontend) {
       ? (2 * graphLinks.length) / (graphNodes.length * (graphNodes.length - 1))
       : 0;
 
-  const maxDegree = degreeValues.length > 0 ? Math.max(...degreeValues) : 0;
+  const maxDegree = degreeValues.reduce((max, d) => Math.max(max, d), 0);
 
   const degreeVariance =
     graphNodes.length > 0
