@@ -40,7 +40,13 @@ import {
   runCreateSourceDocumentWithGraphData,
 } from "./source-document";
 import { runAttachDocuments, runDetachDocument } from "./topic-space";
-import { classifyEdgeMotion as runClassifyEdgeMotion } from "@/server/services/kg/classify-edge-motion.service";
+import {
+  generateSkeletonMotion as runGenerateSkeletonMotion,
+  generateMotionComparison as runGenerateMotionComparison,
+  generateFloodDiffusion as runGenerateFloodDiffusion,
+  listSkeletonMotionCache as runListSkeletonMotionCache,
+  getMotionComparisonFromCache as runGetMotionComparisonFromCache,
+} from "@/server/services/kg/skeleton-motion.service";
 
 // ---------------------------------------------------------------------------
 // generateMetaGraphFromText 用ヘルパー関数
@@ -2821,25 +2827,106 @@ Order ${idx + 1}: Community ${c.communityId}
     }),
 
   /**
-   * エッジ述語をCDT（概念依存理論）の8カテゴリに分類し、アニメーション設定を返す。
-   * DBキャッシュを活用し、未分類のエッジのみLLMに問い合わせる。
-   * DancingBoard (IUI 2025) の Appendix A プロンプト構造を参考にしている。
+   * T2Mモデル（MoMask/OmniControl）でエッジの関係性テキストから骨格モーションJSONを生成する。
+   * DBキャッシュを活用し、同一プロンプト+モデルの組み合わせはキャッシュから返す。
    */
-  classifyEdgeMotion: protectedProcedure
+  generateSkeletonMotion: protectedProcedure
     .input(
       z.object({
         topicSpaceId: z.string(),
-        edges: z.array(
-          z.object({
-            edgeId: z.string(),
-            edgeType: z.string(),
-            sourceName: z.string().optional(),
-            sourceLabel: z.string().optional(),
-            targetName: z.string().optional(),
-            targetLabel: z.string().optional(),
-          }),
-        ),
+        edgeId: z.string(),
+        text: z.string().min(1).max(500),
+        numFrames: z.number().int().min(10).max(300).optional(),
+        model: z.enum(["momask", "omnicontrol"]).optional(),
+        spatialControl: z.object({
+          startPosition: z.object({ x: z.number(), y: z.number() }),
+          endPosition: z.object({ x: z.number(), y: z.number() }),
+          controlJoint: z.enum(["pelvis", "left_foot", "right_foot"]),
+        }).optional(),
+        seed: z.number().int().optional(),
+        forceRegenerate: z.boolean().optional(),
       }),
     )
-    .mutation(async ({ ctx, input }) => runClassifyEdgeMotion(ctx.db, input)),
+    .mutation(async ({ ctx, input }) =>
+      runGenerateSkeletonMotion(ctx.db, input),
+    ),
+
+  /**
+   * MoMask / OmniControl / FloodDiffusion(single) を同一プロンプトで並列実行し比較結果を返す。
+   */
+  generateMotionComparison: protectedProcedure
+    .input(
+      z.object({
+        topicSpaceId: z.string(),
+        edgeId: z.string(),
+        text: z.string().min(1).max(500),
+        numFrames: z.number().int().min(10).max(300).optional(),
+        spatialControl: z.object({
+          startPosition: z.object({ x: z.number(), y: z.number() }),
+          endPosition: z.object({ x: z.number(), y: z.number() }),
+          controlJoint: z.enum(["pelvis", "left_foot", "right_foot"]),
+        }).optional(),
+        seed: z.number().int().optional(),
+        forceRegenerate: z.boolean().optional(),
+        floodLength: z.number().int().min(5).max(120).optional(),
+        floodSmoothingAlpha: z.number().min(0).max(1).optional(),
+        floodNumDenoiseSteps: z.number().int().min(5).max(100).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      runGenerateMotionComparison(ctx.db, input),
+    ),
+
+  /** FloodDiffusion 単独生成（single / streaming） */
+  generateFloodDiffusion: protectedProcedure
+    .input(
+      z.object({
+        topicSpaceId: z.string(),
+        edgeId: z.string(),
+        mode: z.enum(["single", "streaming"]),
+        text: z.string().min(1).max(500).optional(),
+        length: z.number().int().min(5).max(120).optional(),
+        segments: z
+          .array(
+            z.object({
+              text: z.string().min(1).max(500),
+              endToken: z.number().int().min(1).max(120),
+            }),
+          )
+          .optional(),
+        numDenoiseSteps: z.number().int().min(5).max(100).optional(),
+        smoothingAlpha: z.number().min(0).max(1).optional(),
+        seed: z.number().int().optional(),
+        forceRegenerate: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      runGenerateFloodDiffusion(ctx.db, input),
+    ),
+
+  /** 比較ラボ等: 骨格モーションキャッシュの一覧（軽量メタデータのみ） */
+  listSkeletonMotionCache: protectedProcedure
+    .input(
+      z.object({
+        topicSpaceId: z.string(),
+        edgeId: z.string().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) =>
+      runListSkeletonMotionCache(ctx.db, input),
+    ),
+
+  /** キャッシュから MoMask + OmniControl の比較ペアを読み込む */
+  getMotionComparisonFromCache: protectedProcedure
+    .input(
+      z.object({
+        topicSpaceId: z.string(),
+        edgeId: z.string(),
+        promptText: z.string().min(1),
+        numFrames: z.number().int().min(10).max(300),
+      }),
+    )
+    .query(async ({ ctx, input }) =>
+      runGetMotionComparisonFromCache(ctx.db, input),
+    ),
 };

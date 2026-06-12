@@ -9,6 +9,8 @@ import {
   inferMotionStyle,
   mergeRunTemplateIntoPlan,
   validateHumanMotionPlan,
+  type MotionIntent,
+  type MotionPlanValidationResult,
   type MotionStyle,
 } from "@/app/const/motion-intent";
 import {
@@ -25,6 +27,7 @@ import {
   type EdgeMotionClassificationInput,
 } from "./edge-motion-classification";
 import {
+  apiMotionIntent,
   stripNulls,
   withStageAStructuredOutput,
   withStageBStructuredOutput,
@@ -37,7 +40,7 @@ export type PipelineEdgeResult = {
   edgeId: string;
   category: CdtCategory;
   motionConfig: EdgeMotionConfig & { category: CdtCategory };
-  validation: ReturnType<typeof validateHumanMotionPlan>;
+  validation: MotionPlanValidationResult;
   stageA?: MotionStoryboardItem;
   stageBSource: StageBSource;
   rawMotionPlanProvided: boolean;
@@ -81,19 +84,19 @@ function buildFallbackStoryboard(
   return {
     edgeId: edge.edgeId,
     cdtCategory: category,
-    motionIntent: {
+    motionIntent: apiMotionIntent({
       style,
       energy: 0.7,
       dominantSide: directionHint === "left" ? "left" : "right",
       directionHint,
-    },
+    }),
     storyboard: `${edge.sourceName ?? "source"} と ${edge.targetName ?? "target"} の関係 (${edge.edgeType}) を表現する`,
     requiredParts: isHuman
       ? ["head", "body", style === "fight" ? "rightArm" : "leftArm"]
       : ["edgeGlyph"],
     assetHint: {
       kind: isHuman ? "human" : "abstract",
-      assetId: style === "run" && isHuman ? "human-runner-right" : undefined,
+      assetId: style === "run" && isHuman ? "human-runner-right" : null,
     },
   };
 }
@@ -207,7 +210,9 @@ export function buildMotionPlanFromPipeline(
           easing: "linear",
           intensity: 1,
         },
-        motionIntent: storyboard.motionIntent,
+        motionIntent: stripNulls(
+          storyboard.motionIntent,
+        ) as MotionIntent,
       },
       edge.edgeType,
       context,

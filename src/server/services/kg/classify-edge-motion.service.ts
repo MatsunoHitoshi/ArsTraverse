@@ -13,7 +13,10 @@ import {
   type EdgeMotionClassificationInput,
 } from "./edge-motion-classification";
 import { getEdgeMotionPipelineVersion } from "./motion-llm-schema";
-import { classifyPredicateBatchWithPipeline } from "./motion-llm-pipeline";
+import {
+  classifyPredicateBatchWithPipeline,
+  type PipelineEdgeResult,
+} from "./motion-llm-pipeline";
 
 export type ClassifyEdgeMotionInput = {
   topicSpaceId: string;
@@ -401,15 +404,13 @@ export async function classifyEdgeMotion(
       uncachedEdges.map((e) => [e.edgeId, e.edgeType] as const),
     );
 
-    const pipelineVersion = getEdgeMotionPipelineVersion();
+    const pipelineVersion: 1 | 2 = getEdgeMotionPipelineVersion();
 
     for (const batch of predicateBatches) {
       const representatives = batch.map((g) => g.representative);
 
       let llmItems: LlmClassificationItem[] = [];
-      let pipelineResults: Awaited<
-        ReturnType<typeof classifyPredicateBatchWithPipeline>
-      > = [];
+      let pipelineResults: PipelineEdgeResult[] = [];
 
       if (pipelineVersion === 2) {
         try {

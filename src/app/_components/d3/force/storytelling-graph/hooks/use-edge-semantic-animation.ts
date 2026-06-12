@@ -1,101 +1,35 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useEffect, useState } from "react";
-import { api } from "@/trpc/react";
+import { useCallback, useState } from "react";
 import type { CustomLinkType } from "@/app/const/types";
-import {
-  CDT_ANIMATION_MAP,
-  type EdgeMotionConfig,
-} from "@/app/const/edge-cdt-animation";
+import type { EdgeMotionConfig } from "@/app/const/edge-cdt-animation";
 
 /**
- * エッジ述語をCDTカテゴリに分類してアニメーション設定を返すフック。
- * enabled=false のときは何もしない（tRPC呼び出しなし）。
- * 呼び出し元はフォーカス中のエッジのみを links に渡すこと（全エッジ一括分類を避ける）。
- * links（フォーカス集合）が変わったときのみ未分類分をバッチ分類し、結果をメモ化する。
+ * @deprecated 旧LLMパイプラインのCDT分類フック。
+ * T2Mパイプライン（useSkeletonMotion）に置き換え済み。
+ * 既存コンポーネントの型互換性のために空実装を維持。
  */
 export type UseEdgeSemanticAnimationResult = {
   getEdgeMotionConfig: (edgeId: string) => EdgeMotionConfig | null;
   isLoading: boolean;
-  /** 分類キャッシュ更新のたびに増加（ノードペアモーションの再計算トリガー） */
   edgeMotionCacheVersion: number;
 };
 
-export function useEdgeSemanticAnimation({
-  links,
-  enabled,
-  topicSpaceId,
-}: {
+export function useEdgeSemanticAnimation(_options: {
   links: CustomLinkType[];
   enabled: boolean;
   topicSpaceId?: string;
 }): UseEdgeSemanticAnimationResult {
-  // enabled=false または topicSpaceId 未設定の場合は空を返す
-  const isActive = enabled && !!topicSpaceId;
-
-  // エッジID → motionConfig のキャッシュ（セッション中に積み上げる）
-  const cacheRef = useRef<Map<string, EdgeMotionConfig>>(new Map());
-  const [edgeMotionCacheVersion, setEdgeMotionCacheVersion] = useState(0);
-
-  // リクエスト対象のエッジリスト（type が空のものは除外）
-  const edgesToClassify = useMemo(() => {
-    if (!isActive) return [];
-    return links
-      .filter((l) => l.id && l.type && !cacheRef.current.has(l.id))
-      .map((l) => {
-        const source = typeof l.source === "object" ? l.source : null;
-        const target = typeof l.target === "object" ? l.target : null;
-        return {
-          edgeId: l.id,
-          edgeType: l.type,
-          sourceName: source?.name,
-          sourceLabel: source?.label,
-          targetName: target?.name,
-          targetLabel: target?.label,
-        };
-      });
-  }, [links, isActive]);
-
-  const mutation = api.kg.classifyEdgeMotion.useMutation({
-    onSuccess: (data) => {
-      for (const result of data.results) {
-        if (!result) continue;
-        const cdtCategory = result.motionConfig.category;
-        const fallbackConfig: EdgeMotionConfig =
-          CDT_ANIMATION_MAP[cdtCategory] ?? CDT_ANIMATION_MAP.MENTAL;
-        const config: EdgeMotionConfig = {
-          ...fallbackConfig,
-          ...result.motionConfig,
-        };
-        cacheRef.current.set(result.edgeId, config);
-      }
-      setEdgeMotionCacheVersion((v) => v + 1);
-    },
-  });
-
-  // edgesToClassify が変わるたびにバッチ分類を実行
-  const lastEdgesKeyRef = useRef<string>("");
-  useEffect(() => {
-    if (!isActive || edgesToClassify.length === 0 || !topicSpaceId) return;
-    const key = edgesToClassify.map((e) => e.edgeId).join(",");
-    if (key === lastEdgesKeyRef.current) return;
-    lastEdgesKeyRef.current = key;
-    mutation.mutate({ topicSpaceId, edges: edgesToClassify });
-    // mutation は依存に入れない（参照が変わるたびに再実行してしまうため）
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [edgesToClassify, isActive, topicSpaceId]);
+  const [edgeMotionCacheVersion] = useState(0);
 
   const getEdgeMotionConfig = useCallback(
-    (edgeId: string): EdgeMotionConfig | null => {
-      if (!isActive) return null;
-      return cacheRef.current.get(edgeId) ?? null;
-    },
-    [isActive, edgeMotionCacheVersion],
+    (_edgeId: string): EdgeMotionConfig | null => null,
+    [],
   );
 
   return {
     getEdgeMotionConfig,
-    isLoading: mutation.isPending,
+    isLoading: false,
     edgeMotionCacheVersion,
   };
 }

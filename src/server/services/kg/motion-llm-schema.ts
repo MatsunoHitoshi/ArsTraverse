@@ -1,7 +1,9 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { z } from "zod";
 import { GENERATIVE_MOTION_PLAN_RENDERER_VERSION } from "@/app/const/generative-motion-plan";
-import { EDGE_MOTION_LLM_MODEL } from "./edge-motion-classification";
+
+const EDGE_MOTION_LLM_MODEL =
+  process.env.EDGE_MOTION_LLM_MODEL ?? "gpt-5.4";
 
 /** OpenAI Structured Outputs requires nullable instead of optional. */
 const n = <T extends z.ZodTypeAny>(schema: T) => schema.nullable();
@@ -265,7 +267,7 @@ export type StageBSource = "llm" | "template" | "fallback";
 export function stripNulls<T>(value: T): T {
   if (value === null) return undefined as T;
   if (Array.isArray(value)) {
-    return value.map((item) => stripNulls(item)) as T;
+    return (value as unknown[]).map((item) => stripNulls(item)) as T;
   }
   if (typeof value === "object" && value !== null) {
     const out: Record<string, unknown> = {};

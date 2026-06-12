@@ -472,8 +472,6 @@ ${JSON.stringify({
 })}`;
 }
 
-export type { MotionStoryboardItem } from "./motion-llm-schema";
-
 export type UniquePredicateGroup = {
   representative: EdgeMotionClassificationInput;
   edgeIds: string[];

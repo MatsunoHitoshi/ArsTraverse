@@ -838,6 +838,41 @@ model CommunityStory {
   @@index([metaNodeId])
 }
 
+// T2Mモデル生成の骨格モーションJSONキャッシュ（MoMask / OmniControl / FloodDiffusion）
+model SkeletonMotionCache {
+  id           String   @id @default(cuid())
+
+  // エッジ識別子
+  edgeId       String
+
+  // TopicSpace のスコープ
+  topicSpaceId String
+
+  // 生成に使ったプロンプトのハッシュ（同一テキストでキャッシュヒット用）
+  promptHash   String
+
+  // 生成プロンプト原文（一覧表示用）
+  promptText   String?
+
+  // MoMask リクエスト時の numFrames（OmniControl は 196 固定）
+  numFrames    Int?
+
+  // 使用モデル（momask / omnicontrol / flooddiffusion）
+  model        String   @default("momask")
+
+  // 骨格モーション JSON（SkeletonMotionData 形式）
+  skeletonJson Json
+
+  // 評価メトリクス
+  metrics      Json?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([edgeId, topicSpaceId, promptHash, model])
+  @@index([topicSpaceId])
+}
+
 // エッジ意味アニメーション: CDT分類結果のキャッシュ
 model EdgeMotionAnnotation {
   id           String   @id @default(cuid())

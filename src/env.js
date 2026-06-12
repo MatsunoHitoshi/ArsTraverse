@@ -32,6 +32,9 @@ export const env = createEnv({
     QUICK_COMMONS_TOPICSPACE_ID: z.string().optional(),
     QUICK_COMMONS_SYSTEM_USER_ID: z.string().optional(),
     QUICK_COMMONS_ALLOWED_ORIGIN: z.string().optional(),
+    MODAL_ENDPOINT_URL: z.string().url().optional(),
+    MODAL_FLOODDIFFUSION_URL: z.string().url().optional(),
+    T2M_MODEL: z.enum(["momask", "omnicontrol"]).default("momask").optional(),
   },
 
   /**
@@ -68,6 +71,9 @@ export const env = createEnv({
     QUICK_COMMONS_TOPICSPACE_ID: process.env.QUICK_COMMONS_TOPICSPACE_ID,
     QUICK_COMMONS_SYSTEM_USER_ID: process.env.QUICK_COMMONS_SYSTEM_USER_ID,
     QUICK_COMMONS_ALLOWED_ORIGIN: process.env.QUICK_COMMONS_ALLOWED_ORIGIN,
+    MODAL_ENDPOINT_URL: process.env.MODAL_ENDPOINT_URL,
+    MODAL_FLOODDIFFUSION_URL: process.env.MODAL_FLOODDIFFUSION_URL,
+    T2M_MODEL: process.env.T2M_MODEL,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

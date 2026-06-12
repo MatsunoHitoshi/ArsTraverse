@@ -4,6 +4,7 @@ import { getEdgeCompositeKeyFromLink } from "@/app/const/story-segment";
 import { getMaxEdgeLabelFontSizeByLength } from "@/app/_utils/graph-label-utils";
 import { calcEdgeLabelPos, getDirectionalKey } from "../utils/graph-utils";
 import type { EdgeMotionConfig } from "@/app/const/edge-cdt-animation";
+import type { SkeletonMotionData } from "@/app/const/skeleton-motion";
 import {
   layoutPosWithNodePair,
   nodePairOffsetLayoutScale,
@@ -13,6 +14,7 @@ import {
   CdtAnimatedEdgePath,
   CdtEdgeGlowFilterDef,
 } from "./cdt-animated-edge-path";
+import { SkeletonMotionRenderer } from "./skeleton-motion-renderer";
 import { EdgeSemanticMotionScene } from "./edge-semantic-pictogram";
 
 const MIN_DISPLAY_NODE_RADIUS = 3;
@@ -87,6 +89,8 @@ export function StoryGraphContent(props: {
   activeSemanticEdgeIds?: Set<string> | null;
   /** CDTカテゴリに基づくノードペアのビュー空間オフセット+スケール */
   getNodePairTransform?: (nodeId: string) => NodePairTransform | null;
+  /** T2Mモデルによる骨格モーションデータを取得する関数 */
+  getSkeletonMotion?: (edgeId: string) => SkeletonMotionData | null;
 }) {
   const {
     graphContentRef,
@@ -131,6 +135,7 @@ export function StoryGraphContent(props: {
     getEdgeMotionConfig,
     activeSemanticEdgeIds,
     getNodePairTransform,
+    getSkeletonMotion,
   } = props;
 
   const hasCdtEdges = pathItemsWithFocusIndex.some(
@@ -694,14 +699,6 @@ export function StoryGraphContent(props: {
           return null;
         }
 
-        const motionConfig = getEdgeMotionConfig?.(link.id) ?? null;
-        if (!motionConfig) return null;
-
-        const isSequencedCdtEdge = activeSemanticEdgeIds != null;
-        const isActiveCdtEdge =
-          !isSequencedCdtEdge || activeSemanticEdgeIds.has(link.id);
-        if (!isActiveCdtEdge) return null;
-
         const [sx, sy] = nodeViewWithPair(source);
         const [tx, ty] = nodeViewWithPair(target);
         const effectiveEdgeProgress = freeExploreMode
@@ -709,6 +706,35 @@ export function StoryGraphContent(props: {
           : showFullGraph
             ? overviewEdgeProgress
             : edgeRevealProgress;
+        const edgeOpacity = Math.max(0, Math.min(1, effectiveEdgeProgress * 2 - 0.5));
+
+        // T2M骨格モーションを優先的に描画
+        const skeletonData = getSkeletonMotion?.(link.id) ?? null;
+        if (skeletonData) {
+          const midX = (sx + tx) / 2;
+          const midY = (sy + ty) / 2;
+          const facesLeft = tx < sx;
+          return (
+            <SkeletonMotionRenderer
+              key={`skeleton-motion-${link.id}-${i}`}
+              motionData={skeletonData}
+              globalX={midX}
+              globalY={midY}
+              displayScale={displayScale}
+              opacity={edgeOpacity}
+              facesLeft={facesLeft}
+            />
+          );
+        }
+
+        // フォールバック: 旧CDTモーションシーン
+        const motionConfig = getEdgeMotionConfig?.(link.id) ?? null;
+        if (!motionConfig) return null;
+
+        const isSequencedCdtEdge = activeSemanticEdgeIds != null;
+        const isActiveCdtEdge =
+          !isSequencedCdtEdge || activeSemanticEdgeIds.has(link.id);
+        if (!isActiveCdtEdge) return null;
 
         return (
           <EdgeSemanticMotionScene
@@ -719,7 +745,7 @@ export function StoryGraphContent(props: {
             targetX={tx}
             targetY={ty}
             displayScale={displayScale}
-            opacity={Math.max(0, Math.min(1, effectiveEdgeProgress * 2 - 0.5))}
+            opacity={edgeOpacity}
           />
         );
       })}
