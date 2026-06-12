@@ -30,6 +30,36 @@ export function calculateGraphStatistics(graph: GraphDocumentForFrontend) {
     .slice(0, 5) // 上位5件
     .map((n) => ({ ...n, degree: degrees.get(n.id) ?? 0 }));
 
+  // 次数分布に関する指標
+  const degreeValues = Array.from(degrees.values());
+
+  const avgDegree =
+    graphNodes.length > 0 ? (2 * graphLinks.length) / graphNodes.length : 0;
+
+  const density =
+    graphNodes.length > 1
+      ? (2 * graphLinks.length) / (graphNodes.length * (graphNodes.length - 1))
+      : 0;
+
+  const maxDegree = degreeValues.reduce((max, d) => Math.max(max, d), 0);
+
+  const degreeVariance =
+    graphNodes.length > 0
+      ? degreeValues.reduce((sum, d) => sum + (d - avgDegree) ** 2, 0) /
+        graphNodes.length
+      : 0;
+  const degreeStdDev = Math.sqrt(degreeVariance);
+
+  const maxDegreeNode = topDegreeNodes[0] ?? null;
+
+  const hubDependencyRatio =
+    graphLinks.length > 0 ? maxDegree / (2 * graphLinks.length) : 0;
+
+  const degreeDistribution: Record<number, number> = {};
+  for (const d of degreeValues) {
+    degreeDistribution[d] = (degreeDistribution[d] ?? 0) + 1;
+  }
+
   // 2. 直径と平均ホップ数の計算
   const adj = new Map<string, string[]>();
   graphNodes.forEach((n) => adj.set(n.id, []));
@@ -119,5 +149,12 @@ export function calculateGraphStatistics(graph: GraphDocumentForFrontend) {
     avgPathLength,
     avgClusteringCoeff,
     globalClusteringCoeff,
+    avgDegree,
+    density,
+    degreeStdDev,
+    maxDegree,
+    maxDegreeNode,
+    hubDependencyRatio,
+    degreeDistribution,
   };
 }
