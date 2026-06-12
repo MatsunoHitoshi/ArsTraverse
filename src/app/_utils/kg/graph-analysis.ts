@@ -21,6 +21,12 @@ export interface GraphAnalysisResult {
     diameter: number;
     avgPathLength: number;
     clusteringCoeff: number;
+    avgDegree: number;
+    density: number;
+    degreeStdDev: number;
+    maxDegree: number;
+    hubDependencyRatio: number;
+    degreeDistribution: Record<number, number>;
   };
 
   // 属性分析
@@ -174,6 +180,12 @@ export function analyzeGraphStructure(
       diameter: stats.diameter,
       avgPathLength: stats.avgPathLength,
       clusteringCoeff: stats.avgClusteringCoeff,
+      avgDegree: stats.avgDegree,
+      density: stats.density,
+      degreeStdDev: stats.degreeStdDev,
+      maxDegree: stats.maxDegree,
+      hubDependencyRatio: stats.hubDependencyRatio,
+      degreeDistribution: stats.degreeDistribution,
     },
     attributes: {
       numericAttributes,
@@ -214,6 +226,11 @@ export function prepareAnalysisForLLM(
       summary: {
         nodeCount: analysis.structure.nodeCount,
         relationshipCount: analysis.structure.relationshipCount,
+        avgDegree: analysis.structure.avgDegree,
+        density: analysis.structure.density,
+        degreeStdDev: analysis.structure.degreeStdDev,
+        maxDegree: analysis.structure.maxDegree,
+        hubDependencyRatio: analysis.structure.hubDependencyRatio,
         nodeLabelDistribution: Object.entries(analysis.structure.nodeLabels)
           .sort((a, b) => b[1] - a[1])
           .slice(0, 10)
@@ -225,6 +242,7 @@ export function prepareAnalysisForLLM(
           .slice(0, 10)
           .reduce((acc, [type, count]) => ({ ...acc, [type]: count }), {}),
       },
+      degreeDistribution: analysis.structure.degreeDistribution,
       topCentralNodes: topNodes,
       usefulAttributes: {
         numeric: significantAttributes,
@@ -265,7 +283,13 @@ export function getAnalysisDataByFocus(
           centralityMetrics: {
             diameter: analysis.structure.diameter,
             avgPathLength: analysis.structure.avgPathLength,
+            avgDegree: analysis.structure.avgDegree,
+            density: analysis.structure.density,
+            degreeStdDev: analysis.structure.degreeStdDev,
+            maxDegree: analysis.structure.maxDegree,
+            hubDependencyRatio: analysis.structure.hubDependencyRatio,
           },
+          degreeDistribution: analysis.structure.degreeDistribution,
         },
         null,
         2,

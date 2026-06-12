@@ -84,11 +84,17 @@ export const GraphInfoPanel = ({
       summary: {
         nodeCount,
         edgeCount: linkCount,
+        avgDegree: graphStatistics.avgDegree,
+        density: graphStatistics.density,
+        degreeStdDev: graphStatistics.degreeStdDev,
+        maxDegree: graphStatistics.maxDegree,
+        hubDependencyRatio: graphStatistics.hubDependencyRatio,
         diameter: graphStatistics.diameter,
         avgPathLength: graphStatistics.avgPathLength,
         avgClusteringCoeff: graphStatistics.avgClusteringCoeff,
         globalClusteringCoeff: graphStatistics.globalClusteringCoeff,
       },
+      degreeDistribution: graphStatistics.degreeDistribution,
       distributions: {
         nodeTypes: nodeTypeCounts,
         edgeTypes: linkTypeCounts,
@@ -151,64 +157,119 @@ export const GraphInfoPanel = ({
                 </div>
                 <div>概要を表示</div>
               </DisclosureButton>
-              <DisclosurePanel className="flex flex-col gap-2 pl-6 text-sm text-slate-200">
-                <div>ノード数: {nodeCount}</div>
-                <div>エッジ数: {linkCount}</div>
-                <div>
-                  平均ホップ数: {graphStatistics.avgPathLength.toFixed(2)}
-                </div>
-                <div>直径: {graphStatistics.diameter}</div>
-                <div>
-                  大域的クラスター係数:{" "}
-                  {graphStatistics.globalClusteringCoeff?.toFixed(3)}
-                </div>
-                <div>
-                  平均クラスター係数:{" "}
-                  {graphStatistics.avgClusteringCoeff?.toFixed(3)}
+              <DisclosurePanel className="flex flex-col gap-3 pl-6 text-sm text-slate-200">
+                {/* 基本統計 */}
+                <div className="flex flex-col gap-1">
+                  <div className="font-semibold text-slate-400">基本統計</div>
+                  <div className="pl-2">
+                    <div>ノード数: {nodeCount}</div>
+                    <div>エッジ数: {linkCount}</div>
+                  </div>
                 </div>
 
-                <div className="font-semibold text-slate-400">
-                  重要エンティティ（ハブ）:
-                </div>
-                <div className="flex flex-col gap-1 pl-2">
-                  {graphStatistics.topDegreeNodes.map((node) => (
-                    <button
-                      key={node.id}
-                      className="flex w-full cursor-pointer items-center justify-between rounded p-1 text-left hover:bg-white/10"
-                      onClick={() => setFocusNode(node)}
-                    >
-                      <span className="flex-1 truncate text-xs">
-                        {node.name}
-                      </span>
-                      <span className="ml-2 rounded bg-slate-600 px-1 text-xs">
-                        {node.degree}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-
-                <div className="font-semibold text-slate-400">
-                  ノードタイプ内訳:
-                </div>
-                <div className="pl-2">
-                  {Object.entries(nodeTypeCounts).map(([type, count]) => (
-                    <div key={type} className="flex justify-between">
-                      <span>{type}</span>
-                      <span>{count}</span>
+                {/* 次数分析 */}
+                <div className="flex flex-col gap-1">
+                  <div className="font-semibold text-slate-400">次数分析</div>
+                  <div className="flex flex-col gap-0.5 pl-2">
+                    <div>
+                      平均次数 (K): {graphStatistics.avgDegree.toFixed(2)}
                     </div>
-                  ))}
+                    <div>
+                      次数の標準偏差: {graphStatistics.degreeStdDev.toFixed(2)}
+                    </div>
+                    <div>
+                      最大次数:{" "}
+                      {graphStatistics.maxDegreeNode
+                        ? `${graphStatistics.maxDegreeNode.name} (${graphStatistics.maxDegree})`
+                        : graphStatistics.maxDegree}
+                    </div>
+                    <div>
+                      ハブ依存度:{" "}
+                      {(graphStatistics.hubDependencyRatio * 100).toFixed(1)}%
+                    </div>
+                    <div>
+                      密度 (ρ): {graphStatistics.density.toFixed(4)}
+                    </div>
+                  </div>
                 </div>
 
-                <div className="font-semibold text-slate-400">
-                  エッジタイプ内訳:
-                </div>
-                <div className="pl-2">
-                  {Object.entries(linkTypeCounts).map(([type, count]) => (
-                    <div key={type} className="flex justify-between">
-                      <span>{type}</span>
-                      <span>{count}</span>
+                {/* 次数分布ヒストグラム */}
+                <DegreeDistributionChart
+                  degreeDistribution={graphStatistics.degreeDistribution}
+                />
+
+                {/* 接続性指標 */}
+                <div className="flex flex-col gap-1">
+                  <div className="font-semibold text-slate-400">
+                    接続性指標
+                  </div>
+                  <div className="flex flex-col gap-0.5 pl-2">
+                    <div>
+                      平均ホップ数:{" "}
+                      {graphStatistics.avgPathLength.toFixed(2)}
                     </div>
-                  ))}
+                    <div>直径: {graphStatistics.diameter}</div>
+                    <div>
+                      大域的クラスター係数:{" "}
+                      {graphStatistics.globalClusteringCoeff?.toFixed(3)}
+                    </div>
+                    <div>
+                      平均クラスター係数:{" "}
+                      {graphStatistics.avgClusteringCoeff?.toFixed(3)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 重要エンティティ */}
+                <div className="flex flex-col gap-1">
+                  <div className="font-semibold text-slate-400">
+                    重要エンティティ（ハブ）
+                  </div>
+                  <div className="flex flex-col gap-1 pl-2">
+                    {graphStatistics.topDegreeNodes.map((node) => (
+                      <button
+                        key={node.id}
+                        className="flex w-full cursor-pointer items-center justify-between rounded p-1 text-left hover:bg-white/10"
+                        onClick={() => setFocusNode(node)}
+                      >
+                        <span className="flex-1 truncate text-xs">
+                          {node.name}
+                        </span>
+                        <span className="ml-2 rounded bg-slate-600 px-1 text-xs">
+                          {node.degree}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* タイプ内訳 */}
+                <div className="flex flex-col gap-1">
+                  <div className="font-semibold text-slate-400">
+                    ノードタイプ内訳
+                  </div>
+                  <div className="pl-2">
+                    {Object.entries(nodeTypeCounts).map(([type, count]) => (
+                      <div key={type} className="flex justify-between">
+                        <span>{type}</span>
+                        <span>{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <div className="font-semibold text-slate-400">
+                    エッジタイプ内訳
+                  </div>
+                  <div className="pl-2">
+                    {Object.entries(linkTypeCounts).map(([type, count]) => (
+                      <div key={type} className="flex justify-between">
+                        <span>{type}</span>
+                        <span>{count}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </DisclosurePanel>
             </Disclosure>
@@ -453,6 +514,81 @@ export const PropertiesSummaryPanel = ({
         ))}
       </div>
     </div>
+  );
+};
+
+const DEGREE_BINS = [
+  { label: "0", min: 0, max: 0 },
+  { label: "1", min: 1, max: 1 },
+  { label: "2", min: 2, max: 2 },
+  { label: "3-5", min: 3, max: 5 },
+  { label: "6-10", min: 6, max: 10 },
+  { label: "11-20", min: 11, max: 20 },
+  { label: "21-50", min: 21, max: 50 },
+  { label: "51+", min: 51, max: Infinity },
+] as const;
+
+function binDegreeDistribution(
+  distribution: Record<number, number>,
+): { label: string; count: number }[] {
+  const binned = DEGREE_BINS.map((bin) => ({ label: bin.label, count: 0 }));
+  for (const [degStr, count] of Object.entries(distribution)) {
+    const deg = Number(degStr);
+    const idx = DEGREE_BINS.findIndex((b) => deg >= b.min && deg <= b.max);
+    if (idx !== -1) binned[idx]!.count += count;
+  }
+  return binned.filter((b) => b.count > 0);
+}
+
+const DegreeDistributionChart = ({
+  degreeDistribution,
+}: {
+  degreeDistribution: Record<number, number>;
+}) => {
+  const entries = Object.entries(degreeDistribution);
+  if (entries.length === 0) return null;
+
+  const useBinning = entries.length > 20;
+
+  const bars = useBinning
+    ? binDegreeDistribution(degreeDistribution)
+    : entries
+        .map(([degree, count]) => ({ label: String(degree), count }))
+        .sort((a, b) => Number(a.label) - Number(b.label));
+
+  const maxCount = Math.max(...bars.map((b) => b.count));
+
+  return (
+    <Disclosure defaultOpen={false}>
+      <DisclosureButton className="group flex w-full flex-row items-center gap-2 text-sm text-slate-400">
+        <div className="group-data-[open]:rotate-90">
+          <TriangleRightIcon height={14} width={14} color="white" />
+        </div>
+        <div className="font-semibold">次数分布</div>
+      </DisclosureButton>
+      <DisclosurePanel className="flex flex-col gap-0.5 pl-6 pt-1">
+        {bars.map(({ label, count }) => (
+          <div key={label} className="flex items-center gap-1 text-xs">
+            <div className="w-8 text-right text-slate-400">{label}</div>
+            <div className="flex-1">
+              <div
+                className="h-3 rounded-sm bg-blue-400"
+                style={{
+                  width: `${(count / maxCount) * 100}%`,
+                  minWidth: count > 0 ? "2px" : undefined,
+                }}
+              />
+            </div>
+            <div className="w-8 text-slate-400">{count}</div>
+          </div>
+        ))}
+        {useBinning && (
+          <div className="mt-1 text-xs text-slate-500">
+            ※ 次数が多いためビン化して表示
+          </div>
+        )}
+      </DisclosurePanel>
+    </Disclosure>
   );
 };
 
