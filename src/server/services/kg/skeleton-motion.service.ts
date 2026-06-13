@@ -2,6 +2,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { createHash } from "crypto";
 import {
   OMNICONTROL_OUTPUT_FRAMES,
+  floodFramesFromLatentTokens,
   floodLatentTokensFromFrames,
   type FloodDiffusionMeta,
   type FloodDiffusionMotionResponse,
@@ -299,8 +300,10 @@ export async function generateFloodDiffusion(
 
   const numFrames =
     input.mode === "streaming" && input.segments
-      ? (input.segments[input.segments.length - 1]?.endToken ?? 0) * 4
-      : (input.length ?? floodLatentTokensFromFrames(60)) * 4;
+      ? floodFramesFromLatentTokens(
+          input.segments[input.segments.length - 1]?.endToken ?? 0,
+        )
+      : floodFramesFromLatentTokens(input.length ?? floodLatentTokensFromFrames(60));
 
   if (!input.forceRegenerate) {
     const cached = await db.skeletonMotionCache.findUnique({

@@ -31,7 +31,9 @@ export type SkeletonMotionResponse = SkeletonMotionData & {
 
 export type FloodDiffusionSegmentMeta = {
   text: string;
+  startToken?: number;
   endToken: number;
+  startFrame?: number;
   endFrame: number;
 };
 
@@ -81,15 +83,27 @@ export type MotionComparisonCacheGroup = {
 /** OmniControl CMDM fixed output length (HumanML3D max). GPU cost is constant. */
 export const OMNICONTROL_OUTPUT_FRAMES = 196;
 
-/** FloodDiffusion VAE upsampling: output frames ≈ latentTokens × ratio. */
+/** FloodDiffusion VAE: after the first latent, each token upsamples to 4 frames. */
 export const FLOOD_LATENT_TO_FRAME_RATIO = 4;
 
-export function floodLatentTokensFromFrames(numFrames: number): number {
-  return Math.max(5, Math.ceil(numFrames / FLOOD_LATENT_TO_FRAME_RATIO));
+/** Exclusive end-frame index after `token` latent steps (matches gpu-worker decode). */
+export function floodLatentTokenToFrame(token: number): number {
+  if (token <= 0) return 0;
+  return 1 + (token - 1) * FLOOD_LATENT_TO_FRAME_RATIO;
 }
 
+export function floodFramesFromLatentTokens(latentTokens: number): number {
+  return floodLatentTokenToFrame(latentTokens);
+}
+
+export function floodLatentTokensFromFrames(numFrames: number): number {
+  if (numFrames <= 0) return 5;
+  return Math.max(5, 1 + Math.ceil((numFrames - 1) / FLOOD_LATENT_TO_FRAME_RATIO));
+}
+
+/** @deprecated alias — use floodFramesFromLatentTokens for exact VAE frame count */
 export function floodApproxFramesFromLatentTokens(latentTokens: number): number {
-  return latentTokens * FLOOD_LATENT_TO_FRAME_RATIO;
+  return floodFramesFromLatentTokens(latentTokens);
 }
 
 export const SKELETON_DISPLAY_SCALE = 0.8;

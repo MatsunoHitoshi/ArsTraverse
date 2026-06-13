@@ -76,7 +76,10 @@ export function FloodSegmentEditor({
       </div>
 
       <div className="space-y-2">
-        {segments.map((seg, index) => (
+        {segments.map((seg, index) => {
+          const prevEndToken = index === 0 ? 0 : (segments[index - 1]?.endToken ?? 0);
+          const durationTokens = seg.endToken - prevEndToken;
+          return (
           <div
             key={index}
             className="flex flex-wrap items-end gap-2 rounded-lg border border-gray-700/60 bg-gray-900/40 p-2"
@@ -117,7 +120,8 @@ export function FloodSegmentEditor({
               />
             </div>
             <div className="text-[10px] text-gray-500 pb-1.5 tabular-nums">
-              ≈{floodApproxFramesFromLatentTokens(seg.endToken)}f
+              {durationTokens} tok · ≈
+              {floodApproxFramesFromLatentTokens(durationTokens)}f
             </div>
             <button
               type="button"
@@ -128,7 +132,8 @@ export function FloodSegmentEditor({
               Remove
             </button>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">

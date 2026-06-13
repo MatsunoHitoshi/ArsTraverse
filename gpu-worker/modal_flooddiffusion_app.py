@@ -41,17 +41,25 @@ flood_image = (
         "tqdm",
         "regex",
         "safetensors",
+        "sentencepiece>=0.1.99",
+        "protobuf",
     )
     .run_commands(
-        "pip install flash-attn --no-build-isolation || "
-        "echo 'WARNING: flash-attn install failed; model may fail at runtime'",
+        # google/umt5-base config.json lacks model_type; patch before first load
+        "python -c \""
+        "from huggingface_hub import snapshot_download; "
+        "import json, os; "
+        "p = snapshot_download('google/umt5-base'); "
+        "cfg = os.path.join(p, 'config.json'); "
+        "c = json.load(open(cfg)); "
+        "c.setdefault('model_type', 'umt5'); "
+        "json.dump(c, open(cfg, 'w'), indent=2); "
+        "print('patched umt5 config at', cfg)"
+        "\"",
     )
-    .add_local_file("projection.py", "/root/projection.py", copy=True)
-    .add_local_file(
-        "flooddiffusion_inference.py",
-        "/root/flooddiffusion_inference.py",
-        copy=True,
-    )
+    # No copy=True so modal serve hot-reloads local changes
+    .add_local_file("projection.py", "/root/projection.py")
+    .add_local_file("flooddiffusion_inference.py", "/root/flooddiffusion_inference.py")
 )
 
 # ---------------------------------------------------------------------------
@@ -89,6 +97,9 @@ class FloodGenerateRequest(BaseModel):
 def generate(request: FloodGenerateRequest) -> dict:
     """Generate skeleton motion via FloodDiffusion."""
     import sys
+    import traceback
+
+    from fastapi import HTTPException
 
     sys.path.insert(0, "/root")
 
@@ -99,15 +110,22 @@ def generate(request: FloodGenerateRequest) -> dict:
         [s.model_dump() for s in request.segments] if request.segments else None
     )
 
-    joints_3d, flood_meta = flooddiffusion_inference(
-        mode=request.mode,
-        text=request.text,
-        length=request.length,
-        segments=segments,
-        num_denoise_steps=request.numDenoiseSteps,
-        smoothing_alpha=request.smoothingAlpha,
-        seed=request.seed,
-    )
+    try:
+        joints_3d, flood_meta = flooddiffusion_inference(
+            mode=request.mode,
+            text=request.text,
+            length=request.length,
+            segments=segments,
+            num_denoise_steps=request.numDenoiseSteps,
+            smoothing_alpha=request.smoothingAlpha,
+            seed=request.seed,
+        )
+    except Exception as exc:
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"FloodDiffusion inference failed: {exc}",
+        ) from exc
 
     result = skeleton_to_json(joints_3d, fps=20, include_metrics=True)
     result["model"] = "flooddiffusion"

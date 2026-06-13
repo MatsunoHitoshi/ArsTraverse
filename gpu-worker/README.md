@@ -114,7 +114,7 @@ Streaming mode:
   "segments": [
     { "text": "a person walks forward", "endToken": 20 },
     { "text": "a person turns around", "endToken": 40 },
-    { "text": "a person runs quickly", "endToken": 60 }
+    { "text": "a person runs", "endToken": 60 }
   ],
   "smoothingAlpha": 0.5
 }
@@ -122,7 +122,7 @@ Streaming mode:
 
 Response includes `floodMeta` with `mode`, `latentTokens`, `inferenceMs`, and optional `segments`.
 
-Note: `length` / `endToken` are **latent token** counts. Output frames ≈ tokens × 4 at 20 FPS.
+Note: `length` / `endToken` are **latent token** counts. Output frames = `1 + (tokens - 1) × 4` (first latent → 1 frame, then 4/frame) at 20 FPS. Example: 60 tokens → 237 frames.
 
 ### GET /health
 
@@ -134,7 +134,8 @@ Set in `.env`:
 
 ```env
 MODAL_ENDPOINT_URL=https://...t2m-motion-worker-generate.modal.run
-MODAL_FLOODDIFFUSION_URL=https://...flooddiffusion-motion-worker-generate.modal.run
+# modal serve 時は -generate-dev、modal deploy 後は -generate（-dev なし）
+MODAL_FLOODDIFFUSION_URL=https://...flooddiffusion-motion-worker-generate-dev.modal.run
 ```
 
 Motion Comparison Lab (`/dev/motion-comparison-lab`) uses both endpoints.

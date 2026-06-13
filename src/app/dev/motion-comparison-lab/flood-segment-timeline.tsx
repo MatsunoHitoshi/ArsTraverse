@@ -6,7 +6,9 @@ import { formatMotionTime } from "@/app/const/skeleton-motion";
 /** Segment boundary metadata for streaming playback (matches API floodMeta.segments). */
 type SegmentTimelineItem = {
   text: string;
+  startToken?: number;
   endToken: number;
+  startFrame?: number;
   endFrame: number;
 };
 
@@ -26,6 +28,13 @@ function previousEndFrame(
   return segments[index - 1]?.endFrame ?? 0;
 }
 
+function segmentStartFrame(
+  segments: readonly SegmentTimelineItem[],
+  index: number,
+): number {
+  return segments[index]?.startFrame ?? previousEndFrame(segments, index);
+}
+
 function findActiveSegmentIndex(
   segments: readonly SegmentTimelineItem[],
   frame: number,
@@ -33,8 +42,10 @@ function findActiveSegmentIndex(
   if (segments.length === 0) return 0;
 
   for (const [index, seg] of segments.entries()) {
-    const prevEnd = previousEndFrame(segments, index);
-    if (frame >= prevEnd && frame <= seg.endFrame) return index;
+    const start = segmentStartFrame(segments, index);
+    if (frame >= start && frame < seg.endFrame) {
+      return index;
+    }
   }
 
   return segments.length - 1;
@@ -99,8 +110,8 @@ export function FloodSegmentTimeline({
         aria-valuenow={Math.round(progress * 100)}
       >
         {segments.map((seg, i) => {
-          const prevEndFrame = previousEndFrame(segments, i);
-          const startRatio = prevEndFrame / Math.max(totalFrames, 1);
+          const startFrame = segmentStartFrame(segments, i);
+          const startRatio = startFrame / Math.max(totalFrames, 1);
           const endRatio = seg.endFrame / Math.max(totalFrames, 1);
           const width = (endRatio - startRatio) * 100;
           const left = startRatio * 100;

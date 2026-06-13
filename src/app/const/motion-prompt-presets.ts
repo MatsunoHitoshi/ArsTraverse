@@ -25,7 +25,7 @@ export const MOTION_PROMPT_PRESETS: MotionPromptPreset[] = [
   {
     id: "run",
     label: "走る",
-    prompt: "a person runs quickly",
+    prompt: "a person runs",
   },
   {
     id: "jump",
@@ -81,7 +81,7 @@ export const FLOOD_STREAMING_PRESETS: FloodStreamingPreset[] = [
     segments: [
       { text: "a person walks forward", endToken: 20 },
       { text: "a person turns around", endToken: 40 },
-      { text: "a person runs quickly", endToken: 60 },
+      { text: "a person runs", endToken: 60 },
     ],
   },
   {
