@@ -177,11 +177,13 @@ ArsTraverse follows a monolithic Next.js architecture with clear separation of c
 
 ## Documentation (Japanese)
 
-Concept and flow diagrams for the writing workspace, story generation, auto-highlighting, and the public scroll-linked storytelling viewer live under `docs/`. Notable entries:
+Concept and flow diagrams for the writing workspace, story generation, auto-highlighting, field research scanning, graph statistics, and the public scroll-linked storytelling viewer live under `docs/`. Notable entries:
 
 - `docs/concept-writing-experience.md` / `docs/concept-writing-data-linkage.md` — writing UX vs data
 - `docs/story-generation-text-mode-flow.md` — text-to-meta-graph pipeline
 - `docs/auto-annotation-information-reference-flow.md` — entity highlight ↔ graph focus
+- `docs/field-scan-flow.md` — mobile field scan: OCR → LLM normalize → KG extraction
+- `docs/graph-statistics-panel.md` — graph info panel metrics and degree distribution
 - `docs/storytelling-scroll-viewer.md` — published article `ScrollStorytellingViewerUnified`, URL params, scroll guards
 
 ## Project Structure
@@ -251,6 +253,8 @@ supabase/
 - [データ連携の概念](./docs/concept-writing-data-linkage.md)
 - [テキストからストーリー生成（処理フロー）](./docs/story-generation-text-mode-flow.md)
 - [自動アノテーションと情報参照](./docs/auto-annotation-information-reference-flow.md)
+- [フィールドリサーチ：現地スキャンから知識グラフ作成](./docs/field-scan-flow.md)
+- [グラフ統計パネル（次数分布・接続性指標）](./docs/graph-statistics-panel.md)
 - [公開記事のストーリーテリングと URL クエリ](./docs/storytelling-public-viewer-and-urls.md)
 - [公開 Unified ビューのスクロール・ガード・レイアウト詳細](./docs/storytelling-scroll-viewer.md)
 
