@@ -9,7 +9,26 @@ export type SkeletonMotionData = {
   boneConnections: [number, number][];
   /** frames[frameIdx][jointIdx] = [x, y] in local coordinates (pelvis-centered) */
   frames: [number, number][][];
+  /** Optional pelvis-centered 3D joints (HumanML3D XYZ, same scale as frames). */
+  frames3d?: [number, number, number][][];
 };
+
+export type JointPose3d = [number, number, number];
+
+/** Camera for projecting 3D skeleton onto graph edge orientation. */
+export type SkeletonViewCamera = {
+  edgeDx: number;
+  edgeDy: number;
+  /** Camera pitch above horizontal (radians). */
+  pitch: number;
+  /** Extra yaw around vertical axis (radians). */
+  yawOffset: number;
+  /** When true, rotate projection so +Z walk aligns with edge direction. */
+  alignWithEdge: boolean;
+};
+
+/** Default oblique pitch (~30°) for edge-following camera projection. */
+export const DEFAULT_SKELETON_VIEW_PITCH = Math.PI / 6;
 
 export type SkeletonMotionMetrics = {
   footSkatingRatio: number;
@@ -108,13 +127,41 @@ export function floodApproxFramesFromLatentTokens(latentTokens: number): number 
 
 export const SKELETON_DISPLAY_SCALE = 0.8;
 
-export const JOINT_RADIUS = 1.5;
+/** Default joint dot radius (torso, limbs). */
+export const JOINT_RADIUS = 2;
 
-export const BONE_STROKE_WIDTH = 1.2;
+/** Head joint — larger circle for stick-figure readability. */
+export const JOINT_RADIUS_HEAD = 4.5;
 
-export const BONE_COLOR = "rgba(255, 255, 255, 0.8)";
+/** Wrist / hand joints — slightly larger than body joints. */
+export const JOINT_RADIUS_HAND = 2.8;
+
+export const BONE_STROKE_WIDTH = 2.4;
+
+export const BONE_COLOR = "rgba(255, 255, 255, 0.85)";
 
 export const JOINT_COLOR = "rgba(255, 255, 255, 0.95)";
+
+export type SkeletonJointRole = "default" | "head" | "hand";
+
+export function getSkeletonJointRole(jointName: string | undefined): SkeletonJointRole {
+  if (!jointName) return "default";
+  const name = jointName.toLowerCase();
+  if (name === "head") return "head";
+  if (name.includes("wrist") || name.includes("hand")) return "hand";
+  return "default";
+}
+
+export function getSkeletonJointRadius(role: SkeletonJointRole): number {
+  switch (role) {
+    case "head":
+      return JOINT_RADIUS_HEAD;
+    case "hand":
+      return JOINT_RADIUS_HAND;
+    default:
+      return JOINT_RADIUS;
+  }
+}
 
 /** Loop crossfade length at each end (at 20fps ≈ 0.75s per side). */
 export const LOOP_CROSSFADE_FRAMES = 15;
@@ -236,4 +283,77 @@ export function interpolateFrame(
     const [bx, by] = b[i]!;
     return [ax + (bx - ax) * t, ay + (by - ay) * t] as [number, number];
   });
+}
+
+function blendPoses3d(
+  a: JointPose3d[],
+  b: JointPose3d[],
+  t: number,
+): JointPose3d[] {
+  return a.map(([ax, ay, az], i) => {
+    const [bx, by, bz] = b[i] ?? [ax, ay, az];
+    return [
+      ax + (bx - ax) * t,
+      ay + (by - ay) * t,
+      az + (bz - az) * t,
+    ] as JointPose3d;
+  });
+}
+
+export function interpolateFrame3d(
+  frames: JointPose3d[][],
+  frameIndex: number,
+): JointPose3d[] {
+  const floorIdx = Math.floor(frameIndex);
+  const ceilIdx = Math.ceil(frameIndex);
+  const t = frameIndex - floorIdx;
+
+  if (ceilIdx >= frames.length || t === 0) {
+    return frames[Math.min(floorIdx, frames.length - 1)]!;
+  }
+
+  const a = frames[floorIdx]!;
+  const b = frames[ceilIdx]!;
+
+  return a.map(([ax, ay, az], i) => {
+    const [bx, by, bz] = b[i]!;
+    return [
+      ax + (bx - ax) * t,
+      ay + (by - ay) * t,
+      az + (bz - az) * t,
+    ] as JointPose3d;
+  });
+}
+
+export function interpolateLoopFrame3d(
+  frames: JointPose3d[][],
+  progress: number,
+  crossfadeFrames: number = LOOP_CROSSFADE_FRAMES,
+): JointPose3d[] {
+  const n = frames.length;
+  if (n === 0) return [];
+  if (n === 1) return frames[0]!;
+
+  const clamped = ((progress % 1) + 1) % 1;
+  const cf = Math.min(
+    Math.max(1, crossfadeFrames),
+    Math.floor((n - 1) / 2),
+  );
+  const crossfadeRatio = cf / n;
+  const frameIndex = clamped * (n - 1);
+  const headPose = interpolateFrame3d(frames, 0);
+
+  if (clamped < crossfadeRatio) {
+    const alpha = smoothstep(clamped / crossfadeRatio);
+    const currentPose = interpolateFrame3d(frames, frameIndex);
+    return blendPoses3d(headPose, currentPose, alpha);
+  }
+
+  if (clamped >= 1 - crossfadeRatio) {
+    const alpha = smoothstep((clamped - (1 - crossfadeRatio)) / crossfadeRatio);
+    const tailPose = interpolateFrame3d(frames, frameIndex);
+    return blendPoses3d(tailPose, headPose, alpha);
+  }
+
+  return interpolateFrame3d(frames, frameIndex);
 }

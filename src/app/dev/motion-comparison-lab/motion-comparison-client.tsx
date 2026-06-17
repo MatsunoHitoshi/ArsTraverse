@@ -310,6 +310,13 @@ export function MotionComparisonLabClient() {
         <h1 className="text-2xl font-bold mb-1">Motion Comparison Lab</h1>
         <p className="text-sm text-gray-400 mb-6">
           MoMask / OmniControl / FloodDiffusion
+          {" · "}
+          <a
+            href="/dev/graph-motion-lab"
+            className="text-cyan-400 hover:underline"
+          >
+            Graph Motion Lab
+          </a>
         </p>
 
         <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-4 mb-6 space-y-4">

@@ -248,9 +248,20 @@ def skeleton_to_json(
     scale = 30.0
     joints_2d_scaled = joints_2d * scale
 
+    pelvis_3d = joints_3d[:, 0:1, :]
+    joints_3d_centered = (joints_3d - pelvis_3d) * scale
+
     frames = [
         [[round(float(x), 2), round(float(y), 2)] for x, y in frame_joints]
         for frame_joints in joints_2d_scaled
+    ]
+
+    frames3d = [
+        [
+            [round(float(x), 2), round(float(y), 2), round(float(z), 2)]
+            for x, y, z in frame_joints
+        ]
+        for frame_joints in joints_3d_centered
     ]
 
     result: dict = {
@@ -258,6 +269,7 @@ def skeleton_to_json(
         "jointNames": HUMANML3D_JOINT_NAMES,
         "boneConnections": [list(pair) for pair in HUMANML3D_BONE_CONNECTIONS],
         "frames": frames,
+        "frames3d": frames3d,
     }
 
     if include_metrics:

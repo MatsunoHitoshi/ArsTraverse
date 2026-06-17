@@ -1,16 +1,16 @@
 "use client";
 
 import React, { useEffect, useRef, useMemo } from "react";
-import type { SkeletonMotionData } from "@/app/const/skeleton-motion";
+import type { SkeletonMotionData, SkeletonViewCamera } from "@/app/const/skeleton-motion";
 import {
   SKELETON_DISPLAY_SCALE,
-  JOINT_RADIUS,
   BONE_STROKE_WIDTH,
   BONE_COLOR,
   JOINT_COLOR,
-  interpolateFrame,
-  interpolateLoopFrame,
+  getSkeletonJointRadius,
+  getSkeletonJointRole,
 } from "@/app/const/skeleton-motion";
+import { sampleSkeletonPose2d } from "@/app/_utils/kg/skeleton-3d-projection";
 
 type SkeletonMotionRendererProps = {
   motionData: SkeletonMotionData;
@@ -21,28 +21,17 @@ type SkeletonMotionRendererProps = {
   /** Display scale factor from graph zoom */
   displayScale: number;
   opacity?: number;
-  /** Whether to flip the skeleton horizontally (faces left) */
+  /** Whether to flip the skeleton horizontally (legacy 2D when no viewCamera) */
   facesLeft?: boolean;
-  /** Color override for bones */
+  /** Edge-aligned 3D projection camera (requires frames3d for full effect). */
+  viewCamera?: SkeletonViewCamera | null;
   boneColor?: string;
-  /** Color override for joints */
   jointColor?: string;
-  /** When set, disables internal auto-play and renders this frame index. */
   frameIndex?: number;
-  /** Normalized playback position [0, 1). Preferred over frameIndex for loop crossfade. */
   playbackProgress?: number;
-  /** When true with playbackProgress, blends tail toward head at the loop seam. */
   loopCrossfade?: boolean;
 };
 
-/**
- * SVG skeleton motion renderer.
- *
- * Reads a SkeletonMotionData (from T2M model output) and renders bones/joints
- * as SVG <line>/<circle> elements, driven by requestAnimationFrame.
- * The skeleton is drawn in local coordinates (pelvis-centered) and translated
- * to the global position on the D3 graph.
- */
 export function SkeletonMotionRenderer({
   motionData,
   globalX,
@@ -50,6 +39,7 @@ export function SkeletonMotionRenderer({
   displayScale,
   opacity = 1,
   facesLeft = false,
+  viewCamera = null,
   boneColor = BONE_COLOR,
   jointColor = JOINT_COLOR,
   frameIndex: controlledFrameIndex,
@@ -60,14 +50,25 @@ export function SkeletonMotionRenderer({
   const rafRef = useRef<number | null>(null);
   const startTimeRef = useRef<number | null>(null);
 
-  const { fps, boneConnections, frames } = motionData;
+  const { fps, boneConnections, frames, jointNames } = motionData;
   const totalFrames = frames.length;
   const durationMs = (totalFrames / fps) * 1000;
   const isControlled =
     playbackProgress !== undefined || controlledFrameIndex !== undefined;
 
   const scale = SKELETON_DISPLAY_SCALE / Math.max(0.5, displayScale);
-  const flipX = facesLeft ? -1 : 1;
+
+  const sampleOptions = useMemo(
+    () => ({
+      loopCrossfade,
+      viewCamera,
+      facesLeft: viewCamera?.alignWithEdge ? false : facesLeft,
+    }),
+    [loopCrossfade, viewCamera, facesLeft],
+  );
+
+  const resolveProgress = (progress: number) =>
+    sampleSkeletonPose2d(motionData, progress, sampleOptions);
 
   useEffect(() => {
     if (totalFrames === 0) return;
@@ -78,12 +79,6 @@ export function SkeletonMotionRenderer({
     const boneElements = g.querySelectorAll<SVGLineElement>(".skel-bone");
     const jointElements = g.querySelectorAll<SVGCircleElement>(".skel-joint");
 
-    const samplePose = (progress: number) => {
-      return loopCrossfade
-        ? interpolateLoopFrame(frames, progress)
-        : interpolateFrame(frames, progress * Math.max(totalFrames - 1, 0));
-    };
-
     const applyPoseFromJoints = (currentJoints: [number, number][]) => {
       boneElements.forEach((el, i) => {
         const conn = boneConnections[i];
@@ -93,27 +88,28 @@ export function SkeletonMotionRenderer({
         const jb = currentJoints[b];
         if (!ja || !jb) return;
 
-        el.setAttribute("x1", String(ja[0] * scale * flipX));
-        el.setAttribute("y1", String(-ja[1] * scale));
-        el.setAttribute("x2", String(jb[0] * scale * flipX));
-        el.setAttribute("y2", String(-jb[1] * scale));
+        el.setAttribute("x1", String(ja[0] * scale));
+        el.setAttribute("y1", String(ja[1] * scale));
+        el.setAttribute("x2", String(jb[0] * scale));
+        el.setAttribute("y2", String(jb[1] * scale));
       });
 
       jointElements.forEach((el, i) => {
         const j = currentJoints[i];
         if (!j) return;
-        el.setAttribute("cx", String(j[0] * scale * flipX));
-        el.setAttribute("cy", String(-j[1] * scale));
+        el.setAttribute("cx", String(j[0] * scale));
+        el.setAttribute("cy", String(j[1] * scale));
       });
     };
 
     if (isControlled) {
       if (playbackProgress !== undefined) {
-        applyPoseFromJoints(samplePose(playbackProgress));
+        applyPoseFromJoints(resolveProgress(playbackProgress));
       } else {
-        applyPoseFromJoints(
-          interpolateFrame(frames, controlledFrameIndex ?? 0),
-        );
+        const idx = controlledFrameIndex ?? 0;
+        const progress =
+          totalFrames <= 1 ? 0 : idx / Math.max(totalFrames - 1, 1);
+        applyPoseFromJoints(resolveProgress(progress));
       }
       return;
     }
@@ -123,7 +119,7 @@ export function SkeletonMotionRenderer({
 
       const elapsed = now - startTimeRef.current;
       const progress = (elapsed % durationMs) / durationMs;
-      applyPoseFromJoints(samplePose(progress));
+      applyPoseFromJoints(resolveProgress(progress));
 
       rafRef.current = requestAnimationFrame(tick);
     };
@@ -138,21 +134,21 @@ export function SkeletonMotionRenderer({
       startTimeRef.current = null;
     };
   }, [
-    frames,
+    motionData,
     boneConnections,
     totalFrames,
     durationMs,
     scale,
-    flipX,
     isControlled,
     controlledFrameIndex,
     playbackProgress,
-    loopCrossfade,
+    sampleOptions,
   ]);
 
   const initialJoints = useMemo(
-    () => (frames.length > 0 ? frames[0]! : []),
-    [frames],
+    () => resolveProgress(0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- motionData + camera
+    [motionData, sampleOptions],
   );
 
   if (totalFrames === 0) return null;
@@ -171,10 +167,10 @@ export function SkeletonMotionRenderer({
           <line
             key={`bone-${i}`}
             className="skel-bone"
-            x1={ja[0] * scale * flipX}
-            y1={-ja[1] * scale}
-            x2={jb[0] * scale * flipX}
-            y2={-jb[1] * scale}
+            x1={ja[0] * scale}
+            y1={ja[1] * scale}
+            x2={jb[0] * scale}
+            y2={jb[1] * scale}
             stroke={boneColor}
             strokeWidth={BONE_STROKE_WIDTH}
             strokeLinecap="round"
@@ -182,23 +178,26 @@ export function SkeletonMotionRenderer({
         );
       })}
 
-      {initialJoints.map((j, i) => (
-        <circle
-          key={`joint-${i}`}
-          className="skel-joint"
-          cx={j[0] * scale * flipX}
-          cy={-j[1] * scale}
-          r={JOINT_RADIUS}
-          fill={jointColor}
-        />
-      ))}
+      {initialJoints.map((j, i) => {
+        const role = getSkeletonJointRole(jointNames[i]);
+        const radius = getSkeletonJointRadius(role);
+        return (
+          <circle
+            key={`joint-${i}`}
+            className={`skel-joint skel-joint-${role}`}
+            cx={j[0] * scale}
+            cy={j[1] * scale}
+            r={radius}
+            fill={jointColor}
+            stroke={role === "head" ? boneColor : undefined}
+            strokeWidth={role === "head" ? 0.6 : 0}
+          />
+        );
+      })}
     </g>
   );
 }
 
-/**
- * Variant used for comparison lab: renders skeleton inside a fixed-size SVG viewBox.
- */
 export function SkeletonMotionPreview({
   motionData,
   width = 200,
@@ -208,6 +207,7 @@ export function SkeletonMotionPreview({
   frameIndex,
   playbackProgress,
   loopCrossfade,
+  facesLeft,
 }: {
   motionData: SkeletonMotionData;
   width?: number;
@@ -217,6 +217,7 @@ export function SkeletonMotionPreview({
   frameIndex?: number;
   playbackProgress?: number;
   loopCrossfade?: boolean;
+  facesLeft?: boolean;
 }) {
   return (
     <svg
@@ -235,6 +236,7 @@ export function SkeletonMotionPreview({
         frameIndex={frameIndex}
         playbackProgress={playbackProgress}
         loopCrossfade={loopCrossfade}
+        facesLeft={facesLeft}
       />
     </svg>
   );

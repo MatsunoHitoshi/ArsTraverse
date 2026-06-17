@@ -35,6 +35,7 @@ export type SkeletonMotionResult = {
   jointNames: string[];
   boneConnections: [number, number][];
   frames: [number, number][][];
+  frames3d?: [number, number, number][][];
   metrics?: {
     footSkatingRatio: number;
     jointJitter: number;

@@ -81,6 +81,7 @@ Response:
   "jointNames": ["pelvis", "left_hip", ...],
   "boneConnections": [[0,1], [0,2], ...],
   "frames": [[[0, 0], [-10.2, 5.1], ...], ...],
+  "frames3d": [[[0, 0, 0], [-10.2, 5.1, 2.3], ...], ...],
   "metrics": {
     "footSkatingRatio": 0.12,
     "jointJitter": 0.034,

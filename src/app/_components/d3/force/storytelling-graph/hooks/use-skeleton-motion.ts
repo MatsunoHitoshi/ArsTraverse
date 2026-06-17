@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useEffect, useState } from "react";
 import { api } from "@/trpc/react";
 import type { CustomLinkType } from "@/app/const/types";
 import type { SkeletonMotionData } from "@/app/const/skeleton-motion";
+import { buildMotionPrompt } from "@/app/_utils/kg/build-motion-prompt";
 
 export type UseSkeletonMotionResult = {
   getSkeletonMotion: (edgeId: string) => SkeletonMotionData | null;
@@ -57,6 +58,7 @@ export function useSkeletonMotion({
         jointNames: data.jointNames,
         boneConnections: data.boneConnections,
         frames: data.frames,
+        frames3d: data.frames3d,
       });
       setSkeletonCacheVersion((v) => v + 1);
     },
@@ -95,18 +97,4 @@ export function useSkeletonMotion({
     isLoading: mutation.isPending,
     skeletonCacheVersion,
   };
-}
-
-function buildMotionPrompt(edge: {
-  edgeType: string;
-  sourceName?: string;
-  sourceLabel?: string;
-  targetName?: string;
-  targetLabel?: string;
-}): string {
-  const parts: string[] = [];
-  if (edge.sourceName) parts.push(edge.sourceName);
-  parts.push(edge.edgeType.toLowerCase().replace(/_/g, " "));
-  if (edge.targetName) parts.push(edge.targetName);
-  return parts.join(" ");
 }
