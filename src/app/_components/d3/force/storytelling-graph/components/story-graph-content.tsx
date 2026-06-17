@@ -4,13 +4,18 @@ import { getEdgeCompositeKeyFromLink } from "@/app/const/story-segment";
 import { getMaxEdgeLabelFontSizeByLength } from "@/app/_utils/graph-label-utils";
 import { calcEdgeLabelPos, getDirectionalKey } from "../utils/graph-utils";
 import type { EdgeMotionConfig } from "@/app/const/edge-cdt-animation";
+import type { SkeletonMotionData } from "@/app/const/skeleton-motion";
 import {
   layoutPosWithNodePair,
   nodePairOffsetLayoutScale,
   type NodePairTransform,
 } from "@/app/const/edge-cdt-node-pair-animation";
-import { CdtAnimatedEdgePath, CdtEdgeGlowFilterDef } from "./cdt-animated-edge-path";
-import { EdgeSemanticPictogram } from "./edge-semantic-pictogram";
+import {
+  CdtAnimatedEdgePath,
+  CdtEdgeGlowFilterDef,
+} from "./cdt-animated-edge-path";
+import { SkeletonMotionRenderer } from "./skeleton-motion-renderer";
+import { EdgeSemanticMotionScene } from "./edge-semantic-pictogram";
 
 const MIN_DISPLAY_NODE_RADIUS = 3;
 
@@ -84,6 +89,8 @@ export function StoryGraphContent(props: {
   activeSemanticEdgeIds?: Set<string> | null;
   /** CDTカテゴリに基づくノードペアのビュー空間オフセット+スケール */
   getNodePairTransform?: (nodeId: string) => NodePairTransform | null;
+  /** T2Mモデルによる骨格モーションデータを取得する関数 */
+  getSkeletonMotion?: (edgeId: string) => SkeletonMotionData | null;
 }) {
   const {
     graphContentRef,
@@ -128,6 +135,7 @@ export function StoryGraphContent(props: {
     getEdgeMotionConfig,
     activeSemanticEdgeIds,
     getNodePairTransform,
+    getSkeletonMotion,
   } = props;
 
   const hasCdtEdges = pathItemsWithFocusIndex.some(
@@ -163,13 +171,34 @@ export function StoryGraphContent(props: {
               const link = item.link;
               const src = link.source as CustomNodeType;
               const tgt = link.target as CustomNodeType;
-              if (!src || !tgt || src.x == null || src.y == null || tgt.x == null || tgt.y == null) return null;
+              if (
+                !src ||
+                !tgt ||
+                src.x == null ||
+                src.y == null ||
+                tgt.x == null ||
+                tgt.y == null
+              )
+                return null;
               const [gsx, gsy] = nodeViewWithPair(src);
               const [gtx, gty] = nodeViewWithPair(tgt);
               return (
-                <linearGradient key={`edge-flow-${i}`} id={`edge-flow-${i}`} gradientUnits="userSpaceOnUse" x1={gsx} y1={gsy} x2={gtx} y2={gty}>
+                <linearGradient
+                  key={`edge-flow-${i}`}
+                  id={`edge-flow-${i}`}
+                  gradientUnits="userSpaceOnUse"
+                  x1={gsx}
+                  y1={gsy}
+                  x2={gtx}
+                  y2={gty}
+                >
                   {edgeFlowStops.map((stop, j) => (
-                    <stop key={j} offset={stop.offset} stopColor="#94a3b8" stopOpacity={stop.opacity} />
+                    <stop
+                      key={j}
+                      offset={stop.offset}
+                      stopColor="#94a3b8"
+                      stopOpacity={stop.opacity}
+                    />
                   ))}
                 </linearGradient>
               );
@@ -183,7 +212,13 @@ export function StoryGraphContent(props: {
             {communityDisplayData.map((comm) => {
               const gradientId = `storytelling-community-gradient-${comm.communityId}`;
               return (
-                <radialGradient key={gradientId} id={gradientId} cx="50%" cy="50%" r="50%">
+                <radialGradient
+                  key={gradientId}
+                  id={gradientId}
+                  cx="50%"
+                  cy="50%"
+                  r="50%"
+                >
                   <stop offset="0%" stopColor="#004df7" stopOpacity="0.25" />
                   <stop offset="50%" stopColor="#004df7" stopOpacity="0.12" />
                   <stop offset="100%" stopColor="#004df7" stopOpacity="0" />
@@ -197,7 +232,16 @@ export function StoryGraphContent(props: {
             const gradientId = `storytelling-community-gradient-${comm.communityId}`;
             return (
               <g key={comm.communityId}>
-                <circle cx={vx} cy={vy} r={viewRadius} fill={`url(#${gradientId})`} stroke="#334155" strokeWidth={1} strokeOpacity={0.4} className="pointer-events-none" />
+                <circle
+                  cx={vx}
+                  cy={vy}
+                  r={viewRadius}
+                  fill={`url(#${gradientId})`}
+                  stroke="#334155"
+                  strokeWidth={1}
+                  strokeOpacity={0.4}
+                  className="pointer-events-none"
+                />
                 {comm.title != null && comm.title !== "" && (
                   <text
                     x={vx}
@@ -228,7 +272,15 @@ export function StoryGraphContent(props: {
         const link = item.link;
         const source = link.source as CustomNodeType;
         const target = link.target as CustomNodeType;
-        if (!source || !target || source.x == null || source.y == null || target.x == null || target.y == null) return null;
+        if (
+          !source ||
+          !target ||
+          source.x == null ||
+          source.y == null ||
+          target.x == null ||
+          target.y == null
+        )
+          return null;
         const [sx, sy] = nodeViewWithPair(source);
         const [tx, ty] = nodeViewWithPair(target);
         const dirKey = getDirectionalKey(link);
@@ -246,15 +298,18 @@ export function StoryGraphContent(props: {
             ? edgeOpacities.focus
             : showFullGraph
               ? (() => {
-                const layoutDx = target.x - source.x;
-                const layoutDy = target.y - source.y;
-                const distance = Math.sqrt(layoutDx * layoutDx + layoutDy * layoutDy);
-                const normalizedDistance =
-                  linkDistanceRange.distanceRange > 0
-                    ? (distance - linkDistanceRange.minDistance) / linkDistanceRange.distanceRange
-                    : 0;
-                return 0.6 - normalizedDistance * 0.59;
-              })()
+                  const layoutDx = target.x - source.x;
+                  const layoutDy = target.y - source.y;
+                  const distance = Math.sqrt(
+                    layoutDx * layoutDx + layoutDy * layoutDy,
+                  );
+                  const normalizedDistance =
+                    linkDistanceRange.distanceRange > 0
+                      ? (distance - linkDistanceRange.minDistance) /
+                        linkDistanceRange.distanceRange
+                      : 0;
+                  return 0.6 - normalizedDistance * 0.59;
+                })()
               : edgeOpacities.focus;
           const useFlowGrad =
             shouldRunSteadyAnim &&
@@ -263,8 +318,6 @@ export function StoryGraphContent(props: {
             !getEdgeMotionConfig?.(link.id);
 
           const motionConfig = getEdgeMotionConfig?.(link.id) ?? null;
-          const edgeMidX = (sx + tx) / 2;
-          const edgeMidY = (sy + ty) / 2;
           const edgeFullyRevealed = effectiveEdgeProgress >= 1;
           const isSequencedCdtEdge =
             motionConfig != null && activeSemanticEdgeIds != null;
@@ -291,7 +344,9 @@ export function StoryGraphContent(props: {
                       : edgeStrokeWidthFocus * 0.85
                   }
                   strokeOpacity={cdtStrokeOpacity}
-                  revealProgress={edgeFullyRevealed ? undefined : effectiveEdgeProgress}
+                  revealProgress={
+                    edgeFullyRevealed ? undefined : effectiveEdgeProgress
+                  }
                   steadyAnimate={steadyCdtAnim}
                 />
               ) : useFlowGrad ? (
@@ -312,26 +367,24 @@ export function StoryGraphContent(props: {
                   pathLength={1}
                   strokeDasharray={1}
                   strokeDashoffset={1 - effectiveEdgeProgress}
-                  style={segmentProgress != null ? undefined : !isPc ? { transition: "stroke-dashoffset 100ms ease-out" } : undefined}
+                  style={
+                    segmentProgress != null
+                      ? undefined
+                      : !isPc
+                        ? { transition: "stroke-dashoffset 100ms ease-out" }
+                        : undefined
+                  }
                   strokeLinecap="round"
                   strokeOpacity={focusStrokeOpacity}
                   strokeWidth={edgeStrokeWidthFocus}
-                />
-              )}
-              {motionConfig && isActiveCdtEdge && (
-                <EdgeSemanticPictogram
-                  config={motionConfig}
-                  cx={edgeMidX}
-                  cy={edgeMidY}
-                  displayScale={displayScale}
-                  opacity={Math.max(0, Math.min(1, effectiveEdgeProgress * 2 - 0.5))}
                 />
               )}
             </g>
           );
         }
 
-        const isNeighborEdge = neighborNodeIdSet.has(source.id) || neighborNodeIdSet.has(target.id);
+        const isNeighborEdge =
+          neighborNodeIdSet.has(source.id) || neighborNodeIdSet.has(target.id);
         const baseEdgeOpacity = freeExploreMode
           ? isNeighborEdge
             ? edgeOpacities.exploreNeighbor
@@ -339,21 +392,23 @@ export function StoryGraphContent(props: {
           : isNeighborEdge
             ? edgeOpacities.neighbor
             : edgeOpacities.dim;
-        const edgeOpacity =
-          freeExploreMode
-            ? baseEdgeOpacity
-            : showFullGraph
-              ? (() => {
+        const edgeOpacity = freeExploreMode
+          ? baseEdgeOpacity
+          : showFullGraph
+            ? (() => {
                 const layoutDx = target.x - source.x;
                 const layoutDy = target.y - source.y;
-                const distance = Math.sqrt(layoutDx * layoutDx + layoutDy * layoutDy);
+                const distance = Math.sqrt(
+                  layoutDx * layoutDx + layoutDy * layoutDy,
+                );
                 const normalizedDistance =
                   linkDistanceRange.distanceRange > 0
-                    ? (distance - linkDistanceRange.minDistance) / linkDistanceRange.distanceRange
+                    ? (distance - linkDistanceRange.minDistance) /
+                      linkDistanceRange.distanceRange
                     : 0;
                 return 0.6 - normalizedDistance * 0.59;
               })()
-              : baseEdgeOpacity;
+            : baseEdgeOpacity;
         return (
           <g key={`path-${dirKey}-${i}`}>
             <path
@@ -374,43 +429,74 @@ export function StoryGraphContent(props: {
         if (!link) return null;
         const source = link.source as CustomNodeType;
         const target = link.target as CustomNodeType;
-        if (!source || !target || source.x == null || source.y == null || target.x == null || target.y == null) return null;
+        if (
+          !source ||
+          !target ||
+          source.x == null ||
+          source.y == null ||
+          target.x == null ||
+          target.y == null
+        )
+          return null;
         const pairCount = linksInPair.length;
-        const typesInPair = linksInPair.map((l) => l.type ?? "").filter(Boolean);
-        const isFocusEdge = linksInPair.some((l) => focusEdgeIdSet.has(getEdgeCompositeKeyFromLink(l)));
-        const showThisEdgeLabel = typesInPair.length > 0 && (showEdgeLabels || (isFocusEdge && !freeExploreMode && !showFullGraph));
+        const typesInPair = linksInPair
+          .map((l) => l.type ?? "")
+          .filter(Boolean);
+        const isFocusEdge = linksInPair.some((l) =>
+          focusEdgeIdSet.has(getEdgeCompositeKeyFromLink(l)),
+        );
+        const showThisEdgeLabel =
+          typesInPair.length > 0 &&
+          (showEdgeLabels ||
+            (isFocusEdge && !freeExploreMode && !showFullGraph));
         if (!showThisEdgeLabel) return null;
 
         const [sx, sy] = nodeViewWithPair(source);
         const [tx, ty] = nodeViewWithPair(target);
         const len = Math.sqrt((tx - sx) ** 2 + (ty - sy) ** 2) || 1;
 
-        const { x: labelX, y: labelY, angle } = calcEdgeLabelPos(sx, sy, tx, ty, hasExplicitEdges, isFocusEdge);
+        const {
+          x: labelX,
+          y: labelY,
+          angle,
+        } = calcEdgeLabelPos(sx, sy, tx, ty, hasExplicitEdges, isFocusEdge);
 
         const labelTextLength =
           expandedEdgePairKey === pairKey && pairCount > 1
             ? Math.max(...typesInPair.map((t) => t.length))
             : pairCount > 1
               ? (typesInPair[0]?.length ?? 0) + 3
-              : typesInPair[0]?.length ?? 1;
+              : (typesInPair[0]?.length ?? 1);
         const baseEdgeLabelFontSize = getEdgeLabelFontSize(isFocusEdge);
-        const maxFontSizeByEdge = getMaxEdgeLabelFontSizeByLength(len, labelTextLength);
-        const effectiveEdgeLabelFontSize = Math.max(4, Math.min(baseEdgeLabelFontSize, maxFontSizeByEdge));
+        const maxFontSizeByEdge = getMaxEdgeLabelFontSizeByLength(
+          len,
+          labelTextLength,
+        );
+        const effectiveEdgeLabelFontSize = Math.max(
+          4,
+          Math.min(baseEdgeLabelFontSize, maxFontSizeByEdge),
+        );
         const handleLabelClick =
           pairCount > 1
             ? (e: React.MouseEvent) => {
-              e.stopPropagation();
-              setExpandedEdgePairKey((prev) => (prev === pairKey ? null : pairKey));
-            }
+                e.stopPropagation();
+                setExpandedEdgePairKey((prev) =>
+                  prev === pairKey ? null : pairKey,
+                );
+              }
             : undefined;
 
         const labelContent =
           expandedEdgePairKey === pairKey && pairCount > 1
             ? typesInPair.map((t, j) => (
-              <tspan key={`${t}-${j}`} x={0} dy={j === 0 ? 0 : `${j * 1.2}em`}>
-                {t}
-              </tspan>
-            ))
+                <tspan
+                  key={`${t}-${j}`}
+                  x={0}
+                  dy={j === 0 ? 0 : `${j * 1.2}em`}
+                >
+                  {t}
+                </tspan>
+              ))
             : pairCount > 1
               ? `${typesInPair[0]} …`
               : typesInPair[0];
@@ -428,7 +514,9 @@ export function StoryGraphContent(props: {
                 textAnchor="middle"
                 fill="#94a3b8"
                 fontSize={effectiveEdgeLabelFontSize}
-                className={pairCount > 1 ? "cursor-pointer" : "pointer-events-none"}
+                className={
+                  pairCount > 1 ? "cursor-pointer" : "pointer-events-none"
+                }
                 opacity={Math.max(0, Math.min(1, edgeRevealProgress * 2 - 0.5))}
                 onClick={handleLabelClick}
               >
@@ -438,7 +526,8 @@ export function StoryGraphContent(props: {
           );
         }
 
-        const isNeighborEdge = neighborNodeIdSet.has(source.id) || neighborNodeIdSet.has(target.id);
+        const isNeighborEdge =
+          neighborNodeIdSet.has(source.id) || neighborNodeIdSet.has(target.id);
         const baseEdgeOpacity = freeExploreMode
           ? isNeighborEdge
             ? edgeOpacities.exploreNeighbor
@@ -446,21 +535,23 @@ export function StoryGraphContent(props: {
           : isNeighborEdge
             ? edgeOpacities.neighbor
             : edgeOpacities.dim;
-        const edgeOpacity =
-          freeExploreMode
-            ? baseEdgeOpacity
-            : showFullGraph
-              ? (() => {
+        const edgeOpacity = freeExploreMode
+          ? baseEdgeOpacity
+          : showFullGraph
+            ? (() => {
                 const layoutDx = target.x - source.x;
                 const layoutDy = target.y - source.y;
-                const distance = Math.sqrt(layoutDx * layoutDx + layoutDy * layoutDy);
+                const distance = Math.sqrt(
+                  layoutDx * layoutDx + layoutDy * layoutDy,
+                );
                 const normalizedDistance =
                   linkDistanceRange.distanceRange > 0
-                    ? (distance - linkDistanceRange.minDistance) / linkDistanceRange.distanceRange
+                    ? (distance - linkDistanceRange.minDistance) /
+                      linkDistanceRange.distanceRange
                     : 0;
                 return 0.6 - normalizedDistance * 0.59;
               })()
-              : baseEdgeOpacity;
+            : baseEdgeOpacity;
         return (
           <g
             key={`label-${pairKey}`}
@@ -473,10 +564,14 @@ export function StoryGraphContent(props: {
               textAnchor="middle"
               fill="#646368"
               fontSize={effectiveEdgeLabelFontSize}
-              className={pairCount > 1 ? "cursor-pointer" : "pointer-events-none"}
+              className={
+                pairCount > 1 ? "cursor-pointer" : "pointer-events-none"
+              }
               style={{
                 opacity: edgeOpacity,
-                ...(segmentProgress != null ? undefined : !isPc && { transition: "opacity 100ms ease-out" }),
+                ...(segmentProgress != null
+                  ? undefined
+                  : !isPc && { transition: "opacity 100ms ease-out" }),
               }}
               opacity={edgeRevealProgress}
               onClick={handleLabelClick}
@@ -500,7 +595,10 @@ export function StoryGraphContent(props: {
         const imageUrl = node.properties?.imageUrl as string | undefined;
         const showImage = imageUrl && !failedImageNodeIds.has(node.id);
         const rRaw = imageUrl ? baseR * 2.5 : baseR;
-        const r = freeExploreMode && scaleForSize > 1 ? Math.max(MIN_DISPLAY_NODE_RADIUS, rRaw) : rRaw;
+        const r =
+          freeExploreMode && scaleForSize > 1
+            ? Math.max(MIN_DISPLAY_NODE_RADIUS, rRaw)
+            : rRaw;
         const shouldShowThisNodeLabel =
           freeExploreMode || showFullGraph
             ? true
@@ -515,13 +613,19 @@ export function StoryGraphContent(props: {
             transform={`translate(${vx}, ${vy})`}
             style={{
               opacity,
-              ...(segmentProgress != null ? undefined : !isPc && { transition: "opacity 100ms ease-out" }),
+              ...(segmentProgress != null
+                ? undefined
+                : !isPc && { transition: "opacity 100ms ease-out" }),
               ...(freeExploreMode && {
                 cursor: draggingNodeId === node.id ? "grabbing" : "grab",
               }),
             }}
           >
-            <g transform={combinedScale !== 1 ? `scale(${combinedScale})` : undefined}>
+            <g
+              transform={
+                combinedScale !== 1 ? `scale(${combinedScale})` : undefined
+              }
+            >
               {showImage ? (
                 <>
                   <defs>
@@ -538,29 +642,111 @@ export function StoryGraphContent(props: {
                       href={imageUrl}
                       preserveAspectRatio="xMidYMid slice"
                       onError={() => {
-                        setFailedImageNodeIds((prev) => new Set(prev).add(node.id));
+                        setFailedImageNodeIds((prev) =>
+                          new Set(prev).add(node.id),
+                        );
                       }}
                     />
                   </g>
-                  <circle r={r} fill="none" stroke="#94a3b8" strokeWidth={nodeStrokeWidth} />
+                  <circle
+                    r={r}
+                    fill="none"
+                    stroke="#94a3b8"
+                    strokeWidth={nodeStrokeWidth}
+                  />
                 </>
               ) : (
-                <circle r={r} fill="#e2e8f0" stroke="#94a3b8" strokeWidth={nodeStrokeWidth / 2} />
-              )}
-              {shouldShowThisNodeLabel && getNodeLabelFontSize(isFocusNode) > 0 && (
-                <text
-                  y={-10}
-                  textAnchor="middle"
+                <circle
+                  r={r}
                   fill="#e2e8f0"
-                  fontSize={getNodeLabelFontSize(isFocusNode)}
-                  fontWeight={focusNodeIdSet.has(node.id) ? "bold" : "normal"}
-                  className="pointer-events-none select-none"
-                >
-                  {node.name}
-                </text>
+                  stroke="#94a3b8"
+                  strokeWidth={nodeStrokeWidth / 2}
+                />
               )}
+              {shouldShowThisNodeLabel &&
+                getNodeLabelFontSize(isFocusNode) > 0 && (
+                  <text
+                    y={-10}
+                    textAnchor="middle"
+                    fill="#e2e8f0"
+                    fontSize={getNodeLabelFontSize(isFocusNode)}
+                    fontWeight={focusNodeIdSet.has(node.id) ? "bold" : "normal"}
+                    className="pointer-events-none select-none"
+                  >
+                    {node.name}
+                  </text>
+                )}
             </g>
           </g>
+        );
+      })}
+
+      {/* 4. ノードペアの具象 motion scene はノード circle より前面に描画 */}
+      {pathItemsWithFocusIndex.map((item, i) => {
+        const link = item.link;
+        const source = link.source as CustomNodeType;
+        const target = link.target as CustomNodeType;
+        if (
+          !hasExplicitEdges ||
+          !item.hasFocus ||
+          !source ||
+          !target ||
+          source.x == null ||
+          source.y == null ||
+          target.x == null ||
+          target.y == null
+        ) {
+          return null;
+        }
+
+        const [sx, sy] = nodeViewWithPair(source);
+        const [tx, ty] = nodeViewWithPair(target);
+        const effectiveEdgeProgress = freeExploreMode
+          ? 1
+          : showFullGraph
+            ? overviewEdgeProgress
+            : edgeRevealProgress;
+        const edgeOpacity = Math.max(0, Math.min(1, effectiveEdgeProgress * 2 - 0.5));
+
+        // T2M骨格モーションを優先的に描画
+        const skeletonData = getSkeletonMotion?.(link.id) ?? null;
+        if (skeletonData) {
+          const midX = (sx + tx) / 2;
+          const midY = (sy + ty) / 2;
+          const facesLeft = tx < sx;
+          return (
+            <SkeletonMotionRenderer
+              key={`skeleton-motion-${link.id}-${i}`}
+              motionData={skeletonData}
+              globalX={midX}
+              globalY={midY}
+              displayScale={displayScale}
+              opacity={edgeOpacity}
+              facesLeft={facesLeft}
+            />
+          );
+        }
+
+        // フォールバック: 旧CDTモーションシーン
+        const motionConfig = getEdgeMotionConfig?.(link.id) ?? null;
+        if (!motionConfig) return null;
+
+        const isSequencedCdtEdge = activeSemanticEdgeIds != null;
+        const isActiveCdtEdge =
+          !isSequencedCdtEdge || activeSemanticEdgeIds.has(link.id);
+        if (!isActiveCdtEdge) return null;
+
+        return (
+          <EdgeSemanticMotionScene
+            key={`semantic-motion-scene-${link.id}-${i}`}
+            config={motionConfig}
+            sourceX={sx}
+            sourceY={sy}
+            targetX={tx}
+            targetY={ty}
+            displayScale={displayScale}
+            opacity={edgeOpacity}
+          />
         );
       })}
     </g>
