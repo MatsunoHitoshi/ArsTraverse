@@ -268,6 +268,7 @@ export function interpolateFrame(
   frames: [number, number][][],
   frameIndex: number,
 ): [number, number][] {
+  if (frames.length === 0) return [];
   const floorIdx = Math.floor(frameIndex);
   const ceilIdx = Math.ceil(frameIndex);
   const t = frameIndex - floorIdx;
@@ -304,6 +305,7 @@ export function interpolateFrame3d(
   frames: JointPose3d[][],
   frameIndex: number,
 ): JointPose3d[] {
+  if (frames.length === 0) return [];
   const floorIdx = Math.floor(frameIndex);
   const ceilIdx = Math.ceil(frameIndex);
   const t = frameIndex - floorIdx;
