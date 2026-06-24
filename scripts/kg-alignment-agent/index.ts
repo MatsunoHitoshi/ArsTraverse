@@ -13,6 +13,7 @@ async function main() {
     config.baseUrl,
     config.sessionCookie,
     config.userAuthToken,
+    config.accessToken,
   );
 
   const logger = new RunLogger(config.topicSpaceId, config.resumeRunId);

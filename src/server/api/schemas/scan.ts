@@ -16,7 +16,7 @@ export const OcrMetadataSchema = z
     confidence: z.number().optional(),
     processedAt: z.string().optional(),
     regions: z.array(OcrRegionSchema).optional(),
-    /** Stored for INPUT_SCAN display when storage URL is unavailable. */
+    /** INPUT_SCAN のみ。Storage URL が使えない場合の表示フォールバック用。 */
     plainText: z.string().optional(),
   })
   .catchall(z.unknown());

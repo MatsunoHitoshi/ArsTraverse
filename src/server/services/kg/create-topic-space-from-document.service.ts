@@ -98,6 +98,41 @@ export async function createTopicSpaceFromDocument(
           skipDuplicates: true,
         });
       }
+
+      const nodeProvenanceData = graphData.nodes
+        .map((node) => {
+          const graphNodeId = oldToNewNodeIdMap.get(node.id);
+          if (!graphNodeId || !params.documentId) {
+            return null;
+          }
+          return {
+            topicSpaceId: topicSpace.id,
+            sourceDocumentId: params.documentId,
+            graphNodeId,
+            localNodeId: node.id,
+          };
+        })
+        .filter((row): row is NonNullable<typeof row> => row !== null);
+
+      if (nodeProvenanceData.length > 0) {
+        await tx.topicSpaceDocumentNodeProvenance.createMany({
+          data: nodeProvenanceData,
+        });
+      }
+
+      const createdRelationships = await tx.graphRelationship.findMany({
+        where: { topicSpaceId: topicSpace.id },
+      });
+      const sourceDocumentId = params.documentId;
+      if (createdRelationships.length > 0 && sourceDocumentId) {
+        await tx.topicSpaceDocumentEdgeProvenance.createMany({
+          data: createdRelationships.map((relationship) => ({
+            topicSpaceId: topicSpace.id,
+            sourceDocumentId,
+            graphRelationshipId: relationship.id,
+          })),
+        });
+      }
     }
 
     return topicSpace;

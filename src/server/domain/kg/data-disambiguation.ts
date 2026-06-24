@@ -16,11 +16,7 @@ const deleteDuplicatedRelationships = (relationships: GraphRelationship[]) => {
       )
     );
   });
-  const mergedRelationships = filteredRelationships.map((relationship) => ({
-    ...relationship,
-    id: createId(),
-  }));
-  return mergedRelationships;
+  return filteredRelationships;
 };
 
 export const mergerNodes = (
@@ -140,7 +136,11 @@ const mergerGraphsWithDuplicatedNodeName = (p: {
 
   const deduplicatedRelationships =
     deleteDuplicatedRelationships(newRelationships);
-  return { nodes: newNodes, relationships: deduplicatedRelationships };
+  return {
+    nodes: newNodes,
+    relationships: deduplicatedRelationships,
+    nodeIdRecords,
+  };
 };
 
 const simpleMerge = (graph: {

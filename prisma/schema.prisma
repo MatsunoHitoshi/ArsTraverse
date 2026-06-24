@@ -227,6 +227,8 @@ model TopicSpace {
 
   // ドキュメントアタッチ時に追加されたエッジの出所（detach 時に完全復元するため）
   edgeProvenances TopicSpaceDocumentEdgeProvenance[]
+  // ドキュメントアタッチ時のノード対応（detach 時に共有ノードを残すため）
+  nodeProvenances TopicSpaceDocumentNodeProvenance[]
 }
 
 model TopicSpaceDocumentEdgeProvenance {
@@ -241,6 +243,22 @@ model TopicSpaceDocumentEdgeProvenance {
 
   @@unique([topicSpaceId, sourceDocumentId, graphRelationshipId])
   @@index([topicSpaceId, sourceDocumentId])
+}
+
+model TopicSpaceDocumentNodeProvenance {
+  id               String   @id @default(cuid())
+  topicSpaceId     String
+  sourceDocumentId String // FK にしない（ドキュメント削除時の扱いを単純化）
+  graphNodeId      String // TopicSpace 上のノード ID
+  localNodeId      String // DocumentGraph 上のノード ID
+
+  topicSpace TopicSpace @relation(fields: [topicSpaceId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([topicSpaceId, sourceDocumentId, localNodeId])
+  @@index([topicSpaceId, sourceDocumentId])
+  @@index([topicSpaceId, graphNodeId])
 }
 
 enum GraphDataStatus {

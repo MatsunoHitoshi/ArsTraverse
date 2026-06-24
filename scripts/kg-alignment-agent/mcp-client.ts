@@ -30,6 +30,7 @@ export class TopicSpaceMcpClient {
     private readonly baseUrl: string,
     private readonly sessionCookie: string,
     private readonly userAuthToken?: string,
+    private readonly accessToken?: string,
     storedIdentifier?: string | null,
   ) {
     this.identifier = resolveMcpToolIdentifier(
@@ -55,7 +56,9 @@ export class TopicSpaceMcpClient {
       `${baseUrl.replace(/\/$/, "")}/api/topic-spaces/${topicSpaceId}/mcp`,
     );
     const headers: Record<string, string> = {};
-    if (sessionCookie) {
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    } else if (sessionCookie) {
       headers.Cookie = sessionCookie.includes("=")
         ? sessionCookie
         : `next-auth.session-token=${sessionCookie}`;

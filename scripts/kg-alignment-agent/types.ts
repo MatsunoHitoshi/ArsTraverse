@@ -76,6 +76,7 @@ export type AgentConfig = {
   baseUrl: string;
   sessionCookie: string;
   userAuthToken?: string;
+  accessToken?: string;
   model: string;
   dryRun: boolean;
   withContext: boolean;

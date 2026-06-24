@@ -93,6 +93,20 @@ export async function attachDocumentsToTopicSpace(
       });
     }
 
+    const nodeProvenanceData = updatedGraphData.nodeProvenance.flatMap((p) =>
+      p.mappings.map((mapping) => ({
+        topicSpaceId: input.id,
+        sourceDocumentId: p.sourceDocumentId,
+        graphNodeId: mapping.graphNodeId,
+        localNodeId: mapping.localNodeId,
+      })),
+    );
+    if (nodeProvenanceData.length > 0) {
+      await tx.topicSpaceDocumentNodeProvenance.createMany({
+        data: nodeProvenanceData,
+      });
+    }
+
     return documentAttachedTopicSpace;
   });
 }

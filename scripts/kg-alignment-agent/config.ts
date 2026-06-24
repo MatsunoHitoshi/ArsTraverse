@@ -49,7 +49,8 @@ Options:
   --help             Show this help
 
 Environment:
-  ALIGNMENT_AGENT_SESSION_COOKIE   (required for writes) next-auth session cookie
+  ALIGNMENT_AGENT_MCP_ACCESS_TOKEN (recommended) /mcp/authorize で発行した mcp1 トークン
+  ALIGNMENT_AGENT_SESSION_COOKIE   next-auth session cookie
   ALIGNMENT_AGENT_USER_AUTH_TOKEN  (optional) embedding search token
   ALIGNMENT_AGENT_BASE_URL
   ALIGNMENT_AGENT_MODEL
@@ -73,9 +74,10 @@ export function loadConfig(argv: string[]): AgentConfig {
 
   const sessionCookie =
     process.env.ALIGNMENT_AGENT_SESSION_COOKIE?.trim() ?? "";
-  if (!sessionCookie && args["dry-run"] !== true) {
+  const accessToken = process.env.ALIGNMENT_AGENT_MCP_ACCESS_TOKEN?.trim();
+  if (!sessionCookie && !accessToken && args["dry-run"] !== true) {
     console.warn(
-      "警告: ALIGNMENT_AGENT_SESSION_COOKIE が未設定です。書き込みツールは失敗する可能性があります。",
+      "警告: ALIGNMENT_AGENT_MCP_ACCESS_TOKEN または ALIGNMENT_AGENT_SESSION_COOKIE が未設定です。書き込みツールは失敗する可能性があります。",
     );
   }
 
@@ -87,6 +89,7 @@ export function loadConfig(argv: string[]): AgentConfig {
       "http://localhost:3000",
     sessionCookie,
     userAuthToken: process.env.ALIGNMENT_AGENT_USER_AUTH_TOKEN?.trim(),
+    accessToken,
     model:
       (typeof args.model === "string" ? args.model : undefined) ??
       process.env.ALIGNMENT_AGENT_MODEL ??

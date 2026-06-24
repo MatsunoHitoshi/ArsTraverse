@@ -21,6 +21,10 @@ export async function attachTopicSpaceGraphData(
   nodes: GraphNode[];
   relationships: GraphRelationship[];
   provenance: Array<{ sourceDocumentId: string; relationshipIds: string[] }>;
+  nodeProvenance: Array<{
+    sourceDocumentId: string;
+    mappings: Array<{ localNodeId: string; graphNodeId: string }>;
+  }>;
 }> {
   let newGraphNodes: GraphNode[] = topicSpace.graphNodes;
   let newGraphRelationships: GraphRelationship[] =
@@ -29,6 +33,10 @@ export async function attachTopicSpaceGraphData(
   const provenance: Array<{
     sourceDocumentId: string;
     relationshipIds: string[];
+  }> = [];
+  const nodeProvenance: Array<{
+    sourceDocumentId: string;
+    mappings: Array<{ localNodeId: string; graphNodeId: string }>;
   }> = [];
 
   if (additionalGraphIds.length > 0) {
@@ -73,6 +81,15 @@ export async function attachTopicSpaceGraphData(
             relationshipIds: addedRelationshipIds,
           });
         }
+        if (sourceDocumentId && fusedGraph.nodeIdRecords.length > 0) {
+          nodeProvenance.push({
+            sourceDocumentId,
+            mappings: fusedGraph.nodeIdRecords.map((record) => ({
+              localNodeId: record.prevId,
+              graphNodeId: record.newId,
+            })),
+          });
+        }
       }
 
       newGraphNodes = fusedGraph.nodes;
@@ -96,7 +113,27 @@ export async function attachTopicSpaceGraphData(
   return {
     ...newGraphWithProperties,
     provenance,
+    nodeProvenance,
   };
+}
+
+export function resolveDetachedNodeIds(params: {
+  documentNodeProvenance: Array<{ graphNodeId: string }>;
+  otherDocumentsNodeProvenance: Array<{ graphNodeId: string }>;
+}): Set<string> {
+  const fromThisDoc = new Set(
+    params.documentNodeProvenance.map((row) => row.graphNodeId),
+  );
+  const fromOthers = new Set(
+    params.otherDocumentsNodeProvenance.map((row) => row.graphNodeId),
+  );
+  const deleted = new Set<string>();
+  for (const graphNodeId of fromThisDoc) {
+    if (!fromOthers.has(graphNodeId)) {
+      deleted.add(graphNodeId);
+    }
+  }
+  return deleted;
 }
 
 export async function detachTopicSpaceGraphData(
