@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import { mergerNodes } from "@/server/domain/kg/data-disambiguation";
 import type { NodeTypeForFrontend } from "@/app/const/types";
 import { findTopicSpaceWithGraphAndAssertAdmin } from "@/server/repositories/topic-space-graph.repository";
+import { reassignTopicSpaceNodeProvenanceOnMerge } from "@/server/repositories/topic-space-document-provenance.repository";
 import { applyTopicSpaceGraphDiff } from "./apply-topic-space-graph-diff.service";
 
 export async function mergeGraphNodes(
@@ -21,6 +22,12 @@ export async function mergeGraphNodes(
   const prevNodes = topicSpace.graphNodes;
   const prevRelationships = topicSpace.graphRelationships;
 
+  const canonicalNodeId = params.nodesToMerge[0]?.id;
+  const duplicateNodeIds = params.nodesToMerge
+    .slice(1)
+    .map((node) => node.id)
+    .filter((id) => id !== canonicalNodeId);
+
   const updatedGraphData = mergerNodes(
     {
       nodes: prevNodes,
@@ -31,6 +38,15 @@ export async function mergeGraphNodes(
 
   await db.$transaction(
     async (tx) => {
+      if (canonicalNodeId && duplicateNodeIds.length > 0) {
+        await reassignTopicSpaceNodeProvenanceOnMerge(
+          tx,
+          params.topicSpaceId,
+          canonicalNodeId,
+          duplicateNodeIds,
+        );
+      }
+
       await applyTopicSpaceGraphDiff(tx, {
         topicSpaceId: params.topicSpaceId,
         userId: params.userId,

@@ -4,8 +4,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { api } from "@/trpc/server";
 import { TRPCError } from "@trpc/server";
 import type { NextRequest } from "next/server";
-import { getServerAuthSession } from "@/server/auth";
-import { db } from "@/server/db";
+import { resolveMcpAuth } from "@/server/mcp/resolve-mcp-auth";
 import { resolveMcpToolIdentifier } from "@/app/_utils/mcp/mcp-tool-identifier";
 import type { McpDraftHandlerCtx } from "@/server/mcp/graph-edit-draft-handlers";
 import {
@@ -69,28 +68,6 @@ type DuplicateCandidate = {
   similarityScore: number;
   matchSource: "embedding" | "string";
 };
-
-async function resolveUserAuthToken(
-  request: NextRequest,
-): Promise<string | null> {
-  const fromHeader = request.headers.get("User-Authorization");
-  if (fromHeader) {
-    return fromHeader;
-  }
-
-  const session = await getServerAuthSession();
-  if (!session?.user?.id) {
-    return null;
-  }
-
-  const account = await db.account.findFirst({
-    where: { userId: session.user.id },
-    select: { id_token: true },
-    orderBy: { updatedAt: "desc" },
-  });
-
-  return account?.id_token ?? null;
-}
 
 function stringMatchScore(query: string, name: string): number {
   const q = query.toLowerCase().trim();
@@ -1477,11 +1454,13 @@ const routeHandler = async (
     }
     throw error;
   }
-  const userAuthToken = await resolveUserAuthToken(request);
-  const session = await getServerAuthSession();
-  const draftCtx: McpDraftHandlerCtx | null = session?.user?.id
-    ? { db, userId: session.user.id }
-    : null;
+  const mcpAuth = await resolveMcpAuth(request, topicSpaceId);
+  if (!mcpAuth.ok) {
+    return new Response(mcpAuth.message, { status: mcpAuth.status });
+  }
+
+  const { auth, draftCtx } = mcpAuth;
+  const userAuthToken = auth.userAuthToken;
 
   const mcpToolIdentifier = resolveMcpToolIdentifier(
     topicSpaceId,

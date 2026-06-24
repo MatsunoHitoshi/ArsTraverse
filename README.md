@@ -257,6 +257,7 @@ supabase/
 - [グラフ統計パネル（D3 可視化）](./docs/graph-statistics-panel.md)
 - [公開記事のストーリーテリングと URL クエリ](./docs/storytelling-public-viewer-and-urls.md)
 - [公開 Unified ビューのスクロール・ガード・レイアウト詳細](./docs/storytelling-scroll-viewer.md)
+- [MCP 認証（外部クライアント向け API キー）](./docs/mcp-authentication.md)
 
 ## Available Scripts
 

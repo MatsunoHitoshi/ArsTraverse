@@ -2,7 +2,10 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { assertTopicSpaceAdmin } from "@/server/repositories/topic-space-graph.repository";
 import { applyTopicSpaceGraphDiff } from "./apply-topic-space-graph-diff.service";
-import { detachTopicSpaceGraphData } from "./topic-space-graph-fusion.service";
+import {
+  detachTopicSpaceGraphData,
+  resolveDetachedNodeIds,
+} from "./topic-space-graph-fusion.service";
 
 type DetachDocumentsCtx = {
   db: PrismaClient;
@@ -51,12 +54,44 @@ export async function detachDocumentsFromTopicSpace(
     throw new Error("Document graph not found");
   }
 
-  const detachedGraphData = await detachTopicSpaceGraphData(
-    topicSpace,
-    documentGraphId,
-    leftGraphIds.filter((id): id is string => id !== undefined),
-    ctx,
-  );
+  const nodeProvenanceRows =
+    await ctx.db.topicSpaceDocumentNodeProvenance.findMany({
+      where: {
+        topicSpaceId: input.id,
+        sourceDocumentId: input.documentId,
+      },
+    });
+
+  const otherDocumentIds = topicSpace.sourceDocuments
+    .filter((sourceDocument) => sourceDocument.id !== input.documentId)
+    .map((sourceDocument) => sourceDocument.id);
+
+  let deletedNodeIds: Set<string>;
+  if (nodeProvenanceRows.length > 0) {
+    const otherNodeProvenanceRows =
+      otherDocumentIds.length > 0
+        ? await ctx.db.topicSpaceDocumentNodeProvenance.findMany({
+            where: {
+              topicSpaceId: input.id,
+              sourceDocumentId: { in: otherDocumentIds },
+            },
+          })
+        : [];
+    deletedNodeIds = resolveDetachedNodeIds({
+      documentNodeProvenance: nodeProvenanceRows,
+      otherDocumentsNodeProvenance: otherNodeProvenanceRows,
+    });
+  } else {
+    const detachedGraphData = await detachTopicSpaceGraphData(
+      topicSpace,
+      documentGraphId,
+      leftGraphIds.filter((id): id is string => id !== undefined),
+      ctx,
+    );
+    deletedNodeIds = new Set(
+      detachedGraphData.deletedNodes.map((node) => node.id),
+    );
+  }
 
   const provenanceEdges =
     await ctx.db.topicSpaceDocumentEdgeProvenance.findMany({
@@ -66,11 +101,13 @@ export async function detachDocumentsFromTopicSpace(
       },
     });
 
-  const deletedNodeIds = new Set(
-    detachedGraphData.deletedNodes.map((node) => node.id),
-  );
   const edgeIdsToRemove = new Set([
-    ...detachedGraphData.deletedRelationships.map((r) => r.id),
+    ...prevRelationships
+      .filter(
+        (rel) =>
+          deletedNodeIds.has(rel.fromNodeId) || deletedNodeIds.has(rel.toNodeId),
+      )
+      .map((rel) => rel.id),
     ...provenanceEdges.map((p) => p.graphRelationshipId),
   ]);
 
@@ -101,6 +138,13 @@ export async function detachDocumentsFromTopicSpace(
     });
 
     await tx.topicSpaceDocumentEdgeProvenance.deleteMany({
+      where: {
+        topicSpaceId: input.id,
+        sourceDocumentId: input.documentId,
+      },
+    });
+
+    await tx.topicSpaceDocumentNodeProvenance.deleteMany({
       where: {
         topicSpaceId: input.id,
         sourceDocumentId: input.documentId,

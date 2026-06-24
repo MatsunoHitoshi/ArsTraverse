@@ -9,7 +9,17 @@
 
 ## 2. 認証情報の取得
 
-### セッション Cookie（必須: 書き込み時）
+### MCP アクセストークン（推奨）
+
+1. ブラウザで `/mcp/authorize?client=kg-alignment-agent&topic_space_id=YOUR_TOPIC_SPACE_ID` を開く
+2. Google でログインし、対象 TopicSpace を選んでトークンを発行
+3. 環境変数に設定:
+
+```bash
+export ALIGNMENT_AGENT_MCP_ACCESS_TOKEN='mcp1....'
+```
+
+### セッション Cookie（代替）
 
 1. ブラウザで `http://localhost:3000` にログイン
 2. DevTools → Application → Cookies
@@ -28,7 +38,7 @@ embedding 検索用。ログインユーザの OAuth `id_token` を MCP の `Use
 export ALIGNMENT_AGENT_USER_AUTH_TOKEN='eyJ...'
 ```
 
-未設定時は文字列類似のみ。MCP レスポンスに `embeddingSkippedReason` が含まれる。
+アクセストークン・Cookie のいずれも未設定の場合、書き込みツールは失敗する。`User-Authorization` 未設定時は embedding 検索がスキップされ、MCP レスポンスに `embeddingSkippedReason` が含まれる。
 
 ## 3. 基本コマンド
 
