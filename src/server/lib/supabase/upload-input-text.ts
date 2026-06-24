@@ -21,9 +21,16 @@ function readLocalServiceRoleKeyFromCli(): string | null {
   }
 }
 
+let cachedServiceRoleKey: string | null = null;
+
 function resolveServiceRoleKey(): string {
+  if (cachedServiceRoleKey) {
+    return cachedServiceRoleKey;
+  }
+
   const fromEnv = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (fromEnv) {
+    cachedServiceRoleKey = fromEnv;
     return fromEnv;
   }
 
@@ -31,6 +38,7 @@ function resolveServiceRoleKey(): string {
   if (isLocalSupabaseUrl(supabaseUrl)) {
     const fromCli = readLocalServiceRoleKeyFromCli();
     if (fromCli) {
+      cachedServiceRoleKey = fromCli;
       return fromCli;
     }
   }

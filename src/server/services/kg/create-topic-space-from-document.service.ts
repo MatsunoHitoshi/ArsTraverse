@@ -120,13 +120,10 @@ export async function createTopicSpaceFromDocument(
         });
       }
 
-      const createdRelationships = await tx.graphRelationship.findMany({
-        where: { topicSpaceId: topicSpace.id },
-      });
       const sourceDocumentId = params.documentId;
-      if (createdRelationships.length > 0 && sourceDocumentId) {
+      if (graphData.relationships.length > 0 && sourceDocumentId) {
         await tx.topicSpaceDocumentEdgeProvenance.createMany({
-          data: createdRelationships.map((relationship) => ({
+          data: graphData.relationships.map((relationship) => ({
             topicSpaceId: topicSpace.id,
             sourceDocumentId,
             graphRelationshipId: relationship.id,

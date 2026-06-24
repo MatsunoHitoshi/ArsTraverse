@@ -105,6 +105,7 @@ export function parseNodeMergeOperationsFromChangeHistory(history: {
   }
 
   const removedIds = new Set(removedNodeSnapshots.map((row) => row.oldId));
+  // エッジ UPDATE から代表ノードを推定する。接続エッジのない統合は復元できない。
   const canonicalByRemovedId = new Map<string, string>();
 
   for (const row of history.nodeLinkChangeHistories) {
