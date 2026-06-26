@@ -55,13 +55,31 @@ async function upsertDriveSourceDocument(
     mimeType: input.file.mimeType,
   });
 
+  const existing = input.existingDocumentId
+    ? await ctx.db.sourceDocument.findFirst({
+        where: { id: input.existingDocumentId, isDeleted: false },
+        include: { graph: true },
+      })
+    : null;
+
+  if (existing?.contentHash === input.contentHash) {
+    if (!input.isAttached) {
+      await attachDocumentsToTopicSpace(ctx, {
+        id: input.topicSpaceId,
+        documentIds: [existing.id],
+      });
+      return "updated";
+    }
+    return "skipped";
+  }
+
   const extracted = await runExtractKGFromPlainText(input.plainText);
   if (!extracted) {
     throw new Error("知識グラフの抽出に失敗しました");
   }
   const dataJson = KnowledgeGraphInputSchema.parse(extracted);
 
-  if (!input.existingDocumentId) {
+  if (!existing) {
     const { sourceDocument } = await createSourceDocumentWithGraph(ctx, {
       name: input.file.name,
       url: webViewUrl,
@@ -81,17 +99,8 @@ async function upsertDriveSourceDocument(
     return "created";
   }
 
-  const existing = await ctx.db.sourceDocument.findFirst({
-    where: { id: input.existingDocumentId, isDeleted: false },
-    include: { graph: true },
-  });
-
-  if (!existing?.graph) {
+  if (!existing.graph) {
     throw new Error("既存 SourceDocument の DocumentGraph が見つかりません");
-  }
-
-  if (existing.contentHash === input.contentHash) {
-    return "skipped";
   }
 
   if (input.isAttached) {
@@ -145,7 +154,7 @@ export async function syncTopicSpaceDriveFolder(
   if (!topicSpace) {
     throw new TRPCError({
       code: "NOT_FOUND",
-      message: "TopicSpace が見つかりません。",
+      message: "リポジトリが見つかりません。",
     });
   }
 

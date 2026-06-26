@@ -19,6 +19,12 @@ export async function replaceDocumentGraphFromExtraction(
   const relationships = input.dataJson
     .relationships as RelationshipTypeForFrontend[];
 
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const validRelationships = relationships.filter(
+    (relationship) =>
+      nodeIds.has(relationship.sourceId) && nodeIds.has(relationship.targetId),
+  );
+
   return db.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.graphRelationship.deleteMany({
       where: { documentGraphId: input.documentGraphId },
@@ -39,9 +45,9 @@ export async function replaceDocumentGraphFromExtraction(
       });
     }
 
-    if (relationships.length > 0) {
+    if (validRelationships.length > 0) {
       await tx.graphRelationship.createMany({
-        data: relationships.map((relationship) => ({
+        data: validRelationships.map((relationship) => ({
           id: relationship.id,
           fromNodeId: relationship.sourceId,
           toNodeId: relationship.targetId,

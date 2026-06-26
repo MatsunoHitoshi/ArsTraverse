@@ -65,7 +65,7 @@ export function TopicSpaceDriveSyncPanel({
     <div className="flex flex-col gap-3 rounded-md border border-slate-700/60 bg-slate-900/30 p-3">
       <div className="text-sm font-semibold">Google Drive 同期</div>
       <p className="text-xs text-slate-400">
-        ログイン中の Google アカウントの Drive フォルダを選び、資料を TopicSpace
+        ログイン中の Google アカウントの Drive フォルダを選び、資料をリポジトリ
         に取り込みます。
       </p>
 
@@ -157,7 +157,7 @@ export function TopicSpaceDriveSyncPanel({
       </div>
 
       {status?.lastSyncedAt && (
-        <div className="text-xs text-slate-400">
+        <div className="text-xs text-slate-400" suppressHydrationWarning>
           最終同期: {new Date(status.lastSyncedAt).toLocaleString("ja-JP")}
           {status.lastSyncStatus ? ` (${status.lastSyncStatus})` : ""}
         </div>

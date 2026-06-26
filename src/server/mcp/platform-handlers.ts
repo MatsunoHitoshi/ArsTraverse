@@ -229,7 +229,7 @@ export async function mcpCreateSourceDocumentFromPlainText(
     relationshipCount: graph.relationships.length,
     graph,
     message:
-      "SourceDocument を作成し、LLM による知識グラフ抽出を完了しました。TopicSpace を作成する場合は create_topic_space_from_source_documents を使用してください。",
+      "SourceDocument を作成し、LLM による知識グラフ抽出を完了しました。リポジトリを作成する場合は create_topic_space_from_source_documents を使用してください。",
   };
 }
 
@@ -265,7 +265,7 @@ export async function mcpCreateTopicSpaceFromSourceDocuments(
     relationshipCount: result.relationshipCount,
     linkedDocuments: result.linkedDocuments,
     message:
-      "TopicSpace（リポジトリ）を作成し、指定した SourceDocument のグラフを統合しました。",
+      "リポジトリを作成し、指定した SourceDocument のグラフを統合しました。",
   };
 }
 
@@ -294,7 +294,7 @@ export async function mcpGetTopicSpaceGraph(
   if (!topicSpace) {
     throw new TRPCError({
       code: "NOT_FOUND",
-      message: "TopicSpace が見つからないか、アクセス権がありません。",
+      message: "リポジトリが見つからないか、アクセス権がありません。",
     });
   }
 
@@ -364,7 +364,7 @@ export async function mcpAttachDocumentsToTopicSpace(
     nodeCount,
     relationshipCount,
     message:
-      "SourceDocument を TopicSpace に統合しました。node / edge provenance も記録されます。",
+      "SourceDocument をリポジトリに統合しました。node / edge provenance も記録されます。",
   };
 }
 
@@ -416,7 +416,7 @@ export async function mcpDetachDocumentFromTopicSpace(
     nodeCount,
     relationshipCount,
     message:
-      "SourceDocument を TopicSpace から切り離しました。当該ドキュメント由来の provenance も削除されます。",
+      "SourceDocument をリポジトリから切り離しました。当該ドキュメント由来の provenance も削除されます。",
   };
 }
 
@@ -446,7 +446,7 @@ export async function mcpGetTopicSpaceChangeHistory(
     count: histories.length,
     histories,
     message:
-      "TopicSpace の変更履歴を取得しました。isNodeMerge=true の行が UI 手動統合の履歴です。",
+      "リポジトリの変更履歴を取得しました。isNodeMerge=true の行が UI 手動統合の履歴です。",
   };
 }
 
@@ -552,7 +552,7 @@ export async function mcpGetTopicSpaceDriveSyncStatus(
   if (!topicSpace) {
     throw new TRPCError({
       code: "NOT_FOUND",
-      message: "TopicSpace が見つからないか、アクセス権がありません。",
+      message: "リポジトリが見つからないか、アクセス権がありません。",
     });
   }
 

@@ -57,6 +57,7 @@ export async function listDriveFilesInFolder(
   const drive = driveClient;
   const files: DriveFileMeta[] = [];
   const queue = [input.folderId];
+  const visited = new Set<string>([input.folderId]);
 
   while (queue.length > 0) {
     const currentFolderId = queue.shift();
@@ -80,7 +81,8 @@ export async function listDriveFilesInFolder(
         }
 
         if (file.mimeType === "application/vnd.google-apps.folder") {
-          if (input.recursive) {
+          if (input.recursive && !visited.has(file.id)) {
+            visited.add(file.id);
             queue.push(file.id);
           }
           continue;

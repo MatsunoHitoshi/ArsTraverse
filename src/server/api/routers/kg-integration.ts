@@ -69,7 +69,7 @@ export const integrationProcedures = {
           },
         });
         if (!topicSpace) {
-          throw new Error("TopicSpace not found");
+          throw new Error("リポジトリが見つかりません");
         }
 
         graphData = {

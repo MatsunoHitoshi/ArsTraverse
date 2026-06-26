@@ -72,10 +72,11 @@ export function verifyGoogleDriveOAuthState(state: string): {
 }
 
 export function sanitizeReturnTo(returnTo: string | null): string {
-  if (!returnTo?.startsWith("/")) {
+  if (!returnTo) {
     return "/topic-spaces";
   }
-  if (returnTo.startsWith("//")) {
+  // 先頭が単一の '/' で、2文字目が '/' や '\' でない相対パスのみ許可
+  if (!/^\/[^/\\]/.test(returnTo) && returnTo !== "/") {
     return "/topic-spaces";
   }
   return returnTo;

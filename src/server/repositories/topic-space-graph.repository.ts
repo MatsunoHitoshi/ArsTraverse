@@ -32,7 +32,7 @@ export function assertTopicSpaceAdmin(
   if (!isAdmin) {
     throw new TRPCError({
       code: "NOT_FOUND",
-      message: "TopicSpace not found",
+      message: "リポジトリが見つかりません",
     });
   }
 }
@@ -46,7 +46,7 @@ export async function findTopicSpaceWithGraphAndAssertAdmin(
   if (!topicSpace) {
     throw new TRPCError({
       code: "NOT_FOUND",
-      message: "TopicSpace not found",
+      message: "リポジトリが見つかりません",
     });
   }
   assertTopicSpaceAdmin(topicSpace, userId);

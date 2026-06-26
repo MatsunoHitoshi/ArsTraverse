@@ -27,7 +27,12 @@ type PickerResponse = {
 declare global {
   interface Window {
     gapi?: {
-      load: (name: string, callback: () => void) => void;
+      load: (
+        name: string,
+        optionsOrCallback:
+          | { callback?: () => void; onerror?: () => void }
+          | (() => void),
+      ) => void;
     };
     google?: {
       picker: {
@@ -40,20 +45,79 @@ declare global {
   }
 }
 
-function loadScript(src: string): Promise<void> {
+const GAPI_SCRIPT_URL = "https://apis.google.com/js/api.js";
+const GAPI_READY_TIMEOUT_MS = 15_000;
+
+function waitForGapi(
+  timeoutMs = GAPI_READY_TIMEOUT_MS,
+): Promise<NonNullable<Window["gapi"]>> {
   return new Promise((resolve, reject) => {
-    const existing = document.querySelector(`script[src="${src}"]`);
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      if (window.gapi?.load) {
+        window.clearInterval(timer);
+        resolve(window.gapi);
+        return;
+      }
+      if (Date.now() - startedAt >= timeoutMs) {
+        window.clearInterval(timer);
+        reject(new Error("Google API (gapi) の読み込みがタイムアウトしました。広告ブロック等でスクリプトが遮断されている可能性があります。"));
+      }
+    }, 50);
+  });
+}
+
+function loadGapiScript(): Promise<void> {
+  if (window.gapi?.load) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve, reject) => {
+    const startWaiting = () => {
+      void waitForGapi()
+        .then(() => resolve())
+        .catch(reject);
+    };
+
+    const existing = document.querySelector<HTMLScriptElement>(
+      `script[src="${GAPI_SCRIPT_URL}"]`,
+    );
     if (existing) {
-      resolve();
+      startWaiting();
       return;
     }
+
     const script = document.createElement("script");
-    script.src = src;
+    script.src = GAPI_SCRIPT_URL;
     script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error(`Failed to load ${src}`));
+    script.onload = startWaiting;
+    script.onerror = () =>
+      reject(new Error("Google API スクリプトの読み込みに失敗しました"));
     document.body.appendChild(script);
   });
+}
+
+function loadPickerModule(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (!window.gapi?.load) {
+      reject(new Error("Google API (gapi) が未ロードです"));
+      return;
+    }
+
+    window.gapi.load("picker", {
+      callback: () => resolve(),
+      onerror: () =>
+        reject(new Error("Google Picker API の読み込みに失敗しました")),
+    });
+  });
+}
+
+async function ensurePickerReady(): Promise<void> {
+  await loadGapiScript();
+  await waitForGapi();
+  if (!window.google?.picker) {
+    await loadPickerModule();
+  }
 }
 
 export function GoogleDriveFolderPicker({
@@ -61,6 +125,7 @@ export function GoogleDriveFolderPicker({
   onPick,
 }: GoogleDriveFolderPickerProps) {
   const [ready, setReady] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const pickerConfigQuery = api.googleDrive.getPickerConfig.useQuery(undefined, {
     enabled: false,
@@ -70,12 +135,13 @@ export function GoogleDriveFolderPicker({
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      setLoading(true);
+      setError(null);
       try {
-        await loadScript("https://apis.google.com/js/api.js");
-        if (cancelled) return;
-        window.gapi?.load("picker", () => {
-          if (!cancelled) setReady(true);
-        });
+        await ensurePickerReady();
+        if (!cancelled) {
+          setReady(true);
+        }
       } catch (loadError) {
         if (!cancelled) {
           setError(
@@ -83,6 +149,10 @@ export function GoogleDriveFolderPicker({
               ? loadError.message
               : "Picker の読み込みに失敗しました",
           );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
         }
       }
     })();
@@ -93,11 +163,25 @@ export function GoogleDriveFolderPicker({
 
   const openPicker = useCallback(async () => {
     setError(null);
+    try {
+      if (!ready) {
+        await ensurePickerReady();
+        setReady(true);
+      }
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Picker の読み込みに失敗しました",
+      );
+      return;
+    }
+
     const result = await pickerConfigQuery.refetch();
     const config = result.data;
     const picker = window.google?.picker;
 
-    if (!config || !picker || !ready) {
+    if (!config || !picker) {
       setError("Google Picker の準備ができていません");
       return;
     }
@@ -137,11 +221,13 @@ export function GoogleDriveFolderPicker({
     <div className="flex flex-col gap-1">
       <button
         type="button"
-        disabled={(disabled ?? false) || !ready || pickerConfigQuery.isFetching}
+        disabled={(disabled ?? false) || loading || pickerConfigQuery.isFetching}
         onClick={() => void openPicker()}
         className="rounded bg-blue-600 px-3 py-1 text-xs hover:bg-blue-500 disabled:opacity-50"
       >
-        {pickerConfigQuery.isFetching ? "準備中..." : "フォルダを選ぶ"}
+        {loading || pickerConfigQuery.isFetching
+          ? "準備中..."
+          : "フォルダを選ぶ"}
       </button>
       {(error ?? pickerConfigQuery.error?.message) && (
         <p className="text-xs text-red-400">

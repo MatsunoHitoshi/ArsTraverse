@@ -22,7 +22,7 @@ export const treeGraphRouter = createTRPCRouter({
         },
       });
 
-      if (!topicSpace) throw new Error("TopicSpace not found");
+      if (!topicSpace) throw new Error("リポジトリが見つかりません");
 
       const topicSpaceGraphData = {
         nodes: topicSpace.graphNodes,

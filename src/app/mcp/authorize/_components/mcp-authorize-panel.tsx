@@ -74,8 +74,8 @@ export function McpAuthorizePanel({
           スコープ:{" "}
           <span className="text-white">
             {result.scope === "platform"
-              ? "プラットフォーム（ドキュメント・TopicSpace 作成）"
-              : "TopicSpace（検索・グラフ編集）"}
+              ? "プラットフォーム（ドキュメント・リポジトリ作成）"
+              : "リポジトリ（検索・グラフ編集）"}
           </span>
           <br />
           有効期限:{" "}
@@ -97,7 +97,7 @@ export function McpAuthorizePanel({
         {result.mcpUrl ? (
           <>
             <label className="mt-6 block text-xs font-medium uppercase tracking-wide text-slate-400">
-              TopicSpace MCP URL
+              リポジトリ MCP URL
             </label>
             <CopyBlock value={result.mcpUrl} />
           </>
@@ -173,17 +173,17 @@ export function McpAuthorizePanel({
             className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white"
           >
             <option value={PLATFORM_MCP_SCOPE}>
-              プラットフォーム（ドキュメント取り込み・TopicSpace 新規作成）
+              プラットフォーム（ドキュメント取り込み・リポジトリ新規作成）
             </option>
             {topicSpaces.map((space) => (
               <option key={space.id} value={space.id}>
-                TopicSpace: {space.name}
+                リポジトリ: {space.name}
               </option>
             ))}
           </select>
           <p className="mt-2 text-xs leading-relaxed text-slate-500">
-            初回取り込みでは「プラットフォーム」を選び、TopicSpace
-            作成後に TopicSpace を含むトークンを再発行してください。
+            初回取り込みでは「プラットフォーム」を選び、リポジトリ
+            作成後にリポジトリを含むトークンを再発行してください。
           </p>
         </div>
 

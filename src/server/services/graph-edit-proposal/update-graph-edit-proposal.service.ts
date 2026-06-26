@@ -106,7 +106,7 @@ export async function updateGraphEditProposal(
     if (!topicSpace) {
       throw new TRPCError({
         code: "NOT_FOUND",
-        message: "TopicSpaceが見つかりません",
+        message: "リポジトリが見つかりません",
       });
     }
 

@@ -27,7 +27,7 @@ export async function detachDocumentsFromTopicSpace(
   if (!topicSpace) {
     throw new TRPCError({
       code: "NOT_FOUND",
-      message: "TopicSpace not found",
+      message: "リポジトリが見つかりません",
     });
   }
   assertTopicSpaceAdmin(topicSpace, ctx.session.user.id);

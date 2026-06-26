@@ -24,7 +24,7 @@ export async function attachDocumentsToTopicSpace(
   if (
     !topicSpace?.admins.some((admin) => admin.id === ctx.session.user.id)
   ) {
-    throw new Error("TopicSpace not found");
+    throw new Error("リポジトリが見つかりません");
   }
 
   const attachDocuments = await ctx.db.sourceDocument.findMany({

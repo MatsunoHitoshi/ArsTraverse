@@ -153,7 +153,7 @@ export const topicSpaceRouter = createTRPCRouter({
       });
 
       if (!topicSpace) {
-        throw new Error("TopicSpace not found");
+        throw new Error("リポジトリが見つかりません");
       }
       assertTopicSpaceAdmin(topicSpace, ctx.session.user.id);
 
@@ -185,7 +185,7 @@ export const topicSpaceRouter = createTRPCRouter({
       if (!topicSpace) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "TopicSpace not found",
+          message: "リポジトリが見つかりません",
         });
       }
 
@@ -219,7 +219,7 @@ export const topicSpaceRouter = createTRPCRouter({
           tags: true,
         },
       });
-      if (!topicSpace) throw new Error("TopicSpace not found");
+      if (!topicSpace) throw new Error("リポジトリが見つかりません");
 
       return formTopicSpaceForFrontendPublic(
         {
@@ -252,7 +252,7 @@ export const topicSpaceRouter = createTRPCRouter({
           tags: true,
         },
       });
-      if (!topicSpace) throw new Error("TopicSpace not found");
+      if (!topicSpace) throw new Error("リポジトリが見つかりません");
 
       const graphData = {
         nodes: topicSpace.graphNodes,
@@ -355,7 +355,7 @@ export const topicSpaceRouter = createTRPCRouter({
       });
 
       if (!topicSpace) {
-        throw new Error("TopicSpace not found");
+        throw new Error("リポジトリが見つかりません");
       }
       assertTopicSpaceAdmin(topicSpace, ctx.session.user.id);
 
@@ -379,7 +379,7 @@ export const topicSpaceRouter = createTRPCRouter({
       });
 
       if (!topicSpace) {
-        throw new Error("TopicSpace not found");
+        throw new Error("リポジトリが見つかりません");
       }
       assertTopicSpaceAdmin(topicSpace, ctx.session.user.id);
 
@@ -405,7 +405,7 @@ export const topicSpaceRouter = createTRPCRouter({
       if (!topicSpace) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "TopicSpace not found",
+          message: "リポジトリが見つかりません",
         });
       }
       assertTopicSpaceAdmin(topicSpace, ctx.session.user.id);
@@ -453,7 +453,7 @@ export const topicSpaceRouter = createTRPCRouter({
       if (!topicSpace) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "TopicSpace not found",
+          message: "リポジトリが見つかりません",
         });
       }
       assertTopicSpaceAdmin(topicSpace, ctx.session.user.id);
@@ -518,7 +518,7 @@ export const topicSpaceRouter = createTRPCRouter({
       if (!topicSpace) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "TopicSpace not found",
+          message: "リポジトリが見つかりません",
         });
       }
       assertTopicSpaceAdmin(topicSpace, ctx.session.user.id);
@@ -602,7 +602,7 @@ export const topicSpaceRouter = createTRPCRouter({
         },
       });
       if (!topicSpace) {
-        throw new Error("TopicSpace not found");
+        throw new Error("リポジトリが見つかりません");
       }
       assertTopicSpaceAdmin(topicSpace, ctx.session.user.id);
 
@@ -645,7 +645,7 @@ export const topicSpaceRouter = createTRPCRouter({
       });
 
       if (!topicSpace) {
-        throw new Error("TopicSpace not found");
+        throw new Error("リポジトリが見つかりません");
       }
       // ログインユーザーであれば誰でもノード説明生成が可能
 
@@ -748,7 +748,7 @@ ${referenceText}
       if (!topicSpace) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "TopicSpace not found",
+          message: "リポジトリが見つかりません",
         });
       }
       assertTopicSpaceAdmin(topicSpace, ctx.session.user.id);
@@ -792,7 +792,7 @@ ${referenceText}
       if (!topicSpace) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "TopicSpace not found",
+          message: "リポジトリが見つかりません",
         });
       }
       assertTopicSpaceAdmin(topicSpace, ctx.session.user.id);

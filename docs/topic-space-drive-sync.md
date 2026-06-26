@@ -1,12 +1,12 @@
-# Google Drive 同期（TopicSpace）
+# Google Drive 同期（リポジトリ）
 
-ArsTraverse が TopicSpace 単位で Google Drive フォルダと同期し、`INPUT_DRIVE` 型の SourceDocument として知識グラフ化します。
+ArsTraverse がリポジトリ単位で Google Drive フォルダと同期し、`INPUT_DRIVE` 型の SourceDocument として知識グラフ化します。
 
 ## 認証方式
 
 ログイン中の **本人の Google アカウント** で Drive にアクセスします（ユーザー OAuth のみ）。
 
-1. TopicSpace 画面で **「Google Drive を連携」**（`/api/google-drive/connect`）
+1. リポジトリ画面で **「Google Drive を連携」**（`/api/google-drive/connect`）
 2. Google の同意画面で Drive 読み取りを許可
 3. **「フォルダを選ぶ」**（Google Picker）で同期フォルダを選択
 4. **「今すぐ同期」**
@@ -25,6 +25,7 @@ ArsTraverse が TopicSpace 単位で Google Drive フォルダと同期し、`IN
 | `NEXT_PUBLIC_BASE_URL` | OAuth コールバック URL のベース |
 | `NEXT_PUBLIC_GOOGLE_PICKER_API_KEY` | Google Picker 用 API キー |
 | `NEXT_PUBLIC_GOOGLE_APP_ID` | Google Cloud プロジェクト番号 |
+| `CRON_SECRET` | Vercel Cron 認証用（本番必須。Vercel が `Authorization: Bearer` で送信） |
 
 ## Google Cloud Console 設定
 

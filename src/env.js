@@ -32,6 +32,7 @@ export const env = createEnv({
     QUICK_COMMONS_TOPICSPACE_ID: z.string().optional(),
     QUICK_COMMONS_SYSTEM_USER_ID: z.string().optional(),
     QUICK_COMMONS_ALLOWED_ORIGIN: z.string().optional(),
+    CRON_SECRET: z.string().optional(),
     /** Server-side Storage upload (MCP, scan flow). Local: `supabase status` fallback when URL is 127.0.0.1 */
     SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   },
@@ -71,6 +72,7 @@ export const env = createEnv({
     QUICK_COMMONS_TOPICSPACE_ID: process.env.QUICK_COMMONS_TOPICSPACE_ID,
     QUICK_COMMONS_SYSTEM_USER_ID: process.env.QUICK_COMMONS_SYSTEM_USER_ID,
     QUICK_COMMONS_ALLOWED_ORIGIN: process.env.QUICK_COMMONS_ALLOWED_ORIGIN,
+    CRON_SECRET: process.env.CRON_SECRET,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     NEXT_PUBLIC_GOOGLE_PICKER_API_KEY:
       process.env.NEXT_PUBLIC_GOOGLE_PICKER_API_KEY,

@@ -48,7 +48,7 @@ export const storyRouter = createTRPCRouter({
       });
 
       if (!topicSpace) {
-        throw new Error("TopicSpace not found");
+        throw new Error("リポジトリが見つかりません");
       }
 
       // データをDB構造に変換

@@ -66,7 +66,7 @@ export async function getUserGoogleDriveAccessToken(
 
   if (!connection?.refreshToken) {
     throw new Error(
-      "Google Drive が未連携です。TopicSpace 画面から Drive を連携してください。",
+      "Google Drive が未連携です。リポジトリ画面から Drive を連携してください。",
     );
   }
 
@@ -101,7 +101,7 @@ export async function getGoogleDriveClientForUser(
 
   if (!connection?.refreshToken) {
     throw new Error(
-      "Google Drive が未連携です。TopicSpace 画面から Drive を連携してください。",
+      "Google Drive が未連携です。リポジトリ画面から Drive を連携してください。",
     );
   }
 
