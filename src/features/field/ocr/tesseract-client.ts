@@ -25,17 +25,17 @@ export type OcrProgressUpdate = {
 export type OcrProgressHandler = (update: OcrProgressUpdate) => void;
 
 const OCR_STATUS_LABELS: Record<string, string> = {
-  "loading tesseract core": "OCR エンジンを読み込み中",
-  "initializing tesseract": "OCR を初期化中",
-  "loading language traineddata": "言語データを読み込み中",
-  "initializing api": "OCR API を初期化中",
-  "recognizing text": "文字を認識中",
+  "loading tesseract core": "Loading OCR engine",
+  "initializing tesseract": "Initializing OCR",
+  "loading language traineddata": "Loading language data",
+  "initializing api": "Initializing OCR API",
+  "recognizing text": "Recognizing text",
 };
 
 export function getOcrStatusLabel(update: OcrProgressUpdate): string {
-  const base = OCR_STATUS_LABELS[update.status] ?? "OCR を準備中";
+  const base = OCR_STATUS_LABELS[update.status] ?? "Preparing OCR";
   if (update.regionIndex != null && update.regionCount != null) {
-    return `${base}（領域 ${update.regionIndex + 1}/${update.regionCount}）`;
+    return `${base} (region ${update.regionIndex + 1}/${update.regionCount})`;
   }
   return base;
 }

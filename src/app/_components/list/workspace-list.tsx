@@ -3,9 +3,10 @@ import type { WorkspaceResponse } from "@/app/const/types";
 import { Button } from "../button/button";
 import { DotHorizontalIcon, PlusIcon } from "../icons";
 import { formatDate } from "@/app/_utils/date/format-date";
-import { useRouter } from "next/navigation";
+import { Link, useRouter } from "i18n/navigation";
+import { useLocale, useTranslations } from "next-intl";
+import type { Locale } from "i18n/routing";
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
-import Link from "next/link";
 
 type WorkspaceListProps = {
   workspaces: WorkspaceResponse[];
@@ -24,6 +25,8 @@ const WorkspaceList = ({
   menu,
   onWorkspaceHover,
 }: WorkspaceListProps) => {
+  const t = useTranslations("list");
+  const locale = useLocale() as Locale;
   const router = useRouter();
 
   const PopoverMenu = ({ workspace }: { workspace: WorkspaceResponse }) => {
@@ -46,11 +49,11 @@ const WorkspaceList = ({
     <div className="flex flex-col divide-y divide-slate-600 rounded-md border border-slate-400">
       {workspaces.length === 0 ? (
         <div className="flex flex-row items-center justify-between p-3">
-          <div>ワークスペースがありません</div>
+          <div>{t("noWorkspaces")}</div>
           <Link href="/workspaces/new">
             <Button className="flex flex-row items-center gap-1">
               <PlusIcon width={16} height={16} color="white" />
-              <div className="text-sm">新規ワークスペース</div>
+              <div className="text-sm">{t("newWorkspace")}</div>
             </Button>
           </Link>
         </div>
@@ -105,7 +108,7 @@ const WorkspaceList = ({
                   </div>
                 </UrlCopy> */}
                 <div className="w-[128px] text-right text-sm">
-                  {formatDate(workspace.createdAt)}
+                  {formatDate(workspace.createdAt, locale)}
                 </div>
               </div>
             </div>

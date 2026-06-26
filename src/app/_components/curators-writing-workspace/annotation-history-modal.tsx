@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import { api } from "@/trpc/react";
 import { Button } from "../button/button";
 
@@ -13,6 +14,8 @@ export const AnnotationHistoryModal: React.FC<AnnotationHistoryModalProps> = ({
   annotationId,
   onClose,
 }) => {
+  const t = useTranslations("annotation");
+  const tCommon = useTranslations("common");
   const { data: histories, isLoading } =
     api.annotation.getAnnotationHistory.useQuery({
       annotationId,
@@ -21,15 +24,15 @@ export const AnnotationHistoryModal: React.FC<AnnotationHistoryModalProps> = ({
   const getChangeTypeLabel = (changeType: string) => {
     switch (changeType) {
       case "CREATED":
-        return "作成";
+        return t("historyCreated");
       case "UPDATED":
-        return "更新";
+        return t("historyUpdated");
       case "DELETED":
-        return "削除";
+        return t("historyDeleted");
       case "RESTORED":
-        return "復元";
+        return t("historyRestored");
       case "TYPE_CHANGED":
-        return "タイプ変更";
+        return t("historyTypeChanged");
       default:
         return changeType;
     }
@@ -66,7 +69,7 @@ export const AnnotationHistoryModal: React.FC<AnnotationHistoryModalProps> = ({
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
         <div className="w-full max-w-2xl rounded-lg bg-white p-6">
-          <div className="text-center">読み込み中...</div>
+          <div className="text-center">{tCommon("loading")}</div>
         </div>
       </div>
     );
@@ -76,7 +79,7 @@ export const AnnotationHistoryModal: React.FC<AnnotationHistoryModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
       <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white p-6">
         <div className="mb-4 flex items-start justify-between">
-          <h3 className="text-lg font-semibold">注釈履歴</h3>
+          <h3 className="text-lg font-semibold">{t("historyTitle")}</h3>
           <Button onClick={onClose} className="bg-gray-200 text-gray-800">
             ×
           </Button>
@@ -108,7 +111,7 @@ export const AnnotationHistoryModal: React.FC<AnnotationHistoryModalProps> = ({
                 {history.changeReason && (
                   <div className="mb-2">
                     <span className="text-sm font-medium text-gray-700">
-                      変更理由:
+                      {t("changeReason")}
                     </span>
                     <span className="ml-2 text-sm text-gray-600">
                       {history.changeReason}
@@ -119,7 +122,7 @@ export const AnnotationHistoryModal: React.FC<AnnotationHistoryModalProps> = ({
                 {history.changeComment && (
                   <div className="mb-2">
                     <span className="text-sm font-medium text-gray-700">
-                      コメント:
+                      {t("changeComment")}
                     </span>
                     <span className="ml-2 text-sm text-gray-600">
                       {history.changeComment}
@@ -127,14 +130,13 @@ export const AnnotationHistoryModal: React.FC<AnnotationHistoryModalProps> = ({
                   </div>
                 )}
 
-                {/* 変更内容の差分表示 */}
                 {(history.previousContent ?? history.currentContent) && (
                   <div className="mt-3">
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       {history.previousContent && (
                         <div>
                           <h5 className="mb-1 text-sm font-medium text-gray-700">
-                            変更前
+                            {t("beforeChange")}
                           </h5>
                           <div className="rounded border bg-red-50 p-2 text-xs text-gray-600">
                             {typeof history.previousContent === "string"
@@ -146,7 +148,7 @@ export const AnnotationHistoryModal: React.FC<AnnotationHistoryModalProps> = ({
                       {history.currentContent && (
                         <div>
                           <h5 className="mb-1 text-sm font-medium text-gray-700">
-                            変更後
+                            {t("afterChange")}
                           </h5>
                           <div className="rounded border bg-green-50 p-2 text-xs text-gray-600">
                             {typeof history.currentContent === "string"
@@ -162,7 +164,7 @@ export const AnnotationHistoryModal: React.FC<AnnotationHistoryModalProps> = ({
             ))}
           </div>
         ) : (
-          <div className="py-8 text-center text-gray-500">履歴がありません</div>
+          <div className="py-8 text-center text-gray-500">{t("noHistory")}</div>
         )}
       </div>
     </div>

@@ -1,6 +1,7 @@
 "use client";
 import { api } from "@/trpc/react";
 import { useSession } from "next-auth/react";
+import { useTranslations } from "next-intl";
 import { DocumentList } from "../list/document-list";
 import { TabsContainer } from "../tab/tab";
 import { Button } from "../button/button";
@@ -14,9 +15,11 @@ import {
   DeleteRecordModal,
   type DeleteRecordType,
 } from "../modal/delete-record-modal";
-import Link from "next/link";
+import { Link } from "i18n/navigation";
 
 export const Dashboard = () => {
+  const t = useTranslations("dashboard");
+  const tCommon = useTranslations("common");
   const { data: session } = useSession();
   const { data: documentsData, refetch: refetchDocuments } =
     api.sourceDocument.getListBySession.useQuery({
@@ -42,7 +45,9 @@ export const Dashboard = () => {
           <div className="flex flex-col gap-8 overflow-scroll">
             <div className="flex flex-col gap-1">
               <div className="flex flex-row items-center justify-between">
-                <div className="text-lg font-semibold">最近のドキュメント</div>
+                <div className="text-lg font-semibold">
+                  {t("recentDocuments")}
+                </div>
                 <Link href="/documents/new">
                   <Button className="!h-8 !w-8 !p-2">
                     <div className="h-4 w-4">
@@ -77,7 +82,7 @@ export const Dashboard = () => {
                                 color="#ea1c0c"
                               />
                             </div>
-                            <div className="text-error-red">削除</div>
+                            <div className="text-error-red">{tCommon("delete")}</div>
                           </div>
                         </button>
                       </div>
@@ -87,17 +92,18 @@ export const Dashboard = () => {
               )}
             </div>
             <div className="flex flex-col gap-1">
-              <div className="h-8 text-lg font-semibold">変更提案</div>
+              <div className="h-8 text-lg font-semibold">
+                {t("editProposals")}
+              </div>
               <MyProposalList limit={5} />
             </div>
           </div>
 
           <div className="flex flex-col gap-1 overflow-scroll">
             <div className="flex flex-row items-center justify-between">
-              <div className="text-lg font-semibold">リポジトリ</div>
+              <div className="text-lg font-semibold">{t("repository")}</div>
               <Button
                 onClick={() => {
-                  console.log("topicSpaceCreateModalOpen -> true");
                   setTopicSpaceCreateModalOpen(true);
                 }}
                 className="!h-8 !w-8 !p-2"
@@ -129,7 +135,7 @@ export const Dashboard = () => {
                           <div className="h-4 w-4">
                             <TrashIcon width={16} height={16} color="#ea1c0c" />
                           </div>
-                          <div className="text-error-red">削除</div>
+                          <div className="text-error-red">{tCommon("delete")}</div>
                         </div>
                       </button>
                     </div>

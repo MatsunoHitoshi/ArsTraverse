@@ -1,5 +1,6 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useMemo } from "react";
 import * as d3 from "d3";
+import { useTranslations } from "next-intl";
 import { D3ZoomProvider } from "../zoom";
 import type { ClusteringResult, ClusterResult } from "@/app/const/types";
 import type { JsonValue } from "@prisma/client/runtime/library";
@@ -50,6 +51,22 @@ export function AnnotationMapD3Visualization({
   annotations = [],
   hierarchy,
 }: AnnotationMapD3VisualizationProps) {
+  const t = useTranslations("graph.annotationMap");
+  const tooltipLabels = useMemo(
+    () => ({
+      group: (title: string) => t("group", { title }),
+      type: (type: string) => t("type", { type }),
+      author: (name: string) => t("author", { name }),
+      createdAt: (date: string) => t("createdAt", { date }),
+      unknownAuthor: t("unknownAuthor"),
+      clusterGroup: (title: string) => t("group", { title }),
+      clusterSize: (count: number) => t("clusterSize", { count }),
+      algorithm: (name: string) => t("algorithm", { name }),
+      dominantType: (type: string) => t("dominantType", { type }),
+      avgSentiment: (value: string) => t("avgSentiment", { value }),
+    }),
+    [t],
+  );
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -361,13 +378,13 @@ export function AnnotationMapD3Visualization({
             .html(
               `
               <div>
-                ${cluster ? `グループ: ${cluster.title ?? `C${cluster.clusterId}`}<br/>` : ""}
+                ${cluster ? `${tooltipLabels.group(cluster.title ?? `C${cluster.clusterId}`)}<br/>` : ""}
                 ${
                   annotation
                     ? `
-                  タイプ: ${annotation.type}<br/>
-                  作成者: ${annotation.author.name ?? "不明"}<br/>
-                  作成日: ${new Date(annotation.createdAt).toLocaleDateString()}
+                  ${tooltipLabels.type(annotation.type)}<br/>
+                  ${tooltipLabels.author(annotation.author.name ?? tooltipLabels.unknownAuthor)}<br/>
+                  ${tooltipLabels.createdAt(new Date(annotation.createdAt).toLocaleDateString())}
                 `
                     : ""
                 }
@@ -488,11 +505,11 @@ export function AnnotationMapD3Visualization({
           .html(
             `
             <div>
-              <strong>グループ: ${d.title ?? `C${d.clusterId}`}</strong><br/>
-              サイズ: ${d.size}件<br/>
-              アルゴリズム: ${clusteringResult.algorithm}<br/>
-              ${d.features?.dominantType ? `主要タイプ: ${d.features.dominantType}<br/>` : ""}
-              ${d.features?.avgSentiment ? `平均感情: ${d.features.avgSentiment.toFixed(2)}<br/>` : ""}
+              <strong>${tooltipLabels.clusterGroup(d.title ?? `C${d.clusterId}`)}</strong><br/>
+              ${tooltipLabels.clusterSize(d.size)}<br/>
+              ${tooltipLabels.algorithm(clusteringResult.algorithm)}<br/>
+              ${d.features?.dominantType ? `${tooltipLabels.dominantType(d.features.dominantType)}<br/>` : ""}
+              ${d.features?.avgSentiment ? `${tooltipLabels.avgSentiment(d.features.avgSentiment.toFixed(2))}<br/>` : ""}
             </div>
           `,
           )
@@ -520,6 +537,7 @@ export function AnnotationMapD3Visualization({
     width,
     annotations,
     hierarchy,
+    tooltipLabels,
   ]);
 
   return (

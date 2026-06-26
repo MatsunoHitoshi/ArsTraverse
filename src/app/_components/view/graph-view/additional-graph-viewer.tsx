@@ -1,3 +1,4 @@
+"use client";
 import type { CustomLinkType, CustomNodeType } from "@/app/const/types";
 import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { api } from "@/trpc/react";
@@ -13,6 +14,7 @@ import { Loading } from "../../loading/loading";
 import { CrossLargeIcon } from "../../icons";
 import { ContainerSizeProvider } from "@/providers/container-size";
 import { createId } from "@/app/_utils/cuid/cuid";
+import { useTranslations } from "next-intl";
 
 const AdditionalGraphViewer = ({
   topicSpaceId,
@@ -40,6 +42,7 @@ const AdditionalGraphViewer = ({
     React.SetStateAction<GraphDocumentForFrontend | undefined>
   >;
 }) => {
+  const t = useTranslations("view");
   const integrateGraph = api.kg.integrateGraph.useMutation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState<number>(400);
@@ -189,11 +192,11 @@ const AdditionalGraphViewer = ({
       ...contextRelationships,
     ];
 
-    console.log("統合予定ノード数:", mergeTargetNodeIds.size);
-    console.log("既存コンテキストノード数:", contextNodes.length);
-    console.log("既存コンテキストエッジ数:", contextRelationships.length);
-    console.log("追加グラフの全ノード数:", allNodes.length);
-    console.log("追加グラフの全エッジ数:", allRelationships.length);
+    console.log("Merge target node count:", mergeTargetNodeIds.size);
+    console.log("Existing context node count:", contextNodes.length);
+    console.log("Existing context edge count:", contextRelationships.length);
+    console.log("Additional graph total nodes:", allNodes.length);
+    console.log("Additional graph total edges:", allRelationships.length);
 
     return {
       ...newGraphDocument,
@@ -215,15 +218,15 @@ const AdditionalGraphViewer = ({
     const existingNodes = topicSpaceData.graphData.nodes ?? [];
     const existingRelationships = topicSpaceData.graphData.relationships ?? [];
 
-    console.log("=== 統合処理開始 ===");
-    console.log("既存ノード数:", existingNodes.length);
-    console.log("既存エッジ数:", existingRelationships.length);
+    console.log("=== Integration start ===");
+    console.log("Existing node count:", existingNodes.length);
+    console.log("Existing edge count:", existingRelationships.length);
     console.log(
-      "annotatedGraphDocumentノード数:",
+      "annotatedGraphDocument node count:",
       annotatedGraphDocument.nodes.length,
     );
     console.log(
-      "annotatedGraphDocumentエッジ数:",
+      "annotatedGraphDocument edge count:",
       annotatedGraphDocument.relationships.length,
     );
 
@@ -233,9 +236,9 @@ const AdditionalGraphViewer = ({
       (node) => !node.id.startsWith("context-"),
     );
 
-    console.log("統合対象ノード数（context-除外後）:", nodesToIntegrate.length);
+    console.log("Nodes to integrate (excluding context-):", nodesToIntegrate.length);
     console.log(
-      "統合対象ノードID一覧:",
+      "Node IDs to integrate:",
       nodesToIntegrate.map((n) => n.id),
     );
 
@@ -283,11 +286,11 @@ const AdditionalGraphViewer = ({
     );
 
     console.log(
-      "エッジ変換後（フィルタ前）:",
+      "Edges after transform (before filter):",
       relationshipsBeforeFilter.length,
     );
     relationshipsBeforeFilter.forEach((rel, idx) => {
-      console.log(`  エッジ[${idx}]:`, {
+      console.log(`  Edge[${idx}]:`, {
         id: rel.id,
         type: rel.type,
         originalSourceId: rel._originalSourceId,
@@ -310,11 +313,11 @@ const AdditionalGraphViewer = ({
       return !isDuplicate;
     });
 
-    console.log("重複チェック後エッジ数:", relationshipsToIntegrate.length);
+    console.log("Edge count after duplicate check:", relationshipsToIntegrate.length);
     const duplicateCount =
       relationshipsBeforeFilter.length - relationshipsToIntegrate.length;
     if (duplicateCount > 0) {
-      console.log(`重複により除外されたエッジ数: ${duplicateCount}`);
+      console.log(`Edges excluded as duplicates: ${duplicateCount}`);
     }
 
     const graphDocumentToIntegrate: GraphDocumentForFrontend = {
@@ -330,11 +333,11 @@ const AdditionalGraphViewer = ({
       ),
     };
 
-    console.log("=== 統合送信データ ===");
-    console.log("統合送信ノード数:", nodesToIntegrate.length);
-    console.log("統合送信エッジ数:", relationshipsToIntegrate.length);
+    console.log("=== Integration payload ===");
+    console.log("Payload node count:", nodesToIntegrate.length);
+    console.log("Payload edge count:", relationshipsToIntegrate.length);
     console.log(
-      "統合送信エッジ詳細:",
+      "Payload edge details:",
       relationshipsToIntegrate.map((rel) => ({
         id: rel.id,
         type: rel.type,
@@ -451,7 +454,7 @@ const AdditionalGraphViewer = ({
               }}
               className="!px-2 !py-1 !text-sm"
             >
-              グラフに反映
+              {t("applyToGraph")}
             </Button>
           ) : (
             <Button
@@ -459,7 +462,7 @@ const AdditionalGraphViewer = ({
               disabled={isIntegrating}
               className="!px-2 !py-1 !text-sm"
             >
-              {isIntegrating ? <Loading color="white" size={12} /> : "統合"}
+              {isIntegrating ? <Loading color="white" size={12} /> : t("integrate")}
             </Button>
           )}
         </div>

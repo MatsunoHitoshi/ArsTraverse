@@ -5,6 +5,7 @@ import { Switch } from "@headlessui/react";
 import { ChevronRightIcon } from "../icons";
 import { TopicGraphDocumentList } from "../list/topic-graph-document-list";
 import type { DocumentResponse } from "@/app/const/types";
+import { useTranslations } from "next-intl";
 
 interface DocumentListSectionProps {
   documents: DocumentResponse[];
@@ -25,6 +26,7 @@ export const TopicSpaceDocumentListSection: React.FC<
   setIsClustered,
   defaultOpen = true,
 }) => {
+  const t = useTranslations("topicSpace");
   const [isDocumentListOpen, setIsDocumentListOpen] =
     useState<boolean>(defaultOpen);
 
@@ -40,10 +42,10 @@ export const TopicSpaceDocumentListSection: React.FC<
           >
             <ChevronRightIcon width={16} height={16} color="white" />
           </span>
-          <span>ドキュメント</span>
+          <span>{t("documents")}</span>
         </button>
         <div className="flex flex-row items-center gap-2">
-          <div className="text-sm">色分け</div>
+          <div className="text-sm">{t("colorCoding")}</div>
           <div>
             <Switch
               checked={isClustered}

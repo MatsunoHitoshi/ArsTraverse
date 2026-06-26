@@ -1,5 +1,7 @@
+"use client";
 import { useRef, useState } from "react";
 import type { SetStateAction } from "react";
+import { useTranslations } from "next-intl";
 import { FileUploader } from "../file-uploader/file-uploader";
 import { Button } from "../button/button";
 import { storageUtils } from "@/app/_utils/supabase/supabase";
@@ -37,6 +39,7 @@ export const DocumentForm = ({
   setDocumentUrl,
   documentUrl,
 }: DocumentFormProps) => {
+  const t = useTranslations("document");
   const [isPlaneTextMode, setIsPlaneTextMode] = useState<boolean>(false);
   const [extractMode, setExtractMode] = useState<string>("iterative");
   const [text, setText] = useState<string>();
@@ -59,7 +62,7 @@ export const DocumentForm = ({
 
   const extractIteratively = async (fileUrl: string) => {
     setIsProcessing(true);
-    setProgress("ドキュメントを解析中...");
+    setProgress(t("parsingDocument"));
 
     try {
       // 1. Inspect text to get chunks
@@ -69,7 +72,7 @@ export const DocumentForm = ({
       });
 
       if (!inspectRes.data.documents) {
-        throw new Error("ドキュメントの解析に失敗しました。");
+        throw new Error(t("parseFailed"));
       }
 
       const documents = inspectRes.data.documents;
@@ -80,7 +83,10 @@ export const DocumentForm = ({
       for (let i = 0; i < documents.length; i += BATCH_SIZE) {
         const batch = documents.slice(i, i + BATCH_SIZE);
         setProgress(
-          `フェーズ1: 初期抽出中... (${Math.min(i + BATCH_SIZE, documents.length)}/${documents.length})`,
+          t("phase1Progress", {
+            current: Math.min(i + BATCH_SIZE, documents.length),
+            total: documents.length,
+          }),
         );
 
         const res = await extractPhase1.mutateAsync({
@@ -117,7 +123,10 @@ export const DocumentForm = ({
       for (let i = 0; i < documents.length; i += BATCH_SIZE) {
         const batch = documents.slice(i, i + BATCH_SIZE);
         setProgress(
-          `フェーズ2: 文脈補完中... (${Math.min(i + BATCH_SIZE, documents.length)}/${documents.length})`,
+          t("phase2Progress", {
+            current: Math.min(i + BATCH_SIZE, documents.length),
+            total: documents.length,
+          }),
         );
 
         const res = await extractPhase2.mutateAsync({
@@ -137,7 +146,7 @@ export const DocumentForm = ({
       }
 
       // 4. Finalize
-      setProgress("グラフを構築中...");
+      setProgress(t("buildingGraph"));
       const finalRes = await finalizeGraph.mutateAsync({
         nodes: accumulatedNodes,
         relationships: accumulatedRelationships,
@@ -151,7 +160,7 @@ export const DocumentForm = ({
       setProgress("");
     } catch (error) {
       console.error(error);
-      alert("処理中にエラーが発生しました。");
+      alert(t("processingError"));
       setIsProcessing(false);
       setProgress("");
     }
@@ -218,7 +227,7 @@ export const DocumentForm = ({
 
     if (isPlaneTextMode) {
       if (!text) {
-        alert("テキストが入力されていません。");
+        alert(t("noTextEntered"));
         return;
       }
       try {
@@ -250,12 +259,12 @@ export const DocumentForm = ({
         };
       } catch (error) {
         console.error("アップロード中にエラーが発生しました", error);
-        alert("アップロード中にエラーが発生しました。");
+        alert(t("uploadError"));
         setIsProcessing(false);
       }
     } else {
       if (!file) {
-        alert("ファイルが選択されていません。");
+        alert(t("noFileSelected"));
         return;
       }
       try {
@@ -283,7 +292,7 @@ export const DocumentForm = ({
         }
       } catch (error) {
         console.error("アップロード中にエラーが発生しました", error);
-        alert("アップロード中にエラーが発生しました。");
+        alert(t("uploadError"));
         setIsProcessing(false);
       }
     }
@@ -297,14 +306,10 @@ export const DocumentForm = ({
         className="flex w-full flex-col items-center gap-16"
       >
         <div className="flex flex-col items-center gap-8">
-          <div className="text-3xl font-semibold">文書の内容を可視化</div>
+          <div className="text-3xl font-semibold">{t("visualizeTitle")}</div>
           <div className="flex flex-col items-center gap-1">
-            <div className="text-xl">
-              pdfまたは手入力で文書をアップロードできます
-            </div>
-            <div className="text-sm text-orange-600">
-              注意：機密情報・個人情報を含む文書は絶対にアップロードしないでください
-            </div>
+            <div className="text-xl">{t("uploadHint")}</div>
+            <div className="text-sm text-orange-600">{t("privacyWarning")}</div>
           </div>
         </div>
 
@@ -312,7 +317,7 @@ export const DocumentForm = ({
           {isPlaneTextMode ? (
             <>
               <Textarea
-                placeholder="テキストを入力"
+                placeholder={t("textPlaceholder")}
                 autoFocus={true}
                 className="min-h-[194px] w-full resize-none rounded-xl bg-slate-500 !p-4 text-base"
                 defaultValue={text}
@@ -325,7 +330,7 @@ export const DocumentForm = ({
             <>
               {inspectResult.length > 0 ? (
                 <div className="flex flex-col items-center gap-2">
-                  <div className="font-semibold">ファイルから抽出されたテキスト</div>
+                  <div className="font-semibold">{t("extractedTextTitle")}</div>
                   <div className="flex h-96 flex-col items-center gap-2 overflow-y-scroll rounded-xl border border-slate-300">
                     <div className="flex flex-col items-center gap-2 p-8">
                       {inspectResult.map((result, index) => (
@@ -351,7 +356,7 @@ export const DocumentForm = ({
                         }}
                       >
                         <div className="text-xs underline hover:no-underline">
-                          大きなファイルを読み込ませるときのTips
+                          {t("largeFileTips")}
                         </div>
                       </button>
                     </div>
@@ -362,7 +367,7 @@ export const DocumentForm = ({
           )}
 
           <div className="flex flex-row items-center gap-2">
-            <div className="text-sm">手入力モード</div>
+            <div className="text-sm">{t("manualInputMode")}</div>
             <div className="flex flex-row items-center gap-8">
               <Switch
                 disabled={isProcessing}
@@ -374,12 +379,15 @@ export const DocumentForm = ({
               </Switch>
               {process.env.NODE_ENV === "development" && (
                 <div className="flex flex-row items-center gap-2">
-                  <div className="text-sm">抽出モード</div>
+                  <div className="text-sm">{t("extractMode")}</div>
                   <ListboxInput
                     options={[
-                      { value: "langChain", label: "標準" },
-                      { value: "iterative", label: "反復的抽出" },
-                      { value: "assistants", label: "OpenAI Assistants" },
+                      { value: "langChain", label: t("extractModeStandard") },
+                      { value: "iterative", label: t("extractModeIterative") },
+                      {
+                        value: "assistants",
+                        label: t("extractModeAssistants"),
+                      },
                     ]}
                     selected={extractMode}
                     setSelected={setExtractMode}
@@ -397,8 +405,8 @@ export const DocumentForm = ({
                   className="bg-slate-700 text-sm hover:bg-slate-600"
                 >
                   {customMappingRules
-                    ? "✓ 抽出形式の設定変更"
-                    : "抽出形式の設定"}
+                    ? t("schemaConfigured")
+                    : t("schemaConfigure")}
                 </Button>
               </div>
               {((!!text && isPlaneTextMode) || (file && !isPlaneTextMode)) && (
@@ -406,11 +414,11 @@ export const DocumentForm = ({
                   <div className="flex flex-row justify-end">
                     {isPlaneTextMode || inspectResult.length > 0 ? (
                       <Button type="submit" isLoading={isProcessing}>
-                        グラフを構築する
+                        {t("buildGraph")}
                       </Button>
                     ) : (
                       <Button type="submit" isLoading={isProcessing}>
-                        テキストを抽出する
+                        {t("extractText")}
                       </Button>
                     )}
                   </div>

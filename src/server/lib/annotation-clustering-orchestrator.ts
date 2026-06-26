@@ -1,4 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
+import type { Locale } from "i18n/routing";
+import { getDefaultClusterTitle } from "@/server/lib/i18n/prompts/cluster-title-generator";
 import {
   type AnnotationData,
   AnnotationFeatureExtractor,
@@ -76,6 +78,7 @@ export class AnnotationClusteringOrchestrator {
     params: Omit<AnnotationClusteringParams, "featureExtraction"> & {
       featureExtraction: Omit<FeatureExtractionParams, "topicSpaceNodes">;
     },
+    locale: Locale = "ja",
   ): Promise<AnnotationClusteringResult> {
     const startTime = Date.now();
 
@@ -175,6 +178,7 @@ export class AnnotationClusteringOrchestrator {
           annotationIds: cluster.annotationIds,
         })),
         this.titleGenerator.getDefaultParams(),
+        locale,
       );
       const titleTime = Date.now() - titleStartTime;
 
@@ -185,7 +189,7 @@ export class AnnotationClusteringOrchestrator {
         );
         return {
           ...cluster,
-          title: titleResult?.title ?? `クラスター ${cluster.clusterId}`,
+          title: titleResult?.title ?? getDefaultClusterTitle(locale, cluster.clusterId),
         };
       });
 

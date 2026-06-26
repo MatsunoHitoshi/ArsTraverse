@@ -1,4 +1,7 @@
+"use client";
+
 import React, { useState, useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "../../button/button";
 import {
   ChevronLeftIcon,
@@ -14,7 +17,7 @@ import {
   DisclosurePanel,
 } from "@headlessui/react";
 import type { GraphDocumentForFrontend } from "@/app/const/types";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter } from "i18n/navigation";
 import { getNodeByIdForFrontend } from "@/app/_utils/kg/filter";
 
 import { calculateGraphStatistics } from "@/app/_utils/kg/graph-statistics";
@@ -40,6 +43,7 @@ export const GraphInfoPanel = ({
   contextType,
   // maxHeight,
 }: GraphInfoPanelProps) => {
+  const t = useTranslations("graph");
   const [isPanelOpen, setIsPanelOpen] = useState<boolean>(true);
   const { nodes: graphNodes, relationships: graphLinks } = graphDocument;
 
@@ -110,10 +114,10 @@ export const GraphInfoPanel = ({
 
     try {
       await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
-      alert("グラフ統計情報をクリップボードにコピーしました");
+      alert(t("copyStatisticsSuccess"));
     } catch (err) {
       console.error("Failed to copy:", err);
-      alert("コピーに失敗しました");
+      alert(t("copyStatisticsFailed"));
     }
   };
 
@@ -139,13 +143,13 @@ export const GraphInfoPanel = ({
           {/* グラフ全体情報 */}
           <div className="flex w-full flex-col gap-2 rounded-md border border-slate-400 p-2">
             <div className="flex w-full items-center justify-between font-semibold text-slate-50">
-              <div>グラフ基本情報</div>
+              <div>{t("basicInfo")}</div>
               <button
                 onClick={() => {
                   void handleCopyStatistics();
                 }}
                 className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-700 p-1 text-slate-50 hover:bg-slate-600"
-                title="分析用データをコピー"
+                title={t("copyAnalysisData")}
               >
                 <ClipboardIcon width={14} height={14} color="white" />
               </button>
@@ -155,40 +159,48 @@ export const GraphInfoPanel = ({
                 <div className="group-data-[open]:rotate-90">
                   <TriangleRightIcon height={16} width={16} color="white" />
                 </div>
-                <div>概要を表示</div>
+                <div>{t("showOverview")}</div>
               </DisclosureButton>
               <DisclosurePanel className="flex flex-col gap-3 pl-6 text-sm text-slate-200">
                 {/* 基本統計 */}
                 <div className="flex flex-col gap-1">
-                  <div className="font-semibold text-slate-400">基本統計</div>
+                  <div className="font-semibold text-slate-400">{t("basicStatistics")}</div>
                   <div className="pl-2">
-                    <div>ノード数: {nodeCount}</div>
-                    <div>エッジ数: {linkCount}</div>
+                    <div>{t("nodeCountLabel", { count: nodeCount })}</div>
+                    <div>{t("edgeCountLabel", { count: linkCount })}</div>
                   </div>
                 </div>
 
                 {/* 次数分析 */}
                 <div className="flex flex-col gap-1">
-                  <div className="font-semibold text-slate-400">次数分析</div>
+                  <div className="font-semibold text-slate-400">{t("degreeAnalysis")}</div>
                   <div className="flex flex-col gap-0.5 pl-2">
                     <div>
-                      平均次数 (K): {graphStatistics.avgDegree.toFixed(2)}
+                      {t("avgDegree", {
+                        value: graphStatistics.avgDegree.toFixed(2),
+                      })}
                     </div>
                     <div>
-                      次数の標準偏差: {graphStatistics.degreeStdDev.toFixed(2)}
+                      {t("degreeStdDev", {
+                        value: graphStatistics.degreeStdDev.toFixed(2),
+                      })}
                     </div>
                     <div>
-                      最大次数:{" "}
-                      {graphStatistics.maxDegreeNode
-                        ? `${graphStatistics.maxDegreeNode.name} (${graphStatistics.maxDegree})`
-                        : graphStatistics.maxDegree}
+                      {t("maxDegree", {
+                        value: graphStatistics.maxDegreeNode
+                          ? `${graphStatistics.maxDegreeNode.name} (${graphStatistics.maxDegree})`
+                          : String(graphStatistics.maxDegree),
+                      })}
                     </div>
                     <div>
-                      ハブ依存度:{" "}
-                      {(graphStatistics.hubDependencyRatio * 100).toFixed(1)}%
+                      {t("hubDependency", {
+                        value: `${(graphStatistics.hubDependencyRatio * 100).toFixed(1)}%`,
+                      })}
                     </div>
                     <div>
-                      密度 (ρ): {graphStatistics.density.toFixed(4)}
+                      {t("density", {
+                        value: graphStatistics.density.toFixed(4),
+                      })}
                     </div>
                   </div>
                 </div>
@@ -201,21 +213,24 @@ export const GraphInfoPanel = ({
                 {/* 接続性指標 */}
                 <div className="flex flex-col gap-1">
                   <div className="font-semibold text-slate-400">
-                    接続性指標
+                    {t("connectivityMetrics")}
                   </div>
                   <div className="flex flex-col gap-0.5 pl-2">
                     <div>
-                      平均ホップ数:{" "}
-                      {graphStatistics.avgPathLength.toFixed(2)}
+                      {t("avgPathLength", {
+                        value: graphStatistics.avgPathLength.toFixed(2),
+                      })}
                     </div>
-                    <div>直径: {graphStatistics.diameter}</div>
+                    <div>{t("diameter", { value: graphStatistics.diameter })}</div>
                     <div>
-                      大域的クラスター係数:{" "}
-                      {graphStatistics.globalClusteringCoeff?.toFixed(3)}
+                      {t("globalClusteringCoeff", {
+                        value: graphStatistics.globalClusteringCoeff?.toFixed(3),
+                      })}
                     </div>
                     <div>
-                      平均クラスター係数:{" "}
-                      {graphStatistics.avgClusteringCoeff?.toFixed(3)}
+                      {t("avgClusteringCoeff", {
+                        value: graphStatistics.avgClusteringCoeff?.toFixed(3),
+                      })}
                     </div>
                   </div>
                 </div>
@@ -223,7 +238,7 @@ export const GraphInfoPanel = ({
                 {/* 重要エンティティ */}
                 <div className="flex flex-col gap-1">
                   <div className="font-semibold text-slate-400">
-                    重要エンティティ（ハブ）
+                    {t("importantEntities")}
                   </div>
                   <div className="flex flex-col gap-1 pl-2">
                     {graphStatistics.topDegreeNodes.map((node) => (
@@ -246,7 +261,7 @@ export const GraphInfoPanel = ({
                 {/* タイプ内訳 */}
                 <div className="flex flex-col gap-1">
                   <div className="font-semibold text-slate-400">
-                    ノードタイプ内訳
+                    {t("nodeTypeBreakdown")}
                   </div>
                   <div className="pl-2">
                     {Object.entries(nodeTypeCounts).map(([type, count]) => (
@@ -260,7 +275,7 @@ export const GraphInfoPanel = ({
 
                 <div className="flex flex-col gap-1">
                   <div className="font-semibold text-slate-400">
-                    エッジタイプ内訳
+                    {t("edgeTypeBreakdown")}
                   </div>
                   <div className="pl-2">
                     {Object.entries(linkTypeCounts).map(([type, count]) => (
@@ -277,7 +292,7 @@ export const GraphInfoPanel = ({
 
           <div className="flex h-full w-full flex-col gap-2 rounded-md border border-slate-400 p-2">
             <div className="w-full font-semibold text-slate-50">
-              選択中のノード
+              {t("selectedNode")}
             </div>
 
             <Disclosure>
@@ -357,11 +372,11 @@ export const GraphInfoPanel = ({
                     className="w-max cursor-pointer rounded-md bg-slate-500 p-2 text-sm text-white"
                     href={`/topic-spaces/${contextId}/tree/${focusedNode?.id}`}
                   >
-                    ツリー表示
+                    {t("treeView")}
                   </a>
                 )}
 
-                <div className="text-sm">隣接しているノード</div>
+                <div className="text-sm">{t("adjacentNodes")}</div>
                 <div className="flex w-full flex-col divide-y divide-slate-400">
                   {neighborNodes.map((node, index) => {
                     return (
@@ -387,7 +402,7 @@ export const GraphInfoPanel = ({
           </div>
 
           <div className="flex w-full flex-col gap-2 rounded-md border border-slate-400 p-2">
-            <div className="font-semibold text-slate-50">選択中のリンク</div>
+            <div className="font-semibold text-slate-50">{t("selectedLink")}</div>
             {focusedLink && (
               <div className="flex max-w-[300px] flex-col gap-2">
                 <div className="font-semibold text-orange-500">
@@ -442,13 +457,14 @@ export const PropertiesSummaryPanel = ({
   /** リストからノード編集モーダルを開く場合に指定（「詳細」と同様のボタンで編集を開く） */
   onEditNode?: (node: CustomNodeType) => void;
 }) => {
+  const t = useTranslations("graph");
   const router = useRouter();
   const pathname = usePathname();
 
   return (
     <div className="flex flex-col gap-1">
       <div className="flex flex-row items-center gap-2">
-        <div className="text-xs">プロパティ</div>
+        <div className="text-xs">{t("properties")}</div>
         {withDetail && (
           <Button
             className="!p-1 !text-sm"
@@ -456,7 +472,7 @@ export const PropertiesSummaryPanel = ({
               router.push(`${pathname}?list=true&nodeId=${node.id}`)
             }
           >
-            詳細
+            {t("detail")}
           </Button>
         )}
         {onEditNode && (
@@ -545,6 +561,7 @@ const DegreeDistributionChart = ({
 }: {
   degreeDistribution: Record<number, number>;
 }) => {
+  const t = useTranslations("graph");
   const entries = Object.entries(degreeDistribution);
   if (entries.length === 0) return null;
 
@@ -564,7 +581,7 @@ const DegreeDistributionChart = ({
         <div className="group-data-[open]:rotate-90">
           <TriangleRightIcon height={14} width={14} color="white" />
         </div>
-        <div className="font-semibold">次数分布</div>
+        <div className="font-semibold">{t("degreeDistribution")}</div>
       </DisclosureButton>
       <DisclosurePanel className="flex flex-col gap-0.5 pl-6 pt-1">
         {bars.map(({ label, count }) => (
@@ -584,7 +601,7 @@ const DegreeDistributionChart = ({
         ))}
         {useBinning && (
           <div className="mt-1 text-xs text-slate-500">
-            ※ 次数が多いためビン化して表示
+            {t("degreeBinnedNote")}
           </div>
         )}
       </DisclosurePanel>

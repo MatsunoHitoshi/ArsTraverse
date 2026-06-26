@@ -1,4 +1,7 @@
+"use client";
+
 import React from "react";
+import { useTranslations } from "next-intl";
 import { NodeAnnotationSection } from "../view/node/node-annotation-section";
 import { NodeImageFormSection } from "../form/node-image-form-section";
 import type {
@@ -14,7 +17,6 @@ interface NodeDetailPanelProps {
   >;
   setIsGraphEditor: React.Dispatch<React.SetStateAction<boolean>>;
   onGraphUpdate: (additionalGraph: GraphDocumentForFrontend) => void;
-  /** 画像保存時にグラフを更新するために必要。null の場合は onGraphUpdate は呼ばない */
   currentGraph?: GraphDocumentForFrontend | null;
 }
 
@@ -26,20 +28,22 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({
   onGraphUpdate,
   currentGraph,
 }) => {
+  const t = useTranslations("workspace");
+  const tCommon = useTranslations("common");
+
   if (!activeEntity) {
     return (
       <div className="min-h-full rounded-b-lg border border-gray-300 bg-slate-900 p-4 shadow-sm">
-        <h2 className="text-md mb-4 font-semibold text-gray-400">詳細</h2>
-        <p className="text-gray-300">
-          Editor内でハイライトされたエンティティをクリックすると詳細が表示されます。
-        </p>
+        <h2 className="text-md mb-4 font-semibold text-gray-400">
+          {tCommon("detail")}
+        </h2>
+        <p className="text-gray-300">{t("nodeDetailEmpty")}</p>
       </div>
     );
   }
 
   return (
     <div className="h-full overflow-y-scroll rounded-b-lg border border-gray-300 bg-slate-900 p-4 shadow-sm">
-      {/* ノード情報 */}
       <div className="text-white">
         <h3 className="font-semibold text-white">{activeEntity.name}</h3>
         <p className="text-sm text-gray-400">{activeEntity.label}</p>
@@ -47,7 +51,6 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({
           {String(activeEntity.properties?.description ?? "No description")}
         </p>
 
-        {/* ノード画像の挿入・変更・削除 */}
         <div className="mt-3">
           <NodeImageFormSection
             topicSpaceId={topicSpaceId}
@@ -69,7 +72,6 @@ export const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({
         <div className="my-3 border-b border-gray-400" />
       </div>
 
-      {/* 注釈セクション */}
       <NodeAnnotationSection
         node={activeEntity}
         topicSpaceId={topicSpaceId}

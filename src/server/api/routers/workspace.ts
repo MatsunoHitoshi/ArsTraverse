@@ -19,9 +19,20 @@ import {
   convertFromDatabase,
   type StoryWithRelations,
 } from "@/server/lib/meta-graph-converter";
-import { DEFAULT_EMPTY_WORKSPACE_CONTENT } from "@/app/_constants/workspace-default-content";
+import { getDefaultEmptyWorkspaceContent } from "@/app/_constants/workspace-default-content";
+import jaMessages from "../../../../messages/ja.json";
+import enMessages from "../../../../messages/en.json";
 import { SearchPublishedNodesInputSchema } from "@/server/api/schemas/scan";
 import { searchPublishedNodes } from "@/server/services/workspace/search-published-nodes.service";
+import { getTrpcMessage } from "@/server/lib/i18n/messages";
+import {
+  getNodeRelatedInfoHeader,
+  getTextCompletionBasicPrompt,
+  getTextCompletionDeepPrompt,
+  getTextCompletionFallbackPrompt,
+  getTextCompletionWithGraphFallbackPrompt,
+  getTextCompletionWithGraphPrompt,
+} from "@/server/lib/i18n/prompts/workspace";
 
 export const TiptapContentSchema = z.object({
   type: z.string(),
@@ -161,10 +172,13 @@ export const workspaceRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const emptyWorkspace = await ctx.db.workspace.create({
         data: {
-          name: "新しいワークスペース",
+          name:
+            ctx.locale === "en"
+              ? enMessages.workspace.defaultName
+              : jaMessages.workspace.defaultName,
           description: "",
           status: WorkspaceStatus.DRAFT,
-          content: DEFAULT_EMPTY_WORKSPACE_CONTENT,
+          content: getDefaultEmptyWorkspaceContent(ctx.locale),
           user: {
             connect: { id: ctx.session.user.id },
           },
@@ -239,7 +253,7 @@ export const workspaceRouter = createTRPCRouter({
       });
 
       if (!workspace) {
-        throw new Error("Workspace not found or access denied");
+        throw new Error(getTrpcMessage(ctx.locale, "workspace.notFoundOrDenied"));
       }
 
       // グラフデータの形式に変換
@@ -372,7 +386,7 @@ export const workspaceRouter = createTRPCRouter({
       });
 
       if (!workspace) {
-        throw new Error("Workspace not found or access denied");
+        throw new Error(getTrpcMessage(ctx.locale, "workspace.notFoundOrDenied"));
       }
 
       // 共同編集者を追加
@@ -408,7 +422,7 @@ export const workspaceRouter = createTRPCRouter({
       });
 
       if (!workspace) {
-        throw new Error("Workspace not found or access denied");
+        throw new Error(getTrpcMessage(ctx.locale, "workspace.notFoundOrDenied"));
       }
 
       // 共同編集者を削除
@@ -474,7 +488,7 @@ export const workspaceRouter = createTRPCRouter({
       });
 
       if (!workspace) {
-        throw new Error("Workspace not found or access denied");
+        throw new Error(getTrpcMessage(ctx.locale, "workspace.notFoundOrDenied"));
       }
 
       // 論理削除
@@ -516,7 +530,7 @@ export const workspaceRouter = createTRPCRouter({
       });
 
       if (!workspace) {
-        throw new Error("Workspace not found or access denied");
+        throw new Error(getTrpcMessage(ctx.locale, "workspace.notFoundOrDenied"));
       }
 
       console.log("isDeepMode: ", isDeepMode);
@@ -561,7 +575,11 @@ export const workspaceRouter = createTRPCRouter({
               ),
             );
           return (
-            `### (ID: ${baseNode.id}, name: ${baseNode.name}, label: ${baseNode.label}) \n#### ノードの関連情報\n` +
+            getNodeRelatedInfoHeader(ctx.locale, {
+              id: baseNode.id,
+              name: baseNode.name,
+              label: baseNode.label,
+            }) +
             neighborNodes
               ?.map((node) => {
                 return ` - [${
@@ -585,12 +603,16 @@ export const workspaceRouter = createTRPCRouter({
           model: "gpt-4.1-nano",
           tools: topicSpaceTools,
           input: isDeepMode
-            ? `あなたは、文脈を踏まえながら論理的でわかりやすい文章を執筆する専門家です。${topicSpaceTools.length > 0 ? `ツール「context-search ${workspace.referencedTopicSpaces[0]?.id}」を利用してこれから示すエンティティについて検索を行い、関係性や具体的な言及箇所の検索も併用しながら、` : ""}これから示すテキストの続きである、[ここを補完する]に当てはまる部分を補完してください。必ず言及されている箇所の文章も参照しながら文章を生成してください。応答として出力するのは[ここを補完する]に入る文章だけにしてください。必ず、元の文章と[ここを補完する]の部分が自然につながるように文章を生成してください。
-          ${searchEntities && searchEntities.length > 0 ? `\n検索するエンティティ：${searchEntities.join(", ")}` : ""}
-          \n===テキスト===\n${baseText} [ここを補完する]`
-            : `あなたは、文脈を踏まえながら論理的でわかりやすい文章を執筆する専門家です。これから示すテキストの続きである、[ここを補完する]に当てはまる部分を1文だけ補完してください。応答として出力するのは[ここを補完する]の部分の文章だけにしてください。必要に応じて関連情報も参照しながら文章を生成してください。必ず、元の文章と[ここを補完する]の部分が自然につながるように文章を生成してください。
-          \n===テキスト===\n${baseText} [ここを補完する]
-          \n===関連情報===\n${baseContexts}`,
+            ? getTextCompletionDeepPrompt(ctx.locale, {
+                topicSpaceId: workspace.referencedTopicSpaces[0]?.id,
+                hasTools: topicSpaceTools.length > 0,
+                searchEntities,
+                baseText,
+              })
+            : getTextCompletionBasicPrompt(ctx.locale, {
+                baseText,
+                baseContexts: baseContexts ?? "",
+              }),
         });
       } catch (error) {
         console.error(
@@ -600,7 +622,7 @@ export const workspaceRouter = createTRPCRouter({
         // MCPツールが失敗した場合は基本的なテキスト補完にフォールバック
         response = await openai.responses.create({
           model: "gpt-4.1-nano",
-          input: `以下のテキストの続きである、[ここを補完する]に当てはまる部分を1文だけ補完してください。応答として出力するのは、[ここを補完する]の部分の文章だけにしてください。必ず、元の文章と[ここを補完する]の部分が自然につながるように文章を生成してください。\n${baseText} [ここを補完する]`,
+          input: getTextCompletionFallbackPrompt(ctx.locale, baseText),
         });
       }
 
@@ -632,7 +654,7 @@ export const workspaceRouter = createTRPCRouter({
       });
 
       if (!workspace) {
-        throw new Error("Workspace not found or access denied");
+        throw new Error(getTrpcMessage(ctx.locale, "workspace.notFoundOrDenied"));
       }
 
       const openai = new OpenAI();
@@ -661,17 +683,19 @@ export const workspaceRouter = createTRPCRouter({
       try {
         response = await openai.responses.create({
           model: "gpt-4.1-nano",
-          input: `あなたは知識グラフ記述の専門家です。以下の[グラフ文脈]に含まれる関係のみを根拠に、グラフの論理構造を忠実に文章化してください。事実は[グラフ文脈]の範囲を超えないでください。出力は1〜3文程度。\n
-===スタイル参照(文体のみ)===\n${baseText}\n
-===グラフ文脈===\n${graphContextText}`,
+          input: getTextCompletionWithGraphPrompt(ctx.locale, {
+            baseText,
+            graphContextText,
+          }),
         });
       } catch (error) {
         // フォールバック
         response = await openai.responses.create({
           model: "gpt-4.1-nano",
-          input: `以下の[グラフ文脈]の関係だけを根拠に、その論理構造を説明する短い文章(1〜3文)を書いてください。文体は[スタイル参照]に寄せてください。\n
-===スタイル参照(文体のみ)===\n${baseText}\n
-===グラフ文脈===\n${graphContextText}`,
+          input: getTextCompletionWithGraphFallbackPrompt(ctx.locale, {
+            baseText,
+            graphContextText,
+          }),
         });
       }
 
@@ -700,7 +724,7 @@ export const workspaceRouter = createTRPCRouter({
       });
 
       if (!workspace) {
-        throw new Error("ワークスペースが見つかりません");
+        throw new Error(getTrpcMessage(ctx.locale, "workspace.notFound"));
       }
 
       // エッジが参照トピックスペースに属するかチェック
@@ -715,7 +739,7 @@ export const workspaceRouter = createTRPCRouter({
 
       if (!edge) {
         throw new Error(
-          "指定されたエッジはこのワークスペースで参照されていません",
+          getTrpcMessage(ctx.locale, "workspace.edgeNotReferenced"),
         );
       }
 
@@ -974,7 +998,7 @@ export const workspaceRouter = createTRPCRouter({
       });
 
       if (!workspace) {
-        throw new Error("Workspace not found or access denied");
+        throw new Error(getTrpcMessage(ctx.locale, "workspace.notFoundOrDenied"));
       }
 
       // Workspace.statusをPUBLISHEDに更新
@@ -1038,7 +1062,7 @@ export const workspaceRouter = createTRPCRouter({
       });
 
       if (!workspace) {
-        throw new Error("Published workspace not found");
+        throw new Error(getTrpcMessage(ctx.locale, "workspace.publishedNotFound"));
       }
 
       // グラフデータの形式に変換（topic-space.tsと同じ方法を使用）
@@ -1114,7 +1138,7 @@ export const workspaceRouter = createTRPCRouter({
       });
 
       if (!workspace) {
-        throw new Error("Published workspace not found");
+        throw new Error(getTrpcMessage(ctx.locale, "workspace.publishedNotFound"));
       }
 
       const allNodes: GraphNode[] = workspace.referencedTopicSpaces.flatMap(

@@ -1,8 +1,11 @@
+"use client";
+
 import { Modal } from "../modal/modal";
 import { TextInput } from "../input/text-input";
 import { useEffect, useState } from "react";
 import { api } from "@/trpc/react";
 import { Button } from "../button/button";
+import { useTranslations } from "next-intl";
 
 export const DocumentEditModal = ({
   isOpen,
@@ -15,6 +18,8 @@ export const DocumentEditModal = ({
   documentId: string | null;
   refetch: () => void;
 }) => {
+  const t = useTranslations("document");
+  const tCommon = useTranslations("common");
   const { data: document } = api.sourceDocument.getById.useQuery(
     { id: documentId! },
     { enabled: isOpen && !!documentId },
@@ -52,15 +57,15 @@ export const DocumentEditModal = ({
   }
 
   return (
-    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title="ドキュメントを編集">
+    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title={t("editDocumentTitle")}>
       <div className="flex flex-col gap-8">
         <div className="flex flex-col gap-1">
-          <div>名前</div>
+          <div>{t("name")}</div>
 
           <TextInput
             onChange={setName}
             value={name}
-            placeholder="ドキュメントの名前"
+            placeholder={t("documentNamePlaceholder")}
           />
         </div>
 
@@ -69,10 +74,10 @@ export const DocumentEditModal = ({
             className="!text-small !p-1 text-slate-400"
             onClick={() => setIsOpen(false)}
           >
-            キャンセル
+            {tCommon("cancel")}
           </Button>
           <Button className="!text-small !p-1" onClick={onSubmit}>
-            保存
+            {tCommon("save")}
           </Button>
         </div>
       </div>

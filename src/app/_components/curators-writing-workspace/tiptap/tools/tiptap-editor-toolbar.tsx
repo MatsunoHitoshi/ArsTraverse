@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import type { Editor } from "@tiptap/react";
 import { Button } from "@/app/_components/button/button";
 import {
@@ -27,6 +28,7 @@ export const TiptapEditorToolbar: React.FC<TiptapEditorToolbarProps> = ({
   editor,
   className,
 }) => {
+  const t = useTranslations("workspace");
   const { isHighlightVisible, toggleHighlightVisibility } =
     useHighlightToggle();
 
@@ -58,7 +60,7 @@ export const TiptapEditorToolbar: React.FC<TiptapEditorToolbarProps> = ({
     <div className={`flex items-center gap-1 ${className}`}>
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleBold().run()}
-        title="太字"
+        title={t("toolbarBold")}
       >
         <BoldIcon
           height={16}
@@ -69,7 +71,7 @@ export const TiptapEditorToolbar: React.FC<TiptapEditorToolbarProps> = ({
 
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleItalic().run()}
-        title="斜体"
+        title={t("toolbarItalic")}
       >
         <ItalicIcon
           height={16}
@@ -80,7 +82,7 @@ export const TiptapEditorToolbar: React.FC<TiptapEditorToolbarProps> = ({
 
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleUnderline().run()}
-        title="下線"
+        title={t("toolbarUnderline")}
       >
         <UnderlineIcon
           height={16}
@@ -91,7 +93,7 @@ export const TiptapEditorToolbar: React.FC<TiptapEditorToolbarProps> = ({
 
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleBulletList().run()}
-        title="箇条書き"
+        title={t("toolbarBulletList")}
       >
         <ListBulletIcon
           height={16}
@@ -102,7 +104,7 @@ export const TiptapEditorToolbar: React.FC<TiptapEditorToolbarProps> = ({
 
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleOrderedList().run()}
-        title="番号付きリスト"
+        title={t("toolbarOrderedList")}
       >
         <ListNumberIcon
           height={16}
@@ -113,7 +115,7 @@ export const TiptapEditorToolbar: React.FC<TiptapEditorToolbarProps> = ({
 
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleBlockquote().run()}
-        title="引用"
+        title={t("toolbarQuote")}
       >
         <QuoteIcon
           height={16}
@@ -128,7 +130,7 @@ export const TiptapEditorToolbar: React.FC<TiptapEditorToolbarProps> = ({
           onClick={() =>
             editor.chain().focus().toggleHeading({ level: 1 }).run()
           }
-          title="見出し1"
+          title={t("toolbarHeading1")}
         >
           <span
             className={`text-xs font-bold ${
@@ -145,7 +147,7 @@ export const TiptapEditorToolbar: React.FC<TiptapEditorToolbarProps> = ({
           onClick={() =>
             editor.chain().focus().toggleHeading({ level: 2 }).run()
           }
-          title="見出し2"
+          title={t("toolbarHeading2")}
         >
           <span
             className={`text-xs font-bold ${
@@ -162,7 +164,7 @@ export const TiptapEditorToolbar: React.FC<TiptapEditorToolbarProps> = ({
           onClick={() =>
             editor.chain().focus().toggleHeading({ level: 3 }).run()
           }
-          title="見出し3"
+          title={t("toolbarHeading3")}
         >
           <span
             className={`text-xs font-bold ${
@@ -176,7 +178,7 @@ export const TiptapEditorToolbar: React.FC<TiptapEditorToolbarProps> = ({
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign("left").run()}
-          title="左寄せ"
+          title={t("toolbarAlignLeft")}
         >
           <TextAlignLeftIcon
             height={16}
@@ -186,7 +188,7 @@ export const TiptapEditorToolbar: React.FC<TiptapEditorToolbarProps> = ({
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign("center").run()}
-          title="中央寄せ"
+          title={t("toolbarAlignCenter")}
         >
           <TextAlignCenterIcon
             height={16}
@@ -196,7 +198,7 @@ export const TiptapEditorToolbar: React.FC<TiptapEditorToolbarProps> = ({
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign("right").run()}
-          title="右寄せ"
+          title={t("toolbarAlignRight")}
         >
           <TextAlignRightIcon
             height={16}
@@ -206,7 +208,7 @@ export const TiptapEditorToolbar: React.FC<TiptapEditorToolbarProps> = ({
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign("justify").run()}
-          title="均等割り付け"
+          title={t("toolbarAlignJustify")}
         >
           <TextAlignJustifyIcon
             height={16}
@@ -218,7 +220,7 @@ export const TiptapEditorToolbar: React.FC<TiptapEditorToolbarProps> = ({
 
       <ToolbarButton
         onClick={toggleHighlightVisibility}
-        title={isHighlightVisible ? "ハイライトを隠す" : "ハイライトを表示"}
+        title={isHighlightVisible ? t("toolbarHideHighlight") : t("toolbarShowHighlight")}
       >
         <BorderDashedIcon
           height={16}

@@ -1,6 +1,7 @@
 "use client";
 import { api } from "@/trpc/react";
 import { useSession } from "next-auth/react";
+import { useTranslations } from "next-intl";
 import { TabsContainer } from "../tab/tab";
 import type { GraphDocumentForFrontend } from "@/app/const/types";
 import {
@@ -29,6 +30,7 @@ import { MemberListModal } from "./member-list-modal";
 import { TopicSpaceDriveSyncPanel } from "./topic-space-drive-sync-panel";
 
 export const TopicSpaceDetail = ({ id }: { id: string }) => {
+  const t = useTranslations("topicSpace");
   // 変更履歴のハイライト情報を管理
   const [highlightData, setHighlightData] = useState<{
     addedNodeIds: Set<string>;
@@ -117,13 +119,13 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
                   type="button"
                   onClick={() => setMemberModalOpen(true)}
                   className="flex flex-col items-center cursor-pointer rounded-md p-1 hover:bg-slate-50/10 transition-colors"
-                  aria-label="メンバーを表示"
+                  aria-label={t("showMembers")}
                 >
                   <div className="flex flex-row items-center gap-2">
                     <PersonIcon height={20} width={20} color="white" />
                     <div className="">{topicSpace.admins?.length ?? "-"}</div>
                   </div>
-                  <div className="text-xs">メンバー</div>
+                  <div className="text-xs">{t("members")}</div>
                 </button>
 
                 <div className="flex flex-col items-center">
@@ -131,7 +133,7 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
                     <StarIcon height={20} width={20} color="white" />
                     <div className="">{topicSpace.star}</div>
                   </div>
-                  <div className="text-xs">お気に入り</div>
+                  <div className="text-xs">{t("favorites")}</div>
                 </div>
 
                 <div className="flex flex-col items-center">
@@ -141,7 +143,7 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
                       {topicSpace.sourceDocuments?.length ?? 0}
                     </div>
                   </div>
-                  <div className="text-xs">ドキュメント</div>
+                  <div className="text-xs">{t("documents")}</div>
                 </div>
               </div>
 
@@ -151,7 +153,7 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
                     <div className="flex flex-row items-center gap-2">
                       <Pencil2Icon height={20} width={20} color="white" />
                     </div>
-                    <div className="text-sm">編集する</div>
+                    <div className="text-sm">{t("editAction")}</div>
                   </div>
                 </LinkButton>
 
@@ -160,7 +162,7 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
                     <div className="flex flex-row items-center gap-2">
                       <GraphIcon height={20} width={20} color="white" />
                     </div>
-                    <div className="text-sm">公開ページ</div>
+                    <div className="text-sm">{t("publicPage")}</div>
                   </div>
                 </LinkButton>
               </div>
@@ -178,7 +180,7 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
                     <div className="h-4 w-4">
                       <FileTextIcon width={16} height={16} color="white" />
                     </div>
-                    <div className="text-sm">ドキュメント</div>
+                    <div className="text-sm">{t("documents")}</div>
                   </div>
                 )}
               </Tab>
@@ -191,7 +193,7 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
                     <div className="h-4 w-4">
                       <ShareIcon width={16} height={16} color="white" />
                     </div>
-                    <div className="text-sm">Drive 同期</div>
+                    <div className="text-sm">{t("driveSyncTab")}</div>
                   </div>
                 )}
               </Tab>
@@ -204,7 +206,7 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
                     <div className="h-4 w-4">
                       <FileTextIcon width={16} height={16} color="white" />
                     </div>
-                    <div className="text-sm">変更提案</div>
+                    <div className="text-sm">{t("changeProposals")}</div>
                   </div>
                 )}
               </Tab>
@@ -217,7 +219,7 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
                     <div className="h-4 w-4">
                       <LayersIcon width={16} height={16} color="white" />
                     </div>
-                    <div className="text-sm">変更履歴</div>
+                    <div className="text-sm">{t("changeHistory")}</div>
                   </div>
                 )}
               </Tab>
@@ -235,7 +237,7 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
                       <div className="h-4 w-4">
                         <PlusIcon width={16} height={16} color="white" />
                       </div>
-                      <div className="text-sm">ドキュメントを追加</div>
+                      <div className="text-sm">{t("addDocument")}</div>
                     </Button>
                   </div>
                   <DocumentList
@@ -255,7 +257,7 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
                             onClick={() => onDetachDocument(document.id)}
                           >
                             <div className="text-error-red">
-                              リポジトリから削除
+                              {t("removeFromRepository")}
                             </div>
                           </DocumentListMenuButton>
                           <DocumentListMenuButton
@@ -271,7 +273,7 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
                               setDocumentEditModalOpen(true);
                             }}
                           >
-                            <div className="text-white">名前を編集</div>
+                            <div className="text-white">{t("editName")}</div>
                           </DocumentListMenuButton>
                         </div>
                       );
@@ -308,7 +310,7 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center p-4">
-              <div>まだグラフが作成されていません</div>
+              <div>{t("graphNotCreated")}</div>
               <div>{topicSpace.graphDataStatus}</div>
             </div>
           )}

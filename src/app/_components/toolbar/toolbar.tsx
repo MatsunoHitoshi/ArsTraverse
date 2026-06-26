@@ -1,6 +1,7 @@
 import { Input, Switch } from "@headlessui/react";
 import clsx from "clsx";
 import React from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "../button/button";
 import type { EdgeType } from "@/app/_utils/kg/get-tree-layout-data";
 import { ZoomInIcon } from "../icons";
@@ -32,6 +33,9 @@ export const Toolbar = ({
   magnifierMode,
   setMagnifierMode,
 }: ToolbarProps) => {
+  const t = useTranslations("view");
+  const tGraph = useTranslations("graph");
+
   return (
     <div className="flex h-[46px] w-full flex-row items-center justify-between">
       <div className="flex w-full flex-row items-center gap-4">
@@ -54,7 +58,7 @@ export const Toolbar = ({
         )}
         {!!setIsEditing && (
           <div className="flex flex-row items-center gap-2">
-            <div className="text-sm">直接編集</div>
+            <div className="text-sm">{t("directEdit")}</div>
             <div>
               <Switch
                 checked={isEditor}
@@ -68,7 +72,7 @@ export const Toolbar = ({
         )}
         {!!setIsLinkFiltered && (
           <div className="flex flex-row items-center gap-2">
-            <div className="truncate text-sm">リンクフィルタ</div>
+            <div className="truncate text-sm">{t("linkFilter")}</div>
             <div>
               <Switch
                 checked={isLinkFiltered}
@@ -86,13 +90,13 @@ export const Toolbar = ({
               onClick={() => setEdgeType(edgeType === "OUT" ? "IN" : "OUT")}
               className=" !text-xs"
             >
-              {edgeType === "OUT" ? "外方向接続" : "内方向接続"}
+              {edgeType === "OUT" ? t("outboundEdges") : t("inboundEdges")}
             </Button>
           </div>
         )}
         {!!setIsUseExample && (
           <div className="flex flex-row items-center gap-2">
-            <div className="text-sm">サンプルデータを表示</div>
+            <div className="text-sm">{t("showSampleData")}</div>
             <div>
               <Switch
                 checked={isUseExample}
@@ -107,7 +111,7 @@ export const Toolbar = ({
         {!!setNodeSearchQuery && (
           <Input
             type="text"
-            placeholder="ノードを検索"
+            placeholder={tGraph("searchNodes")}
             className={clsx(
               "block w-full max-w-[300px] rounded-lg border-none bg-white/5 px-3 py-1.5 text-sm/6",
               "focus:outline-none data-[focus]:outline-1 data-[focus]:-outline-offset-2 data-[focus]:outline-slate-400",

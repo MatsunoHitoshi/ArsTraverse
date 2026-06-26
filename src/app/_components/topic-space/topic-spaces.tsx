@@ -9,8 +9,11 @@ import { TopicSpaceCreateModal } from "./topic-space-create-modal";
 import { TopicSpaceRenameModal } from "./topic-space-rename-modal";
 import { TrashIcon, Pencil2Icon } from "../icons";
 import { DeleteRecordModal } from "../modal/delete-record-modal";
+import { useTranslations } from "next-intl";
 
 export const TopicSpaces = () => {
+  const t = useTranslations("topicSpace");
+  const tCommon = useTranslations("common");
   const { data: session } = useSession();
   const { data: topicSpaces, refetch } =
     api.topicSpaces.getListBySession.useQuery();
@@ -51,7 +54,7 @@ export const TopicSpaces = () => {
                               color="white"
                             />
                           </div>
-                          <div>名称変更</div>
+                          <div>{t("rename")}</div>
                         </div>
                       </button>
                       <button
@@ -66,7 +69,7 @@ export const TopicSpaces = () => {
                           <div className="h-4 w-4">
                             <TrashIcon width={16} height={16} color="#ea1c0c" />
                           </div>
-                          <div className="text-error-red">削除</div>
+                          <div className="text-error-red">{tCommon("delete")}</div>
                         </div>
                       </button>
                     </div>

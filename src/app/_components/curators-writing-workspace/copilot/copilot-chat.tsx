@@ -1,4 +1,7 @@
+"use client";
+
 import { useState, useRef, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/app/_components/button/button";
 import { PaperPlaneIcon } from "@/app/_components/icons";
 import { api } from "@/trpc/react";
@@ -36,47 +39,53 @@ export const CopilotChat = ({
   onFilteredGraphData,
   className,
 }: CopilotChatProps) => {
+  const t = useTranslations("workspace");
   const [query, setQuery] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
-  const hasAnalyzedRef = useRef<string | null>(null); // 分析済みのグラフIDを追跡
+  const hasAnalyzedRef = useRef<string | null>(null);
 
-  // LLMからグラフの洞察を取得
+  const buildGreetingContent = (
+    body: string,
+    includeAskLayout = true,
+  ): string => {
+    let content = `${t("copilotGreeting")}\n\n${body}`;
+    if (includeAskLayout) {
+      content += `\n${t("copilotAskLayout")}`;
+    }
+    return content;
+  };
+
   const analyzeInsights = api.kg.analyzeGraphInsights.useMutation({
     onSuccess: (data) => {
       const insights = data.insights;
-      let content =
-        "こんにちは！ArsTraverse Copilotです。グラフの可視化や解釈についてお手伝いします。\n\n";
+      let body = "";
 
       if (insights.summary) {
-        content += "## グラフの特徴\n\n";
-        content += insights.summary;
-        content += "\n\n";
+        body += `${t("copilotGraphFeatures")}\n\n`;
+        body += insights.summary;
+        body += "\n\n";
 
-        // 中心的な概念
         if (insights.centralConcepts.nodes.length > 0) {
-          content += "### 中心的な概念\n\n";
-          content += insights.centralConcepts.summary;
-          content += "\n\n";
+          body += `${t("copilotCentralConcepts")}\n\n`;
+          body += insights.centralConcepts.summary;
+          body += "\n\n";
         }
 
-        // レイアウト提案がある場合
         if (insights.layoutSuggestions.length > 0) {
-          content += "### レイアウト提案\n\n";
+          body += `${t("copilotLayoutSuggestions")}\n\n`;
           insights.layoutSuggestions.slice(0, 3).forEach((suggestion) => {
-            content += `- **${suggestion.name}**: ${suggestion.description}\n`;
+            body += `- **${suggestion.name}**: ${suggestion.description}\n`;
           });
-          content += "\n";
+          body += "\n";
         }
       } else {
-        content += "グラフデータが読み込まれると、詳細な分析を表示します。";
+        body += t("copilotLoadGraphHint");
       }
-
-      content += "\nグラフのレイアウト変更や分析について質問してください！";
 
       setMessages([
         {
           role: "assistant",
-          content,
+          content: buildGreetingContent(body),
         },
       ]);
     },
@@ -85,8 +94,7 @@ export const CopilotChat = ({
       setMessages([
         {
           role: "assistant",
-          content:
-            "こんにちは！ArsTraverse Copilotです。グラフの可視化や解釈についてお手伝いします。\n\nグラフの分析中にエラーが発生しました。",
+          content: buildGreetingContent(t("copilotAnalysisError"), false),
         },
       ]);
     },
@@ -95,14 +103,12 @@ export const CopilotChat = ({
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      content:
-        "こんにちは！ArsTraverse Copilotです。グラフの可視化や解釈についてお手伝いします。\n\nグラフを分析中です...",
+      content: buildGreetingContent(t("copilotAnalyzing"), false),
     },
   ]);
 
   const askCopilot = api.kg.askCopilot.useMutation({
     onSuccess: (data) => {
-      // rawResponseがあればそれを使用、なければreplyを使用
       const contentToShow = data.rawResponse ?? data.reply;
       setMessages((prev) => [
         ...prev,
@@ -112,8 +118,6 @@ export const CopilotChat = ({
         onLayoutInstruction(data.layoutInstruction);
       }
       if (onFilteredGraphData) {
-        // GraphDocumentFrontendSchemaの型とGraphDocumentForFrontendの型が
-        // propertiesの型で異なるが、実際のデータは互換性があるため型アサーションを使用
         onFilteredGraphData(
           (data.filteredGraphData as GraphDocumentForFrontend | undefined) ??
             null,
@@ -125,7 +129,7 @@ export const CopilotChat = ({
         ...prev,
         {
           role: "assistant",
-          content: "エラーが発生しました: " + error.message,
+          content: `${t("copilotError")} ${error.message}`,
         },
       ]);
     },
@@ -148,20 +152,16 @@ export const CopilotChat = ({
     });
   };
 
-  // グラフデータが変更されたら洞察を取得
   useEffect(() => {
-    // グラフデータのハッシュを生成（ノード数とリレーション数で簡易的に判定）
     const graphHash = currentGraphData?.nodes
       ? `${currentGraphData.nodes.length}-${currentGraphData.relationships.length}-${workspaceId}`
       : null;
 
-    // 既に同じグラフを分析済みの場合はスキップ
     if (hasAnalyzedRef.current === graphHash) {
       return;
     }
 
     if (currentGraphData?.nodes && currentGraphData.nodes.length > 0) {
-      // 分析中フラグを設定
       hasAnalyzedRef.current = graphHash;
 
       analyzeInsights.mutate({
@@ -174,8 +174,7 @@ export const CopilotChat = ({
       setMessages([
         {
           role: "assistant",
-          content:
-            "こんにちは！ArsTraverse Copilotです。グラフの可視化や解釈についてお手伝いします。\n\nグラフデータが読み込まれると、詳細な分析を表示します。",
+          content: buildGreetingContent(t("copilotLoadGraphHint")),
         },
       ]);
     }
@@ -192,12 +191,12 @@ export const CopilotChat = ({
     <div
       className={`flex h-full flex-col border-l border-slate-700 bg-slate-900 ${className}`}
     >
-      {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-700 bg-slate-800 px-4 py-2">
-        <h2 className="text-sm font-semibold text-slate-200">アシスタント</h2>
+        <h2 className="text-sm font-semibold text-slate-200">
+          {t("copilotAssistant")}
+        </h2>
       </div>
 
-      {/* Messages */}
       <div className="flex-1 space-y-4 overflow-y-auto p-4" ref={scrollRef}>
         {messages.map((msg, i) => (
           <div
@@ -225,13 +224,12 @@ export const CopilotChat = ({
           <div className="flex justify-start">
             <div className="flex items-center gap-2 rounded-lg bg-slate-700 px-3 py-2 text-sm text-slate-200">
               <Loading color="white" size={20} />
-              <span>考え中...</span>
+              <span>{t("copilotThinking")}</span>
             </div>
           </div>
         )}
       </div>
 
-      {/* Input */}
       <form
         onSubmit={handleSubmit}
         className="border-t border-slate-700 bg-slate-800 p-3"
@@ -241,7 +239,7 @@ export const CopilotChat = ({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="グラフのレイアウトを変更して..."
+            placeholder={t("copilotPlaceholder")}
             className="flex-1 rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
             disabled={askCopilot.isPending}
           />

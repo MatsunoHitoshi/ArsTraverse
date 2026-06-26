@@ -16,7 +16,9 @@ import {
   getSegmentNodeIdsFromMetaGraphStoryData,
   type ScrollStep,
 } from "@/app/_utils/story-scroll-utils";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "i18n/navigation";
+import { useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import { useWindowSize } from "@/app/_hooks/use-window-size";
 import {
   CheckIcon,
@@ -71,6 +73,8 @@ export function ScrollStorytellingViewerUnified({
   workspaceTitle,
   topicSpaceId,
 }: ScrollStorytellingViewerUnifiedProps) {
+  const t = useTranslations("article");
+  const tGraph = useTranslations("graph");
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [innerWidth] = useWindowSize();
@@ -114,13 +118,13 @@ export function ScrollStorytellingViewerUnified({
     const overviewStep: ScrollStep = {
       id: "__overview__",
       communityId: "",
-      communityTitle: workspaceTitle ?? "グラフ全体",
+      communityTitle: workspaceTitle ?? tGraph("fullGraph"),
       text: " ",
       nodeIds: [],
       edgeIds: [],
     };
     return [overviewStep, ...storySteps];
-  }, [metaGraphData, workspaceTitle]);
+  }, [metaGraphData, workspaceTitle, tGraph]);
 
   const isPc = (innerWidth ?? 0) >= XL_BREAKPOINT;
 
@@ -595,7 +599,7 @@ export function ScrollStorytellingViewerUnified({
   if (steps.length === 0) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center text-slate-400">
-        表示するストーリーがありません
+        {t("noStory")}
       </div>
     );
   }
@@ -668,8 +672,8 @@ export function ScrollStorytellingViewerUnified({
             type="button"
             onClick={scrollToTop}
             className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-700/90 text-slate-200 shadow hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-400"
-            aria-label="ページトップ（タイトル）へ戻る"
-            title="ページトップ（タイトル）へ戻る"
+            aria-label={t("scrollToTop")}
+            title={t("scrollToTop")}
           >
             <UpArrowIcon width={18} height={18} color="currentColor" />
           </button>
@@ -677,8 +681,8 @@ export function ScrollStorytellingViewerUnified({
             type="button"
             onClick={toggleFreeExplore}
             className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-700/90 text-slate-200 shadow hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-400"
-            aria-label={isFreeExploreMode ? "自由探索を終了" : "自由探索モード"}
-            title={isFreeExploreMode ? "自由探索を終了" : "グラフを自由にズーム・移動"}
+            aria-label={isFreeExploreMode ? t("exitFreeExplore") : t("freeExploreMode")}
+            title={isFreeExploreMode ? t("exitFreeExplore") : t("freeExploreZoomTitle")}
           >
             {isFreeExploreMode ? (
               <ResetIcon width={18} height={18} color="currentColor" />
@@ -695,9 +699,9 @@ export function ScrollStorytellingViewerUnified({
                   ? "bg-indigo-600/90 text-white hover:bg-indigo-500"
                   : "bg-slate-700/90 text-slate-200 hover:bg-slate-600"
               }`}
-              aria-label={showEdgeSemanticAnimation ? "エッジアニメーションをオフ" : "エッジ意味アニメーションをオン"}
+              aria-label={showEdgeSemanticAnimation ? t("edgeAnimationOff") : t("edgeAnimationOn")}
               aria-pressed={showEdgeSemanticAnimation}
-              title={showEdgeSemanticAnimation ? "エッジ意味アニメーション: オン（クリックでオフ）" : "エッジ意味アニメーション: オフ（クリックでオン）"}
+              title={showEdgeSemanticAnimation ? t("edgeAnimationOnTitle") : t("edgeAnimationOffTitle")}
             >
               <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="3" />
@@ -763,8 +767,8 @@ export function ScrollStorytellingViewerUnified({
                       type="button"
                       onClick={() => copySectionLink(progressStep?.communityId ?? "")}
                       className="flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded text-slate-400 transition-colors hover:text-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-400"
-                      aria-label="セクション冒頭へのリンクをコピー"
-                      title="リンクをコピー"
+                      aria-label={t("copySectionLink")}
+                      title={t("copyLink")}
                     >
                       {copiedCommunityId === (progressStep?.communityId ?? "") ? (
                         <CheckIcon width={14} height={14} color="#22c55e" />
@@ -832,8 +836,8 @@ export function ScrollStorytellingViewerUnified({
                       type="button"
                       onClick={() => copySectionLink(progressStep?.communityId ?? "")}
                       className="flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded text-slate-400 transition-colors hover:text-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-400"
-                      aria-label="セクション冒頭へのリンクをコピー"
-                      title="リンクをコピー"
+                      aria-label={t("copySectionLink")}
+                      title={t("copyLink")}
                     >
                       {copiedCommunityId === (progressStep?.communityId ?? "") ? (
                         <CheckIcon width={14} height={14} color="#22c55e" />
@@ -849,9 +853,9 @@ export function ScrollStorytellingViewerUnified({
                       type="button"
                       onClick={scrollToNextSegment}
                       className="flex flex-col items-center gap-1.5 text-slate-300/75 transition-opacity hover:opacity-100 hover:text-slate-200 cursor-pointer w-max p-4"
-                      aria-label="次のセグメントへスクロール"
+                      aria-label={t("scrollToNext")}
                     >
-                      <span className="text-xs font-medium">スクロールして続きを見る</span>
+                      <span className="text-xs font-medium">{t("scrollToContinue")}</span>
                       <span className="animate-bounce">
                         <DownArrowIcon width={24} height={24} color="currentColor" />
                       </span>

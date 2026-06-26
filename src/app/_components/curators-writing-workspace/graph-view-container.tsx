@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type {
   CustomLinkType,
   CustomNodeType,
@@ -125,10 +126,11 @@ export const GraphViewContainer = ({
   layoutOrientation = "vertical",
   isEditMode = false,
 }: GraphViewContainerProps) => {
+  const t = useTranslations("workspace");
   if (!graphDocument) {
     return (
       <div className="flex h-full w-full items-center justify-center">
-        <p>グラフデータが見つかりません</p>
+        <p>{t("graphNotFound")}</p>
       </div>
     );
   }

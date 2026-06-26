@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { api } from "@/trpc/react";
 import { Modal } from "@/app/_components/modal/modal";
 import { Button } from "@/app/_components/button/button";
@@ -21,6 +22,8 @@ export function ScanSessionRenameModal({
   initialName = "",
   onSuccess,
 }: ScanSessionRenameModalProps) {
+  const t = useTranslations("field");
+  const tCommon = useTranslations("common");
   const [name, setName] = useState(initialName);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -37,7 +40,7 @@ export function ScanSessionRenameModal({
       onSuccess?.();
     },
     onError: (error) => {
-      setErrorMessage(error.message ?? "名前の変更に失敗しました");
+      setErrorMessage(error.message ?? t("renameFailed"));
     },
   });
 
@@ -46,14 +49,14 @@ export function ScanSessionRenameModal({
   }
 
   return (
-    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title="スキャン名を編集">
+    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title={t("renameScanTitle")}>
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
-          <div className="text-sm text-slate-200">名前</div>
+          <div className="text-sm text-slate-200">{t("name")}</div>
           <TextInput
             value={name}
             onChange={setName}
-            placeholder="スキャン名"
+            placeholder={t("scanNamePlaceholder")}
           />
         </div>
         {errorMessage && (
@@ -65,13 +68,13 @@ export function ScanSessionRenameModal({
             onClick={() => setIsOpen(false)}
             disabled={renameSession.isPending}
           >
-            キャンセル
+            {tCommon("cancel")}
           </Button>
           <Button
             className="!text-small !p-1"
             onClick={() => {
               if (!name.trim()) {
-                setErrorMessage("名前を入力してください");
+                setErrorMessage(t("nameRequired"));
                 return;
               }
               renameSession.mutate({ id: sessionId, name: name.trim() });
@@ -79,7 +82,7 @@ export function ScanSessionRenameModal({
             isLoading={renameSession.isPending}
             disabled={!name.trim()}
           >
-            保存
+            {tCommon("save")}
           </Button>
         </div>
       </div>

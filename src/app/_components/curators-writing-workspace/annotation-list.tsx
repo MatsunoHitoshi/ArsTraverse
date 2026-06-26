@@ -1,4 +1,7 @@
+"use client";
+
 import React, { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "../button/button";
 import type {
   AnnotationResponse,
@@ -10,11 +13,9 @@ import { AnnotationForm } from "./annotation-form";
 import Image from "next/image";
 import { RelativeTimeWithTooltip } from "./relative-time-with-tooltip";
 import { ChevronDownIcon } from "@heroicons/react/24/outline";
-import Link from "next/link";
-import {
-  getAnnotationTypeColor,
-  getAnnotationTypeLabel,
-} from "@/app/_utils/annotation/type-utils";
+import { Link } from "i18n/navigation";
+import { getAnnotationTypeColor } from "@/app/_utils/annotation/type-utils";
+import { useAnnotationTypeLabel } from "@/app/_utils/annotation/use-annotation-type-label";
 import { PlusIcon, ReplyIcon } from "../icons";
 import { HighlightedText } from "../common/highlighted-text";
 import { api } from "@/trpc/react";
@@ -45,6 +46,9 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
   setIsGraphEditor,
   onGraphUpdate,
 }) => {
+  const t = useTranslations("annotation");
+  const tCommon = useTranslations("common");
+  const getTypeLabel = useAnnotationTypeLabel();
   const [parentAnnotationId, setParentAnnotationId] = useState<string | null>(
     null,
   );
@@ -92,7 +96,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
   if (displayAnnotations.length === 0) {
     return (
       <div className="flex flex-col items-center gap-2 py-4 text-center">
-        <p className="mb-2 text-sm text-gray-400">まだ注釈がありません</p>
+        <p className="mb-2 text-sm text-gray-400">{t("noAnnotationsYet")}</p>
 
         {handleGenerateAnnotationFromDocument && (
           <Button
@@ -100,7 +104,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
             onClick={() => handleGenerateAnnotationFromDocument()}
           >
             <PlusIcon width={16} height={16} color="white" />
-            <div className="text-sm">ドキュメントから注釈を生成</div>
+            <div className="text-sm">{t("generateFromDocument")}</div>
           </Button>
         )}
       </div>
@@ -138,7 +142,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
                   size="medium"
                   className="justify-centers flex flex-row items-center bg-gray-700 px-2 text-xs hover:bg-gray-600"
                 >
-                  詳細
+                  {tCommon("detail")}
                 </Button>
               </Link>
             </div>
@@ -150,7 +154,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
                 annotation.type,
               )}`}
             >
-              {getAnnotationTypeLabel(annotation.type)}
+              {getTypeLabel(annotation.type)}
             </span>
             <Button
               size="small"
@@ -162,7 +166,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
               }}
               className="flex h-6 flex-row items-center justify-center bg-gray-700 px-2 text-xs"
             >
-              グラフ抽出
+              {t("graphExtraction")}
             </Button>
           </div>
 
@@ -188,7 +192,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
               className="flex h-6 flex-row items-center justify-center bg-gray-700 px-2 text-xs"
             >
               <ReplyIcon width={16} height={16} color="white" />
-              返信
+              {tCommon("reply")}
             </Button>
           </div>
 
@@ -242,7 +246,11 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
                         );
                       })()}
                     </div>
-                    <span>{annotation.childAnnotations.length}件の返信</span>
+                    <span>
+                      {t("replyCount", {
+                        count: annotation.childAnnotations.length,
+                      })}
+                    </span>
                   </div>
                   <span
                     className={`transform transition-transform ${expandedReplies.has(annotation.id) ? "rotate-180" : ""}`}
@@ -298,9 +306,9 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
                             size="small"
                             className="flex-row items-center justify-center bg-gray-700 px-2 text-xs hover:bg-gray-600"
                           >
-                            すべての返信を見る ( +{" "}
-                            {annotation.childAnnotations.length - 3}
-                            件)
+                            {t("viewAllReplies", {
+                              count: annotation.childAnnotations.length - 3,
+                            })}
                           </Button>
                         </Link>
                       </div>

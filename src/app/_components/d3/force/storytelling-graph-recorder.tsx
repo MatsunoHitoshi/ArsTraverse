@@ -33,6 +33,7 @@ import {
   type RecordingStep,
 } from "@/app/_utils/video/recording-sequencer";
 import { VideoExportModal } from "../../modal/video-export-modal";
+import { useTranslations } from "next-intl";
 
 
 /** 録画用グラフのサイズ（出力解像度）。16:9 の 1280x720 */
@@ -62,6 +63,7 @@ export const StorytellingGraphRecorder = forwardRef<
   { graphDocument, metaGraphData, workspaceTitle },
   ref,
 ) {
+  const t = useTranslations("graph");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [recordingProgress, setRecordingProgress] =
     useState<RecordingProgress | null>(null);
@@ -111,7 +113,7 @@ export const StorytellingGraphRecorder = forwardRef<
     const overviewStep: RecordingStep = {
       id: "__overview__",
       communityId: "",
-      communityTitle: workspaceTitle ?? "グラフ全体",
+      communityTitle: workspaceTitle ?? t("fullGraph"),
       nodeIds: [],
       edgeIds: [],
     };
@@ -145,7 +147,7 @@ export const StorytellingGraphRecorder = forwardRef<
     });
 
     return [overviewStep, ...enrichedStorySteps];
-  }, [metaGraphData, workspaceTitle, graphDocument]);
+  }, [metaGraphData, workspaceTitle, graphDocument, t]);
 
   const communityTitles = useMemo(
     () =>
@@ -180,7 +182,7 @@ export const StorytellingGraphRecorder = forwardRef<
           currentTransitionIndex: 0,
           totalTransitions: steps.length - 1,
           overallProgress: 0,
-          errorMessage: "SVG要素の取得に失敗しました",
+          errorMessage: t("recordingSvgFetchFailed"),
         });
         return;
       }
@@ -273,7 +275,7 @@ export const StorytellingGraphRecorder = forwardRef<
           totalTransitions: steps.length - 1,
           overallProgress: 0,
           errorMessage:
-            error instanceof Error ? error.message : "不明なエラー",
+            error instanceof Error ? error.message : t("unknownError"),
         });
       } finally {
         // 正常終了・エラー・中断にかかわらずリソースを解放
@@ -284,7 +286,7 @@ export const StorytellingGraphRecorder = forwardRef<
         setRecordingConfig(null);
       }
     },
-    [steps, waitForTransitionComplete],
+    [steps, waitForTransitionComplete, t],
   );
 
   // 録画開始トリガー（モーダルから呼ばれる）

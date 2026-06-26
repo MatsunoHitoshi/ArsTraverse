@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useTranslations } from "next-intl";
 import { GraphChangeType, GraphChangeEntityType } from "@prisma/client";
 import { VisualDiffViewer } from "./visual-diff-viewer";
 import { Button } from "../button/button";
@@ -21,15 +22,15 @@ interface DiffViewerProps {
 }
 
 export const DiffViewer: React.FC<DiffViewerProps> = ({ changes }) => {
+  const t = useTranslations("proposal");
   const [viewMode, setViewMode] = useState<"visual" | "json">("visual");
 
   if (changes.length === 0) {
-    return <div className="text-sm text-gray-500">変更内容がありません</div>;
+    return <div className="text-sm text-gray-500">{t("diff.noChanges")}</div>;
   }
 
   return (
     <div className="space-y-4">
-      {/* 表示モード切り替え */}
       <div className="mb-4 flex h-[46px] flex-row items-end gap-4">
         <div
           className={`border-b-2 border-transparent ${
@@ -40,7 +41,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({ changes }) => {
             onClick={() => setViewMode("visual")}
             className="flex cursor-pointer flex-row items-center gap-1 bg-transparent py-2 hover:bg-slate-50/10"
           >
-            <div>一覧</div>
+            <div>{t("diff.listView")}</div>
           </Button>
         </div>
         <div
@@ -52,12 +53,11 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({ changes }) => {
             onClick={() => setViewMode("json")}
             className="flex cursor-pointer flex-row items-center gap-1 bg-transparent py-2 hover:bg-slate-50/10"
           >
-            <div>JSON表示</div>
+            <div>{t("diff.jsonView")}</div>
           </Button>
         </div>
       </div>
 
-      {/* 表示内容 */}
       {viewMode === "visual" ? (
         <VisualDiffViewer changes={changes} />
       ) : (
@@ -74,9 +74,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({ changes }) => {
                         : "bg-red-100 text-red-800"
                   }`}
                 >
-                  {change.changeType === GraphChangeType.UPDATE && "更新"}
-                  {change.changeType === GraphChangeType.ADD && "追加"}
-                  {change.changeType === GraphChangeType.REMOVE && "削除"}
+                  {t(`diff.changeType.${change.changeType}`)}
                 </span>
                 <span
                   className={`rounded px-2 py-1 text-xs font-medium ${
@@ -85,9 +83,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({ changes }) => {
                       : "bg-orange-100 text-orange-800"
                   }`}
                 >
-                  {change.changeEntityType === GraphChangeEntityType.NODE
-                    ? "ノード"
-                    : "エッジ"}
+                  {t(`diff.entityType.${change.changeEntityType}`)}
                 </span>
                 <span className="text-sm text-gray-600">
                   ID: {change.changeEntityId}
@@ -96,7 +92,9 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({ changes }) => {
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <h4 className="mb-2 text-sm font-semibold">変更前</h4>
+                  <h4 className="mb-2 text-sm font-semibold">
+                    {t("diff.before")}
+                  </h4>
                   <div className="rounded-lg bg-pink-950/40 p-2">
                     <pre className="text-xs">
                       <code style={{ whiteSpace: "pre-wrap" }}>
@@ -107,7 +105,9 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({ changes }) => {
                 </div>
 
                 <div>
-                  <h4 className="mb-2 text-sm font-semibold">変更後</h4>
+                  <h4 className="mb-2 text-sm font-semibold">
+                    {t("diff.after")}
+                  </h4>
                   <div className="rounded-lg bg-green-950/40 p-2">
                     <pre className="text-xs">
                       <code style={{ whiteSpace: "pre-wrap" }}>

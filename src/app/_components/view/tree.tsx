@@ -11,6 +11,7 @@ import { D3RadialTree } from "../d3/tree/radial-tree";
 import Slider from "react-input-slider";
 import { ExportGraphButton } from "../d3/export-graph-button";
 import { Switch } from "@headlessui/react";
+import { useTranslations } from "next-intl";
 import type { EdgeType } from "@/app/_utils/kg/get-tree-layout-data";
 
 export const TreeViewer = ({
@@ -20,6 +21,7 @@ export const TreeViewer = ({
   topicSpaceId: string;
   nodeId: string;
 }) => {
+  const t = useTranslations("view");
   const [edgeType, setEdgeType] = useState<EdgeType>("OUT");
   const { data: topicSpace } = api.topicSpaces.getByIdPublic.useQuery({
     id: topicSpaceId,
@@ -85,7 +87,7 @@ export const TreeViewer = ({
               setEdgeType={setEdgeType}
             />
             <div className="flex flex-row items-center gap-2 px-4">
-              <div className="text-sm">ツリーの広さ</div>
+              <div className="text-sm">{t("treeWidth")}</div>
               <Slider
                 styles={{
                   active: {
@@ -109,7 +111,7 @@ export const TreeViewer = ({
 
           <div className="flex flex-col gap-1">
             <div className="flex w-full flex-row items-center justify-between">
-              <div className="font-semibold">ドキュメント</div>
+              <div className="font-semibold">{t("documents")}</div>
             </div>
 
             <TopicGraphDocumentList
@@ -143,7 +145,7 @@ export const TreeViewer = ({
                     <div
                       className={`text-xs ${bgLight ? "text-slate-900" : ""}`}
                     >
-                      背景色
+                      {t("backgroundColor")}
                     </div>
                     <Switch
                       checked={bgLight}
@@ -158,7 +160,7 @@ export const TreeViewer = ({
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center p-4">
-              <div>グラフがありません</div>
+              <div>{t("noGraph")}</div>
               <div>{topicSpace.graphDataStatus}</div>
             </div>
           )}

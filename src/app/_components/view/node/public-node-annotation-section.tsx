@@ -3,6 +3,7 @@
 import React from "react";
 import { api } from "@/trpc/react";
 import { PublicAnnotationList } from "./public-annotation-list";
+import { useTranslations } from "next-intl";
 import type { CustomNodeType } from "@/app/const/types";
 
 interface PublicNodeAnnotationSectionProps {
@@ -16,6 +17,7 @@ interface PublicNodeAnnotationSectionProps {
 export const PublicNodeAnnotationSection: React.FC<
   PublicNodeAnnotationSectionProps
 > = ({ node, topicSpaceId, setFocusedNode }) => {
+  const tAnnotation = useTranslations("annotation");
   // ノードの注釈を取得
   const { data: annotations } =
     api.annotation.getNodeAnnotationsPublic.useQuery(
@@ -30,7 +32,7 @@ export const PublicNodeAnnotationSection: React.FC<
   return (
     <div className="mb-4">
       <h3 className="mb-2 border-b border-slate-600 pb-1 text-sm font-semibold text-gray-200">
-        注釈
+        {tAnnotation("title")}
       </h3>
       {annotations && (
         <PublicAnnotationList

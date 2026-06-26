@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type {
   CustomNodeType,
   GraphDocumentForFrontend,
@@ -40,6 +41,7 @@ export const RightPanelContainer = ({
   onFilteredGraphData,
   isGraphEditor,
 }: RightPanelContainerProps) => {
+  const t = useTranslations("workspace");
   if (rightPanelMode === "copilot") {
     return (
       <CopilotChat
@@ -69,9 +71,7 @@ export const RightPanelContainer = ({
   return (
     <div className="flex h-full w-full items-center justify-center rounded-b-lg border border-t-0 border-gray-300 bg-slate-800 text-gray-400">
       <div className="text-center">
-        <p className="text-sm">
-          リポジトリを紐づけると詳細パネルが表示されます
-        </p>
+        <p className="text-sm">{t("linkRepositoryForPanel")}</p>
       </div>
     </div>
   );

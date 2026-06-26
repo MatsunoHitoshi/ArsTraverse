@@ -9,8 +9,9 @@ import {
   PRIVATE_USER_SELECT,
 } from "@/server/lib/user-select";
 
+const localeSchema = z.enum(["ja", "en"]);
+
 export const userRouter = createTRPCRouter({
-  // ユーザーのプロフィール情報を取得
   getProfile: protectedProcedure.query(async ({ ctx }) => {
     return ctx.db.user.findUnique({
       where: {
@@ -20,11 +21,10 @@ export const userRouter = createTRPCRouter({
     });
   }),
 
-  // ユーザーの言語設定を更新
   updatePreferredLocale: protectedProcedure
     .input(
       z.object({
-        locale: z.enum(["ja", "en"]),
+        locale: localeSchema,
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -38,7 +38,67 @@ export const userRouter = createTRPCRouter({
       });
     }),
 
-  // ユーザーの現在の言語設定を取得
+  updateUiLocale: protectedProcedure
+    .input(
+      z.object({
+        locale: localeSchema,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const user = await ctx.db.user.findUnique({
+        where: { id: ctx.session.user.id },
+        select: { localeLinked: true },
+      });
+
+      const data: {
+        uiLocale: string;
+        preferredLocale?: string;
+      } = { uiLocale: input.locale };
+
+      if (user?.localeLinked !== false) {
+        data.preferredLocale = input.locale;
+      }
+
+      return ctx.db.user.update({
+        where: { id: ctx.session.user.id },
+        data,
+      });
+    }),
+
+  updateLocaleSettings: protectedProcedure
+    .input(
+      z.object({
+        uiLocale: localeSchema.optional(),
+        preferredLocale: localeSchema.optional(),
+        localeLinked: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const data: {
+        uiLocale?: string;
+        preferredLocale?: string;
+        localeLinked?: boolean;
+      } = {};
+
+      if (input.localeLinked !== undefined) {
+        data.localeLinked = input.localeLinked;
+      }
+      if (input.uiLocale !== undefined) {
+        data.uiLocale = input.uiLocale;
+        if (input.localeLinked ?? true) {
+          data.preferredLocale = input.uiLocale;
+        }
+      }
+      if (input.preferredLocale !== undefined) {
+        data.preferredLocale = input.preferredLocale;
+      }
+
+      return ctx.db.user.update({
+        where: { id: ctx.session.user.id },
+        data,
+      });
+    }),
+
   getPreferredLocale: protectedProcedure.query(async ({ ctx }) => {
     const user = await ctx.db.user.findUnique({
       where: {
@@ -52,7 +112,6 @@ export const userRouter = createTRPCRouter({
     return user?.preferredLocale ?? "ja";
   }),
 
-  // 公開用: ユーザーIDでユーザー情報を取得
   getByIdPublic: publicProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -64,8 +123,6 @@ export const userRouter = createTRPCRouter({
       });
     }),
 
-  // ユーザーIDまたはメールアドレスでユーザーを検索（招待用）
-  // 完全一致のみ。部分一致は列挙攻撃につながるため許可しない
   searchByUserIdOrEmail: protectedProcedure
     .input(z.object({ query: z.string().min(1).max(200) }))
     .query(async ({ ctx, input }) => {

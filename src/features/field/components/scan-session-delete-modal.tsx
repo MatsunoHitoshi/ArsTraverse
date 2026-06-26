@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Modal } from "@/app/_components/modal/modal";
 import { Button } from "@/app/_components/button/button";
 
@@ -20,10 +21,13 @@ export function ScanSessionDeleteModal({
   isPending = false,
   onConfirm,
 }: ScanSessionDeleteModalProps) {
+  const t = useTranslations("field");
+  const tCommon = useTranslations("common");
+
   return (
-    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title="スキャンを削除">
+    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title={t("deleteScanTitle")}>
       <p className="text-sm text-slate-300">
-        「{sessionName}」を削除します。よろしいですか？
+        {t("deleteScanConfirm", { name: sessionName ?? "" })}
       </p>
       {errorMessage && (
         <p className="mt-3 text-sm text-red-300">{errorMessage}</p>
@@ -34,14 +38,14 @@ export function ScanSessionDeleteModal({
           className="bg-slate-700 text-white"
           disabled={isPending}
         >
-          キャンセル
+          {tCommon("cancel")}
         </Button>
         <Button
           onClick={onConfirm}
           isLoading={isPending}
           className="bg-red-700 text-white hover:bg-red-600"
         >
-          削除する
+          {t("confirmDelete")}
         </Button>
       </div>
     </Modal>

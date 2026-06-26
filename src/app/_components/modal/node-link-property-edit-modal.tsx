@@ -1,10 +1,13 @@
+"use client";
+
 import type { GraphDocumentForFrontend } from "@/app/const/types";
+import { useTranslations } from "next-intl";
 import { Modal } from "./modal";
 import { Button } from "../button/button";
 import { Input } from "@headlessui/react";
 import clsx from "clsx";
 import type { CustomNodeType, CustomLinkType } from "@/app/const/types";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { getNodeByIdForFrontend } from "@/app/_utils/kg/filter";
 
 export const NodePropertyEditModal = ({
@@ -22,6 +25,8 @@ export const NodePropertyEditModal = ({
   >;
   graphNode: CustomNodeType | undefined;
 }) => {
+  const t = useTranslations("modal.nodeLink");
+  const tCommon = useTranslations("common");
   const [graphNodeField, setGraphNodeField] = useState<
     CustomNodeType | undefined
   >();
@@ -54,14 +59,14 @@ export const NodePropertyEditModal = ({
   if (!graphNodeField) return null;
 
   return (
-    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title="ノードを編集">
+    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title={t("editNode")}>
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1 rounded-xl bg-slate-700 p-4">
           <div>
-            <div className="text-xs text-gray-400">名前</div>
+            <div className="text-xs text-gray-400">{t("name")}</div>
             <Input
               type="text"
-              placeholder="ノードの名前"
+              placeholder={t("nodeNamePlaceholder")}
               autoFocus
               className={clsx(
                 "block w-full rounded-lg border-none bg-white/5 px-3 py-1.5 text-sm/6",
@@ -84,10 +89,10 @@ export const NodePropertyEditModal = ({
           </div>
 
           <div>
-            <div className="text-xs text-gray-400">ラベル</div>
+            <div className="text-xs text-gray-400">{t("label")}</div>
             <Input
               type="text"
-              placeholder="ノードのラベル"
+              placeholder={t("nodeLabelPlaceholder")}
               className={clsx(
                 "block w-max rounded-md border-none bg-white/5 px-3 py-1.5 text-xs",
                 "focus:outline-none data-[focus]:outline-1 data-[focus]:-outline-offset-2 data-[focus]:outline-slate-400",
@@ -110,7 +115,7 @@ export const NodePropertyEditModal = ({
             className="text-sm !text-error-red"
             onClick={() => setIsDeleteNodeModalOpen(true)}
           >
-            ノードを削除
+            {t("deleteNode")}
           </Button>
           <div className="flex flex-row justify-end gap-2">
             <Button
@@ -120,7 +125,7 @@ export const NodePropertyEditModal = ({
                 setIsOpen(false);
               }}
             >
-              キャンセル
+              {tCommon("cancel")}
             </Button>
             <Button
               type="button"
@@ -147,7 +152,7 @@ export const NodePropertyEditModal = ({
                 setIsOpen(false);
               }}
             >
-              変更
+              {t("change")}
             </Button>
           </div>
         </div>
@@ -155,7 +160,7 @@ export const NodePropertyEditModal = ({
         <DeleteNodeLinkModal
           isOpen={isDeleteNodeModalOpen}
           setIsOpen={setIsDeleteNodeModalOpen}
-          title="ノード"
+          typeKey="node"
           onDelete={onDeleteNode}
         />
       </div>
@@ -178,6 +183,8 @@ export const LinkPropertyEditModal = ({
   >;
   graphLink: CustomLinkType | undefined;
 }) => {
+  const t = useTranslations("modal.nodeLink");
+  const tCommon = useTranslations("common");
   const [graphLinkField, setGraphLinkField] = useState<
     CustomLinkType | undefined
   >();
@@ -204,7 +211,7 @@ export const LinkPropertyEditModal = ({
   if (!graphLinkField) return null;
 
   return (
-    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title="リンクを編集">
+    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title={t("editLink")}>
       <div className="flex flex-col gap-4">
         <div className="flex flex-row items-center rounded-xl bg-slate-900 p-2">
           <div className="rounded-xl border border-slate-500 p-2 text-xs text-gray-400">
@@ -227,7 +234,7 @@ export const LinkPropertyEditModal = ({
           <Input
             type="text"
             autoFocus
-            placeholder="リンクのタイプ"
+            placeholder={t("linkTypePlaceholder")}
             className={clsx(
               "block !max-w-32 rounded-lg border-none bg-white/5 px-3 py-1.5 text-sm/6",
               "focus:outline-none data-[focus]:outline-1 data-[focus]:-outline-offset-2 data-[focus]:outline-slate-400",
@@ -271,7 +278,7 @@ export const LinkPropertyEditModal = ({
             className="text-sm !text-error-red"
             onClick={() => setIsDeleteLinkModalOpen(true)}
           >
-            リンクを削除
+            {t("deleteLink")}
           </Button>
 
           <div className="flex flex-row justify-end gap-2">
@@ -282,7 +289,7 @@ export const LinkPropertyEditModal = ({
                 setIsOpen(false);
               }}
             >
-              キャンセル
+              {tCommon("cancel")}
             </Button>
             <Button
               type="button"
@@ -303,7 +310,7 @@ export const LinkPropertyEditModal = ({
                 setIsOpen(false);
               }}
             >
-              変更
+              {t("change")}
             </Button>
           </div>
         </div>
@@ -311,7 +318,7 @@ export const LinkPropertyEditModal = ({
       <DeleteNodeLinkModal
         isOpen={isDeleteLinkModalOpen}
         setIsOpen={setIsDeleteLinkModalOpen}
-        title="リンク"
+        typeKey="link"
         onDelete={onDeleteLink}
       />
     </Modal>
@@ -321,25 +328,33 @@ export const LinkPropertyEditModal = ({
 const DeleteNodeLinkModal = ({
   isOpen,
   setIsOpen,
-  title,
+  typeKey,
   onDelete,
 }: {
   isOpen: boolean;
-  setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  title: string;
+  setIsOpen: Dispatch<SetStateAction<boolean>>;
+  typeKey: "node" | "link";
   onDelete: () => void;
 }) => {
+  const t = useTranslations("modal.nodeLink");
+  const tCommon = useTranslations("common");
+  const typeLabel = t(typeKey);
+
   return (
-    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title={`${title}を削除する`}>
+    <Modal
+      isOpen={isOpen}
+      setIsOpen={setIsOpen}
+      title={t("deleteConfirmTitle", { type: typeLabel })}
+    >
       <div className="flex flex-col gap-6">
-        <div>{`1件の${title}を削除してもよろしいですか？`}</div>
+        <div>{t("deleteConfirmMessage", { type: typeLabel })}</div>
         <div className="flex flex-row justify-end gap-2">
           <Button
             type="button"
             className="text-sm"
             onClick={() => setIsOpen(false)}
           >
-            キャンセル
+            {tCommon("cancel")}
           </Button>
           <Button
             type="button"
@@ -349,7 +364,7 @@ const DeleteNodeLinkModal = ({
               setIsOpen(false);
             }}
           >
-            削除する
+            {t("confirmDelete")}
           </Button>
         </div>
       </div>

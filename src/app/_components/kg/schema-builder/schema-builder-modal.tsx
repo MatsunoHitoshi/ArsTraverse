@@ -8,6 +8,7 @@ import { ListboxInput } from "../../input/listbox-input";
 import { TextInput } from "../../input/text-input";
 import { api } from "@/trpc/react";
 import type { TextChunk, MappingRule } from "@/server/lib/extractors/base";
+import { useTranslations } from "next-intl";
 
 type SchemaBuilderModalProps = {
   isOpen: boolean;
@@ -24,6 +25,8 @@ export const SchemaBuilderModal = ({
   setIsOpen,
   onSave,
 }: SchemaBuilderModalProps) => {
+  const t = useTranslations("schemaBuilder");
+  const tCommon = useTranslations("common");
   const [sampleText, setSampleText] = useState<string>("");
   const [chunks, setChunks] = useState<TextChunk[]>([]);
   const [mappings, setMappings] = useState<MappingRule[]>([]);
@@ -37,7 +40,7 @@ export const SchemaBuilderModal = ({
 
   const handleAnalyze = async () => {
     if (!sampleText.trim()) {
-      alert("サンプルテキストを入力してください");
+      alert(t("enterSampleText"));
       return;
     }
 
@@ -110,7 +113,7 @@ export const SchemaBuilderModal = ({
       }
     } catch (error) {
       console.error("Text analysis error:", error);
-      alert("テキスト解析に失敗しました");
+      alert(t("analysisFailed"));
     } finally {
       setIsAnalyzing(false);
     }
@@ -263,7 +266,7 @@ export const SchemaBuilderModal = ({
 
   const handleSave = () => {
     if (chunks.length === 0 || mappings.length === 0) {
-      alert("テキストを解析してから保存してください");
+      alert(t("analyzeBeforeSave"));
       return;
     }
 
@@ -283,14 +286,14 @@ export const SchemaBuilderModal = ({
     <Modal
       isOpen={isOpen}
       setIsOpen={setIsOpen}
-      title="抽出形式の設定"
+      title={t("title")}
       size="extra-large"
     >
       <div className="flex flex-col gap-6">
         <div className="flex flex-col gap-2">
-          <label className="text-sm font-semibold">サンプルテキスト</label>
+          <label className="text-sm font-semibold">{t("sampleText")}</label>
           <Textarea
-            placeholder="例: 2025/12/01（音楽） ..."
+            placeholder={t("samplePlaceholder")}
             value={sampleText}
             onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
               setSampleText(e.target.value)
@@ -303,15 +306,13 @@ export const SchemaBuilderModal = ({
             disabled={!sampleText.trim() || isAnalyzing}
             className="w-fit"
           >
-            テキストを解析
+            {t("analyzeText")}
           </Button>
         </div>
 
         {chunks.length > 0 && (
           <div className="flex flex-col gap-4">
-            <div className="text-sm font-semibold">
-              解析結果とマッピング設定
-            </div>
+            <div className="text-sm font-semibold">{t("resultsTitle")}</div>
             <div className="flex max-h-[400px] flex-col gap-3 overflow-y-auto">
               {chunks.map((chunk, index) => {
                 const mapping = getChunkMapping(index);
@@ -333,23 +334,23 @@ export const SchemaBuilderModal = ({
 
                     <div className="flex flex-row items-center gap-4">
                       <div className="flex flex-row items-center gap-2">
-                        <label className="text-xs text-slate-400">役割:</label>
+                        <label className="text-xs text-slate-400">{t("role")}</label>
                         <ListboxInput
                           options={[
-                            { value: "node", label: "ノード" },
+                            { value: "node", label: t("roleNode") },
                             {
                               value: "node_property",
-                              label: "ノードのプロパティ",
+                              label: t("roleNodeProperty"),
                             },
                             {
                               value: "edge_property",
-                              label: "エッジのプロパティ",
+                              label: t("roleEdgeProperty"),
                             },
                             {
                               value: "edge",
-                              label: "エッジ",
+                              label: t("roleEdge"),
                             },
-                            { value: "ignore", label: "無視" },
+                            { value: "ignore", label: t("roleIgnore") },
                           ]}
                           selected={role}
                           setSelected={(value: string) =>
@@ -371,14 +372,14 @@ export const SchemaBuilderModal = ({
                       {role === "node" && (
                         <div className="flex flex-row items-center gap-2">
                           <label className="text-xs text-slate-400">
-                            ノードラベル:
+                            {t("nodeLabel")}
                           </label>
                           <TextInput
                             value={mapping?.nodeLabel ?? chunk.type}
                             onChange={(value: string) =>
                               handleMappingChange(index, "nodeLabel", value)
                             }
-                            placeholder="例: Date, Event"
+                            placeholder={t("nodeLabelPlaceholder")}
                           />
                         </div>
                       )}
@@ -386,14 +387,14 @@ export const SchemaBuilderModal = ({
                       {role === "node_property" && (
                         <div className="flex flex-row items-center gap-2">
                           <label className="text-xs text-slate-400">
-                            プロパティ名:
+                            {t("propertyName")}
                           </label>
                           <TextInput
                             value={mapping?.propertyName ?? chunk.type}
                             onChange={(value: string) =>
                               handleMappingChange(index, "propertyName", value)
                             }
-                            placeholder="例: date, category"
+                            placeholder={t("propertyNamePlaceholder")}
                           />
                         </div>
                       )}
@@ -401,7 +402,7 @@ export const SchemaBuilderModal = ({
                       {role === "edge_property" && (
                         <div className="flex flex-row items-center gap-2">
                           <label className="text-xs text-slate-400">
-                            エッジのプロパティ名:
+                            {t("edgePropertyName")}
                           </label>
                           <TextInput
                             value={mapping?.edgePropertyName ?? chunk.type}
@@ -412,7 +413,7 @@ export const SchemaBuilderModal = ({
                                 value,
                               )
                             }
-                            placeholder="例: date, occurredAt"
+                            placeholder={t("edgePropertyPlaceholder")}
                           />
                         </div>
                       )}
@@ -420,11 +421,11 @@ export const SchemaBuilderModal = ({
                       {role === "edge" && (
                         <div className="flex flex-row items-center gap-2">
                           <label className="text-xs text-slate-400">
-                            エッジのタイプ:
+                            {t("edgeType")}
                           </label>
                           {convertingEdgeTypes.has(index) ? (
                             <div className="rounded bg-slate-700 px-3 py-1.5 text-sm text-slate-400">
-                              変換中...
+                              {t("converting")}
                             </div>
                           ) : (
                             <div className="rounded bg-slate-700 px-3 py-1.5 text-sm text-white">
@@ -446,10 +447,10 @@ export const SchemaBuilderModal = ({
             onClick={() => setIsOpen(false)}
             className="bg-slate-700 hover:bg-slate-600"
           >
-            キャンセル
+            {tCommon("cancel")}
           </Button>
           {chunks.length > 0 && (
-            <Button onClick={handleSave}>設定を保存</Button>
+            <Button onClick={handleSave}>{t("saveSettings")}</Button>
           )}
         </div>
       </div>

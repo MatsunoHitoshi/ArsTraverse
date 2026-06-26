@@ -4,10 +4,11 @@ import { Button } from "../button/button";
 import { UrlCopy } from "../url-copy/url-copy";
 import { DotHorizontalIcon, GraphIcon, Link2Icon, PlusIcon } from "../icons";
 import { formatDate } from "@/app/_utils/date/format-date";
-import { useRouter } from "next/navigation";
+import { Link, useRouter } from "i18n/navigation";
+import { useLocale, useTranslations } from "next-intl";
+import type { Locale } from "i18n/routing";
 import { env } from "@/env";
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
-import Link from "next/link";
 
 type DocumentListProps = {
   documents: DocumentResponse[];
@@ -25,6 +26,8 @@ export const DocumentList = ({
   menu,
   type = "document",
 }: DocumentListProps) => {
+  const t = useTranslations("list");
+  const locale = useLocale() as Locale;
   const router = useRouter();
 
   const PopoverMenu = ({ document }: { document: DocumentResponse }) => {
@@ -47,12 +50,12 @@ export const DocumentList = ({
     <div className="flex flex-col divide-y divide-slate-600 rounded-md border border-slate-400">
       {documents.length === 0 ? (
         <div className="flex flex-row items-center justify-between p-3">
-          <div>ドキュメントがありません</div>
+          <div>{t("noDocuments")}</div>
           {type === "document" && (
             <Link href="/">
               <Button className="flex flex-row items-center gap-1">
                 <PlusIcon width={16} height={16} color="white" />
-                <div className="text-sm">新規ドキュメント</div>
+                <div className="text-sm">{t("newDocument")}</div>
               </Button>
             </Link>
           )}
@@ -101,7 +104,7 @@ export const DocumentList = ({
                   </div>
                 </UrlCopy>
                 <div className="w-[128px] text-right text-sm">
-                  {formatDate(document.createdAt)}
+                  {formatDate(document.createdAt, locale)}
                 </div>
               </div>
             </div>

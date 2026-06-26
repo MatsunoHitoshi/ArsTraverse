@@ -1,13 +1,13 @@
 "use client";
 
 import React from "react";
+import { useLocale, useTranslations } from "next-intl";
+import type { Locale } from "i18n/routing";
 import { api } from "@/trpc/react";
-import { ProposalStatus } from "@prisma/client";
 import { Button } from "../button/button";
 import { formatRelativeTime } from "@/app/_utils/date/format-date";
-import Image from "next/image";
-import { useRouter } from "next/navigation";
-import { getStatusBadge, getStatusIcon } from "./proposal-utils";
+import { useRouter } from "i18n/navigation";
+import { ProposalStatusBadge, getStatusIcon } from "./proposal-utils";
 
 interface MyProposalListProps {
   limit?: number;
@@ -16,6 +16,8 @@ interface MyProposalListProps {
 export const MyProposalList: React.FC<MyProposalListProps> = ({
   limit = 5,
 }) => {
+  const t = useTranslations("proposal");
+  const locale = useLocale() as Locale;
   const router = useRouter();
 
   const { data: proposals, isLoading } =
@@ -26,14 +28,14 @@ export const MyProposalList: React.FC<MyProposalListProps> = ({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-4">
-        <div className="text-gray-500">読み込み中...</div>
+        <div className="text-gray-500">{t("loading")}</div>
       </div>
     );
   }
 
   if (!proposals || proposals.length === 0) {
     return (
-      <div className="py-8 text-center text-gray-500">変更提案がありません</div>
+      <div className="py-8 text-center text-gray-500">{t("noProposals")}</div>
     );
   }
 
@@ -53,7 +55,7 @@ export const MyProposalList: React.FC<MyProposalListProps> = ({
               <div className="mb-2 flex items-center gap-2">
                 {getStatusIcon(proposal.status)}
                 <h3 className="font-medium text-white">{proposal.title}</h3>
-                {getStatusBadge(proposal.status)}
+                <ProposalStatusBadge status={proposal.status} />
               </div>
 
               {proposal.description && (
@@ -71,12 +73,18 @@ export const MyProposalList: React.FC<MyProposalListProps> = ({
 
                 {proposal.lockedBy && (
                   <span className="text-purple-400">
-                    ロック中: {proposal.lockedBy.name ?? "不明"}
+                    {t("lockedBy", {
+                      name: proposal.lockedBy.name ?? t("unknown"),
+                    })}
                   </span>
                 )}
-                <span>{formatRelativeTime(new Date(proposal.createdAt))}</span>
-                <span>{proposal._count.comments}件のコメント</span>
-                <span>{proposal.changes.length}件の変更</span>
+                <span>{formatRelativeTime(new Date(proposal.createdAt), locale)}</span>
+                <span>
+                  {t("commentCount", { count: proposal._count.comments })}
+                </span>
+                <span>
+                  {t("changeCount", { count: proposal.changes.length })}
+                </span>
               </div>
             </div>
 
@@ -86,7 +94,7 @@ export const MyProposalList: React.FC<MyProposalListProps> = ({
                 router.push(`/proposals/${proposal.id}`);
               }}
             >
-              詳細
+              {t("viewDetail")}
             </Button>
           </div>
         </div>

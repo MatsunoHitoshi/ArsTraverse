@@ -1,7 +1,9 @@
+"use client";
 import { Button } from "../button/button";
 import { PlusIcon } from "../icons";
 import { TopicSpaceCard } from "../topic-space/topic-space-card";
 import type { TopicSpaceResponse } from "@/app/const/types";
+import { useTranslations } from "next-intl";
 
 export const TopicSpaceList = ({
   topicSpaces,
@@ -16,11 +18,12 @@ export const TopicSpaceList = ({
   setTopicSpaceCreateModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
   menu?: (topicSpace: TopicSpaceResponse) => React.ReactNode;
 }) => {
+  const t = useTranslations("list");
   return (
     <div className="flex flex-col gap-3">
       {topicSpaces.length == 0 ? (
         <div className="flex flex-row items-center justify-between p-3">
-          <div>リポジトリがありません</div>
+          <div>{t("noRepositories")}</div>
           <Button
             className="flex flex-row items-center gap-1"
             onClick={() => {
@@ -28,7 +31,7 @@ export const TopicSpaceList = ({
             }}
           >
             <PlusIcon width={16} height={16} color="white" />
-            <div className="text-sm">新規リポジトリ</div>
+            <div className="text-sm">{t("newRepository")}</div>
           </Button>
         </div>
       ) : (

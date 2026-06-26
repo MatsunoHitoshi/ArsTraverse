@@ -85,7 +85,7 @@ export async function openCameraStreamWithFallback(): Promise<MediaStream> {
 
   throw lastError instanceof Error
     ? lastError
-    : new Error("カメラを起動できませんでした");
+    : new Error("Failed to start camera");
 }
 
 async function captureWithImageCapture(
@@ -121,7 +121,7 @@ function captureFromVideoElement(video: HTMLVideoElement): Promise<File> {
   const width = video.videoWidth;
   const height = video.videoHeight;
   if (width <= 0 || height <= 0) {
-    return Promise.reject(new Error("カメラ映像の解像度を取得できませんでした"));
+    return Promise.reject(new Error("Failed to read camera resolution"));
   }
 
   const canvas = document.createElement("canvas");
@@ -130,7 +130,7 @@ function captureFromVideoElement(video: HTMLVideoElement): Promise<File> {
 
   const ctx = canvas.getContext("2d");
   if (!ctx) {
-    return Promise.reject(new Error("Canvas が利用できません"));
+    return Promise.reject(new Error("Canvas is not available"));
   }
 
   ctx.drawImage(video, 0, 0, width, height);
@@ -139,7 +139,7 @@ function captureFromVideoElement(video: HTMLVideoElement): Promise<File> {
     canvas.toBlob(
       (blob) => {
         if (!blob) {
-          reject(new Error("撮影画像の生成に失敗しました"));
+          reject(new Error("Failed to generate captured image"));
           return;
         }
         resolve(createScanImageFile(blob, "image/jpeg"));
@@ -168,7 +168,7 @@ export async function captureStillPhotoFromStream(
     await new Promise<void>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
         cleanup();
-        reject(new Error("カメラ映像の準備がタイムアウトしました"));
+        reject(new Error("Camera preview timed out"));
       }, 5000);
 
       const onReady = () => {
@@ -177,7 +177,7 @@ export async function captureStillPhotoFromStream(
       };
       const onError = () => {
         cleanup();
-        reject(new Error("カメラ映像の準備に失敗しました"));
+        reject(new Error("Failed to prepare camera preview"));
       };
       const cleanup = () => {
         clearTimeout(timeoutId);

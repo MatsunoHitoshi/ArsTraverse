@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/app/_components/button/button";
 import { api, type RouterInputs, type RouterOutputs } from "@/trpc/react";
 import type { PrintLayoutSettings } from "./types";
@@ -14,6 +15,7 @@ interface PdfExportButtonProps {
 }
 
 export function PdfExportButton({ layoutSettings, workspaceId, workspaceTitle }: PdfExportButtonProps) {
+  const t = useTranslations("print");
   const styleRef = useRef<HTMLStyleElement | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
@@ -70,7 +72,10 @@ export function PdfExportButton({ layoutSettings, workspaceId, workspaceTitle }:
       const widthMm = convertUnit(width, unit, "mm");
       const heightMm = convertUnit(height, unit, "mm");
 
-      const message = `カスタムサイズ（${widthMm.toFixed(1)}mm × ${heightMm.toFixed(1)}mm）で印刷します。\n\n印刷ダイアログで「用紙サイズ」を「カスタム」に設定してください。`;
+      const message = t("customPrintConfirm", {
+        width: widthMm.toFixed(1),
+        height: heightMm.toFixed(1),
+      });
       if (window.confirm(message)) {
         window.print();
       }
@@ -129,7 +134,7 @@ export function PdfExportButton({ layoutSettings, workspaceId, workspaceTitle }:
         {isDownloading ? "生成中..." : "PDFダウンロード"}
       </Button> */}
       <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700">
-        PDF出力
+        {t("pdfExport")}
       </Button>
     </div>
   );

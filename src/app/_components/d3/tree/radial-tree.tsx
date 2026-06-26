@@ -12,7 +12,7 @@ import {
 import { D3ZoomProvider } from "../zoom";
 import type { TreeNode } from "@/app/const/types";
 import type { GraphDocumentForFrontend } from "@/app/const/types";
-import { useRouter } from "next/navigation";
+import { useRouter } from "i18n/navigation";
 
 type D3RadialTreeProps = {
   bgMode: "dark" | "light";

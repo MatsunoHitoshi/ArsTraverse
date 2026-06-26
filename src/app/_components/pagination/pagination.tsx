@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "../button/button";
 
 type PaginationProps = {
@@ -14,6 +15,8 @@ export const Pagination = ({
   onPageChange,
   className,
 }: PaginationProps) => {
+  const t = useTranslations("pagination");
+
   return (
     <div
       className={`flex flex-row items-center justify-center gap-4 ${className ?? ""}`}
@@ -23,7 +26,7 @@ export const Pagination = ({
         onClick={() => onPageChange(Math.max(1, currentPage - 1))}
         disabled={currentPage === 1}
       >
-        前へ
+        {t("previous")}
       </Button>
       <div className="text-sm">
         {currentPage} / {totalPages}
@@ -33,7 +36,7 @@ export const Pagination = ({
         onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
         disabled={currentPage === totalPages}
       >
-        次へ
+        {t("next")}
       </Button>
     </div>
   );

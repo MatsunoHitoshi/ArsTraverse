@@ -1,7 +1,7 @@
 "use client";
 import { Button } from "../button/button";
 import { FileTextIcon, GraphIcon, Link2Icon } from "../icons";
-import { useRouter } from "next/navigation";
+import { useRouter } from "i18n/navigation";
 import { UrlCopy } from "../url-copy/url-copy";
 import { env } from "@/env";
 import { D3ForceGraph } from "../d3/force/graph";

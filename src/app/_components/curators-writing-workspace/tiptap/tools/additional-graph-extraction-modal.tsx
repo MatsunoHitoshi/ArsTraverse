@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { api } from "@/trpc/react";
 import { Button } from "@/app/_components/button/button";
 import { Modal } from "@/app/_components/modal/modal";
@@ -38,6 +39,8 @@ export const AdditionalGraphExtractionModal: React.FC<
   centralSubject,
   topicSpaceId = "",
 }) => {
+    const t = useTranslations("workspace");
+    const tCommon = useTranslations("common");
     const [isExtracting, setIsExtracting] = useState(false);
     /** 抽出完了後に表示するグラフ（未設定のときはテキスト＋抽出ボタンのみ） */
     const [extractedGraph, setExtractedGraph] =
@@ -85,7 +88,7 @@ export const AdditionalGraphExtractionModal: React.FC<
 
     const handleExtractGraph = async () => {
       if (!text.trim()) {
-        alert("テキストが選択されていません");
+        alert(t("noTextSelected"));
         return;
       }
 
@@ -133,7 +136,7 @@ export const AdditionalGraphExtractionModal: React.FC<
           BUCKETS.PATH_TO_INPUT_TXT,
         );
         if (!fileUrl) {
-          throw new Error("テキストファイルのアップロードに失敗しました");
+          throw new Error(t("textUploadFailed"));
         }
 
         extractKG.mutate(
@@ -158,7 +161,7 @@ export const AdditionalGraphExtractionModal: React.FC<
             },
             onError: (error) => {
               console.error("グラフ抽出エラー:", error);
-              alert("グラフ抽出に失敗しました");
+              alert(t("graphExtractFailed"));
               setIsExtracting(false);
             },
           },
@@ -247,7 +250,7 @@ export const AdditionalGraphExtractionModal: React.FC<
           }
           setIsAdditionalGraphExtractionModalOpen(next);
         }}
-        title="テキストからグラフ抽出"
+        title={t("extractFromTextTitle")}
         size="large"
       >
         <div className="flex flex-col gap-6">
@@ -255,10 +258,10 @@ export const AdditionalGraphExtractionModal: React.FC<
             <>
               <div>
                 <h4 className="mb-2 text-sm font-medium text-slate-200">
-                  選択されたテキスト
+                  {t("selectedText")}
                 </h4>
                 <div className="max-h-32 overflow-y-auto whitespace-pre-wrap rounded-md bg-slate-800 p-3 text-sm text-slate-300">
-                  {text ?? "テキストが選択されていません"}
+                  {text ?? t("noTextSelected")}
                 </div>
               </div>
 
@@ -271,7 +274,7 @@ export const AdditionalGraphExtractionModal: React.FC<
                   {isExtracting ? (
                     <Loading color="white" size={20} />
                   ) : (
-                    "グラフを抽出"
+                    t("extractGraph")
                   )}
                 </Button>
               </div>
@@ -281,14 +284,14 @@ export const AdditionalGraphExtractionModal: React.FC<
                   onClick={handleClose}
                   className="border border-slate-600 bg-slate-700 text-slate-200 hover:bg-slate-600"
                 >
-                  キャンセル
+                  {tCommon("cancel")}
                 </Button>
               </div>
             </>
           ) : (
             <>
               <p className="text-sm text-slate-300">
-                抽出されたグラフを確認・編集できます。タブでグラフビューと一覧を切り替え、「グラフに反映」で元のグラフに追加します。
+                {t("extractGraphReviewHint")}
               </p>
               <div className="flex border-b border-slate-600">
                 <button
@@ -299,7 +302,7 @@ export const AdditionalGraphExtractionModal: React.FC<
                     : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
                     }`}
                 >
-                  グラフビュー
+                  {t("graphView")}
                 </button>
                 <button
                   type="button"
@@ -309,7 +312,7 @@ export const AdditionalGraphExtractionModal: React.FC<
                     : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
                     }`}
                 >
-                  一覧
+                  {t("listView")}
                 </button>
               </div>
               <div className="min-h-[420px]">
@@ -357,7 +360,7 @@ export const AdditionalGraphExtractionModal: React.FC<
                   onClick={handleClose}
                   className="border border-slate-600 bg-slate-700 text-slate-200 hover:bg-slate-600"
                 >
-                  キャンセル
+                  {tCommon("cancel")}
                 </Button>
                 <Button
                   onClick={() => {
@@ -368,7 +371,7 @@ export const AdditionalGraphExtractionModal: React.FC<
                     }
                   }}
                 >
-                  グラフに反映
+                  {t("applyToGraph")}
                 </Button>
               </div>
             </>

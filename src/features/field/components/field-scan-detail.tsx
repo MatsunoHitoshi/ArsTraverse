@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useRouter } from "i18n/navigation";
+import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
@@ -59,6 +59,8 @@ function toDocumentGraphMutationPayload(
 }
 
 export function FieldScanDetail({ sessionId }: FieldScanDetailProps) {
+  const t = useTranslations("field");
+  const tCommon = useTranslations("common");
   const router = useRouter();
   const { data: authSession } = useSession();
   const preferredLocale = (authSession?.user?.preferredLocale ?? "ja") as LocaleEnum;
@@ -91,7 +93,7 @@ export function FieldScanDetail({ sessionId }: FieldScanDetailProps) {
       await syncGraphFromServer();
     },
     onError: async (mutationError) => {
-      setGraphEditError(mutationError.message ?? "グラフの保存に失敗しました");
+      setGraphEditError(mutationError.message ?? t("graphSaveFailed"));
       await syncGraphFromServer();
     },
   });
@@ -113,7 +115,7 @@ export function FieldScanDetail({ sessionId }: FieldScanDetailProps) {
       router.push("/field");
     },
     onError: (mutationError) => {
-      setDeleteError(mutationError.message ?? "削除に失敗しました");
+      setDeleteError(mutationError.message ?? t("deleteFailed"));
     },
   });
 
@@ -132,7 +134,7 @@ export function FieldScanDetail({ sessionId }: FieldScanDetailProps) {
   if (isLoading) {
     return (
       <div className="px-4 py-16 text-center text-sm text-slate-400">
-        読み込み中...
+        {tCommon("loading")}
       </div>
     );
   }
@@ -154,10 +156,10 @@ export function FieldScanDetail({ sessionId }: FieldScanDetailProps) {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 text-center">
         <p className="mb-4 text-sm text-red-300">
-          スキャンセッションを取得できませんでした
+          {t("sessionFetchFailed")}
         </p>
         <Link href="/field" className="text-sm text-sky-400 hover:underline">
-          一覧に戻る
+          {t("backToList")}
         </Link>
       </div>
     );
@@ -204,10 +206,10 @@ export function FieldScanDetail({ sessionId }: FieldScanDetailProps) {
 
         <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-200">OCR テキスト</h2>
+            <h2 className="text-sm font-semibold text-slate-200">{t("ocrText")}</h2>
             {data.ocrMetadata?.confidence != null && (
               <span className="text-xs text-slate-400">
-                信頼度 {Math.round(Number(data.ocrMetadata.confidence))}%
+                {t("confidence")} {Math.round(Number(data.ocrMetadata.confidence))}%
               </span>
             )}
           </div>
@@ -245,13 +247,13 @@ export function FieldScanDetail({ sessionId }: FieldScanDetailProps) {
             onClick={() => router.push(`/graph/${data.graphId}`)}
             className="w-full bg-slate-700 text-white"
           >
-            フルグラフビューで開く
+            {t("openFullGraphView")}
           </Button>
           <Link
             href="/field/scan"
             className="text-center text-sm text-orange-300 hover:underline"
           >
-            新しいスキャンを追加
+            {t("addNewScan")}
           </Link>
         </div>
 
