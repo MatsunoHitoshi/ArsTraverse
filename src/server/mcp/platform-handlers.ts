@@ -19,6 +19,8 @@ import {
   listTopicSpaceChangeHistory,
   replayNodeMergesFromHistory,
 } from "@/server/services/kg/replay-node-merges-from-history.service";
+import { syncTopicSpaceDriveFolder } from "@/server/services/kg/sync-topic-space-drive.service";
+import { buildDriveFolderUrl } from "@/server/lib/google-drive/urls";
 import type { McpDraftHandlerCtx } from "@/server/mcp/graph-edit-draft-handlers";
 
 export type McpPlatformHandlerCtx = McpDraftHandlerCtx;
@@ -531,5 +533,58 @@ async function readTopicSpaceGraphForExport(
         sourceDocumentIds: sourceDocumentIdsByRelationshipId.get(rel.id),
       })),
     },
+  };
+}
+
+export async function mcpGetTopicSpaceDriveSyncStatus(
+  ctx: McpPlatformHandlerCtx,
+  input: { topicSpaceId: string },
+) {
+  const topicSpace = await ctx.db.topicSpace.findFirst({
+    where: {
+      id: input.topicSpaceId,
+      isDeleted: false,
+      admins: { some: { id: ctx.userId } },
+    },
+    include: { driveSync: true },
+  });
+
+  if (!topicSpace) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "TopicSpace が見つからないか、アクセス権がありません。",
+    });
+  }
+
+  const driveSync = topicSpace.driveSync;
+  return {
+    topicSpaceId: topicSpace.id,
+    configured: Boolean(driveSync),
+    enabled: driveSync?.enabled ?? false,
+    driveFolderId: driveSync?.driveFolderId ?? null,
+    driveFolderName: driveSync?.driveFolderName ?? null,
+    driveFolderUrl: driveSync?.driveFolderId
+      ? buildDriveFolderUrl(driveSync.driveFolderId)
+      : null,
+    configuredByUserId: driveSync?.configuredByUserId ?? null,
+    recursive: driveSync?.recursive ?? true,
+    lastSyncedAt: driveSync?.lastSyncedAt?.toISOString() ?? null,
+    lastSyncStatus: driveSync?.lastSyncStatus ?? null,
+    lastSyncError: driveSync?.lastSyncError ?? null,
+  };
+}
+
+export async function mcpSyncTopicSpaceDriveFolder(
+  ctx: McpPlatformHandlerCtx,
+  input: { topicSpaceId: string },
+) {
+  const result = await syncTopicSpaceDriveFolder(
+    { db: ctx.db, session: { user: { id: ctx.userId } } },
+    { topicSpaceId: input.topicSpaceId },
+  );
+
+  return {
+    ...result,
+    message: `Drive 同期完了: 作成 ${result.created}, 更新 ${result.updated}, スキップ ${result.skipped}, 削除 ${result.detached}`,
   };
 }

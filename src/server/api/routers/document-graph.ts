@@ -55,8 +55,11 @@ export const documentGraphRouter = createTRPCRouter({
           ...graph.sourceDocument,
           text: await resolveSourceDocumentPlainText({
             url: graph.sourceDocument.url,
+            name: graph.sourceDocument.name,
+            userId: graph.sourceDocument.userId,
             documentType: graph.sourceDocument.documentType,
             ocrMetadata: graph.sourceDocument.ocrMetadata,
+            externalSourceId: graph.sourceDocument.externalSourceId,
           }),
         },
       };

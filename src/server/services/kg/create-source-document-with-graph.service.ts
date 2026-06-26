@@ -15,6 +15,9 @@ export type CreateSourceDocumentWithGraphInput = {
   documentType?: DocumentType;
   sourceImageUrl?: string | null;
   ocrMetadata?: Prisma.InputJsonValue;
+  externalSourceId?: string | null;
+  externalModifiedAt?: Date | null;
+  contentHash?: string | null;
 };
 
 type CreateWithGraphCtx = {
@@ -90,6 +93,9 @@ export async function createSourceDocumentWithGraph(
         documentType,
         sourceImageUrl: input.sourceImageUrl ?? null,
         ocrMetadata: input.ocrMetadata ?? undefined,
+        externalSourceId: input.externalSourceId ?? null,
+        externalModifiedAt: input.externalModifiedAt ?? null,
+        contentHash: input.contentHash ?? null,
         user: { connect: { id: ctx.session.user.id } },
       },
     });

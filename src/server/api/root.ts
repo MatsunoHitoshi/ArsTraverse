@@ -18,6 +18,7 @@ import { imageRouter } from "./routers/image";
 import { storyRouter } from "./routers/story";
 import { printRouter } from "./routers/print";
 import { scanRouter } from "./routers/scan";
+import { googleDriveRouter } from "./routers/google-drive";
 
 /**
  * This is the primary router for your server.
@@ -44,6 +45,7 @@ export const appRouter = createTRPCRouter({
   story: storyRouter,
   print: printRouter,
   scan: scanRouter,
+  googleDrive: googleDriveRouter,
 });
 
 // export type definition of API

@@ -33,6 +33,7 @@ import {
 import { attachDocumentsToTopicSpace } from "@/server/services/kg/attach-documents.service";
 import { detachDocumentsFromTopicSpace } from "@/server/services/kg/detach-documents.service";
 import { mergeGraphNodes as mergeGraphNodesService } from "@/server/services/kg/merge-graph-nodes.service";
+import { syncTopicSpaceDriveFolder } from "@/server/services/kg/sync-topic-space-drive.service";
 import { updateTopicSpaceGraph } from "@/server/services/kg/update-topic-space-graph.service";
 import { updateTopicSpaceGraphProperties } from "@/server/services/kg/update-topic-space-graph-properties.service";
 import { getTextReference } from "./source-document";
@@ -40,6 +41,8 @@ import { KnowledgeGraphInputSchema } from "../schemas/knowledge-graph";
 import { BUCKETS } from "@/app/_utils/supabase/const";
 import { storageUtils } from "@/app/_utils/supabase/supabase";
 import { TRPCError } from "@trpc/server";
+import { buildDriveFolderUrl } from "@/server/lib/google-drive/urls";
+import { hasUserGoogleDriveConnection } from "@/server/lib/google-drive/user-oauth";
 import OpenAI from "openai";
 
 const TopicSpaceCreateSchema = z.object({
@@ -529,10 +532,16 @@ export const topicSpaceRouter = createTRPCRouter({
       }
       const mimeMatch = header?.match(/^data:(image\/[a-zA-Z+.-]+);base64$/);
       const mime = mimeMatch?.[1];
-      if (!mime || !ALLOWED_IMAGE_MIMES.includes(mime as (typeof ALLOWED_IMAGE_MIMES)[number])) {
+      if (
+        !mime ||
+        !ALLOWED_IMAGE_MIMES.includes(
+          mime as (typeof ALLOWED_IMAGE_MIMES)[number],
+        )
+      ) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Only image/jpeg, image/png, image/webp, image/gif are allowed",
+          message:
+            "Only image/jpeg, image/png, image/webp, image/gif are allowed",
         });
       }
 
@@ -727,5 +736,111 @@ ${referenceText}
           isComplete: true,
         };
       }
+    }),
+
+  getDriveSyncStatus: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const topicSpace = await ctx.db.topicSpace.findFirst({
+        where: { id: input.id, isDeleted: false },
+        include: { admins: true, driveSync: true },
+      });
+      if (!topicSpace) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "TopicSpace not found",
+        });
+      }
+      assertTopicSpaceAdmin(topicSpace, ctx.session.user.id);
+
+      const driveSync = topicSpace.driveSync;
+      const userDriveConnected = await hasUserGoogleDriveConnection(
+        ctx.db,
+        ctx.session.user.id,
+      );
+
+      return {
+        configured: Boolean(driveSync),
+        enabled: driveSync?.enabled ?? false,
+        driveFolderId: driveSync?.driveFolderId ?? null,
+        driveFolderName: driveSync?.driveFolderName ?? null,
+        driveFolderUrl: driveSync?.driveFolderId
+          ? buildDriveFolderUrl(driveSync.driveFolderId)
+          : null,
+        configuredByUserId: driveSync?.configuredByUserId ?? null,
+        recursive: driveSync?.recursive ?? true,
+        lastSyncedAt: driveSync?.lastSyncedAt?.toISOString() ?? null,
+        lastSyncStatus: driveSync?.lastSyncStatus ?? null,
+        lastSyncError: driveSync?.lastSyncError ?? null,
+        userDriveConnected,
+        canUsePicker: userDriveConnected,
+      };
+    }),
+
+  upsertDriveSyncConfig: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        driveFolderId: z.string().min(1),
+        driveFolderName: z.string().optional(),
+        enabled: z.boolean().default(true),
+        recursive: z.boolean().default(true),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const topicSpace = await findTopicSpaceWithGraph(ctx.db, input.id);
+      if (!topicSpace) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "TopicSpace not found",
+        });
+      }
+      assertTopicSpaceAdmin(topicSpace, ctx.session.user.id);
+
+      const connected = await hasUserGoogleDriveConnection(
+        ctx.db,
+        ctx.session.user.id,
+      );
+      if (!connected) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Google Drive が未連携です。先に Drive を連携してください。",
+        });
+      }
+
+      const driveSync = await ctx.db.topicSpaceDriveSync.upsert({
+        where: { topicSpaceId: input.id },
+        create: {
+          topicSpaceId: input.id,
+          driveFolderId: input.driveFolderId.trim(),
+          driveFolderName: input.driveFolderName?.trim() ?? null,
+          authMode: "user_oauth",
+          configuredByUserId: ctx.session.user.id,
+          enabled: input.enabled,
+          recursive: input.recursive,
+        },
+        update: {
+          driveFolderId: input.driveFolderId.trim(),
+          driveFolderName: input.driveFolderName?.trim() ?? null,
+          authMode: "user_oauth",
+          configuredByUserId: ctx.session.user.id,
+          enabled: input.enabled,
+          recursive: input.recursive,
+        },
+      });
+
+      return {
+        driveFolderId: driveSync.driveFolderId,
+        driveFolderName: driveSync.driveFolderName,
+        driveFolderUrl: buildDriveFolderUrl(driveSync.driveFolderId),
+        enabled: driveSync.enabled,
+        recursive: driveSync.recursive,
+      };
+    }),
+
+  syncDriveFolder: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return syncTopicSpaceDriveFolder(ctx, { topicSpaceId: input.id });
     }),
 });

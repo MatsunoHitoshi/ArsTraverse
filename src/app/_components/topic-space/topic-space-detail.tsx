@@ -25,6 +25,7 @@ import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
 import { TopicSpaceChangeHistory } from "./topic-space-change-history";
 import { ProposalList } from "../graph-edit-proposal/proposal-list";
 import { MemberListModal } from "./member-list-modal";
+import { TopicSpaceDriveSyncPanel } from "./topic-space-drive-sync-panel";
 
 export const TopicSpaceDetail = ({ id }: { id: string }) => {
   // 変更履歴のハイライト情報を管理
@@ -108,6 +109,11 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
                 );
               })}
             </div>
+
+            <TopicSpaceDriveSyncPanel
+              topicSpaceId={id}
+              onSynced={() => void refetch()}
+            />
 
             <div className="flex flex-row items-center justify-between">
               <div className="flex flex-row items-center justify-start gap-4 py-2">

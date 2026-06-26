@@ -19,6 +19,7 @@ import { Switch } from "@headlessui/react";
 import { useSession } from "next-auth/react";
 import { MultiDocumentGraphDetailViewer } from "../view/graph-view/multi-document-graph-detail-viewer";
 import { TopicSpaceDocumentListSection } from "./document-list-section";
+import { TopicSpaceDriveSyncPanel } from "./topic-space-drive-sync-panel";
 
 export const circlePosition = (
   index: number,
@@ -216,6 +217,13 @@ export const TopicGraphDetail = ({
                 <></>
               )}
             </div>
+
+            {session && (
+              <TopicSpaceDriveSyncPanel
+                topicSpaceId={id}
+                onSynced={() => void refetch()}
+              />
+            )}
 
             <TopicSpaceDocumentListSection
               documents={topicSpace.sourceDocuments as DocumentResponse[]}

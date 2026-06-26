@@ -78,6 +78,9 @@ model User {
   reviewingEdits       GraphEditProposal[] @relation("GraphEditProposalReviewer")
   lockedProposals      GraphEditProposal[] @relation("GraphEditProposalLock")
   proposalComments     ProposalComment[]
+
+  googleDriveConnection UserGoogleDriveConnection?
+  configuredDriveSyncs  TopicSpaceDriveSync[] @relation("DriveSyncConfiguredBy")
   
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
@@ -101,9 +104,15 @@ model SourceDocument {
   updatedAt DateTime @updatedAt
   isDeleted Boolean  @default(false)
   documentType DocumentType @default(INPUT_TXT)
+  /// Google Drive fileId 等の外部ストレージ ID（INPUT_DRIVE 時の取得キー）
+  externalSourceId String?
+  externalModifiedAt DateTime?
+  contentHash String?
 
   user   User   @relation(fields: [userId], references: [id])
   userId String
+
+  @@index([externalSourceId])
 
   graph       DocumentGraph?
   topicSpaces TopicSpace[]
@@ -117,6 +126,7 @@ enum DocumentType {
   INPUT_PDF
   INPUT_TXT
   INPUT_SCAN
+  INPUT_DRIVE
 }
 
 model DocumentGraph {
@@ -229,6 +239,39 @@ model TopicSpace {
   edgeProvenances TopicSpaceDocumentEdgeProvenance[]
   // ドキュメントアタッチ時のノード対応（detach 時に共有ノードを残すため）
   nodeProvenances TopicSpaceDocumentNodeProvenance[]
+
+  driveSync TopicSpaceDriveSync?
+}
+
+model TopicSpaceDriveSync {
+  id                 String    @id @default(cuid())
+  topicSpaceId       String    @unique
+  driveFolderId      String
+  driveFolderName    String?
+  authMode           String    @default("user_oauth") // 常に user_oauth（レガシー列）
+  configuredByUserId String?
+  enabled            Boolean   @default(true)
+  recursive          Boolean   @default(true)
+  lastSyncedAt       DateTime?
+  lastSyncStatus     String?   // idle | running | error
+  lastSyncError      String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  topicSpace     TopicSpace @relation(fields: [topicSpaceId], references: [id], onDelete: Cascade)
+  configuredBy   User?      @relation("DriveSyncConfiguredBy", fields: [configuredByUserId], references: [id], onDelete: SetNull)
+}
+
+model UserGoogleDriveConnection {
+  id           String    @id @default(cuid())
+  userId       String    @unique
+  refreshToken String
+  scope        String
+  expiresAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model TopicSpaceDocumentEdgeProvenance {
