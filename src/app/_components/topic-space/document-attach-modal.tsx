@@ -44,6 +44,9 @@ const emptyDocument: DocumentResponse = {
   updatedAt: new Date(),
   isDeleted: false,
   documentType: "INPUT_TXT",
+  externalSourceId: null,
+  externalModifiedAt: null,
+  contentHash: null,
 };
 
 export const DocumentAttachModal = ({

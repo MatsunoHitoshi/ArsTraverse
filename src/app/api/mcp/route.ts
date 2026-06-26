@@ -17,6 +17,8 @@ import {
   mcpGetTopicSpaceChangeHistory,
   mcpGetTopicSpaceChangeHistoryDetail,
   mcpReplayNodeMergesFromHistory,
+  mcpGetTopicSpaceDriveSyncStatus,
+  mcpSyncTopicSpaceDriveFolder,
 } from "@/server/mcp/platform-handlers";
 
 const AUTH_REQUIRED_MESSAGE =
@@ -181,6 +183,66 @@ create_topic_space_from_source_documents の後、ローカル JSON へ保存す
           return formatMcpToolError(
             error,
             "TopicSpace グラフの取得中にエラーが発生しました。",
+          );
+        }
+      },
+    );
+
+    server.tool(
+      "get_topic_space_drive_sync_status",
+      `TopicSpace に設定された Google Drive 同期の状態を返します。
+Drive フォルダ ID、最終同期日時、エラー有無を確認する用途に使えます。`,
+      {
+        topicSpaceId: z.string().min(1).describe("対象 TopicSpace ID"),
+      },
+      async ({ topicSpaceId }) => {
+        try {
+          const result = await mcpGetTopicSpaceDriveSyncStatus(
+            requirePlatformCtx(draftCtx),
+            { topicSpaceId },
+          );
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        } catch (error) {
+          return formatMcpToolError(
+            error,
+            "Drive 同期状態の取得中にエラーが発生しました。",
+          );
+        }
+      },
+    );
+
+    server.tool(
+      "sync_topic_space_drive_folder",
+      `TopicSpace に紐づく Google Drive フォルダを同期し、新規・更新ファイルを SourceDocument（INPUT_DRIVE）として取り込み、KG 抽出後に TopicSpace へ統合します。
+設定者の Google Drive 連携（user OAuth）と TopicSpace のフォルダ設定が必要です。`,
+      {
+        topicSpaceId: z.string().min(1).describe("同期対象 TopicSpace ID"),
+      },
+      async ({ topicSpaceId }) => {
+        try {
+          const result = await mcpSyncTopicSpaceDriveFolder(
+            requirePlatformCtx(draftCtx),
+            { topicSpaceId },
+          );
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        } catch (error) {
+          return formatMcpToolError(
+            error,
+            "Drive 同期の実行中にエラーが発生しました。",
           );
         }
       },

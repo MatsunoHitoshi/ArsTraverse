@@ -429,7 +429,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!topicSpace) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "TopicSpaceが見つかりません",
+          message: "リポジトリが見つかりません",
         });
       }
 
@@ -440,7 +440,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!isAdmin) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "このTopicSpaceの変更提案を閲覧する権限がありません",
+          message: "このリポジトリの変更提案を閲覧する権限がありません",
         });
       }
 
@@ -993,7 +993,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!topicSpace) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "TopicSpaceが見つかりません",
+          message: "リポジトリが見つかりません",
         });
       }
 
@@ -1004,7 +1004,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!isAdmin) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "このTopicSpaceの変更履歴を閲覧する権限がありません",
+          message: "このリポジトリの変更履歴を閲覧する権限がありません",
         });
       }
 

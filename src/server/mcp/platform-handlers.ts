@@ -19,6 +19,8 @@ import {
   listTopicSpaceChangeHistory,
   replayNodeMergesFromHistory,
 } from "@/server/services/kg/replay-node-merges-from-history.service";
+import { syncTopicSpaceDriveFolder } from "@/server/services/kg/sync-topic-space-drive.service";
+import { buildDriveFolderUrl } from "@/server/lib/google-drive/urls";
 import type { McpDraftHandlerCtx } from "@/server/mcp/graph-edit-draft-handlers";
 
 export type McpPlatformHandlerCtx = McpDraftHandlerCtx;
@@ -227,7 +229,7 @@ export async function mcpCreateSourceDocumentFromPlainText(
     relationshipCount: graph.relationships.length,
     graph,
     message:
-      "SourceDocument を作成し、LLM による知識グラフ抽出を完了しました。TopicSpace を作成する場合は create_topic_space_from_source_documents を使用してください。",
+      "SourceDocument を作成し、LLM による知識グラフ抽出を完了しました。リポジトリを作成する場合は create_topic_space_from_source_documents を使用してください。",
   };
 }
 
@@ -263,7 +265,7 @@ export async function mcpCreateTopicSpaceFromSourceDocuments(
     relationshipCount: result.relationshipCount,
     linkedDocuments: result.linkedDocuments,
     message:
-      "TopicSpace（リポジトリ）を作成し、指定した SourceDocument のグラフを統合しました。",
+      "リポジトリを作成し、指定した SourceDocument のグラフを統合しました。",
   };
 }
 
@@ -292,7 +294,7 @@ export async function mcpGetTopicSpaceGraph(
   if (!topicSpace) {
     throw new TRPCError({
       code: "NOT_FOUND",
-      message: "TopicSpace が見つからないか、アクセス権がありません。",
+      message: "リポジトリが見つからないか、アクセス権がありません。",
     });
   }
 
@@ -362,7 +364,7 @@ export async function mcpAttachDocumentsToTopicSpace(
     nodeCount,
     relationshipCount,
     message:
-      "SourceDocument を TopicSpace に統合しました。node / edge provenance も記録されます。",
+      "SourceDocument をリポジトリに統合しました。node / edge provenance も記録されます。",
   };
 }
 
@@ -414,7 +416,7 @@ export async function mcpDetachDocumentFromTopicSpace(
     nodeCount,
     relationshipCount,
     message:
-      "SourceDocument を TopicSpace から切り離しました。当該ドキュメント由来の provenance も削除されます。",
+      "SourceDocument をリポジトリから切り離しました。当該ドキュメント由来の provenance も削除されます。",
   };
 }
 
@@ -444,7 +446,7 @@ export async function mcpGetTopicSpaceChangeHistory(
     count: histories.length,
     histories,
     message:
-      "TopicSpace の変更履歴を取得しました。isNodeMerge=true の行が UI 手動統合の履歴です。",
+      "リポジトリの変更履歴を取得しました。isNodeMerge=true の行が UI 手動統合の履歴です。",
   };
 }
 
@@ -531,5 +533,58 @@ async function readTopicSpaceGraphForExport(
         sourceDocumentIds: sourceDocumentIdsByRelationshipId.get(rel.id),
       })),
     },
+  };
+}
+
+export async function mcpGetTopicSpaceDriveSyncStatus(
+  ctx: McpPlatformHandlerCtx,
+  input: { topicSpaceId: string },
+) {
+  const topicSpace = await ctx.db.topicSpace.findFirst({
+    where: {
+      id: input.topicSpaceId,
+      isDeleted: false,
+      admins: { some: { id: ctx.userId } },
+    },
+    include: { driveSync: true },
+  });
+
+  if (!topicSpace) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "リポジトリが見つからないか、アクセス権がありません。",
+    });
+  }
+
+  const driveSync = topicSpace.driveSync;
+  return {
+    topicSpaceId: topicSpace.id,
+    configured: Boolean(driveSync),
+    enabled: driveSync?.enabled ?? false,
+    driveFolderId: driveSync?.driveFolderId ?? null,
+    driveFolderName: driveSync?.driveFolderName ?? null,
+    driveFolderUrl: driveSync?.driveFolderId
+      ? buildDriveFolderUrl(driveSync.driveFolderId)
+      : null,
+    configuredByUserId: driveSync?.configuredByUserId ?? null,
+    recursive: driveSync?.recursive ?? true,
+    lastSyncedAt: driveSync?.lastSyncedAt?.toISOString() ?? null,
+    lastSyncStatus: driveSync?.lastSyncStatus ?? null,
+    lastSyncError: driveSync?.lastSyncError ?? null,
+  };
+}
+
+export async function mcpSyncTopicSpaceDriveFolder(
+  ctx: McpPlatformHandlerCtx,
+  input: { topicSpaceId: string },
+) {
+  const result = await syncTopicSpaceDriveFolder(
+    { db: ctx.db, session: { user: { id: ctx.userId } } },
+    { topicSpaceId: input.topicSpaceId },
+  );
+
+  return {
+    ...result,
+    message: `Drive 同期完了: 作成 ${result.created}, 更新 ${result.updated}, スキップ ${result.skipped}, 削除 ${result.detached}`,
   };
 }

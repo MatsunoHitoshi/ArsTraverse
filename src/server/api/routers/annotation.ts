@@ -928,7 +928,7 @@ export const annotationRouter = createTRPCRouter({
         if (!topicSpace) {
           throw new TRPCError({
             code: "NOT_FOUND",
-            message: "TopicSpaceが見つかりません",
+            message: "リポジトリが見つかりません",
           });
         }
 
@@ -944,7 +944,7 @@ export const annotationRouter = createTRPCRouter({
           if (!node) {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: "指定されたノードはこのTopicSpaceに属していません",
+              message: "指定されたノードはこのリポジトリに属していません",
             });
           }
         }
@@ -961,7 +961,7 @@ export const annotationRouter = createTRPCRouter({
             throw new TRPCError({
               code: "BAD_REQUEST",
               message:
-                "指定されたリレーションシップはこのTopicSpaceに属していません",
+                "指定されたリレーションシップはこのリポジトリに属していません",
             });
           }
         }

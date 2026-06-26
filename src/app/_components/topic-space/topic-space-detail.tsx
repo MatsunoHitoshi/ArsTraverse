@@ -10,6 +10,7 @@ import {
   Pencil2Icon,
   PersonIcon,
   PlusIcon,
+  ShareIcon,
   StarIcon,
   TrashIcon,
 } from "../icons";
@@ -25,6 +26,7 @@ import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
 import { TopicSpaceChangeHistory } from "./topic-space-change-history";
 import { ProposalList } from "../graph-edit-proposal/proposal-list";
 import { MemberListModal } from "./member-list-modal";
+import { TopicSpaceDriveSyncPanel } from "./topic-space-drive-sync-panel";
 
 export const TopicSpaceDetail = ({ id }: { id: string }) => {
   // 変更履歴のハイライト情報を管理
@@ -187,6 +189,19 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
                       } ${hover ? "bg-white/10" : ""}`}
                   >
                     <div className="h-4 w-4">
+                      <ShareIcon width={16} height={16} color="white" />
+                    </div>
+                    <div className="text-sm">Drive 同期</div>
+                  </div>
+                )}
+              </Tab>
+              <Tab as={Fragment}>
+                {({ hover, selected }) => (
+                  <div
+                    className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${selected ? "border-b-2 border-white outline-none" : ""
+                      } ${hover ? "bg-white/10" : ""}`}
+                  >
+                    <div className="h-4 w-4">
                       <FileTextIcon width={16} height={16} color="white" />
                     </div>
                     <div className="text-sm">変更提案</div>
@@ -263,6 +278,12 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
                     }}
                   />
                 </div>
+              </TabPanel>
+              <TabPanel>
+                <TopicSpaceDriveSyncPanel
+                  topicSpaceId={id}
+                  onSynced={() => void refetch()}
+                />
               </TabPanel>
               <TabPanel>
                 <ProposalList topicSpaceId={id} />

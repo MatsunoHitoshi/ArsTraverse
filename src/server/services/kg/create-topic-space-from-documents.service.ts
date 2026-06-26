@@ -85,7 +85,7 @@ export async function createTopicSpaceFromSourceDocuments(
   if (!linked) {
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
-      message: "TopicSpace の作成後に読み込みに失敗しました。",
+      message: "リポジトリの作成後に読み込みに失敗しました。",
     });
   }
 

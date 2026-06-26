@@ -63,8 +63,11 @@ export const getTextReference = async (
 
   const fullText = await resolveSourceDocumentPlainText({
     url: document.url,
+    name: document.name,
+    userId: document.userId,
     documentType: document.documentType,
     ocrMetadata: document.ocrMetadata,
+    externalSourceId: document.externalSourceId,
   });
 
   console.log("fullText: ", fullText.slice(0, 20));
@@ -136,8 +139,11 @@ export const sourceDocumentRouter = createTRPCRouter({
         ),
         text: await resolveSourceDocumentPlainText({
           url: document.url,
+          name: document.name,
+          userId: document.userId,
           documentType: document.documentType,
           ocrMetadata: document.ocrMetadata,
+          externalSourceId: document.externalSourceId,
         }),
       };
     }),

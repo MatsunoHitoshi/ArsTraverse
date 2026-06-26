@@ -43,7 +43,7 @@ export async function issueMcpAccessToken(input: {
     if (!topicSpace) {
       return {
         ok: false,
-        error: "TopicSpace が見つからないか、アクセス権限がありません。",
+        error: "リポジトリが見つからないか、アクセス権限がありません。",
       };
     }
   }

@@ -22,7 +22,7 @@ export async function createDraftProposal(
   if (!topicSpace) {
     throw new TRPCError({
       code: "NOT_FOUND",
-      message: "TopicSpaceが見つかりません",
+      message: "リポジトリが見つかりません",
     });
   }
 

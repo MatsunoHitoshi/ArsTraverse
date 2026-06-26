@@ -7,6 +7,13 @@ import { BUCKETS } from "../supabase/const";
 
 const require = createRequire(import.meta.url);
 
+type GetTextOptions = {
+  externalSourceId?: string | null;
+  mimeType?: string | null;
+  fileName?: string | null;
+  ocrMetadata?: unknown;
+};
+
 type PdfParseResult = { text: string };
 
 async function extractPdfTextFromLocalFile(filePath: string): Promise<string> {
@@ -22,13 +29,27 @@ async function extractPdfTextFromLocalFile(filePath: string): Promise<string> {
 export const getTextFromDocumentFile = async (
   url: string,
   type: DocumentType,
+  options?: GetTextOptions,
 ) => {
   const trimmedUrl = url.trim();
-  if (!trimmedUrl) {
+  if (!trimmedUrl && type !== DocumentType.INPUT_DRIVE) {
     throw new Error("ドキュメント URL が空です");
   }
 
+  if (type === DocumentType.INPUT_DRIVE) {
+    throw new Error(
+      "INPUT_DRIVE の本文取得は resolveSourceDocumentPlainText を使用してください",
+    );
+  }
+
   if (type === DocumentType.INPUT_PDF) {
+    const fileId = options?.externalSourceId?.trim();
+    if (fileId) {
+      throw new Error(
+        "Drive 由来 PDF の本文取得は resolveSourceDocumentPlainText を使用してください",
+      );
+    }
+
     const localFilePath = await writeLocalFileFromUrl(trimmedUrl, "input.pdf");
     return extractPdfTextFromLocalFile(localFilePath);
   }
