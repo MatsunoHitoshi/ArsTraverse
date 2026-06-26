@@ -1,5 +1,5 @@
 import { Analytics } from "@vercel/analytics/react";
-import { hasLocale, NextIntlClientProvider } from "next-intl";
+import { NextIntlClientProvider } from "next-intl";
 import { getMessages, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 
@@ -8,6 +8,7 @@ import { SetHtmlLang } from "@/app/_components/i18n/set-html-lang";
 import NextAuthProvider from "@/providers/next-auth";
 import { SPGuardProvider } from "@/providers/sp-guard";
 import { TRPCReactProvider } from "@/trpc/react";
+import { isValidLocale } from "i18n/request";
 import { routing } from "i18n/routing";
 
 export function generateStaticParams() {
@@ -42,7 +43,7 @@ export default async function LocaleLayout({
 }) {
   const { locale } = await params;
 
-  if (!hasLocale(routing.locales, locale)) {
+  if (!isValidLocale(locale)) {
     notFound();
   }
 

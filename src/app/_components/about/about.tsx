@@ -306,9 +306,9 @@ const LinkButton = ({
 }) => {
   const className =
     "flex w-max flex-row items-center justify-center rounded-full bg-orange-500 px-4 py-2 text-slate-900 duration-200 hover:bg-orange-400";
-  const isExternal = href.startsWith("http");
+  const isInternal = href.startsWith("/") || href.startsWith("#");
 
-  if (isExternal) {
+  if (!isInternal) {
     return (
       <a
         href={href}
