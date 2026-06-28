@@ -185,6 +185,8 @@ Concept and flow diagrams for the writing workspace, story generation, auto-high
 - `docs/field-research-scan-flow.md` — mobile field scan (OCR → graph → node matching)
 - `docs/graph-statistics-panel.md` — D3 graph info panel metrics and degree distribution
 - `docs/storytelling-scroll-viewer.md` — published article `ScrollStorytellingViewerUnified`, URL params, scroll guards
+- `docs/topic-space-drive-sync.md` — Google Drive folder sync into TopicSpace (user OAuth, Cron)
+- `docs/topic-space-node-provenance.md` — SourceDocument ↔ unified graph node/edge tracking
 
 ## Project Structure
 
@@ -258,6 +260,8 @@ supabase/
 - [公開記事のストーリーテリングと URL クエリ](./docs/storytelling-public-viewer-and-urls.md)
 - [公開 Unified ビューのスクロール・ガード・レイアウト詳細](./docs/storytelling-scroll-viewer.md)
 - [MCP 認証（外部クライアント向け API キー）](./docs/mcp-authentication.md)
+- [Google Drive 同期（リポジトリ）](./docs/topic-space-drive-sync.md)
+- [TopicSpace ノード・エッジ provenance](./docs/topic-space-node-provenance.md)
 
 ## Available Scripts
 
@@ -277,6 +281,7 @@ npm run db:studio        # Open Prisma Studio
 # Utilities
 npm run mcp:i           # Model Context Protocol inspector
 npm run kg:align        # KG alignment CLI agent (see docs/kg-alignment-agent/)
+npm run export:topic-space  # Export TopicSpace graph JSON (provenance included)
 npm run supabase:ensure-buckets  # Create input-scan storage bucket (field research)
 ```
 
