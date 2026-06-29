@@ -1,9 +1,11 @@
-import { ChangeTypeMap, EntityTypeMap } from "@/app/const/types";
+"use client";
+
 import { api } from "@/trpc/react";
 import { Input } from "@headlessui/react";
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { ListboxInput } from "../input/listbox-input";
 import { GraphChangeType, GraphChangeEntityType } from "@prisma/client";
+import { useTranslations } from "next-intl";
 
 export const NodeLinkChangeHistory = ({
   graphChangeHistoryId,
@@ -17,6 +19,7 @@ export const NodeLinkChangeHistory = ({
     removedLinkIds: Set<string>;
   }) => void;
 }) => {
+  const t = useTranslations("topicSpace");
   const { data: graphChangeHistory } =
     api.topicSpaceChangeHistory.getById.useQuery({
       id: graphChangeHistoryId,
@@ -26,19 +29,42 @@ export const NodeLinkChangeHistory = ({
   const [selectedChangeType, setSelectedChangeType] = useState("ALL");
   const [selectedEntityType, setSelectedEntityType] = useState("ALL");
 
+  const getChangeTypeLabel = useCallback(
+    (type: GraphChangeType) => {
+      const labels: Record<GraphChangeType, string> = {
+        ADD: t("changeTypeAdd"),
+        REMOVE: t("changeTypeRemove"),
+        UPDATE: t("changeTypeUpdate"),
+      };
+      return labels[type];
+    },
+    [t],
+  );
+
+  const getEntityTypeLabel = useCallback(
+    (type: GraphChangeEntityType) => {
+      const labels: Record<GraphChangeEntityType, string> = {
+        NODE: t("entityTypeNode"),
+        EDGE: t("entityTypeEdge"),
+      };
+      return labels[type];
+    },
+    [t],
+  );
+
   const changeTypeOptions = [
-    { value: "ALL", label: "動作" },
-    ...Object.entries(ChangeTypeMap).map(([key, value]) => ({
+    { value: "ALL", label: t("filterAction") },
+    ...Object.values(GraphChangeType).map((key) => ({
       value: key,
-      label: value,
+      label: getChangeTypeLabel(key),
     })),
   ];
 
   const entityTypeOptions = [
-    { value: "ALL", label: "対象" },
-    ...Object.entries(EntityTypeMap).map(([key, value]) => ({
+    { value: "ALL", label: t("filterTarget") },
+    ...Object.values(GraphChangeEntityType).map((key) => ({
       value: key,
-      label: value,
+      label: getEntityTypeLabel(key),
     })),
   ];
 
@@ -70,7 +96,6 @@ export const NodeLinkChangeHistory = ({
     );
   }, [graphChangeHistory, selectedChangeType, selectedEntityType, searchTerm]);
 
-  // 追加・削除されたノードとエッジのIDを抽出
   const highlightData = useMemo(() => {
     const addedNodeIds = new Set<string>();
     const removedNodeIds = new Set<string>();
@@ -105,14 +130,11 @@ export const NodeLinkChangeHistory = ({
     };
   }, [filteredHistories]);
 
-  // ハイライト情報を親コンポーネントに通知
   useEffect(() => {
     if (!onHighlightChange) return;
-    
-    // マウント時またはhighlightDataが変更されたときにハイライトを更新
+
     onHighlightChange(highlightData);
-    
-    // アンマウント時にハイライトをクリア
+
     return () => {
       if (onHighlightChange) {
         onHighlightChange({
@@ -130,11 +152,11 @@ export const NodeLinkChangeHistory = ({
   return (
     <div className="mt-2 flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <div className="text-sm font-semibold">変更内容</div>
+        <div className="text-sm font-semibold">{t("changeDetails")}</div>
         <div className="flex items-center gap-2">
           <Input
             className="block w-48 rounded-lg border border-gray-700 bg-slate-700 px-3 py-1.5 text-sm text-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
-            placeholder="変更内容を検索..."
+            placeholder={t("searchChangeDetails")}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -159,8 +181,8 @@ export const NodeLinkChangeHistory = ({
           {searchTerm ||
           selectedChangeType !== "ALL" ||
           selectedEntityType !== "ALL"
-            ? "条件に一致する変更内容がありません"
-            : "変更内容がありません"}
+            ? t("noMatchingChangeDetails")
+            : t("noChangeDetails")}
         </div>
       ) : (
         filteredHistories.map((history) => {
@@ -170,14 +192,16 @@ export const NodeLinkChangeHistory = ({
           return (
             <div key={history.id} className="rounded-lg bg-slate-700 p-2">
               <p className="text-sm font-semibold">
-                {EntityTypeMap[history.changeEntityType]}の
-                {ChangeTypeMap[history.changeType]}
+                {t("entityChange", {
+                  entityType: getEntityTypeLabel(history.changeEntityType),
+                  changeType: getChangeTypeLabel(history.changeType),
+                })}
               </p>
               <p className="text-xs">ID: {history.changeEntityId}</p>
 
               {previousState !== "{}" && (
                 <div className="mt-2">
-                  <p className="text-sm font-semibold">変更前</p>
+                  <p className="text-sm font-semibold">{t("beforeChange")}</p>
                   <pre className="rounded-lg bg-pink-950/40 p-2 text-xs">
                     <code style={{ whiteSpace: "pre-wrap" }}>
                       {previousState}
@@ -187,7 +211,7 @@ export const NodeLinkChangeHistory = ({
               )}
 
               <div className="mt-2">
-                <p className="text-sm font-semibold">変更後</p>
+                <p className="text-sm font-semibold">{t("afterChange")}</p>
                 <pre className="rounded-lg bg-green-950/40 p-2 text-xs">
                   <code style={{ whiteSpace: "pre-wrap" }}>{nextState}</code>
                 </pre>

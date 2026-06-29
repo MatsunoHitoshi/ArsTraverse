@@ -1,6 +1,7 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "i18n/navigation";
+import { useTranslations } from "next-intl";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { CheckIcon, Pencil2Icon } from "@/app/_components/icons";
 import type { GraphDocumentForFrontend } from "@/app/const/types";
@@ -38,6 +39,7 @@ function groupMatchesByName(
 }
 
 function NodeMatchPreview({ matches }: { matches: PublishedNodeMatch[] }) {
+  const t = useTranslations("field");
   const topicSpaceMatches = matches.filter(
     (match) => match.sourceType === "topicSpace",
   );
@@ -48,10 +50,15 @@ function NodeMatchPreview({ matches }: { matches: PublishedNodeMatch[] }) {
     (match) => match.sourceType === "workspace",
   );
 
+  const workspacePart =
+    workspaceMatches.length > 0
+      ? t("matchSummaryWorkspace", { count: workspaceMatches.length })
+      : "";
+
   return (
     <div className="rounded-lg border border-orange-500/30 bg-orange-950/20 p-3">
       <p className="mb-2 text-xs font-medium text-orange-300">
-        一致候補 ({matches.length})
+        {t("matchCandidates", { count: matches.length })}
       </p>
       <ul className="flex flex-col gap-2">
         {matches.map((match) => (
@@ -73,7 +80,9 @@ function NodeMatchPreview({ matches }: { matches: PublishedNodeMatch[] }) {
                 rel="noopener noreferrer"
                 className="mt-2 inline-block text-sm text-emerald-300 underline-offset-2 hover:underline"
               >
-                {match.topicSpaceName ?? "トピックスペース"} を開く
+                {t("openNamed", {
+                  name: match.topicSpaceName ?? t("topicSpace"),
+                })}
               </Link>
             ) : match.sourceType === "sourceDocument" &&
               match.sourceDocumentId ? (
@@ -87,11 +96,13 @@ function NodeMatchPreview({ matches }: { matches: PublishedNodeMatch[] }) {
                 rel="noopener noreferrer"
                 className="mt-2 inline-block text-sm text-orange-300 underline-offset-2 hover:underline"
               >
-                {match.sourceDocumentName ??
-                  (match.sourceDocumentType === "INPUT_SCAN"
-                    ? "スキャン"
-                    : "ドキュメント")}{" "}
-                を開く
+                {t("openNamed", {
+                  name:
+                    match.sourceDocumentName ??
+                    (match.sourceDocumentType === "INPUT_SCAN"
+                      ? t("scan")
+                      : t("document")),
+                })}
               </Link>
             ) : match.sourceType === "workspace" && match.workspaceId ? (
               <Link
@@ -100,7 +111,9 @@ function NodeMatchPreview({ matches }: { matches: PublishedNodeMatch[] }) {
                 rel="noopener noreferrer"
                 className="mt-2 inline-block text-sm text-sky-400 underline-offset-2 hover:underline"
               >
-                {match.workspaceName ?? "ワークスペース"} を開く
+                {t("openNamed", {
+                  name: match.workspaceName ?? t("workspace"),
+                })}
               </Link>
             ) : null}
           </li>
@@ -110,11 +123,11 @@ function NodeMatchPreview({ matches }: { matches: PublishedNodeMatch[] }) {
         sourceDocumentMatches.length > 0 ||
         workspaceMatches.length > 0) && (
           <p className="mt-2 text-xs text-slate-400">
-            トピックスペース {topicSpaceMatches.length} 件 / ドキュメント{" "}
-            {sourceDocumentMatches.length} 件
-            {workspaceMatches.length > 0
-              ? ` / 公開グラフ ${workspaceMatches.length} 件`
-              : ""}
+            {t("matchSummary", {
+              topicSpaceCount: topicSpaceMatches.length,
+              documentCount: sourceDocumentMatches.length,
+              workspacePart,
+            })}
           </p>
         )}
     </div>
@@ -155,6 +168,7 @@ export function GraphSummary({
   onGraphChange,
   onRefreshNodeMatches,
 }: GraphSummaryProps) {
+  const t = useTranslations("field");
   const canEdit = onGraphChange != null;
   const [isEditMode, setIsEditMode] = useState(false);
   const nodeNamesAtEditStartRef = useRef<Map<string, string>>(new Map());
@@ -258,10 +272,13 @@ export function GraphSummary({
     <>
       <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-slate-200">グラフ</h2>
+          <h2 className="text-sm font-semibold text-slate-200">{t("graph")}</h2>
           <div className="flex shrink-0 items-center gap-2">
             <span className="text-xs text-slate-400">
-              ノード {graph.nodes.length} · 関係 {graph.relationships.length}
+              {t("nodeRelationshipCount", {
+                nodeCount: graph.nodes.length,
+                relationshipCount: graph.relationships.length,
+              })}
             </span>
             {canEdit && (
               <button
@@ -273,7 +290,7 @@ export function GraphSummary({
                   enterEditMode();
                 }
                 }}
-                aria-label={isEditMode ? "編集モードを終了" : "編集モード"}
+                aria-label={isEditMode ? t("exitEditMode") : t("editMode")}
                 aria-pressed={isEditMode}
                 className={`flex h-8 w-8 items-center justify-center rounded-md transition ${isEditMode
                   ? "bg-orange-500/25 text-orange-200 ring-1 ring-orange-400/60"
@@ -287,20 +304,18 @@ export function GraphSummary({
         </div>
 
         {isEditMode && (
-          <p className="mb-3 text-xs text-slate-500">
-            ノードまたは関係をタップして編集できます。
-          </p>
+          <p className="mb-3 text-xs text-slate-500">{t("editHint")}</p>
         )}
 
         {graph.nodes.length > 0 && (
           <div className="mb-4">
             <div className="mb-2 flex items-center justify-between gap-2">
               <h3 className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                ノード
+                {t("nodes")}
               </h3>
               {matchedNodeCount > 0 && (
                 <span className="text-xs text-orange-300">
-                  {matchedNodeCount} 件が既存データと一致
+                  {t("nodeMatchCount", { count: matchedNodeCount })}
                 </span>
               )}
             </div>
@@ -429,7 +444,7 @@ export function GraphSummary({
         {graph.relationships.length > 0 && (
           <div>
             <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
-              関係
+              {t("relationships")}
             </h3>
             <ul className="flex flex-col gap-2">
               {graph.relationships.map((relationship) => {
@@ -471,7 +486,7 @@ export function GraphSummary({
         <button
           type="button"
           onClick={exitEditMode}
-          aria-label="編集モードを終了"
+          aria-label={t("exitEditMode")}
           className="fixed bottom-6 right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg ring-2 ring-white/20 transition hover:bg-emerald-500 active:scale-95"
         >
           <CheckIcon width={24} height={24} color="white" />

@@ -1,3 +1,4 @@
+"use client";
 import { NodeLinkList } from "@/app/_components/list/node-link-list";
 import { useRef, useState } from "react";
 import type { GraphDocumentForFrontend } from "@/app/const/types";
@@ -11,6 +12,7 @@ import { NodePropertiesDetail } from "../node/node-properties-detail";
 import { useSearchParams } from "next/navigation";
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
 import { Fragment } from "react";
+import { useTranslations } from "next-intl";
 
 // 編集は扱わない
 export const MultiDocumentGraphViewer = ({
@@ -31,6 +33,7 @@ export const MultiDocumentGraphViewer = ({
     removedLinkIds: Set<string>;
   };
 }) => {
+  const t = useTranslations("view");
   const [innerWidth, innerHeight] = useWindowSize();
   const graphAreaWidth = (innerWidth ?? 100) / 2 - 24;
   const graphAreaHeight = (innerHeight ?? 300) - 128;
@@ -99,7 +102,7 @@ export const MultiDocumentGraphViewer = ({
                   className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${selected ? "border-b-2 border-white outline-none" : ""
                     } hover:bg-white/10`}
                 >
-                  2Dグラフ
+                  {t("graph2d")}
                 </button>
               )}
             </Tab>
@@ -110,7 +113,7 @@ export const MultiDocumentGraphViewer = ({
                     className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${selected ? "border-b-2 border-white outline-none" : ""
                       } hover:bg-white/10`}
                   >
-                    3D球面グラフ
+                    {t("graph3dSpherical")}
                   </button>
                 )}
               </Tab>

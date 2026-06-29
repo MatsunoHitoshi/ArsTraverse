@@ -15,6 +15,7 @@ import {
 } from "@/app/_components/icons";
 import { useInView } from "react-intersection-observer";
 import { useEffect, useState, useRef, useMemo } from "react";
+import { useTranslations } from "next-intl";
 import type {
   GraphDocumentForFrontend,
   FilterCondition,
@@ -134,6 +135,8 @@ export const SnapshotStoryboard = ({
   /** 動画書き出しモーダルを開くための ref（親から渡す） */
   videoExportRef?: React.Ref<StorytellingGraphRecorderHandle>;
 }) => {
+  const t = useTranslations("workspace");
+  const tCommon = useTranslations("common");
   // ストーリーデータの取得（refetch用）
   const { refetch: refetchStory } = api.story.get.useQuery(
     { workspaceId },
@@ -149,7 +152,7 @@ export const SnapshotStoryboard = ({
     },
     onError: (error) => {
       console.error("ストーリーの保存に失敗しました:", error);
-      alert("ストーリーの保存に失敗しました。");
+      alert(t("storySaveFailed"));
     },
   });
 
@@ -162,7 +165,7 @@ export const SnapshotStoryboard = ({
     },
     onError: (error) => {
       console.error("Workspaceの更新に失敗しました:", error);
-      alert("ストーリーの追加に失敗しました。");
+      alert(t("storyAddFailed"));
     },
   });
 
@@ -219,7 +222,7 @@ export const SnapshotStoryboard = ({
 
   const handleAddStoriesToContent = () => {
     if (!narrativeFlow || narrativeFlow.length === 0) {
-      alert("ストーリーがありません。");
+      alert(t("noStory"));
       return;
     }
 
@@ -310,7 +313,7 @@ export const SnapshotStoryboard = ({
           (s) => s.communityId === flow.communityId,
         );
         const rawStory = detailedStories?.[flow.communityId];
-        const title = summary?.title ?? `コミュニティ ${flow.communityId}`;
+        const title = summary?.title ?? t("communityLabel", { id: flow.communityId });
         // detailedStories の要素は string | JSONContent（API 型）。ESLint が index アクセスを error 型と誤検知するため無効化
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         const storyText: string =
@@ -377,7 +380,7 @@ export const SnapshotStoryboard = ({
               content: [
                 {
                   type: "text" as const,
-                  text: "追加されたストーリー",
+                  text: t("addedStoriesDivider"),
                 },
               ],
             },
@@ -411,7 +414,7 @@ export const SnapshotStoryboard = ({
       }
     } catch (error) {
       console.error("ストーリーの追加中にエラーが発生しました:", error);
-      alert("ストーリーの追加中にエラーが発生しました。");
+      alert(t("storyAddError"));
     } finally {
       setIsAddingStories(false);
     }
@@ -439,7 +442,7 @@ export const SnapshotStoryboard = ({
                 : summary?.summary ?? "";
             return {
               id: flow.communityId,
-              title: summary?.title ?? `コミュニティ ${flow.communityId}`,
+              title: summary?.title ?? t("communityLabel", { id: flow.communityId }),
               description: description || (summary?.summary ?? ""),
               summary: summary?.summary ?? "",
               transitionText: flow.transitionText,
@@ -455,7 +458,7 @@ export const SnapshotStoryboard = ({
   // ストーリーを保存（フィルタ設定を含む）
   const handleSaveStory = () => {
     if (!metaGraphStoryData || !referencedTopicSpaceId) {
-      alert("ストーリーのデータがないか、リポジトリが設定されていません。");
+      alert(t("storyDataMissing"));
       return;
     }
 
@@ -512,7 +515,7 @@ export const SnapshotStoryboard = ({
   // セクションを保存するハンドラー（段落数が同じならテキストのみ更新して attrs 維持、段落増減時のみ再アノテーション）
   const handleSaveSection = async (sectionId: string) => {
     if (!metaGraphStoryData || !referencedTopicSpaceId) {
-      alert("ストーリーのデータがないか、リポジトリが設定されていません。");
+      alert(t("storyDataMissing"));
       return;
     }
     if (savingSectionId !== null) return;
@@ -521,7 +524,7 @@ export const SnapshotStoryboard = ({
     const description = editingDescription[sectionId] ?? "";
 
     if (!title) {
-      alert("タイトルを入力してください。");
+      alert(t("titleRequired"));
       return;
     }
 
@@ -805,7 +808,7 @@ export const SnapshotStoryboard = ({
                 className={`flex items-center gap-2 ${isEditMode ? "bg-blue-600 hover:bg-blue-700" : "bg-slate-700 hover:bg-slate-600"}`}
               >
                 <ListNumberIcon width={14} height={14} />
-                <span>{isEditMode ? "並べ替え終了" : "並べ替え"}</span>
+                <span>{isEditMode ? t("reorderEnd") : t("reorder")}</span>
               </Button>
               {isEditMode && (
                 <Button
@@ -817,8 +820,8 @@ export const SnapshotStoryboard = ({
                   <ResetIcon width={14} height={14} />
                   <span>
                     {isRegeneratingTransitions
-                      ? "再生成中..."
-                      : "ストーリーを再生成"}
+                      ? t("regenerating")
+                      : t("regenerateStory")}
                   </span>
                 </Button>
               )}
@@ -845,12 +848,12 @@ export const SnapshotStoryboard = ({
               {saveStory.isPending ? (
                 <>
                   <Loading size={14} color="white" />
-                  <span>保存中...</span>
+                  <span>{t("saving")}</span>
                 </>
               ) : (
                 <>
                   <Pencil2Icon width={14} height={14} color="white" />
-                  <span>保存</span>
+                  <span>{tCommon("save")}</span>
                 </>
               )}
             </Button>
@@ -866,12 +869,12 @@ export const SnapshotStoryboard = ({
             {isAddingStories ? (
               <>
                 <Loading size={14} color="white" />
-                <span>追加中...</span>
+                <span>{tCommon("adding")}</span>
               </>
             ) : (
               <>
                 <Pencil2Icon width={14} height={14} color="white" />
-                <span>エディタに追加</span>
+                <span>{t("addToEditor")}</span>
               </>
             )}
           </Button>
@@ -907,7 +910,7 @@ export const SnapshotStoryboard = ({
 
       {segmentSelectionEdit && (
         <div className="mb-3 flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-300">
-          <span>グラフでノード・エッジをクリックして選択し、確定で保存します。</span>
+          <span>{t("segmentSelectionHint")}</span>
           <Button
             size="small"
             onClick={handleConfirmSegmentSelection}
@@ -952,8 +955,8 @@ export const SnapshotStoryboard = ({
               emptyMessage={
                 <div className="py-12 text-center text-slate-500">
                   {metaGraphSummaries && metaGraphSummaries.length === 0
-                    ? "メタグラフを生成中..."
-                    : "ストーリーがありません。メタグラフを生成してください。"}
+                    ? t("generatingMetaGraph")
+                    : t("noStoryGenerateMetaGraph")}
                 </div>
               }
             >
@@ -1019,7 +1022,7 @@ export const SnapshotStoryboard = ({
             {isEditMode && availableCommunities.length > 0 && (
               <div className="mt-8 border-t border-slate-700 pt-8">
                 <h3 className="mb-4 text-lg font-bold text-white">
-                  利用可能なコミュニティ
+                  {t("availableCommunities")}
                 </h3>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   {availableCommunities.map((community) => {
@@ -1027,7 +1030,7 @@ export const SnapshotStoryboard = ({
                       (s) => s.communityId === community.communityId,
                     );
                     const title =
-                      summary?.title ?? `コミュニティ ${community.communityId}`;
+                      summary?.title ?? t("communityLabel", { id: community.communityId });
 
                     return (
                       <div
@@ -1053,7 +1056,7 @@ export const SnapshotStoryboard = ({
                           className="flex items-center gap-1 bg-blue-600/20 text-blue-400 hover:bg-blue-600/40"
                         >
                           <PlusIcon width={14} height={14} />
-                          追加
+                          {tCommon("add")}
                         </Button>
                       </div>
                     );
@@ -1167,6 +1170,9 @@ const StorySection = ({
   onTitleChange?: (title: string) => void;
   onDescriptionChange?: (description: string) => void;
 }) => {
+  const t = useTranslations("workspace");
+  const tCommon = useTranslations("common");
+  const tAnnotation = useTranslations("annotation");
   // useInViewでスクロール検知
   const { ref, inView } = useInView({
     rootMargin: "-10% 0px -10% 0px", // 画面中央10%の範囲に入ったら検知（より敏感に）
@@ -1286,7 +1292,7 @@ const StorySection = ({
               }}
               className="flex items-center gap-1 bg-slate-700 hover:bg-slate-600"
             >
-              <span>キャンセル</span>
+              <span>{tCommon("cancel")}</span>
             </Button>
           </div>
           <div
@@ -1302,9 +1308,9 @@ const StorySection = ({
               className="flex items-center gap-1"
             >
               {isSavingSection ? (
-                <span>保存中...</span>
+                <span>{t("saving")}</span>
               ) : (
-                <span>保存</span>
+                <span>{tCommon("save")}</span>
               )}
             </Button>
           </div>
@@ -1325,11 +1331,11 @@ const StorySection = ({
               onChange={(e) => onTitleChange?.(e.target.value)}
               onClick={(e) => e.stopPropagation()}
               className="mb-2 w-full rounded bg-slate-700 px-2 py-1 text-lg font-semibold text-white outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="タイトル"
+              placeholder={t("titlePlaceholder")}
             />
             {hasDetailedStory && (
               <div className="mb-2 inline-block rounded-md bg-blue-900/20 px-2 py-1 text-xs text-blue-300">
-                詳細ストーリー
+                {t("detailedStory")}
               </div>
             )}
             <Textarea
@@ -1337,7 +1343,7 @@ const StorySection = ({
               onChange={(e) => onDescriptionChange?.(e.target.value)}
               onClick={(e) => e.stopPropagation()}
               className="mb-2 w-full rounded bg-slate-700 px-2 py-2 text-slate-300 outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="詳細ストーリー"
+              placeholder={t("detailedStory")}
             // rows={8}
             />
           </>
@@ -1346,7 +1352,7 @@ const StorySection = ({
             <h3 className="mb-2 text-lg font-semibold text-white">{item.title}</h3>
             {hasDetailedStory && (
               <div className="mb-2 inline-block rounded-md bg-blue-900/20 px-2 py-1 text-xs text-blue-300">
-                詳細ストーリー
+                {t("detailedStory")}
               </div>
             )}
             {typeof storyContent === "object" &&
@@ -1441,9 +1447,9 @@ const StorySection = ({
                                     onReannotateSegment(item.id, idx, text);
                                   }}
                                   className="rounded px-1.5 py-0.5 text-xs text-slate-500 opacity-0 transition-opacity hover:bg-slate-700/50 hover:text-slate-300 group-hover/seg:opacity-100"
-                                  title="この段落のノード・エッジを再推定"
+                                  title={t("reannotateSegmentTitle")}
                                 >
-                                  再推定
+                                  {t("reestimate")}
                                 </button>
                               ))}
                             {onStartSegmentSelectionEdit && (
@@ -1467,9 +1473,9 @@ const StorySection = ({
                                   );
                                 }}
                                 className={`rounded px-1.5 py-0.5 text-xs opacity-0 transition-opacity hover:bg-slate-700/50 group-hover/seg:opacity-100 ${isEditingSelection ? "bg-slate-700/50 text-blue-300" : "text-slate-500 hover:text-slate-300"}`}
-                                title="グラフでノード・エッジを手動で選択"
+                                title={t("manualSelectTitle")}
                               >
-                                {isEditingSelection ? "選択中" : "手動で選択"}
+                                {isEditingSelection ? t("selecting") : t("manualSelect")}
                               </button>
                             )}
                             {onRequestSegmentGraphExtraction && (
@@ -1480,9 +1486,9 @@ const StorySection = ({
                                   onRequestSegmentGraphExtraction(text);
                                 }}
                                 className="rounded px-1.5 py-0.5 text-xs text-slate-500 opacity-0 transition-opacity hover:bg-slate-700/50 hover:text-slate-300 group-hover/seg:opacity-100"
-                                title="この段落の文章を元のグラフに反映"
+                                title={t("segmentGraphExtractTitle")}
                               >
-                                グラフ抽出
+                                {tAnnotation("graphExtraction")}
                               </button>
                             )}
                           </span>
@@ -1509,7 +1515,7 @@ const StorySection = ({
         )}
         {metaNode && (
           <div className="mb-4 text-xs text-slate-500">
-            {metaNode.size}個のノードを含むコミュニティ
+            {t("communityNodeCount", { count: metaNode.size })}
           </div>
         )}
       </div>

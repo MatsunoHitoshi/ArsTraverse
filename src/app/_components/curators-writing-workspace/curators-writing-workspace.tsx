@@ -16,7 +16,9 @@ import React, {
   createContext,
   useCallback,
 } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "i18n/navigation";
+import { useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import TipTapEditor from "./tiptap/tip-tap-editor";
 import type { Workspace } from "@prisma/client";
@@ -132,6 +134,7 @@ const CuratorsWritingWorkspace = ({
   workspace,
   refetch,
 }: CuratorsWritingWorkspaceProps) => {
+  const t = useTranslations("workspace");
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session } = useSession();
@@ -894,7 +897,7 @@ const CuratorsWritingWorkspace = ({
                               </Button>
                               {isGraphSelectionMode && (
                                 <div className="ml-2 flex items-center gap-2 rounded-md bg-slate-900/80 px-2 py-1 text-xs text-orange-200 backdrop-blur-sm">
-                                  <span>AIモード: ノードを選択</span>
+                                  <span>{t("aiModeSelectNodes")}</span>
                                   {selectedNodeIdsForAI.length > 0 && (
                                     <Button
                                       size="small"
@@ -1010,7 +1013,7 @@ const CuratorsWritingWorkspace = ({
                                     width={16}
                                     color="white"
                                   />
-                                  レイアウトをリセット
+                                  {t("resetLayout")}
                                 </Button>
                               )}
                             </>
@@ -1033,7 +1036,7 @@ const CuratorsWritingWorkspace = ({
                                   onClick={onRecordUpdate}
                                   className="flex items-center gap-1 text-xs"
                                 >
-                                  {isAdmin ? "グラフを更新" : "変更提案を作成"}
+                                  {isAdmin ? t("updateGraph") : t("createChangeProposal")}
                                 </Button>
                               )}
                               <DirectedLinksToggleButton
@@ -1049,7 +1052,7 @@ const CuratorsWritingWorkspace = ({
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center">
-                      <p>グラフデータが見つかりません</p>
+                      <p>{t("graphNotFound")}</p>
                     </div>
                   )}
                 </>
@@ -1110,7 +1113,7 @@ const CuratorsWritingWorkspace = ({
       <Modal
         isOpen={isPDFUploadModalOpen}
         setIsOpen={setIsPDFUploadModalOpen}
-        title="新しいドキュメントを追加する"
+        title={t("addNewDocument")}
       >
         <PDFDropZone
           isProcessingPDF={isProcessingPDF}

@@ -9,6 +9,7 @@ import { AnnotationType, AnnotationChangeType } from "@prisma/client";
 import { TiptapContentSchema } from "./workspace";
 import { formGraphDataForFrontend } from "@/app/_utils/kg/frontend-properties";
 import { PUBLIC_USER_SELECT } from "@/server/lib/user-select";
+import { getAnnotationMessage } from "@/server/lib/i18n/prompts/annotation";
 
 export const annotationRouter = createTRPCRouter({
   // 注釈IDで注釈を取得
@@ -60,7 +61,7 @@ export const annotationRouter = createTRPCRouter({
       if (!annotation) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "注釈が見つかりません",
+          message: getAnnotationMessage(ctx.locale, "notFound"),
         });
       }
 
@@ -201,7 +202,7 @@ export const annotationRouter = createTRPCRouter({
       if (!annotation || !annotation.targetNodeId || !annotation.targetNode) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "注釈または対象ノードが見つかりません",
+          message: getAnnotationMessage(ctx.locale, "notFoundOrTargetNode"),
         });
       }
 
@@ -510,7 +511,7 @@ export const annotationRouter = createTRPCRouter({
       if (!annotation) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "注釈が見つかりません",
+          message: getAnnotationMessage(ctx.locale, "notFound"),
         });
       }
 
@@ -541,7 +542,7 @@ export const annotationRouter = createTRPCRouter({
         if (!node) {
           throw new TRPCError({
             code: "NOT_FOUND",
-            message: "対象のノードが見つかりません",
+            message: getAnnotationMessage(ctx.locale, "targetNodeNotFound"),
           });
         }
       }
@@ -556,7 +557,7 @@ export const annotationRouter = createTRPCRouter({
         if (!edge) {
           throw new TRPCError({
             code: "NOT_FOUND",
-            message: "対象のエッジが見つかりません",
+            message: getAnnotationMessage(ctx.locale, "targetEdgeNotFound"),
           });
         }
       }
@@ -579,7 +580,7 @@ export const annotationRouter = createTRPCRouter({
         if (!parentAnnotation) {
           throw new TRPCError({
             code: "NOT_FOUND",
-            message: "親注釈が見つかりません",
+            message: getAnnotationMessage(ctx.locale, "parentNotFound"),
           });
         }
 
@@ -641,7 +642,7 @@ export const annotationRouter = createTRPCRouter({
       if (!existingAnnotation) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "注釈が見つかりません",
+          message: getAnnotationMessage(ctx.locale, "notFound"),
         });
       }
 
@@ -649,7 +650,7 @@ export const annotationRouter = createTRPCRouter({
       if (existingAnnotation.authorId !== ctx.session.user.id) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "この注釈を更新する権限がありません",
+          message: getAnnotationMessage(ctx.locale, "updateForbidden"),
         });
       }
 
@@ -709,7 +710,7 @@ export const annotationRouter = createTRPCRouter({
       if (!existingAnnotation) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "注釈が見つかりません",
+          message: getAnnotationMessage(ctx.locale, "notFound"),
         });
       }
 
@@ -717,7 +718,7 @@ export const annotationRouter = createTRPCRouter({
       if (existingAnnotation.authorId !== ctx.session.user.id) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "この注釈を削除する権限がありません",
+          message: getAnnotationMessage(ctx.locale, "deleteForbidden"),
         });
       }
 
@@ -725,8 +726,7 @@ export const annotationRouter = createTRPCRouter({
       if (existingAnnotation.childAnnotations.length > 0) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message:
-            "子注釈が存在するため削除できません。先に子注釈を削除してください。",
+          message: getAnnotationMessage(ctx.locale, "hasChildren"),
         });
       }
 
@@ -805,7 +805,7 @@ export const annotationRouter = createTRPCRouter({
       if (!annotation) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "注釈が見つかりません",
+          message: getAnnotationMessage(ctx.locale, "notFound"),
         });
       }
 
@@ -829,7 +829,9 @@ export const annotationRouter = createTRPCRouter({
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `グラフ抽出エラー: ${String(error)}`,
+          message: getAnnotationMessage(ctx.locale, "graphExtractionError", {
+            error: String(error),
+          }),
         });
       }
     }),
@@ -913,7 +915,9 @@ export const annotationRouter = createTRPCRouter({
         if (!validation.valid) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: `パラメータが無効です: ${validation.errors.join(", ")}`,
+            message: getAnnotationMessage(ctx.locale, "invalidParams", {
+              errors: validation.errors.join(", "),
+            }),
           });
         }
 
@@ -928,7 +932,7 @@ export const annotationRouter = createTRPCRouter({
         if (!topicSpace) {
           throw new TRPCError({
             code: "NOT_FOUND",
-            message: "リポジトリが見つかりません",
+            message: getAnnotationMessage(ctx.locale, "repositoryNotFound"),
           });
         }
 
@@ -944,7 +948,7 @@ export const annotationRouter = createTRPCRouter({
           if (!node) {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: "指定されたノードはこのリポジトリに属していません",
+              message: getAnnotationMessage(ctx.locale, "nodeNotInRepository"),
             });
           }
         }
@@ -960,8 +964,10 @@ export const annotationRouter = createTRPCRouter({
           if (!relationship) {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message:
-                "指定されたリレーションシップはこのリポジトリに属していません",
+              message: getAnnotationMessage(
+                ctx.locale,
+                "relationshipNotInRepository",
+              ),
             });
           }
         }
@@ -987,6 +993,7 @@ export const annotationRouter = createTRPCRouter({
           input.targetRelationshipId,
           topicSpaceNodes,
           params,
+          ctx.locale,
         );
 
         // 統計情報を追加
@@ -1020,7 +1027,9 @@ export const annotationRouter = createTRPCRouter({
         console.error("クラスタリング実行エラー:", error);
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `クラスタリングに失敗しました: ${String(error)}`,
+          message: getAnnotationMessage(ctx.locale, "clusteringFailed", {
+            error: String(error),
+          }),
         });
       }
     }),
@@ -1033,12 +1042,12 @@ export const annotationRouter = createTRPCRouter({
         cacheKey: z.string().optional(),
       }),
     )
-    .query(async () => {
+    .query(async ({ ctx }) => {
       // 将来的にはキャッシュ機能を実装
       // 現在は常に新しいクラスタリングを実行
       throw new TRPCError({
         code: "NOT_IMPLEMENTED",
-        message: "キャッシュ機能は未実装です",
+        message: getAnnotationMessage(ctx.locale, "cacheNotImplemented"),
       });
     }),
 });

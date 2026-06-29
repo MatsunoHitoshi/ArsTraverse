@@ -1,4 +1,7 @@
+"use client";
+
 import React from "react";
+import { useTranslations } from "next-intl";
 import { Modal } from "../modal/modal";
 import { api } from "@/trpc/react";
 import { Button } from "../button/button";
@@ -28,6 +31,8 @@ export const DeleteRecordModal = ({
   topicSpaceId,
   refetch,
 }: DeleteModalProps) => {
+  const t = useTranslations("modal.deleteRecord");
+  const tCommon = useTranslations("common");
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
   // モーダルが開かれるたびにエラーメッセージをリセット
@@ -44,22 +49,7 @@ export const DeleteRecordModal = ({
   const deleteStory = api.story.delete.useMutation();
   const removeAdmin = api.topicSpaces.removeAdmin.useMutation();
 
-  const title = () => {
-    switch (type) {
-      case "sourceDocument":
-        return "ドキュメント";
-      case "topicSpace":
-        return "リポジトリ";
-      case "workspace":
-        return "ワークスペース";
-      case "annotation":
-        return "注釈";
-      case "story":
-        return "ストーリー";
-      case "topicSpaceMember":
-        return "メンバー";
-    }
-  };
+  const typeLabel = t(`types.${type}`);
 
   const isRemoveMember = type === "topicSpaceMember";
 
@@ -76,7 +66,7 @@ export const DeleteRecordModal = ({
 
             onError: (e) => {
               console.log(e);
-              setErrorMessage(e.message || "削除に失敗しました");
+              setErrorMessage(e.message || t("deleteFailed"));
             },
           },
         );
@@ -90,7 +80,7 @@ export const DeleteRecordModal = ({
             },
             onError: (e) => {
               console.log(e);
-              setErrorMessage(e.message || "削除に失敗しました");
+              setErrorMessage(e.message || t("deleteFailed"));
             },
           },
         );
@@ -104,7 +94,7 @@ export const DeleteRecordModal = ({
             },
             onError: (e) => {
               console.log(e);
-              setErrorMessage(e.message || "削除に失敗しました");
+              setErrorMessage(e.message || t("deleteFailed"));
             },
           },
         );
@@ -119,7 +109,7 @@ export const DeleteRecordModal = ({
             },
             onError: (e) => {
               console.log(e);
-              setErrorMessage(e.message || "削除に失敗しました");
+              setErrorMessage(e.message || t("deleteFailed"));
             },
           },
         );
@@ -133,7 +123,7 @@ export const DeleteRecordModal = ({
             },
             onError: (e) => {
               console.log(e);
-              setErrorMessage(e.message || "削除に失敗しました");
+              setErrorMessage(e.message || t("deleteFailed"));
             },
           },
         );
@@ -148,7 +138,7 @@ export const DeleteRecordModal = ({
             },
             onError: (e) => {
               console.log(e);
-              setErrorMessage(e.message || "メンバーを外すのに失敗しました");
+              setErrorMessage(e.message || t("removeMemberFailed"));
             },
           },
         );
@@ -159,13 +149,17 @@ export const DeleteRecordModal = ({
     <Modal
       isOpen={isOpen}
       setIsOpen={setIsOpen}
-      title={isRemoveMember ? "メンバーを外す" : `${title()}を削除する`}
+      title={
+        isRemoveMember
+          ? t("removeMemberTitle")
+          : t("deleteTitle", { type: typeLabel })
+      }
     >
       <div className="flex flex-col gap-6">
         <div>
           {isRemoveMember
-            ? "このメンバーをリポジトリから外しますか？"
-            : `1件の${title()}を削除してもよろしいですか？`}
+            ? t("removeMemberConfirm")
+            : t("deleteConfirm", { type: typeLabel })}
         </div>
 
         {errorMessage && (
@@ -184,14 +178,14 @@ export const DeleteRecordModal = ({
             className="text-sm"
             onClick={() => setIsOpen(false)}
           >
-            キャンセル
+            {tCommon("cancel")}
           </Button>
           <Button
             type="button"
             className="text-sm text-error-red"
             onClick={() => submit()}
           >
-            {isRemoveMember ? "外す" : "削除する"}
+            {isRemoveMember ? t("remove") : t("confirmDelete")}
           </Button>
         </div>
       </div>

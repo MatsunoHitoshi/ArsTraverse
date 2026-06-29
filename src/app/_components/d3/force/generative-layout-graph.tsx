@@ -19,6 +19,7 @@ import {
 } from "d3";
 import type { Simulation, ForceLink } from "d3";
 import { useEffect, useMemo, useRef, useState, memo } from "react";
+import { useTranslations } from "next-intl";
 import { D3ZoomProvider } from "../zoom";
 import { getNodeByIdForFrontend } from "@/app/_utils/kg/filter";
 import { Input } from "@headlessui/react";
@@ -270,6 +271,7 @@ export const GenerativeLayoutGraph = ({
   layoutOrientation?: "vertical" | "horizontal"; // レイアウト方向
   isEditMode?: boolean; // ストーリー編集モード
 }) => {
+  const t = useTranslations("graph");
   // ハイライト用: 手動選択中は segmentSelectionEdit、それ以外は focusedSegmentRef
   const segmentHighlightNodeIds =
     segmentSelectionEdit?.nodeIds ?? focusedSegmentRef?.nodeIds ?? [];
@@ -1241,7 +1243,7 @@ export const GenerativeLayoutGraph = ({
       <div className="absolute right-4 top-4 z-10 flex items-center gap-2">
         <Input
           type="text"
-          placeholder="ノードを検索"
+          placeholder={t("searchNodes")}
           value={nodeSearchQuery}
           onChange={(e) => setNodeSearchQuery(e.target.value)}
           className={clsx(

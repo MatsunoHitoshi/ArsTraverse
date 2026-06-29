@@ -12,6 +12,7 @@ import {
   forceCollide,
 } from "d3";
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
+import { useTranslations } from "next-intl";
 import { D3ZoomProvider } from "../zoom";
 import type { TopicGraphFilterOption } from "@/app/const/types";
 import {
@@ -353,6 +354,7 @@ export const D3ForceGraph = ({
   /** エッジ分類キャッシュに使用する TopicSpace ID */
   topicSpaceId?: string;
 }) => {
+  const t = useTranslations("graph");
   const { nodes, relationships } = graphDocument;
   const initLinks = relationships as CustomLinkType[];
   const initNodes = isLinkFiltered ? linkFilter(nodes, initLinks) : nodes;
@@ -814,6 +816,7 @@ export const D3ForceGraph = ({
         setDragState,
         onGraphUpdate,
         graphIdentifier,
+        formatNewNodeName: (id) => t("newNodeName", { id }),
       });
     }
 
@@ -846,7 +849,7 @@ export const D3ForceGraph = ({
         {nodes.length === 0 && relationships.length === 0 ? (
           <div className="mt-60 flex flex-col items-center">
             <div>
-              <span translate="yes">グラフデータがありません</span>
+              <span translate="yes">{t("noData")}</span>
             </div>
           </div>
         ) : (

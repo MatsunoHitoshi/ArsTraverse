@@ -1,4 +1,7 @@
+"use client";
+
 import React, { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "../button/button";
 import { TextInput } from "../input/text-input";
 import { Textarea } from "../textarea";
@@ -24,6 +27,7 @@ export const ProposalCreateForm: React.FC<ProposalCreateFormProps> = ({
   onSuccess,
   onCancel,
 }) => {
+  const t = useTranslations("proposal");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,12 +47,12 @@ export const ProposalCreateForm: React.FC<ProposalCreateFormProps> = ({
     e.preventDefault();
 
     if (!title.trim()) {
-      alert("タイトルを入力してください");
+      alert(t("create.titleRequired"));
       return;
     }
 
     if (!description.trim() || description.trim().length < 10) {
-      alert("説明を10文字以上入力してください");
+      alert(t("create.descriptionMinLength"));
       return;
     }
 
@@ -69,38 +73,40 @@ export const ProposalCreateForm: React.FC<ProposalCreateFormProps> = ({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4">
-        <h2 className="text-xl font-semibold">変更提案を作成</h2>
+        <h2 className="text-xl font-semibold">{t("create.title")}</h2>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <label htmlFor="title" className="text-sm font-medium">
-              タイトル <span className="text-red-500">*</span>
+              {t("create.titleLabel")}{" "}
+              <span className="text-red-500">*</span>
             </label>
             <TextInput
               id="title"
               value={title}
               onChange={(value) => setTitle(value)}
-              placeholder="変更提案のタイトルを入力してください"
+              placeholder={t("create.titlePlaceholder")}
               required
             />
           </div>
 
           <div className="flex flex-col gap-2">
             <label htmlFor="description" className="text-sm font-medium">
-              説明 <span className="text-red-500">*</span>
+              {t("create.descriptionLabel")}{" "}
+              <span className="text-red-500">*</span>
             </label>
             <Textarea
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="変更内容の詳細説明を入力してください（10文字以上）"
+              placeholder={t("create.descriptionPlaceholder")}
               rows={3}
             />
           </div>
 
           <div className="flex justify-end gap-2">
             <Button type="button" onClick={onCancel} disabled={isSubmitting}>
-              キャンセル
+              {t("create.cancel")}
             </Button>
             <Button
               type="submit"
@@ -111,7 +117,7 @@ export const ProposalCreateForm: React.FC<ProposalCreateFormProps> = ({
                 description.trim().length < 10
               }
             >
-              {isSubmitting ? "作成中..." : "提案を作成"}
+              {isSubmitting ? t("create.creating") : t("create.submit")}
             </Button>
           </div>
         </form>

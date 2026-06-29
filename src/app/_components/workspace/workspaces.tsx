@@ -10,6 +10,7 @@ import type { WorkspaceResponse } from "@/app/const/types";
 import { ReadOnlyTipTapViewer } from "../article/read-only-tiptap-viewer";
 import type { JSONContent } from "@tiptap/react";
 import { Pagination } from "../pagination/pagination";
+import { useTranslations } from "next-intl";
 
 const normalizePreviewContent = (value: unknown): unknown => {
   if (Array.isArray(value)) {
@@ -42,6 +43,7 @@ const normalizePreviewContent = (value: unknown): unknown => {
 };
 
 export const Workspaces = () => {
+  const t = useTranslations("workspace");
   const { data: session } = useSession();
   const { data: workspaces, refetch } =
     api.workspace.getListBySession.useQuery();
@@ -87,7 +89,7 @@ export const Workspaces = () => {
                           <div className="h-4 w-4">
                             <TrashIcon width={16} height={16} color="#ea1c0c" />
                           </div>
-                          <div className="text-error-red">削除</div>
+                          <div className="text-error-red">{t("delete")}</div>
                         </div>
                       </button>
                     </div>
@@ -117,7 +119,7 @@ export const Workspaces = () => {
             </div>
           ) : (
             <div className="flex h-[460px] items-center justify-center text-sm text-slate-500">
-              ワークスペースにホバーすると、ここに内容プレビューが表示されます。
+              {t("hoverPreviewHint")}
             </div>
           )}
         </div>

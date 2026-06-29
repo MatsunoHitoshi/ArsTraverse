@@ -1,3 +1,4 @@
+"use client";
 import { NodeLinkList } from "@/app/_components/list/node-link-list";
 import { useRef, useState } from "react";
 import type { GraphDocumentForFrontend } from "@/app/const/types";
@@ -17,6 +18,7 @@ import { NodePropertiesDetail } from "../node/node-properties-detail";
 import { useSearchParams } from "next/navigation";
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
 import { Fragment } from "react";
+import { useTranslations } from "next-intl";
 
 export const MultiDocumentGraphDetailViewer = ({
   graphDocument,
@@ -44,6 +46,7 @@ export const MultiDocumentGraphDetailViewer = ({
   }>;
   isLinkFiltered?: boolean;
 }) => {
+  const t = useTranslations("view");
   const [innerWidth, innerHeight] = useWindowSize();
   const { data: session } = useSession();
   const graphAreaWidth =
@@ -134,7 +137,7 @@ export const MultiDocumentGraphDetailViewer = ({
                   className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${selected ? "border-b-2 border-white outline-none" : ""
                     } hover:bg-white/10`}
                 >
-                  2Dグラフ
+                  {t("graph2d")}
                 </button>
               )}
             </Tab>
@@ -145,7 +148,7 @@ export const MultiDocumentGraphDetailViewer = ({
                     className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${selected ? "border-b-2 border-white outline-none" : ""
                       } hover:bg-white/10`}
                   >
-                    3D球面グラフ
+                    {t("graph3dSpherical")}
                   </button>
                 )}
               </Tab>
@@ -157,7 +160,7 @@ export const MultiDocumentGraphDetailViewer = ({
                     className={`flex cursor-pointer flex-row items-center gap-1 rounded-t-sm px-3 py-2 text-sm font-semibold ${selected ? "border-b-2 border-white outline-none" : ""
                       } hover:bg-white/10`}
                   >
-                    多層グラフ
+                    {t("graphMultilayer")}
                   </button>
                 )}
               </Tab>
@@ -263,7 +266,7 @@ export const MultiDocumentGraphDetailViewer = ({
                       onClick={() => setShowLabels(!showLabels)}
                       className={`rounded-lg p-2 backdrop-blur-sm ${showLabels ? "bg-orange-500/40" : "bg-black/20"
                         }`}
-                      title={showLabels ? "ラベルを非表示" : "ラベルを表示"}
+                      title={showLabels ? t("hideLabels") : t("showLabels")}
                     >
                       <svg
                         width={16}
@@ -291,11 +294,11 @@ export const MultiDocumentGraphDetailViewer = ({
                         }`}
                       title={
                         layoutMode === "unified"
-                          ? "層ごとに独立したレイアウトに切り替え"
-                          : "統一レイアウトに切り替え"
+                          ? t("switchToLayeredLayout")
+                          : t("switchToUnifiedLayout")
                       }
                     >
-                      {layoutMode === "unified" ? "統一" : "層別"}
+                      {layoutMode === "unified" ? t("unified") : t("layered")}
                     </button>
                   </div>
                   <D3MultiLayerGraph

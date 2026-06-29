@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/trpc/react";
+import { useTranslations } from "next-intl";
 
 type PickedFolder = {
   id: string;
@@ -23,6 +24,21 @@ type PickerResponse = {
   action: string;
   docs?: PickerDocument[];
 };
+
+type PickerErrorKey =
+  | "gapiTimeout"
+  | "gapiScriptLoadFailed"
+  | "gapiNotLoaded"
+  | "pickerApiLoadFailed"
+  | "pickerLoadFailed"
+  | "pickerNotReady";
+
+class PickerLoadError extends Error {
+  constructor(public readonly messageKey: PickerErrorKey) {
+    super(messageKey);
+    this.name = "PickerLoadError";
+  }
+}
 
 declare global {
   interface Window {
@@ -61,7 +77,7 @@ function waitForGapi(
       }
       if (Date.now() - startedAt >= timeoutMs) {
         window.clearInterval(timer);
-        reject(new Error("Google API (gapi) の読み込みがタイムアウトしました。広告ブロック等でスクリプトが遮断されている可能性があります。"));
+        reject(new PickerLoadError("gapiTimeout"));
       }
     }, 50);
   });
@@ -91,8 +107,7 @@ function loadGapiScript(): Promise<void> {
     script.src = GAPI_SCRIPT_URL;
     script.async = true;
     script.onload = startWaiting;
-    script.onerror = () =>
-      reject(new Error("Google API スクリプトの読み込みに失敗しました"));
+    script.onerror = () => reject(new PickerLoadError("gapiScriptLoadFailed"));
     document.body.appendChild(script);
   });
 }
@@ -100,14 +115,13 @@ function loadGapiScript(): Promise<void> {
 function loadPickerModule(): Promise<void> {
   return new Promise((resolve, reject) => {
     if (!window.gapi?.load) {
-      reject(new Error("Google API (gapi) が未ロードです"));
+      reject(new PickerLoadError("gapiNotLoaded"));
       return;
     }
 
     window.gapi.load("picker", {
       callback: () => resolve(),
-      onerror: () =>
-        reject(new Error("Google Picker API の読み込みに失敗しました")),
+      onerror: () => reject(new PickerLoadError("pickerApiLoadFailed")),
     });
   });
 }
@@ -120,10 +134,24 @@ async function ensurePickerReady(): Promise<void> {
   }
 }
 
+function getPickerErrorMessage(
+  error: unknown,
+  t: (key: PickerErrorKey) => string,
+): string {
+  if (error instanceof PickerLoadError) {
+    return t(error.messageKey);
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return t("pickerLoadFailed");
+}
+
 export function GoogleDriveFolderPicker({
   disabled,
   onPick,
 }: GoogleDriveFolderPickerProps) {
+  const t = useTranslations("topicSpace");
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -144,11 +172,7 @@ export function GoogleDriveFolderPicker({
         }
       } catch (loadError) {
         if (!cancelled) {
-          setError(
-            loadError instanceof Error
-              ? loadError.message
-              : "Picker の読み込みに失敗しました",
-          );
+          setError(getPickerErrorMessage(loadError, t));
         }
       } finally {
         if (!cancelled) {
@@ -159,7 +183,7 @@ export function GoogleDriveFolderPicker({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   const openPicker = useCallback(async () => {
     setError(null);
@@ -169,11 +193,7 @@ export function GoogleDriveFolderPicker({
         setReady(true);
       }
     } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Picker の読み込みに失敗しました",
-      );
+      setError(getPickerErrorMessage(loadError, t));
       return;
     }
 
@@ -182,7 +202,7 @@ export function GoogleDriveFolderPicker({
     const picker = window.google?.picker;
 
     if (!config || !picker) {
-      setError("Google Picker の準備ができていません");
+      setError(t("pickerNotReady"));
       return;
     }
 
@@ -206,7 +226,7 @@ export function GoogleDriveFolderPicker({
       .setOAuthToken(config.accessToken)
       .setDeveloperKey(config.apiKey)
       .setAppId(config.appId)
-      .setTitle("同期するフォルダを選択")
+      .setTitle(t("pickerTitle"))
       .setCallback((data: PickerResponse) => {
         if (data.action !== picker.Action.PICKED || !data.docs?.[0]) return;
         const doc = data.docs[0];
@@ -215,7 +235,7 @@ export function GoogleDriveFolderPicker({
       .build();
 
     pickerInstance.setVisible(true);
-  }, [onPick, pickerConfigQuery, ready]);
+  }, [onPick, pickerConfigQuery, ready, t]);
 
   return (
     <div className="flex flex-col gap-1">
@@ -226,8 +246,8 @@ export function GoogleDriveFolderPicker({
         className="rounded bg-blue-600 px-3 py-1 text-xs hover:bg-blue-500 disabled:opacity-50"
       >
         {loading || pickerConfigQuery.isFetching
-          ? "準備中..."
-          : "フォルダを選ぶ"}
+          ? t("preparing")
+          : t("pickFolder")}
       </button>
       {(error ?? pickerConfigQuery.error?.message) && (
         <p className="text-xs text-red-400">

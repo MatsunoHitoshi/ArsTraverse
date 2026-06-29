@@ -15,6 +15,7 @@ import { Toolbar } from "../toolbar/toolbar";
 import { RelationPathSearch } from "../toolbar/relation-path-search";
 import { circleColor } from "./topic-graph-detail";
 import { useSession } from "next-auth/react";
+import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { MultiDocumentGraphEditor } from "../view/graph-edit/multi-document-graph-editor";
 import { TopicSpaceDocumentListSection } from "./document-list-section";
@@ -28,6 +29,7 @@ export const TopicGraphEditor = ({
   id,
   filterOption,
 }: TopicGraphDetailProps) => {
+  const t = useTranslations("topicSpace");
   const { data: session } = useSession();
   const searchParams = useSearchParams();
   const cutOff = searchParams.get("cut-off");
@@ -143,7 +145,7 @@ export const TopicGraphEditor = ({
                         className="text-sm underline hover:no-underline"
                         href={`/topic-spaces/${id}/path/${pathData.nodes[0]?.id}/${pathData.nodes[pathData.nodes.length - 1]?.id}`}
                       >
-                        詳細
+                        {t("detail")}
                       </a>
                     </div>
                   ) : (
@@ -191,7 +193,7 @@ export const TopicGraphEditor = ({
             />
           ) : (
             <div className="flex w-full flex-col items-center p-4">
-              <div>まだグラフが作成されていません</div>
+              <div>{t("graphNotCreated")}</div>
               <div>{topicSpace.graphDataStatus}</div>
             </div>
           )}

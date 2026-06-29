@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Button } from "@/app/_components/button/button";
 import { PlusIcon, TrashIcon } from "@/app/_components/icons";
 import type { FilterCondition } from "@/app/const/types";
@@ -21,29 +22,30 @@ interface FilterConditionLeafEditorProps {
   onRemove: (index: number) => void;
 }
 
-/** 単一条件（リーフ）の編集UI */
 export const FilterConditionLeafEditor = ({
   condition,
   index,
   onUpdate,
   onRemove,
 }: FilterConditionLeafEditorProps) => {
+  const t = useTranslations("layoutEdit");
+
   return (
     <div className="space-y-2 rounded-lg border border-slate-700 bg-slate-900 p-3">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-slate-300">
-          条件 {index + 1}
+          {t("condition", { index: index + 1 })}
         </span>
         <Button
           size="small"
           onClick={() => onRemove(index)}
           className="text-xs text-red-400 hover:text-red-300"
         >
-          削除
+          {t("remove")}
         </Button>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-slate-400">フィールド</label>
+        <label className="mb-1 block text-xs text-slate-400">{t("field")}</label>
         <div className="flex gap-2">
           <select
             value={
@@ -60,9 +62,9 @@ export const FilterConditionLeafEditor = ({
             }}
             className="w-32 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-sm text-slate-200"
           >
-            <option value="label">ラベル</option>
-            <option value="name">名前</option>
-            <option value="custom">カスタム</option>
+            <option value="label">{t("fieldLabel")}</option>
+            <option value="name">{t("fieldName")}</option>
+            <option value="custom">{t("fieldCustom")}</option>
           </select>
           {condition.field !== "label" && condition.field !== "name" ? (
             <input
@@ -73,14 +75,14 @@ export const FilterConditionLeafEditor = ({
                   : condition.field
               }
               onChange={(e) => onUpdate(index, { field: e.target.value })}
-              placeholder="プロパティ名（例: mentionedAt）"
+              placeholder={t("propertyNamePlaceholder")}
               className="flex-1 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-sm text-slate-200"
             />
           ) : null}
         </div>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-slate-400">演算子</label>
+        <label className="mb-1 block text-xs text-slate-400">{t("operator")}</label>
         <select
           value={condition.operator}
           onChange={(e) => {
@@ -104,23 +106,23 @@ export const FilterConditionLeafEditor = ({
           }}
           className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-sm text-slate-200"
         >
-          <option value="equals">完全一致</option>
-          <option value="in">含まれる</option>
-          <option value="contains">部分一致</option>
-          <option value="date_equals">日付完全一致</option>
-          <option value="date_after">日付以降</option>
-          <option value="date_before">日付以前</option>
-          <option value="date_range">日付範囲</option>
+          <option value="equals">{t("opEquals")}</option>
+          <option value="in">{t("opIn")}</option>
+          <option value="contains">{t("opContains")}</option>
+          <option value="date_equals">{t("opDateEquals")}</option>
+          <option value="date_after">{t("opDateAfter")}</option>
+          <option value="date_before">{t("opDateBefore")}</option>
+          <option value="date_range">{t("opDateRange")}</option>
         </select>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-slate-400">値</label>
+        <label className="mb-1 block text-xs text-slate-400">{t("value")}</label>
         {condition.operator === "in" ? (
           <div className="space-y-2">
             {(Array.isArray(condition.value) ? condition.value : []).length ===
               0 ? (
               <div className="text-xs text-slate-500">
-                値を追加してください
+                {t("addValuePlease")}
               </div>
             ) : null}
             {(Array.isArray(condition.value) ? condition.value : []).map(
@@ -140,7 +142,7 @@ export const FilterConditionLeafEditor = ({
                       next[valueIndex] = e.target.value;
                       onUpdate(index, { value: next });
                     }}
-                    placeholder="値（例: Person）"
+                    placeholder={t("valuePlaceholder")}
                     className="flex-1 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-sm text-slate-200"
                   />
                   <Button
@@ -155,7 +157,7 @@ export const FilterConditionLeafEditor = ({
                       onUpdate(index, { value: next });
                     }}
                     className="flex !h-8 !w-8 shrink-0 items-center justify-center !p-0 text-red-400 hover:text-red-300"
-                    aria-label="この値を削除"
+                    aria-label={t("removeValueAria")}
                   >
                     <TrashIcon width={14} height={14} />
                   </Button>
@@ -173,7 +175,7 @@ export const FilterConditionLeafEditor = ({
               className="flex items-center gap-1 text-xs"
             >
               <PlusIcon width={14} height={14} />
-              値を追加
+              {t("addValue")}
             </Button>
           </div>
         ) : condition.operator === "date_range" ? (
@@ -202,7 +204,7 @@ export const FilterConditionLeafEditor = ({
                   });
                 }
               }}
-              placeholder="開始日（例: 2024-01-01）"
+              placeholder={t("startDatePlaceholder")}
               className="flex-1 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-sm text-slate-200"
             />
             <input
@@ -229,7 +231,7 @@ export const FilterConditionLeafEditor = ({
                   });
                 }
               }}
-              placeholder="終了日（例: 2024-12-31）"
+              placeholder={t("endDatePlaceholder")}
               className="flex-1 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-sm text-slate-200"
             />
           </div>
@@ -238,7 +240,7 @@ export const FilterConditionLeafEditor = ({
             type="text"
             value={typeof condition.value === "string" ? condition.value : ""}
             onChange={(e) => onUpdate(index, { value: e.target.value })}
-            placeholder="値を入力"
+            placeholder={t("enterValue")}
             className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-sm text-slate-200"
           />
         )}
@@ -254,13 +256,14 @@ interface FilterConditionEditorRecursiveProps {
   depth?: number;
 }
 
-/** 条件またはグループを再帰的に編集するUI（AND/OR対応） */
 export const FilterConditionEditorRecursive = ({
   condition,
   onChange,
   onRemove,
   depth = 0,
 }: FilterConditionEditorRecursiveProps) => {
+  const t = useTranslations("layoutEdit");
+
   if (condition.type === "group") {
     const updateLogic = (logic: "AND" | "OR") => {
       onChange({ ...condition, logic });
@@ -295,7 +298,7 @@ export const FilterConditionEditorRecursive = ({
         style={{ marginLeft: depth > 0 ? 12 : 0 }}
       >
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-medium text-slate-400">グループ</span>
+          <span className="text-xs font-medium text-slate-400">{t("group")}</span>
           <div className="flex items-center gap-2">
             <select
               value={condition.logic}
@@ -304,15 +307,15 @@ export const FilterConditionEditorRecursive = ({
               }
               className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-200"
             >
-              <option value="AND">AND（すべて一致）</option>
-              <option value="OR">OR（いずれか一致）</option>
+              <option value="AND">{t("andAll")}</option>
+              <option value="OR">{t("orAny")}</option>
             </select>
             <Button
               size="small"
               onClick={onRemove}
               className="text-xs text-red-400 hover:text-red-300"
             >
-              グループ削除
+              {t("removeGroup")}
             </Button>
           </div>
         </div>
@@ -328,13 +331,12 @@ export const FilterConditionEditorRecursive = ({
           ))}
         </div>
         <Button size="small" onClick={addChild} className="text-xs">
-          条件を追加
+          {t("addCondition")}
         </Button>
       </div>
     );
   }
 
-  // type === "condition"
   const leafCondition = condition;
   const updateLeaf = (
     updates: Partial<Extract<FilterCondition, { type: "condition" }>>,
@@ -354,7 +356,6 @@ export const FilterConditionEditorRecursive = ({
   );
 };
 
-// 後方互換: 従来の props で単一条件のみ編集するコンポーネント
 interface FilterConditionEditorProps {
   condition: Extract<FilterCondition, { type: "condition" }>;
   index: number;

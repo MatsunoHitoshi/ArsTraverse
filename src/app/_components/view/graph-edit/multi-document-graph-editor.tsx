@@ -1,3 +1,4 @@
+"use client";
 import { NodeLinkList } from "@/app/_components/list/node-link-list";
 import { useEffect, useRef, useState } from "react";
 import type { GraphDocumentForFrontend } from "@/app/const/types";
@@ -19,6 +20,7 @@ import { api } from "@/trpc/react";
 import { useGraphEditor } from "@/app/_hooks/use-graph-editor";
 import { Button } from "../../button/button";
 import { Switch } from "@headlessui/react";
+import { useTranslations } from "next-intl";
 
 export const MultiDocumentGraphEditor = ({
   defaultGraphDocument,
@@ -49,6 +51,8 @@ export const MultiDocumentGraphEditor = ({
   isLinkFiltered: boolean;
   nodeSearchQuery: string;
 }) => {
+  const t = useTranslations("view");
+  const tGraph = useTranslations("graph");
   const updateGraph = api.topicSpaces.updateGraph.useMutation();
 
   // カスタムフックを使用
@@ -235,7 +239,7 @@ export const MultiDocumentGraphEditor = ({
 
                     <div className="absolute mt-12 flex flex-col items-start gap-2">
                       <div className="flex flex-row items-center gap-2">
-                        <div className="text-sm">直接編集</div>
+                        <div className="text-sm">{t("directEdit")}</div>
                         <Switch
                           checked={isEditor}
                           onChange={setIsEditor}
@@ -250,7 +254,7 @@ export const MultiDocumentGraphEditor = ({
                           isLoading={updateGraph.isPending}
                           className="!w-max !p-2 !text-xs"
                         >
-                          グラフを更新
+                          {tGraph("updateGraph")}
                         </Button>
                       )}
                     </div>

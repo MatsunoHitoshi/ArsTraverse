@@ -9,6 +9,8 @@ import { Button } from "../button/button";
 import { Textarea } from "../textarea";
 import { ResetIcon, ChevronRightIcon, ReloadIcon } from "../icons";
 import { formatRelativeTime } from "@/app/_utils/date/format-date";
+import { useLocale, useTranslations } from "next-intl";
+import type { Locale } from "i18n/routing";
 
 export const TopicSpaceChangeHistory = ({
   topicSpaceId,
@@ -22,6 +24,9 @@ export const TopicSpaceChangeHistory = ({
     removedLinkIds: Set<string>;
   }) => void;
 }) => {
+  const t = useTranslations("topicSpace");
+  const tCommon = useTranslations("common");
+  const locale = useLocale() as Locale;
   const { data: changeHistories, refetch } =
     api.topicSpaceChangeHistory.listByTopicSpaceId.useQuery({
       id: topicSpaceId,
@@ -93,11 +98,11 @@ export const TopicSpaceChangeHistory = ({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div className="text-base font-semibold">変更履歴</div>
+        <div className="text-base font-semibold">{t("changeHistory")}</div>
         <div className="flex items-center gap-2">
           <Input
             className="block w-48 rounded-lg border border-gray-700 bg-slate-700 px-3 py-1.5 text-sm/6 text-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
-            placeholder="履歴を検索..."
+            placeholder={t("searchHistory")}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -110,8 +115,8 @@ export const TopicSpaceChangeHistory = ({
       {filteredChangeHistories?.length === 0 ? (
         <div className="py-8 text-center text-gray-500">
           {searchTerm
-            ? "検索条件に一致する履歴がありません"
-            : "変更履歴がありません"}
+            ? t("noMatchingHistory")
+            : t("noChangeHistory")}
         </div>
       ) : (
         <div className="space-y-4">
@@ -147,7 +152,7 @@ export const TopicSpaceChangeHistory = ({
                       <div className="flex flex-col">
                         <div className="mb-2 flex items-center gap-2">
                           <div className="text-sm">
-                            {history.description ?? "変更"}
+                            {history.description ?? t("changeDefault")}
                           </div>
                         </div>
 
@@ -162,10 +167,10 @@ export const TopicSpaceChangeHistory = ({
                                 width={20}
                               />
                             )}
-                            <span>{history.user.name ?? "不明"}</span>
+                            <span>{history.user.name ?? t("unknownUser")}</span>
                           </div>
                           <span>
-                            {formatRelativeTime(new Date(history.createdAt))}
+                            {formatRelativeTime(new Date(history.createdAt), locale)}
                           </span>
                         </div>
                       </div>
@@ -179,8 +184,8 @@ export const TopicSpaceChangeHistory = ({
                     >
                       <ResetIcon height={16} width={16} color="white" />
                       {isRollingBack === history.id
-                        ? "ロールバック中..."
-                        : "ロールバック"}
+                        ? t("rollingBack")
+                        : t("rollback")}
                     </Button>
                   </div>
 
@@ -188,17 +193,17 @@ export const TopicSpaceChangeHistory = ({
                   {selectedHistoryId === history.id && (
                     <div className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 p-4">
                       <h4 className="mb-2 font-medium text-yellow-800">
-                        ロールバックの確認
+                        {t("rollbackConfirmTitle")}
                       </h4>
                       <p className="mb-3 text-sm text-yellow-700">
-                        この変更をロールバックしますか？この操作は元に戻すことができません。
+                        {t("rollbackConfirmMessage")}
                       </p>
 
                       <div className="space-y-3">
                         <Textarea
                           value={rollbackReason}
                           onChange={(e) => setRollbackReason(e.target.value)}
-                          placeholder="ロールバック理由を入力してください（任意）"
+                          placeholder={t("rollbackReasonPlaceholder")}
                           rows={2}
                           className="block w-full rounded-lg border border-gray-700 bg-slate-700 px-3 py-2 text-sm/6 text-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
                         />
@@ -211,8 +216,8 @@ export const TopicSpaceChangeHistory = ({
                             className="bg-red-600 hover:bg-red-700"
                           >
                             {isRollingBack === history.id
-                              ? "ロールバック中..."
-                              : "ロールバック実行"}
+                              ? t("rollingBack")
+                              : t("executeRollback")}
                           </Button>
                           <Button
                             size="small"
@@ -222,7 +227,7 @@ export const TopicSpaceChangeHistory = ({
                             }}
                             disabled={isRollingBack === history.id}
                           >
-                            キャンセル
+                            {tCommon("cancel")}
                           </Button>
                         </div>
                       </div>

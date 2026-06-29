@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import type { AnnotationType } from "@prisma/client";
@@ -21,10 +22,24 @@ export const AnnotationEditForm: React.FC<AnnotationEditFormProps> = ({
   onClose,
   onSuccess,
 }) => {
+  const t = useTranslations("annotation");
+  const tCommon = useTranslations("common");
   const [annotationType, setAnnotationType] = useState<AnnotationType>(
     annotation.type,
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const annotationTypeOptions = useMemo(
+    () => [
+      { value: "COMMENT", label: t("comment") },
+      { value: "INTERPRETATION", label: t("interpretation") },
+      { value: "QUESTION", label: t("question") },
+      { value: "CLARIFICATION", label: t("clarification") },
+      { value: "CRITICISM", label: t("criticism") },
+      { value: "SUPPORT", label: t("support") },
+    ],
+    [t],
+  );
 
   const editor = useEditor({
     extensions: [StarterKit],
@@ -47,13 +62,13 @@ export const AnnotationEditForm: React.FC<AnnotationEditFormProps> = ({
     },
     onError: (error) => {
       console.error("注釈更新エラー:", error);
-      alert("注釈の更新に失敗しました");
+      alert(t("updateFailed"));
     },
   });
 
   const handleSubmit = async () => {
     if (!editor?.getHTML()) {
-      alert("注釈の内容を入力してください");
+      alert(t("contentRequired"));
       return;
     }
 
@@ -66,7 +81,7 @@ export const AnnotationEditForm: React.FC<AnnotationEditFormProps> = ({
         annotationId: annotation.id,
         content,
         type: annotationType,
-        changeReason: "編集",
+        changeReason: t("editChangeReason"),
       });
     } catch (error) {
       console.error("注釈更新エラー:", error);
@@ -75,37 +90,26 @@ export const AnnotationEditForm: React.FC<AnnotationEditFormProps> = ({
     }
   };
 
-  const annotationTypeOptions = [
-    { value: "COMMENT", label: "コメント" },
-    { value: "INTERPRETATION", label: "解釈" },
-    { value: "QUESTION", label: "質問" },
-    { value: "CLARIFICATION", label: "補足" },
-    { value: "CRITICISM", label: "批評" },
-    { value: "SUPPORT", label: "支持" },
-  ];
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
       <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-slate-900 p-6">
-        <h3 className="mb-4 text-lg font-semibold">注釈を編集</h3>
+        <h3 className="mb-4 text-lg font-semibold">{t("editAnnotation")}</h3>
 
-        {/* 注釈タイプ選択 */}
         <div className="mb-4">
           <label className="mb-2 block text-sm font-medium text-gray-500">
-            注釈の種類
+            {t("annotationType")}
           </label>
           <ListboxInput
             options={annotationTypeOptions}
             selected={annotationType}
             setSelected={(value) => setAnnotationType(value as AnnotationType)}
-            placeholder="注釈の種類を選択"
+            placeholder={t("selectAnnotationType")}
           />
         </div>
 
-        {/* エディター */}
         <div className="mb-4">
           <label className="mb-2 block text-sm font-medium text-gray-500">
-            内容
+            {t("content")}
           </label>
           <div className="rounded-md bg-slate-800">
             <TiptapEditorToolbar
@@ -119,20 +123,19 @@ export const AnnotationEditForm: React.FC<AnnotationEditFormProps> = ({
           </div>
         </div>
 
-        {/* ボタン */}
         <div className="flex justify-end gap-2">
           <Button
             onClick={onClose}
             disabled={isSubmitting}
             className="border border-gray-300"
           >
-            キャンセル
+            {tCommon("cancel")}
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={isSubmitting || !editor?.getHTML()}
           >
-            {isSubmitting ? "更新中..." : "更新"}
+            {isSubmitting ? tCommon("updating") : tCommon("update")}
           </Button>
         </div>
       </div>

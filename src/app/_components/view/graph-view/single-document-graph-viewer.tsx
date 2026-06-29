@@ -22,11 +22,15 @@ import { NodeLinkEditModal } from "../../modal/node-link-edit-modal";
 import { Button } from "../../button/button";
 import { GraphSyncedText } from "../../document/graph-synced-text";
 import { useGraphEditor } from "@/app/_hooks/use-graph-editor";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "i18n/navigation";
+import { useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { NodeLinkList } from "../../list/node-link-list";
 import { NodePropertiesDetail } from "../node/node-properties-detail";
 
 export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
+  const t = useTranslations("view");
+  const tGraph = useTranslations("graph");
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -164,7 +168,7 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
                     </div>
                   </UrlCopy>
                   <div className="w-full max-w-[200px] truncate">
-                    参照：
+                    {t("referenceLabel")}
                     {graphData.sourceDocument.url.includes("/input-txt/") ? (
                       <button
                         onClick={() => {
@@ -253,7 +257,7 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
                             onUpdateRecord();
                           }}
                         >
-                          グラフを更新
+                          {tGraph("updateGraph")}
                         </Button>
                       </div>
                     )}

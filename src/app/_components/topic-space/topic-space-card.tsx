@@ -7,7 +7,8 @@ import {
   StarIcon,
 } from "../icons";
 import type { TopicSpaceResponse } from "@/app/const/types";
-import { useRouter } from "next/navigation";
+import { useRouter } from "i18n/navigation";
+import { useTranslations } from "next-intl";
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 
 type TopicSpaceCardProps = {
@@ -17,6 +18,7 @@ type TopicSpaceCardProps = {
 
 export const TopicSpaceCard = ({ topicSpace, menu }: TopicSpaceCardProps) => {
   const router = useRouter();
+  const t = useTranslations("topicSpace");
 
   const PopoverMenu = ({ topicSpace }: { topicSpace: TopicSpaceResponse }) => {
     return (
@@ -87,7 +89,7 @@ export const TopicSpaceCard = ({ topicSpace, menu }: TopicSpaceCardProps) => {
             <PersonIcon height={20} width={20} color="white" />
             <div className="">{topicSpace.admins?.length ?? "-"}</div>
           </div>
-          <div className="text-xs">メンバー</div>
+          <div className="text-xs">{t("members")}</div>
         </div>
 
         <div className="flex flex-col items-center">
@@ -95,7 +97,7 @@ export const TopicSpaceCard = ({ topicSpace, menu }: TopicSpaceCardProps) => {
             <StarIcon height={20} width={20} color="white" />
             <div className="">{topicSpace.star}</div>
           </div>
-          <div className="text-xs">お気に入り</div>
+          <div className="text-xs">{t("favorites")}</div>
         </div>
 
         <div className="flex flex-col items-center">
@@ -103,7 +105,7 @@ export const TopicSpaceCard = ({ topicSpace, menu }: TopicSpaceCardProps) => {
             <FileTextIcon height={20} width={20} color="white" />
             <div className="">{topicSpace.sourceDocuments?.length ?? 0}</div>
           </div>
-          <div className="text-xs">ドキュメント</div>
+          <div className="text-xs">{t("documents")}</div>
         </div>
       </div>
     </div>

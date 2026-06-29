@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
+import type { Locale } from "i18n/routing";
 import { api } from "@/trpc/react";
 import { Button } from "../button/button";
 import { Textarea } from "../textarea";
@@ -15,6 +17,8 @@ interface CommentSectionProps {
 export const CommentSection: React.FC<CommentSectionProps> = ({
   proposalId,
 }) => {
+  const t = useTranslations("proposal");
+  const locale = useLocale() as Locale;
   const [newComment, setNewComment] = useState("");
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyContent, setReplyContent] = useState("");
@@ -130,29 +134,27 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
   };
 
   if (isLoading) {
-    return <div className="text-gray-400">コメントを読み込み中...</div>;
+    return <div className="text-gray-400">{t("comment.loading")}</div>;
   }
 
   return (
     <div className="space-y-6">
-      {/* コメント入力フォーム */}
       <form onSubmit={handleSubmitComment} className="space-y-3">
         <Textarea
           value={newComment}
           onChange={(e) => setNewComment(e.target.value)}
-          placeholder="コメントを入力してください..."
+          placeholder={t("comment.placeholder")}
           rows={3}
           className="block w-full rounded-lg border border-gray-700 bg-slate-700 px-3 py-2 text-sm/6 text-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
         />
 
         <div className="flex justify-end">
           <Button type="submit" disabled={!newComment.trim()}>
-            コメントを追加
+            {t("comment.add")}
           </Button>
         </div>
       </form>
 
-      {/* コメント一覧 */}
       {comments && comments.length > 0 ? (
         <div className="space-y-4">
           {comments.map((comment) => (
@@ -169,10 +171,10 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
                     />
                   )}
                   <span className="text-sm font-medium text-gray-300">
-                    {comment.author.name ?? "不明"}
+                    {comment.author.name ?? t("unknown")}
                   </span>
                   <span className="text-xs text-gray-500">
-                    {formatRelativeTime(new Date(comment.createdAt))}
+                    {formatRelativeTime(new Date(comment.createdAt), locale)}
                   </span>
                 </div>
 
@@ -187,19 +189,18 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
                     className="flex flex-row items-center justify-center gap-1 hover:bg-slate-600"
                   >
                     <ReplyIcon height={16} width={16} color="white" />
-                    返信
+                    {t("comment.reply")}
                   </Button>
                 </div>
               </div>
 
-              {/* 返信フォーム */}
               {replyingTo === comment.id && (
                 <div className="ml-4 mt-3">
                   <form onSubmit={handleSubmitReply} className="space-y-2">
                     <Textarea
                       value={replyContent}
                       onChange={(e) => setReplyContent(e.target.value)}
-                      placeholder="返信を入力してください..."
+                      placeholder={t("comment.replyPlaceholder")}
                       rows={2}
                       className="block w-full rounded-lg border border-gray-700 bg-slate-700 px-3 py-2 text-sm/6 text-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
                     />
@@ -209,7 +210,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
                         size="small"
                         disabled={!replyContent.trim()}
                       >
-                        返信
+                        {t("comment.reply")}
                       </Button>
                       <Button
                         type="button"
@@ -220,14 +221,13 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
                         }}
                         className="bg-slate-600 hover:bg-slate-700"
                       >
-                        キャンセル
+                        {t("comment.cancel")}
                       </Button>
                     </div>
                   </form>
                 </div>
               )}
 
-              {/* 子コメント */}
               {comment.childComments && comment.childComments.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {comment.childComments.map((reply) => (
@@ -247,10 +247,10 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
                             />
                           )}
                           <span className="text-sm font-medium text-gray-300">
-                            {reply.author.name ?? "不明"}
+                            {reply.author.name ?? t("unknown")}
                           </span>
                           <span className="text-xs text-gray-500">
-                            {formatRelativeTime(new Date(reply.createdAt))}
+                            {formatRelativeTime(new Date(reply.createdAt), locale)}
                           </span>
                         </div>
 
@@ -267,7 +267,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
         </div>
       ) : (
         <div className="py-8 text-center text-gray-400">
-          コメントがありません
+          {t("comment.empty")}
         </div>
       )}
     </div>

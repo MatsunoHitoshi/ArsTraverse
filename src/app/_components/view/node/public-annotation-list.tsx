@@ -12,7 +12,8 @@ import {
 import { HighlightedText } from "@/app/_components/common/highlighted-text";
 import { api } from "@/trpc/react";
 import { ChevronDownIcon } from "@heroicons/react/24/outline";
-import Link from "next/link";
+import { Link } from "i18n/navigation";
+import { useTranslations } from "next-intl";
 import { Button } from "../../button/button";
 
 interface PublicAnnotationListProps {
@@ -30,6 +31,7 @@ export const PublicAnnotationList: React.FC<PublicAnnotationListProps> = ({
   setFocusedNode,
   showOnlyTopLevel = true,
 }) => {
+  const t = useTranslations("view");
   const [expandedReplies, setExpandedReplies] = useState<Set<string>>(
     new Set(),
   );
@@ -63,7 +65,7 @@ export const PublicAnnotationList: React.FC<PublicAnnotationListProps> = ({
   if (displayAnnotations.length === 0) {
     return (
       <div className="flex flex-col items-center gap-2 py-4 text-center">
-        <p className="mb-2 text-sm text-gray-400">まだ注釈がありません</p>
+        <p className="mb-2 text-sm text-gray-400">{t("noAnnotationsYet")}</p>
       </div>
     );
   }
@@ -170,7 +172,11 @@ export const PublicAnnotationList: React.FC<PublicAnnotationListProps> = ({
                         );
                       })()}
                     </div>
-                    <span>{annotation.childAnnotations.length}件の返信</span>
+                    <span>
+                      {t("replyCount", {
+                        count: annotation.childAnnotations.length,
+                      })}
+                    </span>
                   </div>
                   <span
                     className={`transform transition-transform ${expandedReplies.has(annotation.id) ? "rotate-180" : ""}`}
@@ -226,9 +232,9 @@ export const PublicAnnotationList: React.FC<PublicAnnotationListProps> = ({
                             size="small"
                             className="flex-row items-center justify-center bg-gray-700 px-2 text-xs hover:bg-gray-600"
                           >
-                            すべての返信を見る ( +{" "}
-                            {annotation.childAnnotations.length - 3}
-                            件)
+                            {t("viewAllReplies", {
+                              more: annotation.childAnnotations.length - 3,
+                            })}
                           </Button>
                         </Link>
                       </div>

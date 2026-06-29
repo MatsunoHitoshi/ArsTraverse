@@ -7,6 +7,7 @@ import { UrlCopy } from "../url-copy/url-copy";
 import { ClipboardIcon } from "../icons";
 import { signIn, useSession } from "next-auth/react";
 import Markdown from "react-markdown";
+import { useTranslations } from "next-intl";
 import { TextToSpeech } from "./text-to-speech";
 
 type GraphSummaryGeneratorProps = {
@@ -20,6 +21,7 @@ export const GraphSummaryGenerator = ({
   defaultStartNodeId,
   defaultEndNodeId,
 }: GraphSummaryGeneratorProps) => {
+  const t = useTranslations("summaryGenerator");
   const [generationStarted, setGenerationStarted] = useState<boolean>(false);
   const [summary, setSummary] = useState<string>();
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -100,10 +102,10 @@ export const GraphSummaryGenerator = ({
       return (
         <div className="flex flex-row gap-2">
           <Button className="!w-full" onClick={() => submitForSummary()}>
-            <div className="text-sm">解説</div>
+            <div className="text-sm">{t("summary")}</div>
           </Button>
           <Button className="!w-full" onClick={() => submitForOutline()}>
-            <div className="text-sm">アウトライン</div>
+            <div className="text-sm">{t("outline")}</div>
           </Button>
         </div>
       );
@@ -113,7 +115,7 @@ export const GraphSummaryGenerator = ({
           className="!w-full"
           onClick={() => signIn("google", { callbackUrl: location.pathname })}
         >
-          <div className="text-sm">ログイン/サインインして解説を作成</div>
+          <div className="text-sm">{t("signInToGenerate")}</div>
         </Button>
       );
     }
@@ -122,7 +124,7 @@ export const GraphSummaryGenerator = ({
       <div className="flex w-full flex-col gap-2">
         <div className="flex flex-row items-center gap-2">
           <div className="font-semibold">
-            {contentType === "summary" ? "解説" : "アウトライン"}
+            {contentType === "summary" ? t("summary") : t("outline")}
           </div>
           {isProcessing ? (
             <Loading size={16} color="white" />

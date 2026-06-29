@@ -2,9 +2,10 @@
 import type { DocumentResponse } from "@/app/const/types";
 import { Button } from "../button/button";
 import { GraphIcon } from "../icons";
-import { useRouter } from "next/navigation";
+import { useRouter } from "i18n/navigation";
 import { interpolateRainbow } from "d3";
 import clsx from "clsx";
+import { useTranslations } from "next-intl";
 
 type TopicGraphDocumentListProps = {
   documents: DocumentResponse[];
@@ -22,12 +23,13 @@ export const TopicGraphDocumentList = ({
   setSelectedDocumentId,
   isClustered = false,
 }: TopicGraphDocumentListProps) => {
+  const t = useTranslations("list");
   const router = useRouter();
   return (
     <div className="flex flex-col divide-y divide-slate-600 rounded-md border border-slate-400">
       {documents.length === 0 ? (
         <div className="flex flex-row items-center justify-between p-3">
-          <div>ドキュメントがありません</div>
+          <div>{t("noDocuments")}</div>
         </div>
       ) : (
         documents.slice(start, end).map((document, index) => {

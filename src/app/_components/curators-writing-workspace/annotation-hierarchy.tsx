@@ -1,13 +1,14 @@
+"use client";
+
 import React, { useState } from "react";
+import { useTranslations } from "next-intl";
 import Image from "next/image";
-import Link from "next/link";
+import { Link } from "i18n/navigation";
 import { useSession } from "next-auth/react";
 import { RelativeTimeWithTooltip } from "./relative-time-with-tooltip";
 import { convertJsonToText } from "@/app/_utils/tiptap/convert";
-import {
-  getAnnotationTypeColor,
-  getAnnotationTypeLabel,
-} from "@/app/_utils/annotation/type-utils";
+import { getAnnotationTypeColor } from "@/app/_utils/annotation/type-utils";
+import { useAnnotationTypeLabel } from "@/app/_utils/annotation/use-annotation-type-label";
 import { AnnotationEditForm } from "./annotation-edit-form";
 import type { AnnotationResponse } from "@/app/const/types";
 import { Button } from "../button/button";
@@ -36,6 +37,9 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
   topicSpaceId,
   setShowAnnotationForm,
 }) => {
+  const t = useTranslations("annotation");
+  const tCommon = useTranslations("common");
+  const getTypeLabel = useAnnotationTypeLabel();
   const { data: session } = useSession();
   const [showEditForm, setShowEditForm] = useState(false);
   const [editingAnnotation, setEditingAnnotation] =
@@ -114,7 +118,7 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
                     className="flex h-6 flex-row items-center justify-center rounded px-2 text-xs hover:bg-slate-600"
                     onClick={() => handleEditClick(annotation)}
                   >
-                    編集
+                    {tCommon("edit")}
                   </Button>
 
                   <Button
@@ -122,7 +126,7 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
                     onClick={() => handleDelete(annotation.id)}
                     className="flex h-6 flex-row items-center justify-center bg-red-700 px-2 text-xs hover:bg-red-600"
                   >
-                    削除
+                    {tCommon("delete")}
                   </Button>
                 </>
               )}
@@ -136,7 +140,7 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
                 annotation.type,
               )}`}
             >
-              {getAnnotationTypeLabel(annotation.type)}
+              {getTypeLabel(annotation.type)}
             </span>
           </div>
 
@@ -154,9 +158,9 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
 
           {/* レベル表示 */}
           <div className="mt-3 text-xs text-gray-400">
-            {level === "parent" && "↑ 親注釈"}
-            {level === "current" && "→ 現在の注釈"}
-            {level === "child" && "↓ 子注釈"}
+            {level === "parent" && t("levelParent")}
+            {level === "current" && t("levelCurrent")}
+            {level === "child" && t("levelChild")}
           </div>
         </div>
       );
@@ -195,7 +199,7 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
                 window.location.href = `/annotations/${annotation.id}`;
               }}
             >
-              詳細
+              {tCommon("detail")}
             </button>
           </div>
         </div>
@@ -207,7 +211,7 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
               annotation.type,
             )}`}
           >
-            {getAnnotationTypeLabel(annotation.type)}
+            {getTypeLabel(annotation.type)}
           </span>
         </div>
 
@@ -225,9 +229,9 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
 
         {/* レベル表示 */}
         <div className="mt-3 text-xs text-gray-400">
-          {level === "parent" && "↑ 親注釈"}
-          {level === "current" && "→ 現在の注釈"}
-          {level === "child" && "↓ 子注釈"}
+          {level === "parent" && t("levelParent")}
+          {level === "current" && t("levelCurrent")}
+          {level === "child" && t("levelChild")}
         </div>
       </Link>
     );
@@ -238,7 +242,9 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
       {/* 親注釈 */}
       {parentAnnotation && (
         <div>
-          <h4 className="mb-2 text-sm font-medium text-gray-300">親注釈</h4>
+          <h4 className="mb-2 text-sm font-medium text-gray-300">
+            {t("parentAnnotation")}
+          </h4>
           {renderAnnotationCard(parentAnnotation, false, "parent")}
         </div>
       )}
@@ -246,7 +252,7 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
       {/* 現在の注釈 */}
       <div>
         <h4 className="-mt-4 flex h-12 flex-row items-end text-sm font-medium text-gray-300">
-          <div className="pb-2">現在の注釈</div>
+          <div className="pb-2">{t("currentAnnotation")}</div>
           {parentAnnotation && (
             <div className="ml-12 h-12 border-l-4 border-gray-500"></div>
           )}
@@ -259,7 +265,7 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
         <div className="ml-2 border-l-2 border-gray-600 pl-4">
           <div className="mb-2 flex flex-row items-center justify-between">
             <h4 className="mb-2 text-sm font-medium text-gray-300">
-              子注釈 ({childAnnotations.length}件)
+              {t("childAnnotations", { count: childAnnotations.length })}
             </h4>
             <Button
               size="small"
@@ -267,7 +273,7 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
               className="flex flex-row items-center justify-center gap-1 hover:bg-slate-600"
             >
               <ReplyIcon width={16} height={16} color="white" />
-              返信
+              {tCommon("reply")}
             </Button>
           </div>
 
@@ -284,7 +290,7 @@ export const AnnotationHierarchy: React.FC<AnnotationHierarchyProps> = ({
         <div className="ml-2 border-l-2 border-gray-600 pl-4">
           <div className="rounded-lg border border-gray-600 bg-slate-800 p-4">
             <p className="text-center text-sm text-gray-400">
-              まだ子注釈がありません
+              {t("noChildAnnotations")}
             </p>
           </div>
         </div>

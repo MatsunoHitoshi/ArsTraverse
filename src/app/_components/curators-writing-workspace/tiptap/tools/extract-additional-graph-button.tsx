@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslations } from "next-intl";
 import type { Editor } from "@tiptap/react";
 import { Button } from "@/app/_components/button/button";
 import { PlusIcon } from "@/app/_components/icons";
@@ -18,6 +19,7 @@ interface ExtractAdditionalGraphButtonProps {
 export const ExtractAdditionalGraphButton: React.FC<
   ExtractAdditionalGraphButtonProps
 > = ({ editor, onGraphUpdate, setIsGraphEditor, entities }) => {
+  const t = useTranslations("annotation");
   const [
     isAdditionalGraphExtractionModalOpen,
     setIsAdditionalGraphExtractionModalOpen,
@@ -38,7 +40,7 @@ export const ExtractAdditionalGraphButton: React.FC<
         className={`flex h-8 items-center justify-center gap-1 p-0 text-xs`}
       >
         <PlusIcon height={16} width={16} color="white" />
-        グラフ抽出
+        {t("graphExtraction")}
       </Button>
 
       <AdditionalGraphExtractionModal

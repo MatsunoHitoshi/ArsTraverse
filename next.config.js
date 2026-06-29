@@ -4,12 +4,21 @@
  */
 await import("./src/env.js");
 
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import createNextIntlPlugin from "next-intl/plugin";
 
-const withNextIntl = createNextIntlPlugin();
+const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import("next").NextConfig} */
 const config = {
+  outputFileTracingRoot: path.join(__dirname),
+  turbopack: {
+    root: path.join(__dirname),
+  },
   images: {
     domains: ["matsuno.caric.jp"],
     remotePatterns: [

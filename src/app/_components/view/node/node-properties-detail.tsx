@@ -1,8 +1,10 @@
+"use client";
 import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { Button } from "../../button/button";
 import { ChevronRightIcon, Pencil2Icon } from "../../icons";
 import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter } from "i18n/navigation";
+import { useTranslations } from "next-intl";
 import { api } from "@/trpc/react";
 import { useEffect, useState } from "react";
 import { Loading } from "../../loading/loading";
@@ -26,6 +28,8 @@ export const NodePropertiesDetail = ({
   refetch?: () => void;
   enableEdit?: boolean;
 }) => {
+  const tCommon = useTranslations("common");
+  const tGraph = useTranslations("graph");
   const router = useRouter();
   const pathname = usePathname();
   const extractKG = api.kg.extractKG.useMutation();
@@ -126,13 +130,13 @@ export const NodePropertiesDetail = ({
                   className="w-max cursor-pointer rounded-md bg-slate-500 p-2 text-sm text-white"
                   href={`/topic-spaces/${contextId}/tree/${node.id}`}
                 >
-                  ツリー表示
+                  {tGraph("treeView")}
                 </a>
               )}
             </div>
 
             <div className="flex flex-row items-center gap-3">
-              <div className="text-xs">プロパティ</div>
+              <div className="text-xs">{tGraph("properties")}</div>
 
               {enableEdit && (
                 <>
@@ -141,7 +145,7 @@ export const NodePropertiesDetail = ({
                     onClick={() => setOnEdit(!onEdit)}
                   >
                     {onEdit ? (
-                      "キャンセル"
+                      tCommon("cancel")
                     ) : (
                       <Pencil2Icon width={18} height={18} color="white" />
                     )}
@@ -157,8 +161,8 @@ export const NodePropertiesDetail = ({
                       ) : (
                         <>
                           {newGraphDocument
-                            ? "グラフの再生成"
-                            : "知識グラフを拡張"}
+                            ? tGraph("regenerateFromDescription")
+                            : tGraph("extendKnowledgeGraph")}
                         </>
                       )}
                     </Button>

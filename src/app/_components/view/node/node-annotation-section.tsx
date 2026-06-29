@@ -1,3 +1,4 @@
+"use client";
 import React, { Fragment, useState } from "react";
 import { api } from "@/trpc/react";
 import { Button } from "../../button/button";
@@ -9,6 +10,7 @@ import type {
   GraphDocumentForFrontend,
 } from "@/app/const/types";
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
+import { useTranslations } from "next-intl";
 
 interface NodeAnnotationSectionProps {
   node: CustomNodeType;
@@ -27,6 +29,8 @@ export const NodeAnnotationSection: React.FC<NodeAnnotationSectionProps> = ({
   setIsGraphEditor,
   onGraphUpdate,
 }) => {
+  const t = useTranslations("view");
+  const tAnnotation = useTranslations("annotation");
   const [showAnnotationForm, setShowAnnotationForm] = useState(false);
   const [defaultAnnotationContent, setDefaultAnnotationContent] = useState("");
 
@@ -49,7 +53,7 @@ export const NodeAnnotationSection: React.FC<NodeAnnotationSectionProps> = ({
   const handleGenerateAnnotationFromDocument = () => {
     // まずモーダルを開く
     setShowAnnotationForm(true);
-    setDefaultAnnotationContent("解説文を生成中...");
+    setDefaultAnnotationContent(t("generatingDescription"));
     setIsGenerating(true);
 
     // ストリーミングで解説文を生成
@@ -83,7 +87,7 @@ export const NodeAnnotationSection: React.FC<NodeAnnotationSectionProps> = ({
         },
         onError: (error) => {
           console.error("生成エラー:", error);
-          setDefaultAnnotationContent("生成に失敗しました");
+          setDefaultAnnotationContent(t("generationFailed"));
           setIsGenerating(false);
         },
       },
@@ -102,7 +106,7 @@ export const NodeAnnotationSection: React.FC<NodeAnnotationSectionProps> = ({
                     selected ? "border-b-2 border-white outline-none" : ""
                   } ${hover ? "bg-white/10" : ""}`}
                 >
-                  注釈
+                  {tAnnotation("title")}
                 </div>
               )}
             </Tab>
@@ -113,7 +117,7 @@ export const NodeAnnotationSection: React.FC<NodeAnnotationSectionProps> = ({
                     selected ? "border-b-2 border-white outline-none" : ""
                   } ${hover ? "bg-white/10" : ""}`}
                 >
-                  引用
+                  {t("citation")}
                 </div>
               )}
             </Tab>
@@ -125,7 +129,7 @@ export const NodeAnnotationSection: React.FC<NodeAnnotationSectionProps> = ({
             className="text-xs"
             disabled={isGenerating}
           >
-            {isGenerating ? "生成中..." : "注釈を追加"}
+            {isGenerating ? t("generating") : t("addAnnotation")}
           </Button>
         </div>
 

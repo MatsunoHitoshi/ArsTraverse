@@ -13,25 +13,23 @@ import { ZodError } from "zod";
 
 import { getServerAuthSession } from "@/server/auth";
 import { db } from "@/server/db";
+import { resolveLocaleFromHeaders } from "@/server/lib/locale";
+import { getTrpcMessage } from "@/server/lib/i18n/messages";
+import type { Locale } from "i18n/routing";
 
-/**
- * 1. CONTEXT
- *
- * This section defines the "contexts" that are available in the backend API.
- *
- * These allow you to access things when processing a request, like the database, the session, etc.
- *
- * This helper generates the "internals" for a tRPC context. The API handler and RSC clients each
- * wrap this and provides the required context.
- *
- * @see https://trpc.io/docs/server/context
- */
 export const createTRPCContext = async (opts: { headers: Headers }) => {
   const session = await getServerAuthSession();
+  const headerLocale = resolveLocaleFromHeaders(opts.headers);
+  const sessionLocale = session?.user?.uiLocale;
+  const locale: Locale =
+    sessionLocale === "ja" || sessionLocale === "en"
+      ? sessionLocale
+      : headerLocale;
 
   return {
     db,
     session,
+    locale,
     ...opts,
   };
 };
@@ -97,7 +95,10 @@ export const publicProcedure = t.procedure;
  */
 export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
   if (!ctx.session || !ctx.session.user) {
-    throw new TRPCError({ code: "UNAUTHORIZED" });
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: getTrpcMessage(ctx.locale, "unauthorized"),
+    });
   }
   return next({
     ctx: {

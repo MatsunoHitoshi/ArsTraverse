@@ -1,6 +1,12 @@
 import type { PrismaClient } from "@prisma/client";
 import { convertJsonToText } from "@/app/_utils/tiptap/convert";
 import OpenAI from "openai";
+import type { Locale } from "i18n/routing";
+import {
+  getAnnotationLabel,
+  getClusterTitlePrompt,
+  getDefaultClusterTitle,
+} from "@/server/lib/i18n/prompts/cluster-title-generator";
 
 export interface ClusterTitleGenerationParams {
   maxTokens?: number;
@@ -36,6 +42,7 @@ export class ClusterTitleGenerator {
       annotationIds: string[];
     }>,
     params: ClusterTitleGenerationParams = {},
+    locale: Locale = "ja",
   ): Promise<ClusterTitleResult[]> {
     const {
       maxTokens = 50,
@@ -76,7 +83,7 @@ export class ClusterTitleGenerator {
           if (annotations.length === 0) {
             return {
               clusterId: cluster.clusterId,
-              title: `クラスター ${cluster.clusterId}`,
+              title: getDefaultClusterTitle(locale, cluster.clusterId),
               confidence: 0,
             };
           }
@@ -91,7 +98,7 @@ export class ClusterTitleGenerator {
           if (annotationTexts.length === 0) {
             return {
               clusterId: cluster.clusterId,
-              title: `クラスター ${cluster.clusterId}`,
+              title: getDefaultClusterTitle(locale, cluster.clusterId),
               confidence: 0,
             };
           }
@@ -102,6 +109,7 @@ export class ClusterTitleGenerator {
             maxTokens,
             temperature,
             model,
+            locale,
           );
 
           return {
@@ -116,7 +124,7 @@ export class ClusterTitleGenerator {
           );
           return {
             clusterId: cluster.clusterId,
-            title: `クラスター ${cluster.clusterId}`,
+            title: getDefaultClusterTitle(locale, cluster.clusterId),
             confidence: 0,
           };
         }
@@ -144,6 +152,7 @@ export class ClusterTitleGenerator {
     maxTokens: number,
     temperature: number,
     model: string,
+    locale: Locale,
     maxRetries = 3,
   ): Promise<string> {
     // より柔軟なテキスト選択アルゴリズム
@@ -155,14 +164,13 @@ export class ClusterTitleGenerator {
 
     // 各注釈を明確に区切って表示
     const formattedTexts = selectedTexts
-      .map((text, index) => `【注釈${index + 1}】\n${text}`)
+      .map(
+        (text, index) =>
+          `【${getAnnotationLabel(locale, index)}】\n${text}`,
+      )
       .join("\n\n");
 
-    const prompt = `以下の複数の注釈の内容を総合的に分析して、これらの注釈を代表する短いタイトル（10文字以内）を生成してください。日本語で回答してください。
-
-${formattedTexts}
-
-上記の注釈群を代表するタイトル:`;
+    const prompt = getClusterTitlePrompt(locale, formattedTexts);
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {

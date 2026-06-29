@@ -6,6 +6,7 @@ import {
   Transition,
 } from "@headlessui/react";
 import { ChevronUpDownIcon, CheckIcon } from "@heroicons/react/24/outline";
+import { useTranslations } from "next-intl";
 import React from "react";
 import clsx from "clsx";
 
@@ -25,12 +26,14 @@ export const ListboxInput = ({
   options,
   selected,
   setSelected,
-  placeholder = "選択してください",
+  placeholder,
   className = "",
   buttonClassName = "",
   optionsClassName = "",
   disabled = false,
 }: ListboxInputProps) => {
+  const t = useTranslations("common");
+  const resolvedPlaceholder = placeholder ?? t("selectPlaceholder");
   const selectedOption = options.find((option) => option.value === selected);
 
   return (
@@ -44,7 +47,7 @@ export const ListboxInput = ({
           )}
         >
           <span className="block truncate">
-            {selectedOption?.label ?? placeholder}
+            {selectedOption?.label ?? resolvedPlaceholder}
           </span>
           <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
             <ChevronUpDownIcon

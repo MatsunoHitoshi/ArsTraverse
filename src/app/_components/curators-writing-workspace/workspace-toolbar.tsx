@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Button } from "@/app/_components/button/button";
 import { LinkButton } from "@/app/_components/button/link-button";
 import {
@@ -49,6 +50,7 @@ export const WorkspaceToolbar = ({
   graphDocument,
   isMetaGraphGenerating,
 }: WorkspaceToolbarProps) => {
+  const t = useTranslations("workspace");
   return (
     <div className="mb-2 flex w-full flex-row items-center justify-between gap-2">
       <div className="flex items-center gap-2">
@@ -89,7 +91,7 @@ export const WorkspaceToolbar = ({
           }`}
         >
           <StackIcon height={14} width={14} color={isStorytellingMode ? "#9333ea" : "white"} />
-          {isMetaGraphMode ? "ビュー切替":"ストーリーテリングモード"}
+          {isMetaGraphMode ? t("viewSwitch") : t("storytellingMode")}
         </Button>
         {graphDocument && isMetaGraphMode && (
           <Button
@@ -107,7 +109,7 @@ export const WorkspaceToolbar = ({
                 color="red"
               />
             )}
-            {isMetaGraphGenerating ? "生成中..." : "モード終了"}
+            {isMetaGraphGenerating ? t("generating") : t("endMode")}
           </Button>
         )}
         <Button

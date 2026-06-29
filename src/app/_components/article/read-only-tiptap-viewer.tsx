@@ -14,6 +14,7 @@ import { TiptapStyles } from "../curators-writing-workspace/tiptap/styles/tiptap
 import { TeiCustomTagHighlightExtensions } from "../curators-writing-workspace/tiptap/tei/tei-custom-tag-highlight-extension";
 import { useHighlightToggle } from "../curators-writing-workspace/tiptap/hooks/use-highlight-toggle";
 import { TeiStyles } from "../curators-writing-workspace/tiptap/tei/tei-styles";
+import { useTranslations } from "next-intl";
 
 interface ReadOnlyTipTapViewerProps {
   content: JSONContent;
@@ -28,6 +29,7 @@ export const ReadOnlyTipTapViewer: React.FC<ReadOnlyTipTapViewerProps> = ({
   onEntityClick,
   isHighlightVisible = true,
 }) => {
+  const t = useTranslations("article");
   const editorRef = useRef<HTMLDivElement>(null);
 
   // ハイライト処理用のカスタムフック
@@ -89,7 +91,7 @@ export const ReadOnlyTipTapViewer: React.FC<ReadOnlyTipTapViewerProps> = ({
   };
 
   if (!editor) {
-    return <div className="text-gray-400">読み込み中...</div>;
+    return <div className="text-gray-400">{t("loading")}</div>;
   }
 
   return (

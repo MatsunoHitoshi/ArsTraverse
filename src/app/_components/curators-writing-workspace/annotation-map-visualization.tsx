@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import * as d3 from "d3";
 import { AnnotationMapD3Visualization } from "../d3/annotation-map/annotation-map-d3-visualization";
 import { convertJsonToText } from "@/app/_utils/tiptap/convert";
 import { api } from "@/trpc/react";
 import type { ClusteringResult } from "@/app/const/types";
-import Link from "next/link";
+import { Link } from "i18n/navigation";
 
 interface AnnotationMapVisualizationProps {
   clusteringResult: ClusteringResult;
@@ -28,6 +29,7 @@ export function AnnotationMapVisualization({
   height,
   hierarchy,
 }: AnnotationMapVisualizationProps) {
+  const t = useTranslations("annotation");
   // ズーム機能のための状態
   const [currentScale, setCurrentScale] = useState(1);
   const [currentTransformX, setCurrentTransformX] = useState(0);
@@ -120,10 +122,12 @@ export function AnnotationMapVisualization({
         <div className="flex-shrink-0 p-3 pb-0">
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <h4 className="text-sm font-semibold text-white">グループ一覧</h4>
+              <h4 className="text-sm font-semibold text-white">{t("groupList")}</h4>
               <div className="text-xs text-gray-400">
                 {clusteringResult.algorithm} |{" "}
-                {clusteringResult.clusters?.length ?? 0}グループ
+                {t("groupCount", {
+                  count: clusteringResult.clusters?.length ?? 0,
+                })}
               </div>
             </div>
             {/* {clusteringResult.qualityMetrics?.silhouetteScore && (
@@ -165,10 +169,13 @@ export function AnnotationMapVisualization({
                         }}
                       />
                       <span className="font-medium text-white">
-                        {cluster.title ?? `グループ ${cluster.clusterId}`}
+                        {cluster.title ??
+                          t("groupFallback", { id: cluster.clusterId })}
                       </span>
                     </div>
-                    <div className="text-gray-400">{cluster.size}件</div>
+                    <div className="text-gray-400">
+                      {t("itemCount", { count: cluster.size })}
+                    </div>
                   </div>
 
                   {/* クラスターに属する注釈の詳細 */}

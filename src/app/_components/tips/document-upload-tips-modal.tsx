@@ -1,4 +1,5 @@
 import { Modal } from "../modal/modal";
+import { useTranslations } from "next-intl";
 
 export const DocumentUploadTipsModal = ({
   isOpen,
@@ -7,51 +8,33 @@ export const DocumentUploadTipsModal = ({
   isOpen: boolean;
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }) => {
+  const t = useTranslations("tips");
+
   return (
-    <Modal
-      isOpen={isOpen}
-      setIsOpen={setIsOpen}
-      title="大きなファイルを読み込ませるときのTips"
-    >
+    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title={t("largeFileTitle")}>
       <div className="flex flex-col gap-4">
-        <div className="text-sm">
-          一度にアップロードできるファイルのサイズには限りがありますが、pdfファイルを分割
-          してアップロードした後に、統合することで大きなファイルを読み込ませることができます。
-        </div>
+        <div className="text-sm">{t("intro")}</div>
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
             <div className="flex flex-row items-center gap-2 text-orange-500">
               <div>Step1</div>
-              <div className="font-bold">
-                ファイルを分割してアップロードする
-              </div>
+              <div className="font-bold">{t("step1Title")}</div>
             </div>
-            <div className="text-sm">
-              例えば文献の中の各章ごとにPDFファイルを分割すると、
-              それぞれの章を独立したファイルとして読み込ませることができます。
-              分割したファイルをアップロードすると、「ドキュメント」が作成され
-              それぞれの内容に対応する知識グラフが自動生成されます。
-            </div>
+            <div className="text-sm">{t("step1Body")}</div>
           </div>
           <div className="flex flex-col gap-1">
             <div className="flex flex-row items-start gap-2 text-orange-500">
               <div>Step2</div>
-              <div className="font-bold">
-                ドキュメントを統合するための「場所」を作成する
-              </div>
+              <div className="font-bold">{t("step2Title")}</div>
             </div>
-            <div className="text-sm">
-              それぞれのドキュメントから生成された知識グラフを統合するために、「リポジトリ」を作成します。
-            </div>
+            <div className="text-sm">{t("step2Body")}</div>
           </div>
           <div className="flex flex-col gap-1">
             <div className="flex flex-row items-start gap-2 text-orange-500">
               <div>Step3</div>
-              <div className="font-bold">リポジトリを統合する</div>
+              <div className="font-bold">{t("step3Title")}</div>
             </div>
-            <div className="text-sm">
-              リポジトリにそれぞれのドキュメントを追加すると、自動で知識グラフが統合されます。
-            </div>
+            <div className="text-sm">{t("step3Body")}</div>
           </div>
         </div>
       </div>

@@ -7,6 +7,7 @@ import { api } from "@/trpc/react";
 import { Button } from "../button/button";
 import clsx from "clsx";
 import { useSession } from "next-auth/react";
+import { useTranslations } from "next-intl";
 
 type DocumentSendModalProps = {
   isOpen: boolean;
@@ -23,6 +24,8 @@ export const DocumentSendModal = ({
   documentName,
   refetch,
 }: DocumentSendModalProps) => {
+  const t = useTranslations("document");
+  const tCommon = useTranslations("common");
   const { data: session } = useSession();
   const [queryInput, setQueryInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -75,24 +78,22 @@ export const DocumentSendModal = ({
     <Modal
       isOpen={isOpen}
       setIsOpen={setIsOpen}
-      title="ユーザに送る"
+      title={t("sendToUser")}
       size="small"
     >
       <form onSubmit={handleSubmit}>
         <div className="flex flex-col gap-4">
           {documentName && (
             <div className="text-sm text-slate-400">
-              送信するドキュメント: {documentName}
+              {t("sendingDocument", { name: documentName })}
             </div>
           )}
           <div className="flex flex-col gap-1">
-            <div className="text-sm font-semibold">
-              送信先（ユーザIDまたはメールアドレス・完全一致）
-            </div>
+            <div className="text-sm font-semibold">{t("recipientLabel")}</div>
             <div className="flex flex-row gap-2">
               <Input
                 type="text"
-                placeholder="ユーザID または メールアドレス"
+                placeholder={t("recipientPlaceholder")}
                 value={queryInput}
                 onChange={(e) => setQueryInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -113,7 +114,7 @@ export const DocumentSendModal = ({
                 disabled={!queryInput.trim() || isSearching}
                 className="text-sm"
               >
-                {isSearching ? "検索中..." : "検索"}
+                {isSearching ? tCommon("loading") : t("search")}
               </Button>
             </div>
           </div>
@@ -123,16 +124,15 @@ export const DocumentSendModal = ({
               {recipient ? (
                 <div className="flex flex-col gap-1">
                   <div>
-                    {recipient.name ?? "(名前なし)"} / {recipient.email ?? recipient.id}
+                    {recipient.name ?? t("noName")} /{" "}
+                    {recipient.email ?? recipient.id}
                   </div>
                   {isSelf && (
-                    <div className="text-error-red">
-                      自分自身には送信できません
-                    </div>
+                    <div className="text-error-red">{t("cannotSendToSelf")}</div>
                   )}
                 </div>
               ) : (
-                <div className="text-slate-400">ユーザが見つかりません</div>
+                <div className="text-slate-400">{t("userNotFound")}</div>
               )}
             </div>
           )}
@@ -144,18 +144,14 @@ export const DocumentSendModal = ({
               onClick={handleClose}
               className="text-sm"
             >
-              キャンセル
+              {tCommon("cancel")}
             </Button>
             <Button
               type="submit"
               className="text-sm"
-              disabled={
-                !recipient ||
-                isSelf ||
-                sendToUser.isPending
-              }
+              disabled={!recipient || isSelf || sendToUser.isPending}
             >
-              {sendToUser.isPending ? "送信中..." : "送信"}
+              {sendToUser.isPending ? t("sending") : t("send")}
             </Button>
           </div>
         </div>

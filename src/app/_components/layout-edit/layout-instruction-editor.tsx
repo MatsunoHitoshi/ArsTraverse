@@ -11,6 +11,7 @@ import { FocusNodesSection } from "./sections/focus-nodes-section";
 import { HighlightNodesSection } from "./sections/highlight-nodes-section";
 import { CenterNodesSection } from "./sections/center-nodes-section";
 import { FilterSection } from "./sections/filter-section";
+import { useTranslations } from "next-intl";
 
 interface LayoutInstructionEditorProps {
   layoutInstruction: LayoutInstruction | null;
@@ -25,6 +26,7 @@ export const LayoutInstructionEditor = ({
   setIsLayoutEditorOpen,
   isLayoutEditorOpen,
 }: LayoutInstructionEditorProps) => {
+  const t = useTranslations("layoutEdit");
   const [localInstruction, setLocalInstruction] = useState<LayoutInstruction>(
     layoutInstruction ?? { forces: {} },
   );
@@ -140,7 +142,7 @@ export const LayoutInstructionEditor = ({
     <div className="border-t border-slate-700 bg-slate-800/50 shadow-lg backdrop-blur-sm">
       <div className="flex items-center justify-between border-b border-slate-700 px-2">
         <h2 className="text-sm font-semibold text-slate-200">
-          レイアウト指示エディタ
+          {t("title")}
         </h2>
         <Button
           size="small"

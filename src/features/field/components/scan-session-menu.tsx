@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { DocumentListMenuButton } from "@/app/_components/list/document-list";
 import { DotHorizontalIcon, Pencil2Icon, TrashIcon } from "@/app/_components/icons";
@@ -14,14 +15,17 @@ type ScanSessionMenuProps = {
 export function ScanSessionMenu({
   onRename,
   onDelete,
-  ariaLabel = "スキャンの操作メニュー",
+  ariaLabel,
   className = "",
 }: ScanSessionMenuProps) {
+  const t = useTranslations("field");
+  const tCommon = useTranslations("common");
+
   return (
     <Popover className={`relative z-10 ${className}`}>
       <PopoverButton
         className="!h-8 !w-8 rounded-md bg-slate-600/90 !p-2 hover:bg-slate-600"
-        aria-label={ariaLabel}
+        aria-label={ariaLabel ?? t("scanMenuAriaLabel")}
       >
         <DotHorizontalIcon height={16} width={16} color="white" />
       </PopoverButton>
@@ -33,13 +37,13 @@ export function ScanSessionMenu({
           icon={<Pencil2Icon width={16} height={16} color="white" />}
           onClick={onRename}
         >
-          <div className="text-white">名前を編集</div>
+          <div className="text-white">{t("rename")}</div>
         </DocumentListMenuButton>
         <DocumentListMenuButton
           icon={<TrashIcon width={16} height={16} color="#ea1c0c" />}
           onClick={onDelete}
         >
-          <div className="text-error-red">削除</div>
+          <div className="text-error-red">{tCommon("delete")}</div>
         </DocumentListMenuButton>
       </PopoverPanel>
     </Popover>

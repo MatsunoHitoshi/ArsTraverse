@@ -1,16 +1,19 @@
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/ja";
+import "dayjs/locale/en";
 
-// プラグインとロケールを設定
+import type { Locale } from "i18n/routing";
+
 dayjs.extend(relativeTime);
-dayjs.locale("ja");
 
-export const formatDate = (datetime: Date | string) => {
-  const date = dayjs(datetime);
-  const now = dayjs();
+export const formatDate = (
+  datetime: Date | string,
+  locale: Locale = "ja",
+) => {
+  const date = dayjs(datetime).locale(locale);
+  const now = dayjs().locale(locale);
 
-  // 現在の年と同じ場合は年を省略
   if (date.year() === now.year()) {
     return date.format("MM/DD HH:mm");
   }
@@ -18,16 +21,17 @@ export const formatDate = (datetime: Date | string) => {
   return date.format("YYYY/MM/DD HH:mm");
 };
 
-export const formatRelativeTime = (datetime: Date | string) => {
-  const date = dayjs(datetime);
-  const now = dayjs();
+export const formatRelativeTime = (
+  datetime: Date | string,
+  locale: Locale = "ja",
+) => {
+  const date = dayjs(datetime).locale(locale);
+  const now = dayjs().locale(locale);
 
-  // 48時間（2日）前より古い場合は絶対時間で表示
   const diffInHours = now.diff(date, "hour");
   if (diffInHours >= 48) {
-    return formatDate(datetime);
+    return formatDate(datetime, locale);
   }
 
-  // 相対時間で表示
   return date.fromNow();
 };

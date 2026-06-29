@@ -1,8 +1,11 @@
+"use client";
+
 import React, { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Modal } from "../modal/modal";
 import { Button } from "../button/button";
 import { CopyIcon, Link2Icon, CheckIcon } from "../icons";
-import Link from "next/link";
+import { Link } from "i18n/navigation";
 
 interface ShareTopicSpaceModalProps {
   isOpen: boolean;
@@ -15,12 +18,13 @@ export const ShareTopicSpaceModal: React.FC<ShareTopicSpaceModalProps> = ({
   isOpen,
   setIsOpen,
   topicSpaceId,
-  topicSpaceName,
+  topicSpaceName: _topicSpaceName,
 }) => {
+  const t = useTranslations("workspace");
+  const tCommon = useTranslations("common");
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
 
-  // 共有URLを生成
   const shareUrl = `${window.location.origin}/topic-spaces/${topicSpaceId}/graph`;
 
   const handleCopyUrl = async () => {
@@ -44,19 +48,18 @@ export const ShareTopicSpaceModal: React.FC<ShareTopicSpaceModalProps> = ({
   };
 
   return (
-    <Modal title="参照しているリポジトリ" isOpen={isOpen} setIsOpen={setIsOpen}>
+    <Modal title={t("referencedRepository")} isOpen={isOpen} setIsOpen={setIsOpen}>
       <div className="w-full max-w-md">
-        {/* コンテンツ */}
         <div className="space-y-4">
           <div>
             <div className="mb-2 flex flex-row items-center gap-2">
-              <h3 className="text-sm font-medium text-gray-600">共有URL</h3>
+              <h3 className="text-sm font-medium text-gray-600">{t("shareUrl")}</h3>
               <Link
                 href={shareUrl}
                 target="_blank"
                 className="text-sm text-blue-500"
               >
-                リポジトリに移動
+                {t("goToRepository")}
               </Link>
             </div>
 
@@ -101,17 +104,15 @@ export const ShareTopicSpaceModal: React.FC<ShareTopicSpaceModalProps> = ({
 
           <div className="rounded-lg p-3">
             <p className="text-xs text-orange-500">
-              <strong>共有について:</strong>
+              <strong>{t("shareNoteTitle")}</strong>
               <br />
-              このURLを共有すると、他のユーザーがこのリポジトリを閲覧できます。
-              編集権限は管理者のみに制限されています。
+              {t("shareNoteBody")}
             </p>
           </div>
         </div>
 
-        {/* フッター */}
         <div className="mt-6 flex justify-end">
-          <Button onClick={() => setIsOpen(false)}>閉じる</Button>
+          <Button onClick={() => setIsOpen(false)}>{tCommon("close")}</Button>
         </div>
       </div>
     </Modal>

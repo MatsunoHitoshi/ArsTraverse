@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useRouter } from "i18n/navigation";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { signIn, useSession } from "next-auth/react";
 import dayjs from "dayjs";
 import { api } from "@/trpc/react";
@@ -19,6 +19,8 @@ type SessionTarget = {
 };
 
 export function FieldSessionList() {
+  const t = useTranslations("field");
+  const tCommon = useTranslations("common");
   const router = useRouter();
   const { data: session, status } = useSession();
   const [renameTarget, setRenameTarget] = useState<SessionTarget | null>(null);
@@ -40,14 +42,14 @@ export function FieldSessionList() {
       void refetch();
     },
     onError: (mutationError) => {
-      setDeleteError(mutationError.message ?? "削除に失敗しました");
+      setDeleteError(mutationError.message ?? t("deleteFailed"));
     },
   });
 
   if (status === "loading") {
     return (
       <div className="mx-auto flex w-full max-w-lg flex-col px-4 py-8">
-        <p className="text-center text-sm text-slate-400">読み込み中...</p>
+        <p className="text-center text-sm text-slate-400">{tCommon("loading")}</p>
       </div>
     );
   }
@@ -58,17 +60,15 @@ export function FieldSessionList() {
         <div className="mx-auto flex w-full max-w-lg flex-col gap-6 px-4 py-8">
           <div className="">
             <h1 className="mb-2 text-2xl font-bold text-slate-50">
-              フィールドリサーチ
+              {t("title")}
             </h1>
-            <p className="text-sm text-slate-300">
-              現地で撮影した資料から知識グラフを作成し、公開アーカイブと照合できます。
-            </p>
+            <p className="text-sm text-slate-300">{t("descriptionLoggedOut")}</p>
           </div>
           <Button
             onClick={() => signIn("google", { callbackUrl: "/field" })}
             className="w-full bg-orange-400 text-white hover:bg-orange-500"
           >
-            Google でログイン
+            {t("signInWithGoogle")}
           </Button>
         </div>
       </FadeIn>
@@ -79,12 +79,8 @@ export function FieldSessionList() {
     <FadeIn>
       <div className="mx-auto flex w-full max-w-lg flex-col gap-6 px-4 py-6 pb-24">
         <div>
-          <h1 className="mb-1 text-2xl font-bold text-slate-50">
-            フィールドリサーチ
-          </h1>
-          <p className="text-sm text-slate-300">
-            資料のテキストや、解説パネルのテキストをスキャンしてみましょう。そのテキスト内で言及されている関係性を素早く構造化して調査できます。
-          </p>
+          <h1 className="mb-1 text-2xl font-bold text-slate-50">{t("title")}</h1>
+          <p className="text-sm text-slate-300">{t("descriptionLoggedIn")}</p>
         </div>
 
         <Button
@@ -92,21 +88,21 @@ export function FieldSessionList() {
           className="flex w-full flex-row items-center justify-center gap-1 bg-orange-400 text-white hover:bg-orange-500"
         >
           <PlusIcon width={16} height={16} color="white" />
-          <div className="text-sm">新規スキャン</div>
+          <div className="text-sm">{t("newScan")}</div>
         </Button>
 
         {isLoading && (
-          <p className="text-center text-sm text-slate-400">読み込み中...</p>
+          <p className="text-center text-sm text-slate-400">{tCommon("loading")}</p>
         )}
         {error && (
           <p className="text-center text-sm text-red-400">
-            セッション一覧の取得に失敗しました
+            {t("sessionListFetchFailed")}
           </p>
         )}
 
         {data && data.items.length === 0 && (
           <div className="rounded-xl border border-dashed border-slate-600 p-6 text-center text-sm text-slate-400">
-            まだスキャンがありません。「新規スキャン」から始めてください。
+            {t("noScansYet")}
           </div>
         )}
 
@@ -130,7 +126,7 @@ export function FieldSessionList() {
                     />
                   ) : (
                     <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-slate-700 text-xs text-slate-300">
-                      画像なし
+                      {t("noImage")}
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
@@ -138,14 +134,14 @@ export function FieldSessionList() {
                       {item.name}
                     </div>
                     <div className="mt-1 text-xs text-slate-400">
-                      {dayjs(item.createdAt).format("YYYY/MM/DD HH:mm")} · ノード{" "}
-                      {item.nodeCount}
+                      {dayjs(item.createdAt).format("YYYY/MM/DD HH:mm")} ·{" "}
+                      {t("nodeCount")} {item.nodeCount}
                     </div>
                   </div>
                 </Link>
                 <ScanSessionMenu
                   className="mr-2 shrink-0"
-                  ariaLabel={`${item.name} の操作メニュー`}
+                  ariaLabel={t("sessionMenuAriaLabel", { name: item.name })}
                   onRename={() => setRenameTarget({ id: item.id, name: item.name })}
                   onDelete={() => {
                     setDeleteError(null);

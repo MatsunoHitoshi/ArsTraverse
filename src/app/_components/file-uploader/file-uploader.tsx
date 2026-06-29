@@ -1,6 +1,7 @@
 import type { LegacyRef } from "react";
 import { Button } from "../button/button";
 import { DropFileProviderDashed } from "../drop-file/drop-file-provider";
+import { useTranslations } from "next-intl";
 type FileUploaderProps = {
   name: string;
   inputRef: LegacyRef<HTMLInputElement>;
@@ -14,6 +15,8 @@ export const FileUploader = ({
   setFile,
   file,
 }: FileUploaderProps) => {
+  const t = useTranslations("fileUploader");
+
   return (
     <DropFileProviderDashed setFile={setFile}>
       <div className="flex min-h-[130px] w-full flex-col items-center">
@@ -27,8 +30,8 @@ export const FileUploader = ({
           ref={inputRef}
         />
         <div className="flex flex-col items-center gap-1">
-          <div>ファイルをドラッグアンドドロップ</div>
-          <div className="text-sm">または</div>
+          <div>{t("dragAndDrop")}</div>
+          <div className="text-sm">{t("or")}</div>
           <Button
             id="fileSelect"
             className="pointer-events-auto"
@@ -39,9 +42,9 @@ export const FileUploader = ({
               }
             }}
           >
-            ファイルをアップロード
+            {t("uploadFile")}
           </Button>
-          <div className="text-xs">ファイルサイズ上限：50MB</div>
+          <div className="text-xs">{t("sizeLimit")}</div>
         </div>
 
         <div className="font-semibold">{file?.name}</div>

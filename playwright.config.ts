@@ -11,8 +11,9 @@ if (!process.env.NODE_ENV) {
   Object.assign(process.env, { NODE_ENV: "test" });
 }
 
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000";
+
 export default defineConfig({
-  testDir: "./e2e/kg",
   testMatch: /\.spec\.ts$/,
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
@@ -22,4 +23,27 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 10_000 },
   globalSetup: path.resolve(__dirname, "e2e/global-setup.ts"),
+  ...(process.env.PLAYWRIGHT_BASE_URL
+    ? {}
+    : {
+        webServer: {
+          command: "npm run dev -- --port 3000",
+          url: baseURL,
+          reuseExistingServer: !process.env.CI,
+          timeout: 120_000,
+        },
+      }),
+  projects: [
+    {
+      name: "kg",
+      testDir: "./e2e/kg",
+    },
+    {
+      name: "i18n",
+      testDir: "./e2e/i18n",
+      use: {
+        baseURL,
+      },
+    },
+  ],
 });

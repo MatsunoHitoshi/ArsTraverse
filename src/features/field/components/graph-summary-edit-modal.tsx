@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { useTranslations } from "next-intl";
 import { Modal } from "@/app/_components/modal/modal";
 import { Button } from "@/app/_components/button/button";
 import { TextInput } from "@/app/_components/input/text-input";
@@ -58,6 +59,8 @@ export function GraphSummaryEditModal({
   item,
   onSave,
 }: GraphSummaryEditModalProps) {
+  const t = useTranslations("field");
+  const tCommon = useTranslations("common");
   const [name, setName] = useState("");
   const [type, setType] = useState("");
   const [description, setDescription] = useState("");
@@ -83,7 +86,7 @@ export function GraphSummaryEditModal({
     if (item.kind === "node") {
       const trimmedName = name.trim();
       if (!trimmedName) {
-        setErrorMessage("ノード名を入力してください");
+        setErrorMessage(t("nodeNameRequired"));
         return;
       }
       onSave({
@@ -94,7 +97,7 @@ export function GraphSummaryEditModal({
     } else {
       const trimmedType = type.trim();
       if (!trimmedType) {
-        setErrorMessage("関係タイプを入力してください");
+        setErrorMessage(t("relationshipTypeRequired"));
         return;
       }
       onSave({
@@ -109,7 +112,7 @@ export function GraphSummaryEditModal({
 
   if (!item) return null;
 
-  const title = item.kind === "node" ? "ノードを編集" : "関係を編集";
+  const title = item.kind === "node" ? t("editNode") : t("editRelationship");
 
   return (
     <Modal isOpen={isOpen} setIsOpen={setIsOpen} title={title}>
@@ -122,34 +125,36 @@ export function GraphSummaryEditModal({
 
         {item.kind === "node" ? (
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-slate-200">ノード名</label>
+            <label className="text-sm text-slate-200">{t("nodeName")}</label>
             <TextInput
               value={name}
               onChange={setName}
-              placeholder="ノード名"
+              placeholder={t("nodeNamePlaceholder")}
             />
             {item.label ? (
-              <p className="text-xs text-slate-500">ラベル: {item.label}</p>
+              <p className="text-xs text-slate-500">
+                {t("label")}: {item.label}
+              </p>
             ) : null}
           </div>
         ) : (
           <div className="flex flex-col gap-1">
-            <label className="text-sm text-slate-200">関係タイプ</label>
+            <label className="text-sm text-slate-200">{t("relationshipType")}</label>
             <TextInput
               value={type}
               onChange={setType}
-              placeholder="例: 関連, 影響"
+              placeholder={t("relationshipTypePlaceholder")}
             />
           </div>
         )}
 
         <div className="flex flex-col gap-1">
-          <label className="text-sm text-slate-200">解説・メモ</label>
+          <label className="text-sm text-slate-200">{t("notes")}</label>
           <textarea
             value={description}
             onChange={(event) => setDescription(event.target.value)}
             rows={4}
-            placeholder="現地調査のメモや補足説明（properties.description に保存）"
+            placeholder={t("notesPlaceholder")}
             className="w-full resize-y rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none ring-orange-400/50 focus:ring-2"
           />
         </div>
@@ -163,10 +168,10 @@ export function GraphSummaryEditModal({
             className="!text-small !p-1 text-slate-400"
             onClick={() => setIsOpen(false)}
           >
-            キャンセル
+            {tCommon("cancel")}
           </Button>
           <Button className="!text-small !p-1" onClick={handleSave}>
-            OK
+            {t("ok")}
           </Button>
         </div>
       </div>

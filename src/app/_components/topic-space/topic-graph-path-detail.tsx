@@ -9,6 +9,7 @@ import { Toolbar } from "../toolbar/toolbar";
 import { RelationPathSearch } from "../toolbar/relation-path-search";
 import { GraphSummaryGenerator } from "../summary-generator/graph-smmary-generator";
 import { MultiDocumentGraphDetailViewer } from "../view/graph-view/multi-document-graph-detail-viewer";
+import { useTranslations } from "next-intl";
 
 export const TopicGraphPathDetail = ({
   id,
@@ -19,6 +20,7 @@ export const TopicGraphPathDetail = ({
   startId: string;
   endId: string;
 }) => {
+  const t = useTranslations("topicSpace");
   const { data: topicSpace } = api.topicSpaces.getPath.useQuery({
     id: id,
     startId: startId,
@@ -75,7 +77,7 @@ export const TopicGraphPathDetail = ({
 
           <div className="flex flex-col gap-1">
             <div className="flex w-full flex-row items-center justify-between">
-              <div className="font-semibold">ドキュメント</div>
+              <div className="font-semibold">{t("documents")}</div>
             </div>
             <TopicGraphDocumentList
               documents={topicSpace.sourceDocuments as DocumentResponse[]}
@@ -102,7 +104,7 @@ export const TopicGraphPathDetail = ({
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center p-4">
-              <div>まだグラフが作成されていません</div>
+              <div>{t("graphNotCreated")}</div>
               <div>{topicSpace.graphDataStatus}</div>
             </div>
           )}

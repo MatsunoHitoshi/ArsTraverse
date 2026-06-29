@@ -23,16 +23,16 @@ declare module "next-auth" {
     user: {
       id: string;
       preferredLocale?: string;
-      // ...other properties
-      // role: UserRole;
+      uiLocale?: string;
+      localeLinked?: boolean;
     } & DefaultSession["user"];
   }
 
   interface User {
-    // ...other properties
-    // role: UserRole;
     id: string;
     preferredLocale?: string;
+    uiLocale?: string;
+    localeLinked?: boolean;
   }
 }
 
@@ -50,6 +50,8 @@ export const authOptions: NextAuthOptions = {
         ...session.user,
         id: user.id,
         preferredLocale: user.preferredLocale,
+        uiLocale: user.uiLocale,
+        localeLinked: user.localeLinked,
       },
     }),
   },

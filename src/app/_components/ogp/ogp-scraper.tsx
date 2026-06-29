@@ -1,6 +1,6 @@
 import { getOgp } from "@/app/_utils/ogp/ogp-scraper";
 import Image from "next/image";
-import Link from "next/link";
+import { Link } from "i18n/navigation";
 
 export const OgpScraper = async ({ url }: { url: string }) => {
   const ogp = await getOgp(url);

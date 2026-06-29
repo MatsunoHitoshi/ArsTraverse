@@ -41,6 +41,31 @@ import {
 } from "./source-document";
 import { runAttachDocuments, runDetachDocument } from "./topic-space";
 import { classifyEdgeMotion as runClassifyEdgeMotion } from "@/server/services/kg/classify-edge-motion.service";
+import type { Locale } from "i18n/routing";
+import {
+  getAnalyzeGraphInsightsFallbackSummary,
+  getAnalyzeGraphInsightsNoDataMessage,
+  getAnalyzeGraphInsightsSystemPrompt,
+  getAnalyzeGraphInsightsUserPrompt,
+  getAnnotateStorySegmentsSystemPrompt,
+  getAnnotateStorySegmentsUserPrompt,
+  getAskCopilotSystemPrompt,
+  getCentralConceptsFallbackSummary,
+  getCentralNodeReason,
+  getDefaultCommunitySummary,
+  getDefaultCommunityTitle,
+  getDefaultTransitionText,
+  getGenerateCommunityStorySystemPrompt,
+  getGenerateCommunityStoryUserPrompt,
+  getMissingCommunityTitlesSystemPrompt,
+  getMissingCommunityTitlesUserPrompt,
+  getRegenerateNarrativeFlowSystemPrompt,
+  getRegenerateNarrativeFlowUserPrompt,
+  getSourceDocumentReferencesHeader,
+  getSummarizeCommunitiesSystemPrompt,
+  getSummarizeCommunitiesUserPrompt,
+  getWorkspaceBodyDocumentName,
+} from "@/server/lib/i18n/prompts/kg-copilot";
 
 // ---------------------------------------------------------------------------
 // generateMetaGraphFromText 用ヘルパー関数
@@ -63,6 +88,7 @@ async function runAnnotateStorySegments(
     targetId: string;
     type: string;
   }>,
+  locale: Locale = "ja",
 ): Promise<{ communityId: string; segments: StorySegment[] }> {
   const validNodeIds = new Set(memberNodes.map((n) => n.id));
   const validEdgeIds = new Set(
@@ -98,26 +124,15 @@ async function runAnnotateStorySegments(
   const membersList = memberNodes
     .map((n) => `id: "${n.id}" | ${n.name} (${n.label})`)
     .join("\n");
-  const systemPrompt = `You are an annotator. Given story segments and a list of node IDs and edge composite keys, output which node IDs and edge keys each segment mentions.
+  const systemPrompt = getAnnotateStorySegmentsSystemPrompt(locale);
 
-[Output Format]
-Valid JSON only, no markdown:
-{"segments":[{"text":"...","nodeIds":["id1"],"edgeIds":["sourceId|targetId|type"]},...]}
-
-- "nodeIds" must only contain ids from the [Members] list.
-- "edgeIds" must only contain keys from the [Edge IDs] list.
-- Preserve each "text" exactly as given.`;
-
-  const userPrompt = `[Members]
-${membersList}
-
-[Edge IDs]
-${edgeIdsList}
-
-[Segments to annotate]
-${segmentsToAnnotate.map((s, i) => `${i + 1}. ${s.text}`).join("\n\n")}
-
-Output JSON with segments array (same order, same text, add nodeIds and edgeIds for each).`;
+  const userPrompt = getAnnotateStorySegmentsUserPrompt(locale, {
+    membersList,
+    edgeIdsList,
+    segmentsText: segmentsToAnnotate
+      .map((s, i) => `${i + 1}. ${s.text}`)
+      .join("\n\n"),
+  });
 
   const response = await llm.invoke([
     { role: "system", content: systemPrompt },
@@ -187,6 +202,7 @@ async function integrateWorkspaceTextGraph(
   workspaceId: string,
   contentArray: JSONContent[],
   inputGraphDocument: GraphDoc,
+  locale: Locale = "ja",
 ): Promise<GraphDoc> {
   if (contentArray.length === 0) return inputGraphDocument;
 
@@ -235,7 +251,7 @@ async function integrateWorkspaceTextGraph(
   if (!hasGraph || !extractedGraph) return inputGraphDocument;
 
   const topicSpace = workspace.referencedTopicSpaces[0]!;
-  const bodyDocName = `${workspace.name}本文`;
+  const bodyDocName = getWorkspaceBodyDocumentName(locale, workspace.name);
   const existingBodyDoc = topicSpace.sourceDocuments.find(
     (d) => d.name === bodyDocName,
   );
@@ -430,6 +446,7 @@ async function buildMetaGraphFromTextSections(
   communityData: CommunityAssignmentResult,
   sections: SectionWithSegments[],
   minCommunitySize: number,
+  locale: Locale = "ja",
 ): Promise<{
   metaNodes: Array<{
     communityId: string;
@@ -700,6 +717,7 @@ async function buildMetaGraphFromTextSections(
       section.segments.map((s) => ({ text: s.text })),
       memberNodes,
       internalEdgesDetailed,
+      locale,
     );
     return { cid, segments: result.segments };
   });
@@ -752,7 +770,7 @@ export const copilotProcedures = {
   askCopilot: protectedProcedure
     .input(AskCopilotInputSchema)
     .output(AskCopilotOutputSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const {
         query,
         currentGraphData,
@@ -864,140 +882,12 @@ export const copilotProcedures = {
         ? `\n[Current Layout Instruction]\n${JSON.stringify(currentLayoutInstruction, null, 2)}\n\n**IMPORTANT**: When generating a new Layout Instruction, you MUST preserve all existing settings from the Current Layout Instruction that are not explicitly mentioned in the user's request. Merge the new settings with the existing ones. For example, if the current instruction has "x_axis" with "strength": 0.8 and the user only asks to change "y_axis", keep the "x_axis" settings unchanged.`
         : "";
 
-      const systemPrompt = `You are "ArsTraverse Copilot", an AI assistant for curators.
-Your goal is to help the user build, interpret, and visualize knowledge graphs.
-
-[Curatorial Context]
-${stance}
-${rules}
-
-[Current Graph Metadata]
-${graphMetadata}
-${currentLayoutInstructionText}
-[Important Note about Node Names]
-When the user mentions a node name (e.g., "ヨーゼフ・ボイス", "サイバネティクス"), you should use the node name directly in the Layout Instruction JSON. The backend will automatically resolve node names to their IDs using fuzzy matching. You do NOT need to look up node IDs manually.
-
-[Instructions]
-1. Answer the user's query in Japanese. Be helpful and insightful.
-2. If the user asks to change the layout or visualization (e.g., "arrange by date", "separate admin and artists"), you MUST generate a "Layout Instruction" JSON.
-3. If you generate a Layout Instruction, output it at the very end of your response, enclosed in a code block like this:
-\`\`\`json
-{
-  "layout_strategy": "force_simulation",
-  "forces": {
-    "x_axis": { "type": "timeline", "attribute": "date_property", "strength": 0.8 },
-    "y_axis": { "type": "category_separation", "attribute": "role_property", "groups": { "value1": "top", "value2": "bottom" }, "strength": 0.6 },
-    "charge": { "strength": -300 },
-    "focus_nodes": { "targetNodeIds": ["id1", "id2"], "chargeMultiplier": 2.0 }
-  }
-}
-\`\`\`
-Example for horizontal ellipse (横長の楕円型):
-\`\`\`json
-{
-  "layout_strategy": "force_simulation",
-  "forces": {
-    "x_axis": { "type": "linear", "strength": 0.9 },
-    "y_axis": { "type": "linear", "strength": 0.3 },
-    "charge": { "strength": -300 }
-  }
-}
-\`\`\`
-4. For "x_axis" or "y_axis", use:
-   - "timeline" for date/numeric properties (requires "attribute" field)
-   - "category_separation" for categorical properties (requires "attribute" and "groups" fields)
-   - "linear" for simple linear distribution without attributes (e.g., to create elliptical shapes like "横長の楕円型")
-5. When using "linear" type:
-   - For horizontal ellipse (横長の楕円型): x_axis with high strength (0.8-1.0), y_axis with low strength (0.2-0.4)
-     * This makes nodes spread horizontally (wide) and compress vertically (narrow)
-   - For vertical ellipse (縦長の楕円型): x_axis with low strength (0.2-0.4), y_axis with high strength (0.8-1.0)
-     * This makes nodes compress horizontally (narrow) and spread vertically (tall)
-   - "linear" type does NOT require "attribute" or "groups" fields
-   - **IMPORTANT**: x_axis controls horizontal (left-right) direction, y_axis controls vertical (top-bottom) direction
-6. Infer the correct property names from the [Current Graph Metadata] or common sense (e.g., "date", "year", "role", "type").
-7. **IMPORTANT**: When the user mentions a node name (e.g., "ヨーゼフ・ボイス", "サイバネティクス"), you can use the node name directly in the Layout Instruction JSON. The backend will automatically resolve node names to their IDs using intelligent fuzzy matching. You do NOT need to look up node IDs manually - just use the node name as the user mentioned it.
-9. **For centering nodes**: When the user asks to place a node in the center (e.g., "中央に配置"), use "center_nodes" instead of "focus_nodes":
-\`\`\`json
-{
-  "layout_strategy": "force_simulation",
-  "forces": {
-    "center_nodes": {
-      "targetNodeIds": ["actual_node_id"]
-    }
-  }
-}
-\`\`\`
-Note: "focus_nodes" adjusts charge (repulsion), while "center_nodes" actually places nodes at the center of the graph.
-10. **For filtering nodes**: When the user asks to filter nodes (e.g., "場所で絞り込み", "特定の日付のノード", "片野湘雲を中心に場所で絞り込み"), you can add a "filter" field to the Layout Instruction with nested conditions:
-\`\`\`json
-{
-  "layout_strategy": "force_simulation",
-  "forces": {
-    "center_nodes": { "targetNodeIds": ["片野湘雲"] }
-  },
-  "filter": {
-    "centerNodeIds": ["片野湘雲"],
-    "maxHops": 2,
-    "condition": {
-      "type": "group",
-      "logic": "AND",
-      "conditions": [
-        {
-          "type": "condition",
-          "field": "label",
-          "operator": "in",
-          "value": ["Place", "Museum", "Studio", "Location"]
-        },
-        {
-          "type": "condition",
-          "field": "mentionedAt",
-          "operator": "date_equals",
-          "value": "2024-01-15"
-        }
-      ]
-    },
-    "includeNeighbors": true
-  }
-}
-\`\`\`
-- "condition" can be either a single condition or a group (nested conditions)
-- Condition types:
-  - "condition": leaf condition with field, operator, and value
-  - "group": nested group with logic ("AND" or "OR") and conditions array
-- "field" can be "label", "name", or a property key (e.g., "mentionedAt", "場所")
-- "operator" can be:
-  - "equals": exact match
-  - "in": value is in the array
-  - "contains": partial match (for strings)
-  - "date_equals": date matches exactly (ignores time)
-  - "date_after": date is on or after the specified date
-  - "date_before": date is on or before the specified date
-  - "date_range": date is within the range (value: { "from": "2024-01-01", "to": "2024-12-31" })
-- "value" type depends on operator:
-  - "equals", "contains", "date_equals", "date_after", "date_before": string
-  - "in": array of strings
-  - "date_range": object with "from" and "to" strings
-- Groups can be nested to express complex logic like "A and (B or C)":
-\`\`\`json
-{
-  "type": "group",
-  "logic": "AND",
-  "conditions": [
-    { "type": "condition", "field": "label", "operator": "equals", "value": "A" },
-    {
-      "type": "group",
-      "logic": "OR",
-      "conditions": [
-        { "type": "condition", "field": "label", "operator": "equals", "value": "B" },
-        { "type": "condition", "field": "label", "operator": "equals", "value": "C" }
-      ]
-    }
-  ]
-}
-\`\`\`
-- Generate related concepts for "in" operator (e.g., for "場所", include "Place", "Museum", "Studio", "Location", etc.)
-- When filtering by category like "場所", use "label" field with "in" operator and include related label values
-`;
+      const systemPrompt = getAskCopilotSystemPrompt(ctx.locale, {
+        stance,
+        rules,
+        graphMetadata,
+        currentLayoutInstructionText,
+      });
 
       const response = await llm.invoke([
         { role: "system", content: systemPrompt },
@@ -1212,13 +1102,13 @@ Note: "focus_nodes" adjusts charge (repulsion), while "center_nodes" actually pl
         curatorialContext: CuratorialContextSchema.optional().nullable(),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const { currentGraphData, curatorialContext } = input;
 
       if (!currentGraphData?.nodes || currentGraphData.nodes.length === 0) {
         return {
           insights: {
-            summary: "グラフデータが提供されていません。",
+            summary: getAnalyzeGraphInsightsNoDataMessage(ctx.locale),
             centralConcepts: {
               nodes: [],
               summary: "",
@@ -1251,109 +1141,16 @@ Note: "focus_nodes" adjusts charge (repulsion), while "center_nodes" actually pl
         ? `Stance: ${curatorialContext.stance}`
         : "Stance: Neutral/Undefined";
 
-      const systemPrompt = `You are "ArsTraverse Insight Analyzer", an AI assistant specialized in analyzing knowledge graphs and providing insights for visualization.
-
-[Curatorial Context]
-${stance}
-
-[Task]
-Analyze the provided graph structure and generate a comprehensive summary in Japanese that explains:
-1. What this graph represents (main themes, domains)
-2. Key characteristics (central nodes, relationship patterns)
-3. Notable patterns or structures
-4. Suggestions for visualization approaches
-
-The summary should be conversational, easy to understand, and helpful for users who want to understand their knowledge graph.
-
-[Graph Analysis Data]
-${analysisData}
-
-[Output Format]
-You MUST output a valid JSON object with this structure:
-{
-  "summary": "A comprehensive summary in Japanese explaining the graph's characteristics, main themes, and notable patterns. This should be 3-5 sentences, conversational and easy to understand.",
-  "centralConcepts": {
-    "nodes": [
-      {
-        "id": "node_id",
-        "name": "node_name",
-        "label": "node_label",
-        "centralityScore": 0.85,
-        "degree": 15,
-        "reason": "Why this node is central (in Japanese)"
-      }
-    ],
-    "summary": "Overall explanation of why these nodes are central (in Japanese)"
-  },
-  "filteringOptions": [
-    {
-      "type": "by_label",
-      "description": "Filter by node label",
-      "suggestedValues": ["Person", "Event"],
-      "reasoning": "Why this filtering is useful (in Japanese)"
-    }
-  ],
-  "clusteringSuggestions": [
-    {
-      "method": "by_label",
-      "description": "Cluster by node label",
-      "expectedClusters": 5,
-      "reasoning": "Why this clustering makes sense (in Japanese)"
-    }
-  ],
-  "axisSuggestions": {
-    "x_axis": [
-      {
-        "attribute": "date",
-        "type": "timeline",
-        "reasoning": "This attribute represents time progression (in Japanese)",
-        "groups": null
-      }
-    ],
-    "y_axis": [
-      {
-        "attribute": "category",
-        "type": "category_separation",
-        "reasoning": "This attribute can separate nodes into groups (in Japanese)",
-        "groups": {"group1": "top", "group2": "bottom"}
-      }
-    ]
-  },
-  "layoutSuggestions": [
-    {
-      "name": "Timeline Layout",
-      "description": "Arrange nodes by date on X-axis",
-      "layoutInstruction": {
-        "layout_strategy": "force_simulation",
-        "forces": {
-          "x_axis": {
-            "type": "timeline",
-            "attribute": "date",
-            "strength": 0.8
-          }
-        }
-      },
-      "reasoning": "This layout reveals temporal relationships (in Japanese)"
-    }
-  ]
-}
-
-[Important Guidelines]
-- All text should be in Japanese
-- Be specific and actionable in your suggestions
-- For layout suggestions, provide complete LayoutInstruction objects that can be directly used
-- Explain the reasoning behind each insight
-- Consider the graph structure, node labels, relationship types, and available attributes
-- If numeric attributes exist with time-series characteristics, suggest timeline layouts
-- If categorical attributes exist, suggest category_separation layouts
-- Consider centrality scores when identifying central concepts`;
+      const systemPrompt = getAnalyzeGraphInsightsSystemPrompt(ctx.locale, {
+        stance,
+        analysisData,
+      });
 
       const response = await llm.invoke([
         { role: "system", content: systemPrompt },
         {
           role: "user",
-          content:
-            "このグラフの特徴を分析して、わかりやすい説明を生成してください。",
+          content: getAnalyzeGraphInsightsUserPrompt(ctx.locale),
         },
       ]);
 
@@ -1435,7 +1232,11 @@ You MUST output a valid JSON object with this structure:
         // フォールバック: シンプルなサマリーを返す
         return {
           insights: {
-            summary: `このグラフには${analysis.structure.nodeCount}個のノードと${analysis.structure.relationshipCount}個のリレーションがあります。グラフの詳細な分析を生成できませんでしたが、基本的な統計情報は利用可能です。`,
+            summary: getAnalyzeGraphInsightsFallbackSummary(
+              ctx.locale,
+              analysis.structure.nodeCount,
+              analysis.structure.relationshipCount,
+            ),
             centralConcepts: {
               nodes: analysis.structure.topDegreeNodes.slice(0, 5).map((n) => ({
                 id: n.id,
@@ -1443,9 +1244,9 @@ You MUST output a valid JSON object with this structure:
                 label: n.label,
                 centralityScore: n.degree / analysis.structure.nodeCount,
                 degree: n.degree,
-                reason: `このノードは${n.degree}個のリレーションを持っており、グラフの中心的な役割を果たしています。`,
+                reason: getCentralNodeReason(ctx.locale, n.degree),
               })),
-              summary: "次数が高いノードがグラフの中心的な概念を表しています。",
+              summary: getCentralConceptsFallbackSummary(ctx.locale),
             },
             filteringOptions: [],
             clusteringSuggestions: [],
@@ -1474,7 +1275,7 @@ You MUST output a valid JSON object with this structure:
         curatorialContext: CuratorialContextSchema.optional().nullable(),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const { communities, curatorialContext } = input;
 
       if (communities.length === 0) {
@@ -1493,66 +1294,10 @@ You MUST output a valid JSON object with this structure:
         ? `Stance: ${curatorialContext.stance}`
         : "Stance: Neutral/Undefined";
 
-      const systemPrompt = `You are "ArsTraverse Story Generator", an AI assistant specialized in analyzing knowledge graph communities and generating narrative summaries for art and cultural contexts.
-
-[Curatorial Context]
-${stance}
-
-[Task]
-Given a set of communities (groups of related nodes) from a knowledge graph, generate:
-1. A meaningful Title (e.g., "Impressionism", "19th Century French Art") for each community
-2. A concise Summary (1-2 sentences) explaining what this community represents
-3. A Narrative Flow - an ordered sequence of community IDs that tells a coherent story
-
-[Important]
-- Pay attention to the internal edges (relationships within the community) to understand the connections between nodes
-- Consider external connections (relationships to other communities) when creating the narrative flow
-- Use edge types and connection patterns to generate more contextually accurate summaries
-
-[Output Format]
-You MUST output a valid JSON object with this structure:
-{
-  "summaries": [
-    {
-      "communityId": "community_id",
-      "title": "Meaningful Title (same language as Members)",
-      "summary": "1-2 sentence explanation (same language as Members)"
-    }
-  ],
-  "narrativeFlow": [
-    {
-      "communityId": "community_id",
-      "order": 1,
-      "transitionText": "Explanation of how this connects to the previous community (same language as Members)"
-    }
-  ]
-}
-
-[Narrative Flow Creation Strategy]
-1. DO NOT simply order by community ID - analyze the external connections data
-2. Start with communities that have NO external connections (entry points) OR communities with the MOST external connections (central hubs)
-3. Follow external connection edges to create a logical flow from one community to the next
-4. Use edge types and connection counts to determine importance and flow direction
-5. Create a story that flows naturally based on actual graph connections
-6. The order should tell a coherent narrative, not just list communities
-7. **IMPORTANT**: Select at most 10 communities for the narrative flow. If there are more than 10 communities, choose the most important ones that create the best coherent story based on external connections and thematic relevance
-
-[External Connections Analysis]
-For each community, analyze:
-- Which communities it connects TO (outgoing connections)
-- Which communities connect TO it (incoming connections)
-- The strength of connections (edge count)
-- The types of relationships (edge types)
-Use this data to create a meaningful narrative progression that follows the graph structure.
-
-[Guidelines]
-- Write all text (titles, summaries, transitionText) in the SAME language as the source data (Members, labels). If they are mainly in Japanese, write in Japanese; if mainly in English, write in English. Do not default to English when the resource is in another language.
-- Titles should be concise (3-10 words) and meaningful
-- Summaries should explain the theme or concept represented by the community (not just "〇〇のコミュニティです")
-- Summaries should hint at the story within the community - what relationships, events, or themes connect the nodes
-- Narrative Flow should create a logical progression through the communities based on external connections
-- Transition texts should explain relationships between communities using the connection data
-- Consider the curatorial context when generating titles and summaries`;
+      const systemPrompt = getSummarizeCommunitiesSystemPrompt(
+        ctx.locale,
+        stance,
+      );
 
       const communitiesText = communities
         .map(
@@ -1570,7 +1315,10 @@ Community ${idx + 1} (ID: ${c.communityId}):
         { role: "system", content: systemPrompt },
         {
           role: "user",
-          content: `以下のコミュニティを分析して、タイトル、要約、ナラティブフローを生成してください:\n\n${communitiesText}`,
+          content: getSummarizeCommunitiesUserPrompt(
+            ctx.locale,
+            communitiesText,
+          ),
         },
       ]);
 
@@ -1633,31 +1381,24 @@ Community ${idx + 1} (ID: ${c.communityId}):
             `Missing titles for ${missingTitleCommunities.length} communities, generating titles...`,
           );
           try {
-            const titleGenerationPrompt = `以下のコミュニティに対して、それぞれ意味のあるタイトルを生成してください。各コミュニティのメンバーや関係性を分析して、適切なタイトルを付けてください。タイトルはメンバー名・ラベルの言語に合わせてください（主に日本語なら日本語、主に英語なら英語）。
-
-${missingTitleCommunities
-  .map(
-    (c, idx) => `
+            const titleGenerationPrompt = getMissingCommunityTitlesUserPrompt(
+              ctx.locale,
+              missingTitleCommunities
+                .map(
+                  (c, idx) => `
 Community ${idx + 1} (ID: ${c.communityId}):
 - Members: ${c.memberNodeNames.slice(0, 20).join(", ")}${c.memberNodeNames.length > 20 ? "..." : ""}
 - Labels: ${c.memberNodeLabels?.slice(0, 10).join(", ") ?? "N/A"}
 - Internal Relationships: ${c.internalEdges ?? "None"}
 `,
-  )
-  .join("\n")}
-
-出力形式（JSON）:
-{
-  "titles": [
-    { "communityId": "community_id", "title": "Meaningful Title (same language as Members)" }
-  ]
-}`;
+                )
+                .join("\n"),
+            );
 
             const titleResponse = await llm.invoke([
               {
                 role: "system",
-                content:
-                  "You are a helpful assistant that generates meaningful titles for knowledge graph communities. Write each title in the SAME language as the Members and Labels (e.g. Japanese if they are mainly in Japanese, English if mainly in English).",
+                content: getMissingCommunityTitlesSystemPrompt(ctx.locale),
               },
               { role: "user", content: titleGenerationPrompt },
             ]);
@@ -1684,7 +1425,9 @@ Community ${idx + 1} (ID: ${c.communityId}):
               );
               return {
                 communityId: c.communityId,
-                title: generatedTitle?.title ?? `コミュニティ ${c.communityId}`,
+                title:
+                  generatedTitle?.title ??
+                  getDefaultCommunityTitle(ctx.locale, c.communityId),
                 summary: "",
               };
             });
@@ -1693,7 +1436,7 @@ Community ${idx + 1} (ID: ${c.communityId}):
             // フォールバック: デフォルトタイトルを使用
             additionalSummaries = missingTitleCommunities.map((c) => ({
               communityId: c.communityId,
-              title: `コミュニティ ${c.communityId}`,
+              title: getDefaultCommunityTitle(ctx.locale, c.communityId),
               summary: "",
             }));
           }
@@ -1712,15 +1455,18 @@ Community ${idx + 1} (ID: ${c.communityId}):
         return {
           summaries: communities.map((c) => ({
             communityId: c.communityId,
-            title: `コミュニティ ${c.communityId}`,
-            summary: `${c.memberNodeNames.length}個のノードを含むコミュニティです。`,
+            title: getDefaultCommunityTitle(ctx.locale, c.communityId),
+            summary: getDefaultCommunitySummary(
+              ctx.locale,
+              c.memberNodeNames.length,
+            ),
           })),
           narrativeFlow: communities
             .slice(0, 10) // 最大10個までに制限
             .map((c, idx) => ({
               communityId: c.communityId,
               order: idx + 1,
-              transitionText: `次のコミュニティへ移ります。`,
+              transitionText: getDefaultTransitionText(ctx.locale),
             })),
         };
       }
@@ -2078,6 +1824,7 @@ Community ${idx + 1} (ID: ${c.communityId}):
           workspaceId,
           contentArray,
           inputGraphDocument,
+          ctx.locale,
         );
       }
 
@@ -2115,6 +1862,7 @@ Community ${idx + 1} (ID: ${c.communityId}):
         communityData,
         sections,
         minCommunitySize,
+        ctx.locale,
       );
     }),
 
@@ -2395,73 +2143,13 @@ ${narrativeContext.transitionTextAfter?.trim() ? `- Transition after this commun
         ) ?? [],
       );
 
-      const systemPrompt = hasDetailedInfo
-        ? `You are "ArsTraverse Story Writer", an AI assistant specialized in writing rich, narrative stories about knowledge graph communities in art and cultural contexts.
-
-[Curatorial Context]
-${stance}
-${narrativeContextBlock ?? ""}
-
-[Task]
-Generate a rich, detailed narrative story (3-5 short paragraphs, 200-400 words) about this community. Split the story into SHORT PARAGRAPHS (one or two sentences each). For EACH paragraph you MUST output:
-1. "text": the paragraph text
-2. "nodeIds": array of node IDs from the [Members] list that this paragraph mentions (use ONLY the "id" values shown)
-${hasEdgeInfo ? '3. "edgeIds": array of edge composite keys "sourceId|targetId|type" from the [Internal Relationships] list that this paragraph mentions (use EXACTLY the format shown in [Edge IDs for output])' : '3. "edgeIds": always an empty array []'}
-
-Guidelines:
-- Describe WHO the key figures are and WHAT they did (use node properties for context)
-${hasEdgeInfo ? "- Explain HOW they are connected (use internal edge information)" : "- Explain HOW they are connected based on the node relationships"}
-- Use chronological or thematic progression
-- Avoid generic descriptions like "〇〇のコミュニティです"
-- When source document references are provided, use them for depth
-- **CRITICAL**: The "Narrative Context" provided above (especially transition texts) is for your understanding of the flow only. DO NOT repeat the transition text in your story output. Focus ONLY on the internal story of this community.
-
-[Language]
-- Write the story in the SAME language as the source data (Members, labels, properties, and source references). If they are mainly in Japanese, write in Japanese; if mainly in English, write in English. Do not default to English when the resource is in another language.
-
-[Word Count]
-- Total story: ${wordCount} words (±50). Each paragraph: one or two sentences.
-
-[Output Format]
-You MUST output a valid JSON object only, no markdown or extra text:
-{"segments":[{"text":"...","nodeIds":["id1","id2"],"edgeIds":${hasEdgeInfo ? '["sourceId|targetId|type"]' : "[]"}},{"text":"...","nodeIds":[],"edgeIds":[]},...]}
-
-- "nodeIds" must contain ONLY ids from the [Members] list below.
-${hasEdgeInfo ? '- "edgeIds" must contain ONLY keys from the [Edge IDs for output] list below.' : '- "edgeIds" must always be an empty array [] (no edge data available).'}`
-        : `You are "ArsTraverse Story Writer", an AI assistant specialized in writing rich, narrative stories about knowledge graph communities in art and cultural contexts.
-
-[Curatorial Context]
-${stance}
-${narrativeContextBlock ?? ""}
-
-[Task]
-Generate a rich, detailed narrative story (3-5 paragraphs, 200-400 words) about this community that:
-1. Describes WHO the key figures are and WHAT they did (use node properties for additional context)
-2. Explains HOW they are connected (use ALL internal edge information, including edge properties)
-3. Tells a STORY with context, not just facts
-4. Uses chronological or thematic progression
-5. Connects individual actions to broader themes
-6. Avoids generic descriptions like "〇〇のコミュニティです"
-7. Incorporates specific details from node and edge properties when available
-8. Shows the richness of relationships within the community
-10. **CRITICAL**: The "Narrative Context" provided above (especially transition texts) is for your understanding of the flow only. DO NOT repeat the transition text in your story output. Focus ONLY on the internal story of this community.
-
-[Writing Style]
-- Write the story in the SAME language as the source data (Members, labels, properties, and any source references). If they are mainly in Japanese, write in Japanese; if mainly in English, write in English. Do not default to English when the resource is in another language.
-- Use narrative style, not just listing facts
-- Include specific relationships and connections
-- Show cause and effect, not just description
-- Create a sense of story progression
-- Make it engaging and informative
-- When source document references are available, incorporate relevant details naturally into the narrative
-
-[Word Count]
-- The story should be ${wordCount} words long (±50 words tolerance).
-- Strictly adhere to this word count range. Do not exceed ${wordCount + 50} words or go below ${wordCount - 50} words.
-
-[Example]
-Instead of: "片野湘雲に関連するコミュニティです。"
-Write: "片野湘雲は上溝村で生まれ、父・片野儀右衛門から絵の手ほどきを受けました。儀右衛門は十二天神社に大絵馬を奉納し、後に愛松斎儀亭と名乗るなど、地域の文化人として活動しました。湘雲は元湯玉川館や荒木十畝と交流を持ち、後に画塾を設立して多くの弟子を育てました。これは相模原地域における日本画の伝統と、師弟関係を通じた文化継承の物語を語っています。"`;
+      const systemPrompt = getGenerateCommunityStorySystemPrompt(ctx.locale, {
+        stance,
+        narrativeContextBlock: narrativeContextBlock ?? "",
+        hasDetailedInfo,
+        hasEdgeInfo,
+        wordCount,
+      });
 
       const communityInfo = hasDetailedInfo
         ? `
@@ -2515,15 +2203,18 @@ Community ID: ${communityId}
 `;
 
       // ユーザープロンプトを構築
-      let userPrompt = hasDetailedInfo
-        ? `以下のコミュニティについて、詳細なストーリーを短い段落に分け、各段落に対応するノードID・エッジIDを付けてJSONで出力してください:\n\n${communityInfo}`
-        : `以下のコミュニティについて、詳細なストーリーを${wordCount}字程度で生成してください:\n\n${communityInfo}`;
+      let userPrompt = getGenerateCommunityStoryUserPrompt(ctx.locale, {
+        hasDetailedInfo,
+        communityInfo,
+        wordCount,
+      });
 
       // SourceDocumentのセクションがある場合は追加
       if (sourceDocumentSections.length > 0) {
-        userPrompt += `\n\n[Source Document References]\n以下の情報源から取得した関連セクションを参照して、より詳細で豊富なストーリーを生成してください:\n\n${sourceDocumentSections
+        userPrompt += getSourceDocumentReferencesHeader(ctx.locale);
+        userPrompt += sourceDocumentSections
           .map((section, idx) => `--- Reference ${idx + 1} ---\n${section}`)
-          .join("\n\n")}`;
+          .join("\n\n");
       }
 
       if (hasDetailedInfo) {
@@ -2626,7 +2317,7 @@ Community ID: ${communityId}
           .optional(),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const {
         communityId,
         segments: inputSegments,
@@ -2653,6 +2344,7 @@ Community ID: ${communityId}
         segmentsToAnnotate,
         memberNodes ?? [],
         internalEdgesDetailed ?? [],
+        ctx.locale,
       );
     }),
 
@@ -2664,7 +2356,7 @@ Community ID: ${communityId}
         curatorialContext: CuratorialContextSchema.optional().nullable(),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const { orderedCommunityIds, communities, curatorialContext } = input;
 
       if (orderedCommunityIds.length === 0) {
@@ -2700,38 +2392,10 @@ Community ID: ${communityId}
         ? `Stance: ${curatorialContext.stance}`
         : "Stance: Neutral/Undefined";
 
-      const systemPrompt = `You are "ArsTraverse Story Weaver", an AI assistant specialized in creating coherent narrative flows between knowledge graph communities.
-
-[Curatorial Context]
-${stance}
-
-[Task]
-Given an ORDERED sequence of communities, generate "Transition Text" that logically connects each community to the next one in the sequence.
-The transition text should bridge the themes or relationships between the previous community and the current one.
-
-[Output Format]
-You MUST output a valid JSON object with this structure:
-{
-  "narrativeFlow": [
-    {
-      "communityId": "community_id",
-      "order": 1,
-      "transitionText": "Explanation of how this connects to the previous community (or introduction if first) (in Japanese)"
-    }
-  ]
-}
-
-[Important]
-- You MUST generate a transition text for EVERY community in the list.
-- The output "narrativeFlow" array must have the same number of items as the input.
-- The "communityId" must match the input exactly.
-
-[Guidelines]
-- All text should be in Japanese.
-- For the first community (order: 1), the transition text should be an introduction to the narrative.
-- For subsequent communities, explain the connection or shift in theme from the previous one.
-- Use the provided internal edges and external connections to find logical links.
-`;
+      const systemPrompt = getRegenerateNarrativeFlowSystemPrompt(
+        ctx.locale,
+        stance,
+      );
 
       const communitiesText = orderedCommunities
         .map(
@@ -2753,7 +2417,10 @@ Order ${idx + 1}: Community ${c.communityId}
         { role: "system", content: systemPrompt },
         {
           role: "user",
-          content: `以下の順序でコミュニティをつなぐトランジションテキストを生成してください:\n\n${communitiesText}`,
+          content: getRegenerateNarrativeFlowUserPrompt(
+            ctx.locale,
+            communitiesText,
+          ),
         },
       ]);
 

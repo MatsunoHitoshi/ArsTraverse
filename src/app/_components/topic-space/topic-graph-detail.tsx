@@ -17,6 +17,7 @@ import { interpolateRainbow } from "d3";
 import { useSearchParams } from "next/navigation";
 import { Switch } from "@headlessui/react";
 import { useSession } from "next-auth/react";
+import { useTranslations } from "next-intl";
 import { MultiDocumentGraphDetailViewer } from "../view/graph-view/multi-document-graph-detail-viewer";
 import { TopicSpaceDocumentListSection } from "./document-list-section";
 import { TopicSpaceDriveSyncPanel } from "./topic-space-drive-sync-panel";
@@ -83,6 +84,7 @@ export const TopicGraphDetail = ({
   id,
   filterOption,
 }: TopicGraphDetailProps) => {
+  const t = useTranslations("topicSpace");
   const searchParams = useSearchParams();
   const cutOff = searchParams.get("cut-off");
   const withBetweenNodes = searchParams.get("with-between-nodes");
@@ -206,7 +208,7 @@ export const TopicGraphDetail = ({
                         className="text-sm underline hover:no-underline"
                         href={`/topic-spaces/${id}/path/${pathData.nodes[0]?.id}/${pathData.nodes[pathData.nodes.length - 1]?.id}`}
                       >
-                        詳細
+                        {t("detail")}
                       </a>
                     </div>
                   ) : (
@@ -268,7 +270,7 @@ export const TopicGraphDetail = ({
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center p-4">
-              <div>まだグラフが作成されていません</div>
+              <div>{t("graphNotCreated")}</div>
               <div>{topicSpace.graphDataStatus}</div>
             </div>
           )}

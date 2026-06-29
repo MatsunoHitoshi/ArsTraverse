@@ -7,6 +7,7 @@ import { PlusIcon, TrashIcon, FileTextIcon } from "../icons";
 import { Textarea } from "../textarea";
 import { ProposalCreateForm } from "../graph-edit-proposal/proposal-create-form";
 import { NodeImageFormSection } from "./node-image-form-section";
+import { useTranslations } from "next-intl";
 
 const IMAGE_KEYS = ["imageUrl", "imageCaption", "imageAlt"] as const;
 
@@ -26,6 +27,8 @@ export const NodePropertiesForm = ({
   width?: "short" | "long";
   enableProposalMode?: boolean;
 }) => {
+  const t = useTranslations("form");
+  const tCommon = useTranslations("common");
   const updateProperty = api.topicSpaces.updateGraphProperties.useMutation();
   const [properties, setProperties] = useState<PropertyTypeForFrontend>(
     node.properties,
@@ -133,7 +136,7 @@ export const NodePropertiesForm = ({
                 />
               ) : (
                 <Textarea
-                  placeholder="テキストを入力"
+                  placeholder={t("textPlaceholder")}
                   autoFocus={true}
                   className="min-h-[194px] w-full resize-none rounded-md bg-slate-600 !p-4 text-sm outline-none"
                   defaultValue={String(value)}
@@ -180,12 +183,12 @@ export const NodePropertiesForm = ({
             onClick={handleCreateProposal}
           >
             <FileTextIcon height={18} width={18} />
-            変更提案
+            {t("createProposal")}
           </Button>
         )}
 
         <Button className="!p-1 !text-sm" onClick={submit}>
-          保存
+          {tCommon("save")}
         </Button>
       </div>
     </div>

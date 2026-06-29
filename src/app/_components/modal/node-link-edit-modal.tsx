@@ -1,4 +1,7 @@
+"use client";
+
 import type { GraphDocumentForFrontend } from "@/app/const/types";
+import { useTranslations } from "next-intl";
 import { Modal } from "./modal";
 import { NodeLinkEditPanel } from "./node-link-edit-panel";
 
@@ -21,8 +24,9 @@ export const NodeLinkEditModal = ({
     React.SetStateAction<GraphDocumentForFrontend | undefined>
   >;
 }) => {
+  const t = useTranslations("modal.nodeLink");
   return (
-    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title="ノード・リンクを追加">
+    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title={t("addNodeLink")}>
       <NodeLinkEditPanel
         graphDocument={graphDocument}
         setGraphDocument={setGraphDocument}

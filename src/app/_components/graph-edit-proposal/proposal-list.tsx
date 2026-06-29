@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
+import type { Locale } from "i18n/routing";
+import { useRouter } from "i18n/navigation";
 import { api } from "@/trpc/react";
 import { ProposalStatus } from "@prisma/client";
 import { Button } from "../button/button";
@@ -9,7 +11,7 @@ import { ListboxInput } from "../input/listbox-input";
 import { ReloadIcon } from "../icons";
 import { formatRelativeTime } from "@/app/_utils/date/format-date";
 import Image from "next/image";
-import { getStatusBadge, getStatusIcon } from "./proposal-utils";
+import { ProposalStatusBadge, getStatusIcon } from "./proposal-utils";
 
 interface ProposalListProps {
   topicSpaceId: string;
@@ -20,23 +22,27 @@ export const ProposalList: React.FC<ProposalListProps> = ({
   topicSpaceId,
   onProposalSelect,
 }) => {
+  const t = useTranslations("proposal");
+  const locale = useLocale() as Locale;
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState<ProposalStatus | "ALL">(
     "ALL",
   );
 
-  // ListboxInput用のオプション配列
-  const statusOptions = [
-    { value: "ALL", label: "すべて" },
-    { value: ProposalStatus.DRAFT, label: "下書き" },
-    { value: ProposalStatus.PENDING, label: "レビュー待ち" },
-    { value: ProposalStatus.IN_REVIEW, label: "レビュー中" },
-    { value: ProposalStatus.LOCKED, label: "ロック済み" },
-    { value: ProposalStatus.APPROVED, label: "承認済み" },
-    { value: ProposalStatus.REJECTED, label: "却下" },
-    { value: ProposalStatus.MERGED, label: "マージ済み" },
-    { value: ProposalStatus.CANCELLED, label: "取り下げ" },
-  ];
+  const statusOptions = useMemo(
+    () => [
+      { value: "ALL", label: t("status.all") },
+      { value: ProposalStatus.DRAFT, label: t("status.DRAFT") },
+      { value: ProposalStatus.PENDING, label: t("status.PENDING") },
+      { value: ProposalStatus.IN_REVIEW, label: t("status.IN_REVIEW") },
+      { value: ProposalStatus.LOCKED, label: t("status.LOCKED") },
+      { value: ProposalStatus.APPROVED, label: t("status.APPROVED") },
+      { value: ProposalStatus.REJECTED, label: t("status.REJECTED") },
+      { value: ProposalStatus.MERGED, label: t("status.MERGED") },
+      { value: ProposalStatus.CANCELLED, label: t("status.CANCELLED") },
+    ],
+    [t],
+  );
 
   const {
     data: proposals,
@@ -50,7 +56,7 @@ export const ProposalList: React.FC<ProposalListProps> = ({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="text-gray-500">読み込み中...</div>
+        <div className="text-gray-500">{t("loading")}</div>
       </div>
     );
   }
@@ -58,7 +64,7 @@ export const ProposalList: React.FC<ProposalListProps> = ({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <div className="text-base font-semibold">変更提案</div>
+        <div className="text-base font-semibold">{t("title")}</div>
 
         <div className="flex gap-2">
           <ListboxInput
@@ -67,7 +73,7 @@ export const ProposalList: React.FC<ProposalListProps> = ({
             setSelected={(value) =>
               setStatusFilter(value as ProposalStatus | "ALL")
             }
-            placeholder="ステータスで絞り込み"
+            placeholder={t("filterByStatus")}
           />
 
           <Button size="small" onClick={() => refetch()}>
@@ -77,9 +83,7 @@ export const ProposalList: React.FC<ProposalListProps> = ({
       </div>
 
       {!proposals || proposals.length === 0 ? (
-        <div className="py-8 text-center text-gray-500">
-          変更提案がありません
-        </div>
+        <div className="py-8 text-center text-gray-500">{t("noProposals")}</div>
       ) : (
         <div className="space-y-3">
           {proposals.map((proposal) => (
@@ -93,7 +97,7 @@ export const ProposalList: React.FC<ProposalListProps> = ({
                   <div className="mb-2 flex items-center gap-2">
                     {getStatusIcon(proposal.status)}
                     <h3 className="font-medium">{proposal.title}</h3>
-                    {getStatusBadge(proposal.status)}
+                    <ProposalStatusBadge status={proposal.status} />
                   </div>
 
                   {proposal.description && (
@@ -111,19 +115,25 @@ export const ProposalList: React.FC<ProposalListProps> = ({
                         height={20}
                         className="rounded-full"
                       />
-                      <span>{proposal.proposer.name ?? "不明"}</span>
+                      <span>{proposal.proposer.name ?? t("unknown")}</span>
                     </div>
 
                     {proposal.lockedBy && (
                       <span className="text-purple-600">
-                        ロック中: {proposal.lockedBy.name ?? "不明"}
+                        {t("lockedBy", {
+                          name: proposal.lockedBy.name ?? t("unknown"),
+                        })}
                       </span>
                     )}
                     <span>
-                      {formatRelativeTime(new Date(proposal.createdAt))}
+                      {formatRelativeTime(new Date(proposal.createdAt), locale)}
                     </span>
-                    <span>{proposal._count.comments}件のコメント</span>
-                    <span>{proposal.changes.length}件の変更</span>
+                    <span>
+                      {t("commentCount", { count: proposal._count.comments })}
+                    </span>
+                    <span>
+                      {t("changeCount", { count: proposal.changes.length })}
+                    </span>
                   </div>
                 </div>
 
@@ -137,7 +147,7 @@ export const ProposalList: React.FC<ProposalListProps> = ({
                     }
                   }}
                 >
-                  詳細
+                  {t("viewDetail")}
                 </Button>
               </div>
             </div>

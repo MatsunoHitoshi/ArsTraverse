@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import { DropFileProviderDashed } from "../drop-file/drop-file-provider";
 import { Button } from "../button/button";
 import type { ProcessingStep } from "./hooks/use-pdf-processing";
@@ -22,6 +23,9 @@ export const PDFDropZone: React.FC<PDFDropZoneProps> = ({
   onSelectExistingRepository,
   withTopicSpaceOption = false,
 }) => {
+  const t = useTranslations("workspace");
+  const tCommon = useTranslations("common");
+
   const handleFileSet = (
     file: File | null | ((prev: File | null) => File | null),
   ) => {
@@ -30,6 +34,13 @@ export const PDFDropZone: React.FC<PDFDropZoneProps> = ({
       onPDFUpload(resolvedFile);
     }
   };
+
+  const stepMessage = {
+    upload: t("pdfUploading"),
+    extract: t("pdfExtracting"),
+    graph: t("pdfGraphExtracting"),
+    complete: t("pdfComplete"),
+  } as const;
 
   return (
     <DropFileProviderDashed setFile={handleFileSet}>
@@ -40,34 +51,31 @@ export const PDFDropZone: React.FC<PDFDropZoneProps> = ({
               <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600"></div>
             </div>
             <p className="mb-2 text-lg text-gray-300">
-              {processingStep === "upload" && "ファイルをアップロード中..."}
-              {processingStep === "extract" && "テキストを抽出中..."}
-              {processingStep === "graph" && "知識グラフを抽出中..."}
-              {processingStep === "complete" && "完了しました！"}
+              {stepMessage[processingStep]}
             </p>
             {processingError && (
-              <p className="text-sm text-red-400">エラー: {processingError}</p>
+              <p className="text-sm text-red-400">
+                {tCommon("errorLabel")}: {processingError}
+              </p>
             )}
           </div>
         ) : (
           <>
             <div className="text-center">
-              <p className="mb-2 text-lg text-white">
-                PDFをドラッグアンドドロップ
+              <p className="mb-2 text-lg text-white">{t("pdfDragDrop")}</p>
+              <p className="text-center text-xs text-gray-300">
+                {t("pdfSizeLimit")}
               </p>
-              <p className="text-center text-xs text-gray-300">（50MB以下）</p>
             </div>
             {withTopicSpaceOption && (
               <div className="pointer-events-auto flex flex-col items-center gap-2">
-                <p className="text-sm text-gray-300">
-                  または
-                </p>
+                <p className="text-sm text-gray-300">{tCommon("or")}</p>
 
                 <Button
                   onClick={onSelectExistingRepository}
                   className="px-6 py-3 text-white hover:bg-slate-600"
                 >
-                  既存のリポジトリを選択
+                  {t("selectExistingRepository")}
                 </Button>
               </div>
             )}

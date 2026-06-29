@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslations } from "next-intl";
 
 interface MentionSuggestionItem {
   id: string;
@@ -16,10 +17,11 @@ export const MentionSuggestionList: React.FC<MentionSuggestionListProps> = ({
   selectedIndex,
   onItemClick,
 }) => {
+  const t = useTranslations("workspace");
   if (items.length === 0) {
     return (
       <div className="px-3 py-2 text-sm text-gray-400">
-        候補が見つかりません
+        {t("noMentionCandidates")}
       </div>
     );
   }

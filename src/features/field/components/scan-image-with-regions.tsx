@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import {
   getDisplayedImageLayout,
@@ -16,13 +17,15 @@ type ScanImageWithRegionsProps = {
 export function ScanImageWithRegions({
   imageUrl,
   regions = [],
-  alt = "スキャン画像",
+  alt,
 }: ScanImageWithRegionsProps) {
+  const t = useTranslations("field");
   const containerRef = useRef<HTMLDivElement>(null);
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
   const [layout, setLayout] = useState<ReturnType<
     typeof getDisplayedImageLayout
   > | null>(null);
+  const imageAlt = alt ?? t("scanImageAlt");
 
   useEffect(() => {
     const container = containerRef.current;
@@ -54,7 +57,7 @@ export function ScanImageWithRegions({
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={imageUrl}
-        alt={alt}
+        alt={imageAlt}
         className="block max-h-72 w-full object-contain"
         onLoad={(event) => {
           setNaturalSize({

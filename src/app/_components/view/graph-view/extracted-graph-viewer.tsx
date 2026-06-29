@@ -6,13 +6,15 @@ import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { D3ForceGraph } from "@/app/_components/d3/force/graph";
 import type { CustomNodeType, CustomLinkType } from "@/app/const/types";
 import { Toolbar } from "@/app/_components/toolbar/toolbar";
-import { useRouter } from "next/navigation";
+import { useRouter } from "i18n/navigation";
+import { useTranslations } from "next-intl";
 import { Button } from "@/app/_components/button/button";
 import { api } from "@/trpc/react";
 import { useSearchParams } from "next/navigation";
 import { useWindowSize } from "@/app/_hooks/use-window-size";
 
 export const ExtractedGraphViewer = () => {
+  const tGraph = useTranslations("graph");
   const { data: session } = useSession();
   const [file, setFile] = useState<File | null>(null);
   const [documentUrl, setDocumentUrl] = useState<string | null>(null);
@@ -128,7 +130,7 @@ export const ExtractedGraphViewer = () => {
                       isLoading={isSubmitting}
                       disabled={isSubmitting}
                     >
-                      グラフを保存
+                      {tGraph("saveGraph")}
                     </Button>
                   )}
                 </div>
