@@ -74,6 +74,11 @@ export const userRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const user = await ctx.db.user.findUnique({
+        where: { id: ctx.session.user.id },
+        select: { localeLinked: true },
+      });
+
       const data: {
         uiLocale?: string;
         preferredLocale?: string;
@@ -85,7 +90,8 @@ export const userRouter = createTRPCRouter({
       }
       if (input.uiLocale !== undefined) {
         data.uiLocale = input.uiLocale;
-        if (input.localeLinked ?? true) {
+        const localeLinked = input.localeLinked ?? user?.localeLinked ?? true;
+        if (localeLinked) {
           data.preferredLocale = input.uiLocale;
         }
       }
