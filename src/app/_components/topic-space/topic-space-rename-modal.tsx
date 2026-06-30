@@ -7,6 +7,7 @@ import { api } from "@/trpc/react";
 import { Button } from "../button/button";
 import clsx from "clsx";
 import type { TopicSpaceResponse } from "@/app/const/types";
+import { useTranslations } from "next-intl";
 
 type TopicSpaceRenameModalProps = {
   isOpen: boolean;
@@ -21,6 +22,8 @@ export const TopicSpaceRenameModal = ({
   topicSpace,
   onSuccess,
 }: TopicSpaceRenameModalProps) => {
+  const t = useTranslations("topicSpace");
+  const tCommon = useTranslations("common");
   const [name, setName] = useState("");
 
   useEffect(() => {
@@ -51,16 +54,16 @@ export const TopicSpaceRenameModal = ({
     <Modal
       isOpen={isOpen}
       setIsOpen={setIsOpen}
-      title="リポジトリの名称を変更"
+      title={t("renameRepository")}
       size="small"
     >
       <form onSubmit={handleSubmit}>
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
-            <div className="text-sm font-semibold">名前</div>
+            <div className="text-sm font-semibold">{t("name")}</div>
             <Input
               type="text"
-              placeholder="名前を入力"
+              placeholder={t("enterName")}
               value={name}
               onChange={(e) => setName(e.target.value)}
               className={clsx(
@@ -77,14 +80,14 @@ export const TopicSpaceRenameModal = ({
               onClick={() => setIsOpen(false)}
               className="text-sm"
             >
-              キャンセル
+              {tCommon("cancel")}
             </Button>
             <Button
               type="submit"
               className="text-sm"
               disabled={!name.trim() || updateTopicSpace.isPending}
             >
-              {updateTopicSpace.isPending ? "変更中..." : "変更する"}
+              {updateTopicSpace.isPending ? t("renaming") : t("renameAction")}
             </Button>
           </div>
         </div>

@@ -1,4 +1,7 @@
+"use client";
+
 import type { GraphDocumentForFrontend } from "@/app/const/types";
+import { useTranslations } from "next-intl";
 import { Button } from "../button/button";
 import { Input } from "@headlessui/react";
 import clsx from "clsx";
@@ -32,6 +35,8 @@ export const NodeLinkEditPanel = ({
   /** true のとき graphDocument の全ノード・全エッジを一覧表示（グラフビューと同一） */
   showFullGraph?: boolean;
 }) => {
+  const t = useTranslations("modal.nodeLink");
+  const tCommon = useTranslations("common");
   const isFullGraphMode = showFullGraph;
   const nodes = isFullGraphMode
     ? (graphDocument?.nodes ?? [])
@@ -79,7 +84,7 @@ export const NodeLinkEditPanel = ({
       <div className="flex flex-col divide-y divide-gray-500">
         {nodes.length > 0 ? (
           <div className="flex flex-col gap-1 py-4">
-            <div className="text-sm font-bold">ノード</div>
+            <div className="text-sm font-bold">{t("nodes")}</div>
 
             <div className="flex flex-col gap-2">
               {nodes.map((node) => (
@@ -88,10 +93,10 @@ export const NodeLinkEditPanel = ({
                   className="flex flex-col gap-1 rounded-xl bg-slate-700 p-4"
                 >
                   <div>
-                    <div className="text-xs text-gray-400">名前</div>
+                    <div className="text-xs text-gray-400">{t("name")}</div>
                     <Input
                       type="text"
-                      placeholder="ノードの名前"
+                      placeholder={t("nodeNamePlaceholder")}
                       autoFocus
                       className={clsx(
                         "block w-full rounded-lg border-none bg-white/5 px-3 py-1.5 text-sm/6",
@@ -136,10 +141,10 @@ export const NodeLinkEditPanel = ({
                   </div>
 
                   <div>
-                    <div className="text-xs text-gray-400">ラベル</div>
+                    <div className="text-xs text-gray-400">{t("label")}</div>
                     <Input
                       type="text"
-                      placeholder="ノードのラベル"
+                      placeholder={t("nodeLabelPlaceholder")}
                       className={clsx(
                         "block w-max rounded-md border-none bg-white/5 px-3 py-1.5 text-xs",
                         "focus:outline-none data-[focus]:outline-1 data-[focus]:-outline-offset-2 data-[focus]:outline-slate-400",
@@ -178,7 +183,7 @@ export const NodeLinkEditPanel = ({
         )}
         {relationships.length > 0 ? (
           <div className="flex flex-col gap-1 py-4">
-            <div className="text-sm font-bold">リンク</div>
+            <div className="text-sm font-bold">{t("links")}</div>
             <div className="flex flex-col gap-2">
               {relationships.map((relationship) => (
                 <div
@@ -207,7 +212,7 @@ export const NodeLinkEditPanel = ({
                   <Input
                     type="text"
                     autoFocus
-                    placeholder="リンクのタイプ"
+                    placeholder={t("linkTypePlaceholder")}
                     className={clsx(
                       "block !max-w-32 rounded-lg border-none bg-white/5 px-3 py-1.5 text-sm/6",
                       "focus:outline-none data-[focus]:outline-1 data-[focus]:-outline-offset-2 data-[focus]:outline-slate-400",
@@ -278,11 +283,11 @@ export const NodeLinkEditPanel = ({
             className="text-sm"
             onClick={handleCancel}
           >
-            キャンセル
+            {tCommon("cancel")}
           </Button>
           {!isFullGraphMode && (
             <Button type="button" className="text-sm" onClick={handleAdd}>
-              追加
+              {t("add")}
             </Button>
           )}
         </div>

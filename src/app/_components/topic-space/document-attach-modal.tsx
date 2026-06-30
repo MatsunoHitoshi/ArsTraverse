@@ -16,6 +16,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "../button/button";
 import { MinusIcon, PlusIcon } from "../icons";
+import { useTranslations } from "next-intl";
 
 const DocumentAttachSchema = z.object({
   documents: z.array(z.string()),
@@ -64,6 +65,7 @@ export const DocumentAttachModal = ({
   >([emptyDocument]);
   const attachDocuments = api.topicSpaces.attachDocuments.useMutation();
   const [query, setQuery] = useState("");
+  const t = useTranslations("topicSpace");
 
   const filteredDocuments =
     query === ""
@@ -121,7 +123,7 @@ export const DocumentAttachModal = ({
     <Modal
       isOpen={isOpen}
       setIsOpen={setIsOpen}
-      title="リポジトリにドキュメントを追加"
+      title={t("attachDocumentTitle")}
     >
       <form onSubmit={methods.handleSubmit(submit, isInValid)}>
         <div className="flex flex-col gap-3">
@@ -155,7 +157,7 @@ export const DocumentAttachModal = ({
                         document ? document.name : ""
                       }
                       onChange={(event) => setQuery(event.target.value)}
-                      placeholder="ドキュメント名を入力"
+                      placeholder={t("enterDocumentName")}
                       className={clsx(
                         "w-full rounded-lg border-none bg-white/5 py-1.5 pl-3 pr-8 text-sm/6 text-white",
                         "focus:outline-none data-[focus]:outline-1 data-[focus]:-outline-offset-2 data-[focus]:outline-slate-400",
@@ -215,7 +217,7 @@ export const DocumentAttachModal = ({
 
           <div className="flex flex-row justify-end">
             <Button type="submit" className="text-sm">
-              追加
+              {t("add")}
             </Button>
           </div>
         </div>

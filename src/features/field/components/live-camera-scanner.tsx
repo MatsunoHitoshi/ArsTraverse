@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/app/_components/button/button";
 import { ChevronLeftIcon } from "@/app/_components/icons";
 import {
@@ -8,9 +9,6 @@ import {
   openCameraStreamWithFallback,
   stopCameraStream,
 } from "@/features/field/ocr/camera-capture";
-
-const CAMERA_STARTUP_ERROR =
-  "カメラを起動できませんでした。ファイル選択から画像を追加してください。";
 
 type LiveCameraScannerProps = {
   onCapture: (file: File) => void;
@@ -25,18 +23,17 @@ export function LiveCameraScanner({
   onOpenNativeCamera,
   onBack,
 }: LiveCameraScannerProps) {
+  const t = useTranslations("field");
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [isStarting, setIsStarting] = useState(true);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isCameraStartupError, setIsCameraStartupError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const canCapture = useMemo(
-    () =>
-      !isStarting &&
-      !isCapturing &&
-      errorMessage !== CAMERA_STARTUP_ERROR,
-    [isStarting, isCapturing, errorMessage],
+    () => !isStarting && !isCapturing && !isCameraStartupError,
+    [isStarting, isCapturing, isCameraStartupError],
   );
 
   const releaseCamera = useCallback(() => {
@@ -51,6 +48,7 @@ export function LiveCameraScanner({
       try {
         setIsStarting(true);
         setErrorMessage(null);
+        setIsCameraStartupError(false);
         const stream = await openCameraStreamWithFallback();
         if (!isActive) {
           stopCameraStream(stream);
@@ -63,7 +61,8 @@ export function LiveCameraScanner({
           await videoRef.current.play();
         }
       } catch {
-        setErrorMessage(CAMERA_STARTUP_ERROR);
+        setIsCameraStartupError(true);
+        setErrorMessage(t("cameraStartupError"));
       } finally {
         if (isActive) {
           setIsStarting(false);
@@ -77,7 +76,7 @@ export function LiveCameraScanner({
       isActive = false;
       releaseCamera();
     };
-  }, [releaseCamera]);
+  }, [releaseCamera, t]);
 
   const handleCapture = async () => {
     const video = videoRef.current;
@@ -92,7 +91,7 @@ export function LiveCameraScanner({
       releaseCamera();
       onCapture(file);
     } catch {
-      setErrorMessage("撮影に失敗しました。もう一度お試しください。");
+      setErrorMessage(t("captureFailed"));
     } finally {
       setIsCapturing(false);
     }
@@ -115,7 +114,7 @@ export function LiveCameraScanner({
 
       {isStarting && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 text-sm text-slate-200">
-          カメラを起動中...
+          {t("cameraStarting")}
         </div>
       )}
 
@@ -124,7 +123,7 @@ export function LiveCameraScanner({
           <button
             type="button"
             onClick={handleBack}
-            aria-label="戻る"
+            aria-label={t("back")}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition hover:bg-black/60"
           >
             <ChevronLeftIcon width={20} height={20} color="white" />
@@ -146,21 +145,21 @@ export function LiveCameraScanner({
               className="bg-black/45 px-3 py-2 text-xs text-white backdrop-blur-sm hover:bg-black/60"
               size="small"
             >
-              ファイルから追加
+              {t("addFromFile")}
             </Button>
             <Button
               onClick={onOpenNativeCamera}
               className="bg-black/45 px-3 py-2 text-xs text-white backdrop-blur-sm hover:bg-black/60"
               size="small"
             >
-              システムカメラ
+              {t("systemCamera")}
             </Button>
           </div>
           <button
             type="button"
             onClick={() => void handleCapture()}
             disabled={!canCapture}
-            aria-label="ライブプレビューで撮影する"
+            aria-label={t("captureAriaLabel")}
             className="h-[4.5rem] w-[4.5rem] shrink-0 rounded-full border-4 border-white bg-orange-400 shadow-lg transition disabled:cursor-not-allowed disabled:opacity-50"
           />
           <div className="min-w-[6.5rem]" aria-hidden />

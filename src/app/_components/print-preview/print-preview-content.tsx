@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useRef, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import {
   type MetaGraphStoryData,
   getStoryText,
@@ -55,6 +56,7 @@ export function PrintPreviewContent({
   onCommunityPositionChange,
   onNodePositionChange,
 }: PrintPreviewContentProps) {
+  const t = useTranslations("print");
   const [communityCenters, setCommunityCenters] = useState<
     Map<string, { x: number; y: number }>
   >(new Map());
@@ -94,12 +96,12 @@ export function PrintPreviewContent({
         const content = getStoryContent(storyValue, summary?.summary ?? "");
         return {
           communityId: flow.communityId,
-          title: summary?.title ?? `コミュニティ ${flow.communityId}`,
+          title: summary?.title ?? t("communityFallback", { id: flow.communityId }),
           content: content || (summary?.summary ?? ""),
           order: flow.order,
         };
       });
-  }, [metaGraphData]);
+  }, [metaGraphData, t]);
 
   // ページサイズをmm単位で取得
   const pageSizeInMm = useMemo(() => {
@@ -216,7 +218,7 @@ export function PrintPreviewContent({
       }}
       onWheel={handleWheelZoom}
       role="application"
-      aria-label="プリントプレビュー"
+      aria-label={t("printPreview")}
     >
       {/* ヘッダー（印刷時は非表示） */}
       <div className="absolute top-4 right-4 z-10 flex items-center gap-3">
@@ -227,7 +229,7 @@ export function PrintPreviewContent({
             onClick={() => setZoomLevel((z) => Math.max(ZOOM_MIN, z - ZOOM_STEP))}
             disabled={zoomLevel <= ZOOM_MIN}
             className="flex h-8 w-8 items-center justify-center rounded bg-slate-200 text-slate-700 hover:bg-slate-300 disabled:opacity-40 disabled:cursor-not-allowed"
-            aria-label="縮小"
+            aria-label={t("zoomOut")}
           >
             −
           </button>
@@ -239,7 +241,7 @@ export function PrintPreviewContent({
             onClick={() => setZoomLevel((z) => Math.min(ZOOM_MAX, z + ZOOM_STEP))}
             disabled={zoomLevel >= ZOOM_MAX}
             className="flex h-8 w-8 items-center justify-center rounded bg-slate-200 text-slate-700 hover:bg-slate-300 disabled:opacity-40 disabled:cursor-not-allowed"
-            aria-label="拡大"
+            aria-label={t("zoomIn")}
           >
             +
           </button>
@@ -270,7 +272,7 @@ export function PrintPreviewContent({
       >
         {storyItems.length === 0 ? (
           <div className="py-12 text-center text-gray-500">
-            ストーリーがありません
+            {t("noStory")}
           </div>
         ) : (
           <div className="print-unified-graph-container" ref={graphViewRef} style={{ width: "100%", height: "100%", overflow: "hidden" }}>

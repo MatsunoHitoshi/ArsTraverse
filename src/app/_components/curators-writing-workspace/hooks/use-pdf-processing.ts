@@ -1,4 +1,7 @@
+"use client";
+
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { api } from "@/trpc/react";
 import { storageUtils } from "@/app/_utils/supabase/supabase";
 import { BUCKETS } from "@/app/_utils/supabase/const";
@@ -16,12 +19,12 @@ export const usePDFProcessing = (
   existingTopicSpaceId?: string | null,
   onComplete?: () => void,
 ) => {
+  const t = useTranslations("workspace");
   const [isProcessingPDF, setIsProcessingPDF] = useState(false);
   const [processingStep, setProcessingStep] =
     useState<ProcessingStep>("upload");
   const [processingError, setProcessingError] = useState<string | null>(null);
 
-  // PDF処理用のAPI呼び出し
   const extractKG = api.kg.extractKG.useMutation();
   const createSourceDocument =
     api.sourceDocument.createWithGraphData.useMutation();
@@ -35,36 +38,31 @@ export const usePDFProcessing = (
       setProcessingError(null);
       setProcessingStep("upload");
 
-      // ファイル形式チェック
       if (file.type !== "application/pdf") {
-        throw new Error("PDFファイルのみアップロード可能です");
+        throw new Error(t("pdfOnly"));
       }
 
-      // ファイルサイズチェック（50MB）
       if (file.size > 50 * 1024 * 1024) {
-        throw new Error("ファイルサイズは50MB以下にしてください");
+        throw new Error(t("pdfSizeExceeded"));
       }
 
-      // ファイルをBase64に変換してアップロード
       const reader = new FileReader();
       reader.onload = async () => {
         try {
           const base64Data = reader.result?.toString();
           if (!base64Data) {
-            throw new Error("ファイルの読み込みに失敗しました");
+            throw new Error(t("fileReadFailed"));
           }
 
-          // Supabase Storageにアップロード
           const fileUrl = await storageUtils.uploadFromDataURL(
             base64Data,
             BUCKETS.PATH_TO_INPUT_PDF,
           );
 
           if (!fileUrl) {
-            throw new Error("ファイルのアップロードに失敗しました");
+            throw new Error(t("fileUploadFailed"));
           }
 
-          // グラフ抽出
           setProcessingStep("extract");
           await processPDFToGraph(fileUrl, file.name);
         } catch (error) {
@@ -72,7 +70,7 @@ export const usePDFProcessing = (
           setProcessingError(
             error instanceof Error
               ? error.message
-              : "PDF処理中にエラーが発生しました",
+              : t("pdfProcessingError"),
           );
           setIsProcessingPDF(false);
         }
@@ -83,7 +81,7 @@ export const usePDFProcessing = (
       setProcessingError(
         error instanceof Error
           ? error.message
-          : "アップロード中にエラーが発生しました",
+          : t("uploadProcessingError"),
       );
       setIsProcessingPDF(false);
     }
@@ -93,7 +91,6 @@ export const usePDFProcessing = (
     try {
       setProcessingStep("graph");
 
-      // グラフ抽出
       const extractResult = await new Promise<{
         data: { graph: GraphDocumentForFrontend | null; error?: string };
       }>((resolve, reject) => {
@@ -115,12 +112,11 @@ export const usePDFProcessing = (
       });
 
       if (!extractResult?.data?.graph) {
-        throw new Error("グラフの抽出に失敗しました");
+        throw new Error(t("graphExtractFailedPdf"));
       }
 
       const graphData = extractResult.data.graph;
 
-      // SourceDocumentとDocumentGraphを作成
       const documentResult = await new Promise<CreateSourceDocumentResponse>(
         (resolve, reject) => {
           createSourceDocument.mutate(
@@ -144,17 +140,12 @@ export const usePDFProcessing = (
       );
 
       if (!documentResult) {
-        throw new Error("ドキュメントの作成に失敗しました");
+        throw new Error(t("documentCreateFailed"));
       }
 
-      console.log("DocumentResult:", documentResult);
-      // createWithGraphDataは{ documentGraph, sourceDocument }を返す
       const sourceDocumentId = documentResult.sourceDocument.id;
-      console.log("SourceDocumentId:", sourceDocumentId);
 
-      // 既存のTopicSpaceがある場合は統合、ない場合は新規作成
       if (existingTopicSpaceId) {
-        // 既存のTopicSpaceにSourceDocumentをアタッチ
         await new Promise((resolve, reject) => {
           attachDocuments.mutate(
             {
@@ -174,13 +165,12 @@ export const usePDFProcessing = (
           );
         });
       } else {
-        // 新しいTopicSpaceを作成
         const topicSpaceResult = await new Promise<TopicSpace>(
           (resolve, reject) => {
             createTopicSpace.mutate(
               {
                 name: fileName.replace(".pdf", ""),
-                description: `ワークスペースか作成されたリポジトリ: ${fileName}`,
+                description: t("topicSpaceFromWorkspace", { fileName }),
                 documentId: sourceDocumentId,
               },
               {
@@ -198,10 +188,9 @@ export const usePDFProcessing = (
         );
 
         if (!topicSpaceResult) {
-          throw new Error("リポジトリの作成に失敗しました");
+          throw new Error(t("topicSpaceCreateFailed"));
         }
 
-        // ワークスペースにリポジトリをアタッチ
         const currentTopicSpaceIds: string[] = [];
         await new Promise((resolve, reject) => {
           updateWorkspace.mutate(
@@ -227,12 +216,10 @@ export const usePDFProcessing = (
       setProcessingStep("complete");
       setIsProcessingPDF(false);
 
-      // 成功時のコールバックを実行
       if (onSuccess) {
         onSuccess();
       }
 
-      // 完了時のコールバックを実行（モーダルを閉じる等）
       if (onComplete) {
         onComplete();
       }
@@ -241,7 +228,7 @@ export const usePDFProcessing = (
       setProcessingError(
         error instanceof Error
           ? error.message
-          : "グラフ処理中にエラーが発生しました",
+          : t("graphProcessingError"),
       );
       setIsProcessingPDF(false);
     }

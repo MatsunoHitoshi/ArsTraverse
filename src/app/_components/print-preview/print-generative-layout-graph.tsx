@@ -16,6 +16,7 @@ import {
 } from "d3";
 import type { ForceLink } from "d3";
 import { useEffect, useMemo, useRef, useState, memo } from "react";
+import { useTranslations } from "next-intl";
 import { getEdgeCompositeKeyFromLink } from "@/app/const/story-segment";
 import { darkenHexColor } from "@/app/_utils/color-utils";
 import { getMaxEdgeLabelFontSizeByLength } from "@/app/_utils/graph-label-utils";
@@ -197,6 +198,7 @@ export const PrintGenerativeLayoutGraph = ({
   onNodePositionChange,
   reSimulationTrigger,
 }: PrintGenerativeLayoutGraphProps) => {
+  const t = useTranslations("print");
   const svgRef = useRef<SVGSVGElement>(null);
   // 詳細グラフ全体のレイアウト（一度だけ計算）
   const [detailedGraphLayout, setDetailedGraphLayout] = useState<{
@@ -2096,7 +2098,7 @@ export const PrintGenerativeLayoutGraph = ({
                           background: "linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.2) 50%)",
                           borderBottomRightRadius: "12px",
                         }}
-                        aria-label="リサイズ"
+                        aria-label={t("resize")}
                       />
                     </div>
                   </foreignObject>
@@ -2229,7 +2231,7 @@ export const PrintGenerativeLayoutGraph = ({
                           background: "linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.2) 50%)",
                           borderBottomRightRadius: "12px",
                         }}
-                        aria-label="リサイズ"
+                        aria-label={t("resize")}
                       />
                     </div>
                   </foreignObject>

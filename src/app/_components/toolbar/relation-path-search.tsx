@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { SelectInput } from "../input/select-input";
 import { nodePathSearch } from "@/app/_utils/kg/bfs";
 import { ChevronRightIcon } from "../icons";
+import { useTranslations } from "next-intl";
 
 type SelectBoxOption = { id: string; label: string };
 
@@ -23,6 +24,7 @@ export const RelationPathSearch = ({
   setPathData,
   pathData,
 }: RelationPathSearchProps) => {
+  const t = useTranslations("view");
   const [startNode, setStartNode] = useState<SelectBoxOption>();
   const [endNode, setEndNode] = useState<SelectBoxOption>();
   const [isPathNotFound, setIsPathNotFound] = useState<boolean>(false);
@@ -79,19 +81,19 @@ export const RelationPathSearch = ({
         >
           <ChevronRightIcon width={16} height={16} color="white" />
         </span>
-        <span>詳細検索</span>
+        <span>{t("advancedSearch")}</span>
       </button>
 
       {isOpen && (
         <div className="flex flex-col gap-1">
-          <div className="text-xs">つながりの検索</div>
+          <div className="text-xs">{t("pathSearch")}</div>
           <div className="flex flex-row items-center justify-between gap-2">
             <SelectInput
               options={options}
               selected={startNode}
               setSelected={setStartNode}
               borderRed={isPathNotFound}
-              placeholder="このノードから"
+              placeholder={t("fromNode")}
             />
             <div>
               <ChevronRightIcon height={14} width={14} color="white" />
@@ -102,11 +104,11 @@ export const RelationPathSearch = ({
               selected={endNode}
               setSelected={setEndNode}
               borderRed={isPathNotFound}
-              placeholder="このノードまで"
+              placeholder={t("toNode")}
             />
           </div>
           <div className="flex flex-row items-center gap-2 text-xs">
-            <div>距離: </div>
+            <div>{t("distance")}: </div>
             <div>
               {pathData &&
                 (pathData.nodes.length === 0 ? "-" : pathData.nodes.length - 1)}

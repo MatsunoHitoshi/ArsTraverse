@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, useCallback, memo } from "react";
+import { useTranslations } from "next-intl";
 import { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
 import * as THREE from "three";
@@ -542,6 +543,7 @@ export const D3SphericalGraph = ({
   isSelectionMode?: boolean;
   onNodeSelectionToggle?: (node: CustomNodeType) => void;
 }) => {
+  const t = useTranslations("graph");
   const { nodes, relationships } = graphDocument;
   const initLinks = relationships as CustomLinkType[];
   const initNodes = isLinkFiltered ? linkFilter(nodes, initLinks) : nodes;
@@ -608,7 +610,7 @@ export const D3SphericalGraph = ({
     return (
       <div className="mt-60 flex flex-col items-center">
         <div>
-          <span translate="yes">グラフデータがありません</span>
+          <span translate="yes">{t("noData")}</span>
         </div>
       </div>
     );

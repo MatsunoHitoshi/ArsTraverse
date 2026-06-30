@@ -96,16 +96,29 @@ export type TopicGraphFilterOption = {
   withBetweenNodes?: boolean;
 };
 
-export const ChangeTypeMap = {
-  ADD: "追加",
-  REMOVE: "削除",
-  UPDATE: "更新",
+const FALLBACK_CHANGE_TYPE_LABELS: Record<GraphChangeType, string> = {
+  ADD: "Add",
+  REMOVE: "Remove",
+  UPDATE: "Update",
 };
 
-export const EntityTypeMap = {
-  NODE: "ノード",
-  EDGE: "エッジ",
+const FALLBACK_ENTITY_TYPE_LABELS: Record<GraphChangeEntityType, string> = {
+  NODE: "Node",
+  EDGE: "Edge",
 };
+
+export type ChangeTypeLabelTranslator = (type: GraphChangeType) => string;
+export type EntityTypeLabelTranslator = (type: GraphChangeEntityType) => string;
+
+export const getChangeTypeLabel = (
+  type: GraphChangeType,
+  t?: ChangeTypeLabelTranslator,
+): string => (t ? t(type) : (FALLBACK_CHANGE_TYPE_LABELS[type] ?? type));
+
+export const getEntityTypeLabel = (
+  type: GraphChangeEntityType,
+  t?: EntityTypeLabelTranslator,
+): string => (t ? t(type) : (FALLBACK_ENTITY_TYPE_LABELS[type] ?? type));
 
 export type GraphDocumentForFrontend = {
   nodes: NodeTypeForFrontend[];

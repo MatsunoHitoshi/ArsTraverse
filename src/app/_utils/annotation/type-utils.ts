@@ -19,21 +19,35 @@ export const getAnnotationTypeColor = (type: AnnotationType): string => {
   }
 };
 
-export const getAnnotationTypeLabel = (type: AnnotationType): string => {
-  switch (type) {
-    case "COMMENT":
-      return "コメント";
-    case "INTERPRETATION":
-      return "解釈";
-    case "QUESTION":
-      return "質問";
-    case "CLARIFICATION":
-      return "補足";
-    case "CRITICISM":
-      return "批評";
-    case "SUPPORT":
-      return "支持";
-    default:
-      return type;
+const ANNOTATION_TYPE_KEYS: Record<AnnotationType, string> = {
+  COMMENT: "comment",
+  INTERPRETATION: "interpretation",
+  QUESTION: "question",
+  CLARIFICATION: "clarification",
+  CRITICISM: "criticism",
+  SUPPORT: "support",
+};
+
+const FALLBACK_ANNOTATION_TYPE_LABELS: Record<AnnotationType, string> = {
+  COMMENT: "Comment",
+  INTERPRETATION: "Interpretation",
+  QUESTION: "Question",
+  CLARIFICATION: "Clarification",
+  CRITICISM: "Criticism",
+  SUPPORT: "Support",
+};
+
+export type AnnotationTypeTranslator = (
+  key: (typeof ANNOTATION_TYPE_KEYS)[AnnotationType],
+) => string;
+
+export const getAnnotationTypeLabel = (
+  type: AnnotationType,
+  t?: AnnotationTypeTranslator,
+): string => {
+  const key = ANNOTATION_TYPE_KEYS[type];
+  if (t && key) {
+    return t(key);
   }
+  return FALLBACK_ANNOTATION_TYPE_LABELS[type] ?? type;
 };

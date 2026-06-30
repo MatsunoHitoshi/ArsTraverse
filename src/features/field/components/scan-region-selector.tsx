@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "next-intl";
 import { Button } from "@/app/_components/button/button";
 import { CrossLargeIcon, RotateCounterClockwiseIcon } from "@/app/_components/icons";
 import { ScanImageWithRegions } from "@/features/field/components/scan-image-with-regions";
@@ -51,19 +52,7 @@ type DragState =
     startRegion: NormalizedOcrRegion;
   };
 
-const CORNER_LABELS: Record<RegionCorner, string> = {
-  tl: "左上",
-  tr: "右上",
-  br: "右下",
-  bl: "左下",
-};
-
 const CORNERS: RegionCorner[] = ["tl", "tr", "br", "bl"];
-
-const REGION_HELP_TEXT =
-  "四隅のポイントをドラッグして文字部分に合わせてください。枠内をドラッグすると領域全体を移動できます。";
-
-const REGION_VIEW_TEXT = "指定した文字領域のプレビューです。";
 
 type RegionControlsProps = {
   regions: NormalizedOcrRegion[];
@@ -76,6 +65,7 @@ function ImageRotateButton({
   onRotateImage,
   isRotatingImage,
 }: Pick<RegionControlsProps, "onRotateImage" | "isRotatingImage">) {
+  const t = useTranslations("field");
   if (!onRotateImage) return null;
 
   return (
@@ -85,7 +75,7 @@ function ImageRotateButton({
       isLoading={isRotatingImage}
       className="!h-9 !w-9 !bg-slate-700 !p-2 !pl-2.5 text-white"
       size="small"
-      aria-label="画像を90度回転"
+      aria-label={t("rotateImage90")}
     >
       <RotateCounterClockwiseIcon width={18} height={18} color="white" />
     </Button>
@@ -98,6 +88,8 @@ function RegionControls({
   onRotateImage,
   isRotatingImage,
 }: RegionControlsProps) {
+  const t = useTranslations("field");
+
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
@@ -115,14 +107,14 @@ function RegionControls({
           className="bg-slate-700 px-2 py-1 text-xs text-white"
           size="small"
         >
-          ＋ 領域を追加
+          {t("addRegion")}
         </Button>
         <Button
           onClick={() => onRegionsChange([DEFAULT_OCR_REGION])}
           className="bg-slate-700 px-2 py-1 text-xs text-white"
           size="small"
         >
-          候補をリセット
+          {t("resetRegions")}
         </Button>
         {regions.length > 1 && (
           <Button
@@ -130,12 +122,14 @@ function RegionControls({
             className="bg-slate-700 px-2 py-1 text-xs text-white"
             size="small"
           >
-            最後の領域を削除
+            {t("removeLastRegion")}
           </Button>
         )}
       </div>
 
-      <p className="text-xs text-slate-500">領域 {regions.length} 件</p>
+      <p className="text-xs text-slate-500">
+        {t("regionCount", { count: regions.length })}
+      </p>
     </>
   );
 }
@@ -146,12 +140,23 @@ function ScanRegionSelectorCanvas({
   onRegionsChange,
   containerClassName,
 }: ScanRegionSelectorCanvasProps) {
+  const t = useTranslations("field");
   const containerRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState<DisplayedImageLayout | null>(null);
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
   const dragStateRef = useRef<DragState | null>(null);
   const activePointerId = useRef<number | null>(null);
+
+  const cornerLabels = useMemo(
+    (): Record<RegionCorner, string> => ({
+      tl: t("cornerTopLeft"),
+      tr: t("cornerTopRight"),
+      br: t("cornerBottomRight"),
+      bl: t("cornerBottomLeft"),
+    }),
+    [t],
+  );
 
   const updateLayout = useCallback(() => {
     const container = containerRef.current;
@@ -264,7 +269,7 @@ function ScanRegionSelectorCanvas({
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={imageUrl}
-        alt="OCR 領域選択"
+        alt={t("ocrRegionSelectAlt")}
         className="absolute inset-0 h-full w-full object-contain"
         onLoad={handleImageLoad}
         draggable={false}
@@ -286,7 +291,7 @@ function ScanRegionSelectorCanvas({
             >
               <button
                 type="button"
-                aria-label={`領域 ${index + 1} を移動`}
+                aria-label={t("moveRegion", { index: index + 1 })}
                 className="absolute inset-0 cursor-move touch-none"
                 onPointerDown={(event) => {
                   const point = getNormalizedPoint(
@@ -312,7 +317,10 @@ function ScanRegionSelectorCanvas({
                 <button
                   key={`${index}-${corner}`}
                   type="button"
-                  aria-label={`領域 ${index + 1} ${CORNER_LABELS[corner]}`}
+                  aria-label={t("regionCornerAria", {
+                    index: index + 1,
+                    corner: cornerLabels[corner],
+                  })}
                   className="absolute z-10 h-11 w-11 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none active:cursor-grabbing"
                   style={cornerToRegionStyle(corner)}
                   onPointerDown={(event) => {
@@ -345,6 +353,7 @@ export function ScanRegionSelector({
   onRotateImage,
   isRotatingImage = false,
 }: ScanRegionSelectorProps) {
+  const t = useTranslations("field");
   const [isFullscreen, setIsFullscreen] = useState(defaultFullscreen);
   const [isMounted, setIsMounted] = useState(false);
   const [fullscreenBaseline, setFullscreenBaseline] = useState<
@@ -424,7 +433,7 @@ export function ScanRegionSelector({
           className="fixed inset-0 z-50 flex flex-col bg-slate-950"
           role="dialog"
           aria-modal="true"
-          aria-label="文字領域を全画面で指定"
+          aria-label={t("fullscreenRegionDialog")}
         >
           <div className="flex shrink-0 items-center justify-between border-b border-slate-800 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
             <div className="flex items-center gap-2">
@@ -437,9 +446,9 @@ export function ScanRegionSelector({
               </Button>
               <div>
                 <h3 className="text-sm font-semibold text-slate-100">
-                  文字領域を指定
+                  {t("selectTextRegion")}
                 </h3>
-                <p className="mt-1 text-xs text-slate-400">{REGION_HELP_TEXT}</p>
+                <p className="mt-1 text-xs text-slate-400">{t("regionHelpText")}</p>
               </div>
             </div>
             <Button
@@ -450,7 +459,7 @@ export function ScanRegionSelector({
                 requireFullscreenChangeToComplete && !hasFullscreenChanges
               }
             >
-              完了
+              {t("done")}
             </Button>
           </div>
 
@@ -478,7 +487,7 @@ export function ScanRegionSelector({
     <div className="mt-3 flex flex-col gap-2">
       <div className="flex items-start justify-between gap-3">
         <p className="text-xs text-slate-400">
-          {isFullscreen ? REGION_HELP_TEXT : REGION_VIEW_TEXT}
+          {isFullscreen ? t("regionHelpText") : t("regionViewText")}
         </p>
         {!isFullscreen && (
           <Button
@@ -486,7 +495,7 @@ export function ScanRegionSelector({
             className="shrink-0 bg-slate-700 px-2 py-1 text-sm text-white"
             size="small"
           >
-            範囲調整
+            {t("adjustRegion")}
           </Button>
         )}
       </div>
@@ -495,7 +504,7 @@ export function ScanRegionSelector({
         <ScanImageWithRegions
           imageUrl={imageUrl}
           regions={regions}
-          alt="OCR 領域プレビュー"
+          alt={t("ocrRegionPreviewAlt")}
         />
       )}
 
@@ -504,10 +513,10 @@ export function ScanRegionSelector({
           <ScanImageWithRegions
             imageUrl={imageUrl}
             regions={regions}
-            alt="OCR 領域プレビュー"
+            alt={t("ocrRegionPreviewAlt")}
           />
           <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-950/40 text-xs text-slate-200">
-            全画面モードで調整中…
+            {t("fullscreenAdjusting")}
           </span>
         </div>
       )}

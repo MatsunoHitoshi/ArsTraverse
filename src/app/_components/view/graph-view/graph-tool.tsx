@@ -1,3 +1,4 @@
+"use client";
 import type { TopicGraphFilterOption } from "@/app/const/types";
 import {
   EnterFullScreenIcon,
@@ -7,7 +8,9 @@ import {
 } from "../../icons";
 import { type TagOption, TagsInput } from "../../input/tags-input";
 import { ExportGraphButton } from "../../d3/export-graph-button";
-import { useSearchParams, usePathname } from "next/navigation";
+import { usePathname } from "i18n/navigation";
+import { useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { DirectedLinksToggleButton } from "./directed-links-toggle-button";
 
 export const GraphTool = ({
@@ -41,6 +44,7 @@ export const GraphTool = ({
   magnifierMode?: number;
   setMagnifierMode?: React.Dispatch<React.SetStateAction<number>>;
 }) => {
+  const t = useTranslations("view");
   const searchParams = useSearchParams();
   const pathname = usePathname();
 
@@ -120,7 +124,7 @@ export const GraphTool = ({
               selected={tags}
               setSelected={setTags}
               options={tagOptions}
-              placeholder="タグで絞り込む"
+              placeholder={t("filterByTag")}
               defaultOption={
                 tagFilterOption?.value && tagFilterOption?.type
                   ? {
@@ -140,7 +144,7 @@ export const GraphTool = ({
       {!!isLargeGraph && !isGraphFullScreen && (
         <div className="absolute bottom-4 flex flex-row items-center gap-1 text-xs">
           <div className="text-orange-500">
-            ノード数が多いため一部のみが表示されています
+            {t("partialGraphDisplay")}
           </div>
           {!!setIsGraphFullScreen ? (
             <button
@@ -149,7 +153,7 @@ export const GraphTool = ({
               }}
               className="underline hover:no-underline"
             >
-              全て表示
+              {t("showAll")}
             </button>
           ) : (
             <></>

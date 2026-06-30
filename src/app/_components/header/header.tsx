@@ -1,14 +1,16 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import { Button } from "../button/button";
-import { signIn, signOut, useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { signIn, useSession } from "next-auth/react";
+import { useRouter, usePathname } from "i18n/navigation";
 import { DashboardIcon } from "../icons";
 import { loginProhibited, spAllowed } from "@/app/const/page-config";
-import { usePathname } from "next/navigation";
 
 export const Header = () => {
+  const t = useTranslations("navigation");
+  const tDashboard = useTranslations("dashboard");
   const { data: session } = useSession();
   const router = useRouter();
   const pathname = usePathname();
@@ -99,24 +101,26 @@ export const Header = () => {
         </div>
 
         {isLoginProhibited ? (
-          <div className="flex flex-row items-center gap-1 px-2">
+          <div className="flex flex-row items-center gap-2 px-2">
             <a href="/" target="_blank" rel="noopener noreferrer">
               <Button theme="transparent" size="small">
-                ツールへ移動
+                {tDashboard("moveToTool")}
               </Button>
             </a>
           </div>
         ) : (
           <>
             {!session ? (
-              <Button
-                onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
-                className="text-sm underline hover:no-underline"
-              >
-                SignUp/SignIn
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+                  className="text-sm underline hover:no-underline"
+                >
+                  {t("signUp")}/{t("signIn")}
+                </Button>
+              </div>
             ) : (
-              <div className="flex flex-row items-center gap-1 px-2">
+              <div className="flex flex-row items-center gap-2 px-2">
                 <div className="flex flex-row items-center">
                   <Button
                     onClick={() => {
@@ -141,13 +145,6 @@ export const Header = () => {
                     />
                   </Button>
                 </div>
-
-                <Button
-                  onClick={() => signOut({ callbackUrl: "/" })}
-                  className="text-sm underline hover:no-underline"
-                >
-                  SignOut
-                </Button>
               </div>
             )}
           </>

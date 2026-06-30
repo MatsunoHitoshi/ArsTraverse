@@ -1,3 +1,4 @@
+"use client";
 import type { TopicSpaceResponse } from "@/app/const/types";
 import { Modal } from "../modal/modal";
 import {
@@ -18,6 +19,7 @@ import { Button } from "../button/button";
 import { MinusIcon, Link2Icon } from "../icons";
 import { TextInput } from "../input/text-input";
 import type { TopicSpace } from "@prisma/client";
+import { useTranslations } from "next-intl";
 
 const TopicSpaceAttachSchema = z.object({
   topicSpaces: z.array(z.string()),
@@ -55,6 +57,7 @@ export const TopicSpaceAttachModal = ({
   workspaceId,
   refetch,
 }: TopicSpaceAttachModalProps) => {
+  const t = useTranslations("topicSpace");
   const { data: session } = useSession();
   const { data: topicSpaces } = api.topicSpaces.getListBySession.useQuery();
 
@@ -145,7 +148,7 @@ export const TopicSpaceAttachModal = ({
       setSearchedTopicSpace(null);
       setSelectedTopicSpaces([emptyTopicSpace]);
       methods.setValue("topicSpaces", []);
-      setSharedTopicSpaceError("リポジトリが見つかりません");
+      setSharedTopicSpaceError(t("notFound"));
     }
   }, [
     publicTopicSpace,
@@ -207,7 +210,7 @@ export const TopicSpaceAttachModal = ({
     <Modal
       isOpen={isOpen}
       setIsOpen={setIsOpen}
-      title="参照するリポジトリを追加"
+      title={t("attachTitle")}
     >
       <form onSubmit={methods.handleSubmit(submit, isInValid)}>
         <div className="flex flex-col gap-3">
@@ -224,7 +227,7 @@ export const TopicSpaceAttachModal = ({
                 onClick={() => handleTabChange("search")}
                 className="flex cursor-pointer flex-row items-center gap-1 bg-transparent py-2 hover:bg-slate-50/10"
               >
-                <div className="text-sm">検索で追加</div>
+                <div className="text-sm">{t("attachBySearch")}</div>
               </Button>
             </div>
             <div
@@ -241,7 +244,7 @@ export const TopicSpaceAttachModal = ({
                 <div className="h-4 w-4">
                   <Link2Icon width={16} height={16} color="white" />
                 </div>
-                <div className="text-sm">IDで追加</div>
+                <div className="text-sm">{t("attachById")}</div>
               </Button>
             </div>
           </div>
@@ -279,7 +282,7 @@ export const TopicSpaceAttachModal = ({
                           topicSpaces ? topicSpaces.name : ""
                         }
                         onChange={(event) => setQuery(event.target.value)}
-                        placeholder="リポジトリ名を入力"
+                        placeholder={t("namePlaceholder")}
                         className={clsx(
                           "w-full rounded-lg border-none bg-white/5 py-1.5 pl-3 pr-8 text-sm/6 text-white",
                           "focus:outline-none data-[focus]:outline-1 data-[focus]:-outline-offset-2 data-[focus]:outline-slate-400",
@@ -324,7 +327,7 @@ export const TopicSpaceAttachModal = ({
             /* IDタブ */
             <div className="flex flex-col gap-2">
               <div className="text-sm text-white">
-                共有されたリポジトリを追加
+                {t("attachShared")}
               </div>
               <div className="flex flex-col gap-2">
                 <TextInput
@@ -333,12 +336,12 @@ export const TopicSpaceAttachModal = ({
                     setSharedTopicSpaceId(value);
                     setSharedTopicSpaceError("");
                   }}
-                  placeholder="リポジトリのIDを入力"
+                  placeholder={t("idPlaceholder")}
                 />
 
                 {/* 検索結果の表示 */}
                 {isPublicTopicSpaceLoading && searchId && (
-                  <div className="text-sm text-slate-400">検索中...</div>
+                  <div className="text-sm text-slate-400">{t("searching")}</div>
                 )}
 
                 {searchedTopicSpace && !isPublicTopicSpaceLoading && (
@@ -359,7 +362,7 @@ export const TopicSpaceAttachModal = ({
 
           <div className="flex flex-row justify-end">
             <Button type="submit" className="text-sm">
-              追加
+              {t("add")}
             </Button>
           </div>
         </div>

@@ -15,6 +15,7 @@ import {
   ComboboxOption,
 } from "@headlessui/react";
 import clsx from "clsx";
+import { useTranslations } from "next-intl";
 
 type MemberListModalProps = {
   isOpen: boolean;
@@ -42,6 +43,7 @@ export const MemberListModal = ({
   topicSpaceId,
   refetch,
 }: MemberListModalProps) => {
+  const t = useTranslations("topicSpace");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState<SearchUser | null>(null);
   const [removeMemberModalOpen, setRemoveMemberModalOpen] = useState(false);
@@ -81,7 +83,7 @@ export const MemberListModal = ({
   };
 
   return (
-    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title="メンバー" size="medium">
+    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title={t("members")} size="medium">
       <div className="flex flex-col gap-4">
         {/* メンバー一覧 */}
         <div className="flex flex-col gap-2">
@@ -103,7 +105,7 @@ export const MemberListModal = ({
                     {member.image ? (
                       <Image
                         src={member.image}
-                        alt={member.name ?? "メンバー"}
+                        alt={member.name ?? t("memberAlt")}
                         width={40}
                         height={40}
                         className="h-10 w-10 flex-shrink-0 rounded-full object-cover"
@@ -115,7 +117,7 @@ export const MemberListModal = ({
                     )}
                     <div className="flex flex-col min-w-0">
                       <div className="font-medium">
-                        {member.name ?? "名前未設定"}
+                        {member.name ?? t("nameNotSet")}
                       </div>
                       {member.email && (
                         <div className="truncate text-sm text-slate-400">
@@ -128,7 +130,9 @@ export const MemberListModal = ({
                     <Button
                       onClick={() => handleRemoveUserClick(member.id)}
                       className="!h-8 !w-8 !min-w-8 !flex-shrink-0 !bg-transparent !p-2 hover:!bg-error-red/20"
-                      aria-label={`${member.name ?? "メンバー"}を外す`}
+                      aria-label={t("removeMemberAria", {
+                        name: member.name ?? t("memberAlt"),
+                      })}
                     >
                       <TrashIcon
                         height={16}
@@ -142,7 +146,7 @@ export const MemberListModal = ({
             })
           ) : (
             <div className="py-4 text-center text-slate-400">
-              メンバーが登録されていません
+              {t("noMembers")}
             </div>
           )}
         </div>
@@ -151,7 +155,7 @@ export const MemberListModal = ({
         {isCurrentUserAdmin && topicSpaceId && refetch && (
           <div className="border-t border-slate-600 pt-4">
             <div className="mb-2 text-sm font-medium text-slate-300">
-              メンバーを招待
+              {t("inviteMember")}
             </div>
             <div className="flex flex-col gap-2">
               <Combobox
@@ -162,7 +166,7 @@ export const MemberListModal = ({
                 <ComboboxInput
                   displayValue={(user: SearchUser | null) =>
                     user
-                      ? [user.name ?? "名前未設定", user.email]
+                      ? [user.name ?? t("nameNotSet"), user.email]
                           .filter(Boolean)
                           .join(" / ") || user.id
                       : ""
@@ -171,7 +175,7 @@ export const MemberListModal = ({
                     setSearchQuery(event.target.value);
                     setSelectedUser(null);
                   }}
-                  placeholder="ユーザーID または メールアドレス（完全一致）"
+                  placeholder={t("userSearchPlaceholder")}
                   className={clsx(
                     "w-full rounded-lg border-none bg-white/5 py-2 pl-3 pr-8 text-sm text-white",
                     "focus:outline-none data-[focus]:outline-1 data-[focus]:-outline-offset-2 data-[focus]:outline-slate-400",
@@ -191,7 +195,7 @@ export const MemberListModal = ({
                         {user.image ? (
                           <Image
                             src={user.image}
-                            alt={user.name ?? "メンバー"}
+                            alt={user.name ?? t("memberAlt")}
                             width={32}
                             height={32}
                             className="h-8 w-8 rounded-full object-cover"
@@ -203,7 +207,7 @@ export const MemberListModal = ({
                         )}
                         <div className="flex flex-col">
                           <span className="text-sm font-medium">
-                            {user.name ?? "名前未設定"}
+                            {user.name ?? t("nameNotSet")}
                           </span>
                           {user.email && (
                             <span className="text-xs text-slate-400">
@@ -216,8 +220,8 @@ export const MemberListModal = ({
                   ) : (
                     <div className="p-3 text-center text-sm text-slate-400">
                       {searchQuery.trim()
-                        ? "該当するユーザーがいません"
-                        : "ユーザーIDまたはメールアドレスを正確に入力してください"}
+                        ? t("noMatchingUsers")
+                        : t("enterUserIdOrEmail")}
                     </div>
                   )}
                 </ComboboxOptions>
@@ -228,7 +232,7 @@ export const MemberListModal = ({
                 className="flex flex-row items-center gap-2"
               >
                 <PlusIcon height={16} width={16} color="white" />
-                <span>追加</span>
+                <span>{t("add")}</span>
               </Button>
             </div>
           </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { Modal } from "./modal";
 import { Button } from "../button/button";
 import type {
@@ -30,6 +31,7 @@ export function VideoExportModal({
   recordingProgress,
   onAbortRecording,
 }: VideoExportModalProps) {
+  const t = useTranslations("modal.videoExport");
   const [mode, setMode] = useState<"individual" | "combined">(
     DEFAULT_RECORDING_CONFIG.mode,
   );
@@ -87,12 +89,12 @@ export function VideoExportModal({
     : 0;
 
   return (
-    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title="動画書き出し" size="medium">
+    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title={t("title")} size="medium">
       <div className="flex flex-col gap-5">
         {/* モード選択 */}
         <fieldset>
           <legend className="mb-2 text-sm font-medium text-slate-300">
-            書き出しモード
+            {t("exportMode")}
           </legend>
           <div className="flex flex-col gap-2">
             <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-700 p-3 transition-colors hover:border-slate-500 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-500/10">
@@ -107,10 +109,10 @@ export function VideoExportModal({
               />
               <div>
                 <div className="text-sm font-medium text-slate-200">
-                  全体統合（1ファイル）
+                  {t("combinedTitle")}
                 </div>
                 <div className="text-xs text-slate-400">
-                  すべてのセグメント遷移を1つの動画にまとめます
+                  {t("combinedDescription")}
                 </div>
               </div>
             </label>
@@ -126,10 +128,10 @@ export function VideoExportModal({
               />
               <div>
                 <div className="text-sm font-medium text-slate-200">
-                  セグメント個別（{totalTransitions}ファイル）
+                  {t("individualTitle", { count: totalTransitions })}
                 </div>
                 <div className="text-xs text-slate-400">
-                  各セグメント遷移を個別の動画ファイルとして書き出します
+                  {t("individualDescription")}
                 </div>
               </div>
             </label>
@@ -139,7 +141,7 @@ export function VideoExportModal({
         {/* FPS 設定 */}
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-300">
-            フレームレート (FPS)
+            {t("frameRate")}
           </label>
           <select
             value={fps}
@@ -180,10 +182,10 @@ export function VideoExportModal({
         {mode === "combined" ? (
           <div className="flex flex-col gap-3">
             <div className="text-sm font-medium text-slate-300">
-              滞留時間（セグメントの表示時間）
+              {t("holdTimeSegment")}
             </div>
             <NumberInputRow
-              label="冒頭の表示時間"
+              label={t("holdFirst")}
               value={holdFirstMs}
               onChange={setHoldFirstMs}
               disabled={isRecording}
@@ -192,7 +194,7 @@ export function VideoExportModal({
               min={0}
             />
             <NumberInputRow
-              label="セグメント間の表示時間"
+              label={t("holdBetween")}
               value={holdBetweenMs}
               onChange={setHoldBetweenMs}
               disabled={isRecording}
@@ -201,7 +203,7 @@ export function VideoExportModal({
               min={0}
             />
             <NumberInputRow
-              label="末尾の表示時間"
+              label={t("holdLast")}
               value={holdLastMs}
               onChange={setHoldLastMs}
               disabled={isRecording}
@@ -213,10 +215,10 @@ export function VideoExportModal({
         ) : (
           <div className="flex flex-col gap-3">
             <div className="text-sm font-medium text-slate-300">
-              滞留時間（遷移前後の静止時間）
+              {t("holdTimeTransition")}
             </div>
             <NumberInputRow
-              label="遷移前の静止時間"
+              label={t("holdBefore")}
               value={holdBeforeMs}
               onChange={setHoldBeforeMs}
               disabled={isRecording}
@@ -225,7 +227,7 @@ export function VideoExportModal({
               min={0}
             />
             <NumberInputRow
-              label="遷移後の静止時間"
+              label={t("holdAfter")}
               value={holdAfterMs}
               onChange={setHoldAfterMs}
               disabled={isRecording}
@@ -243,8 +245,10 @@ export function VideoExportModal({
               <>
                 <div className="mb-2 flex items-center justify-between text-sm text-slate-300">
                   <span>
-                    遷移 {recordingProgress.currentTransitionIndex + 1} /{" "}
-                    {recordingProgress.totalTransitions} を録画中...
+                    {t("recordingProgress", {
+                      current: recordingProgress.currentTransitionIndex + 1,
+                      total: recordingProgress.totalTransitions,
+                    })}
                   </span>
                   <span>{progressPercent}%</span>
                 </div>
@@ -258,12 +262,15 @@ export function VideoExportModal({
             )}
             {recordingProgress.phase === "done" && (
               <div className="text-center text-sm text-green-400">
-                書き出しが完了しました
+                {t("exportComplete")}
               </div>
             )}
             {recordingProgress.phase === "error" && (
               <div className="text-center text-sm text-red-400">
-                エラー: {recordingProgress.errorMessage ?? "不明なエラー"}
+                {t("exportError", {
+                  message:
+                    recordingProgress.errorMessage ?? t("unknownError"),
+                })}
               </div>
             )}
           </div>
@@ -277,7 +284,7 @@ export function VideoExportModal({
               onClick={onAbortRecording}
               className="bg-red-600 hover:bg-red-700"
             >
-              中断
+              {t("abort")}
             </Button>
           )}
           <Button
@@ -286,7 +293,7 @@ export function VideoExportModal({
             disabled={isRecording || totalTransitions === 0}
             className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
           >
-            {isRecording ? "録画中..." : "書き出し開始"}
+            {isRecording ? t("recording") : t("startExport")}
           </Button>
         </div>
       </div>

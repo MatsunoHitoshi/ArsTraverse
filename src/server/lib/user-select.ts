@@ -19,5 +19,7 @@ export const PRIVATE_USER_SELECT: Prisma.UserSelect = {
   name: true,
   email: true,
   preferredLocale: true,
+  uiLocale: true,
+  localeLinked: true,
   image: true,
 } as const;

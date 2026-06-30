@@ -1,4 +1,7 @@
-export const DEFAULT_EMPTY_WORKSPACE_CONTENT = {
+import type { Locale } from "i18n/routing";
+import { DEFAULT_EMPTY_WORKSPACE_CONTENT_EN } from "./workspace-default-content-en";
+
+export const DEFAULT_EMPTY_WORKSPACE_CONTENT_JA = {
   type: "doc",
   content: [
     {
@@ -332,3 +335,12 @@ export const DEFAULT_EMPTY_WORKSPACE_CONTENT = {
     },
   ],
 } as const;
+
+export const DEFAULT_EMPTY_WORKSPACE_CONTENT =
+  DEFAULT_EMPTY_WORKSPACE_CONTENT_JA;
+
+export function getDefaultEmptyWorkspaceContent(locale: Locale) {
+  return locale === "en"
+    ? DEFAULT_EMPTY_WORKSPACE_CONTENT_EN
+    : DEFAULT_EMPTY_WORKSPACE_CONTENT_JA;
+}

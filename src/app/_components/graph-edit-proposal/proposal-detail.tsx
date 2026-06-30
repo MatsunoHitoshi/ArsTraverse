@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
+import type { Locale } from "i18n/routing";
 import { api } from "@/trpc/react";
 import { useSession } from "next-auth/react";
 import {
@@ -21,8 +23,8 @@ import {
   ArrowMergeIcon,
 } from "../icons";
 import Image from "next/image";
-import { getStatusBadge } from "./proposal-utils";
-import Link from "next/link";
+import { ProposalStatusBadge } from "./proposal-utils";
+import { Link } from "i18n/navigation";
 import {
   GraphEditChangeForFrontend,
   NodeTypeForFrontend,
@@ -38,6 +40,8 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
   proposalId,
   onBack,
 }) => {
+  const t = useTranslations("proposal");
+  const locale = useLocale() as Locale;
   const { data: session } = useSession();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
@@ -140,16 +144,14 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="text-gray-500">読み込み中...</div>
+        <div className="text-gray-500">{t("loading")}</div>
       </div>
     );
   }
 
   if (!proposal) {
     return (
-      <div className="py-8 text-center text-gray-500">
-        変更提案が見つかりません
-      </div>
+      <div className="py-8 text-center text-gray-500">{t("notFound")}</div>
     );
   }
 
@@ -161,18 +163,20 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* メインコンテンツ */}
         <div className="space-y-6 lg:col-span-2">
-          {/* 提案情報 */}
           <div className="rounded-lg border border-gray-700 bg-slate-800 p-6">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white">提案内容</h2>
-              {getStatusBadge(proposal.status)}
+              <h2 className="text-lg font-semibold text-white">
+                {t("detail.proposalContent")}
+              </h2>
+              <ProposalStatusBadge status={proposal.status} />
             </div>
 
             {proposal.description && (
               <div className="mb-4">
-                <h3 className="mb-2 text-sm font-medium text-gray-300">説明</h3>
+                <h3 className="mb-2 text-sm font-medium text-gray-300">
+                  {t("detail.description")}
+                </h3>
                 <p className="whitespace-pre-wrap text-gray-400">
                   {proposal.description}
                 </p>
@@ -181,7 +185,7 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
 
             <div className="mb-4">
               <h3 className="mb-2 text-sm font-medium text-gray-300">
-                変更内容
+                {t("detail.changes")}
               </h3>
               <DiffViewer
                 changes={proposal.changes as GraphEditChangeForFrontend[]}
@@ -189,19 +193,18 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
             </div>
           </div>
 
-          {/* コメントセクション */}
           <div className="rounded-lg border border-gray-700 bg-slate-800 p-6">
-            <h2 className="mb-4 text-lg font-semibold text-white">コメント</h2>
+            <h2 className="mb-4 text-lg font-semibold text-white">
+              {t("detail.comments")}
+            </h2>
             <CommentSection proposalId={proposalId} />
           </div>
         </div>
 
-        {/* サイドバー */}
         <div className="space-y-6">
-          {/* TopicSpace情報 */}
           <div className="rounded-lg border border-gray-700 bg-slate-800 p-6">
             <h3 className="mb-4 text-lg font-semibold text-white">
-              リポジトリ
+              {t("detail.repository")}
             </h3>
 
             <div className="space-y-3 text-sm">
@@ -224,19 +227,22 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
                   href={`/topic-spaces/${proposal.topicSpace.id}/graph`}
                   className="inline-flex items-center gap-2 rounded-lg bg-slate-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-600"
                 >
-                  グラフを表示
+                  {t("detail.viewGraph")}
                 </Link>
               </div>
             </div>
           </div>
 
-          {/* 提案情報 */}
           <div className="rounded-lg border border-gray-700 bg-slate-800 p-6">
-            <h3 className="mb-4 text-lg font-semibold text-white">提案情報</h3>
+            <h3 className="mb-4 text-lg font-semibold text-white">
+              {t("detail.info")}
+            </h3>
 
             <div className="space-y-3 text-sm">
               <div>
-                <span className="font-medium text-gray-300">提案者:</span>
+                <span className="font-medium text-gray-300">
+                  {t("detail.proposer")}
+                </span>
                 <div className="mt-1 flex items-center gap-2">
                   {proposal.proposer.image && (
                     <Image
@@ -248,7 +254,7 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
                     />
                   )}
                   <span className="text-gray-400">
-                    {proposal.proposer.name ?? "不明"}
+                    {proposal.proposer.name ?? t("unknown")}
                   </span>
                 </div>
               </div>
@@ -256,7 +262,7 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
               {proposal.reviewer && (
                 <div>
                   <span className="font-medium text-gray-300">
-                    レビュー担当:
+                    {t("detail.reviewer")}
                   </span>
                   <div className="mt-1 flex items-center gap-2">
                     {proposal.reviewer.image && (
@@ -269,7 +275,7 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
                       />
                     )}
                     <span className="text-gray-400">
-                      {proposal.reviewer.name ?? "不明"}
+                      {proposal.reviewer.name ?? t("unknown")}
                     </span>
                   </div>
                 </div>
@@ -277,7 +283,9 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
 
               {proposal.lockedBy && (
                 <div>
-                  <span className="font-medium text-gray-300">ロック中:</span>
+                  <span className="font-medium text-gray-300">
+                    {t("detail.locked")}
+                  </span>
                   <div className="mt-1 flex items-center gap-2">
                     {proposal.lockedBy.image && (
                       <Image
@@ -289,51 +297,59 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
                       />
                     )}
                     <span className="text-purple-400">
-                      {proposal.lockedBy.name ?? "不明"}
+                      {proposal.lockedBy.name ?? t("unknown")}
                     </span>
                   </div>
                 </div>
               )}
 
               <div>
-                <span className="font-medium text-gray-300">作成日時:</span>
+                <span className="font-medium text-gray-300">
+                  {t("detail.createdAt")}
+                </span>
                 <div className="mt-1 text-gray-400">
-                  {formatRelativeTime(new Date(proposal.createdAt))}
+                  {formatRelativeTime(new Date(proposal.createdAt), locale)}
                 </div>
               </div>
 
               {proposal.reviewedAt && (
                 <div>
                   <span className="font-medium text-gray-300">
-                    レビュー開始:
+                    {t("detail.reviewStartedAt")}
                   </span>
                   <div className="mt-1 text-gray-400">
-                    {formatRelativeTime(new Date(proposal.reviewedAt))}
+                    {formatRelativeTime(new Date(proposal.reviewedAt), locale)}
                   </div>
                 </div>
               )}
 
               {proposal.approvedAt && (
                 <div>
-                  <span className="font-medium text-gray-300">承認日時:</span>
+                  <span className="font-medium text-gray-300">
+                    {t("detail.approvedAt")}
+                  </span>
                   <div className="mt-1 text-gray-400">
-                    {formatRelativeTime(new Date(proposal.approvedAt))}
+                    {formatRelativeTime(new Date(proposal.approvedAt), locale)}
                   </div>
                 </div>
               )}
 
               {proposal.rejectedAt && (
                 <div>
-                  <span className="font-medium text-gray-300">却下日時:</span>
+                  <span className="font-medium text-gray-300">
+                    {t("detail.rejectedAt")}
+                  </span>
                   <div className="mt-1 text-gray-400">
-                    {formatRelativeTime(new Date(proposal.rejectedAt))}
+                    {formatRelativeTime(new Date(proposal.rejectedAt), locale)}
                   </div>
                 </div>
               )}
 
               {proposal.rejectionReason && (
                 <div>
-                  <span className="font-medium text-gray-300">却下理由:</span>
+                  <span className="font-medium text-gray-300">
+                    {t("detail.rejectionReason")}
+                  </span>
                   <p className="mt-1 text-red-400">
                     {proposal.rejectionReason}
                   </p>
@@ -342,14 +358,12 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
             </div>
           </div>
 
-          {/* アクションボタン */}
           <div className="rounded-lg border border-gray-700 bg-slate-800 p-6">
             <h3 className="mb-4 text-lg font-semibold text-white">
-              アクション
+              {t("detail.actions")}
             </h3>
 
             <div className="space-y-3">
-              {/* ロック/ロック解除 */}
               {isAdmin && (
                 <>
                   {proposal.status === ProposalStatus.PENDING &&
@@ -364,7 +378,7 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
                         className="flex flex-row items-center justify-center gap-1 hover:bg-slate-600"
                       >
                         <LockClosedIcon height={16} width={16} color="white" />
-                        ロック
+                        {t("detail.lock")}
                       </Button>
                     )}
 
@@ -379,13 +393,12 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
                       className="lex flex-row items-center justify-center gap-1 hover:bg-slate-600"
                     >
                       <ArrowMergeIcon height={16} width={16} color="white" />
-                      ロック解除
+                      {t("detail.unlock")}
                     </Button>
                   )}
                 </>
               )}
 
-              {/* レビュー開始 */}
               {isAdmin && proposal.status === ProposalStatus.PENDING && (
                 <Button
                   onClick={() =>
@@ -397,11 +410,10 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
                   className="flex flex-row items-center justify-center gap-1 hover:bg-slate-600"
                 >
                   <EyeOpenIcon height={16} width={16} color="white" />
-                  レビュー開始
+                  {t("detail.startReview")}
                 </Button>
               )}
 
-              {/* 承認 */}
               {isAdmin && proposal.status === ProposalStatus.IN_REVIEW && (
                 <Button
                   onClick={() =>
@@ -413,17 +425,16 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
                   className="flex flex-row items-center justify-center gap-1 hover:bg-slate-600"
                 >
                   <CheckIcon height={16} width={16} color="green" />
-                  承認
+                  {t("detail.approve")}
                 </Button>
               )}
 
-              {/* 却下 */}
               {isAdmin && proposal.status === ProposalStatus.IN_REVIEW && (
                 <div className="space-y-2">
                   <Textarea
                     value={rejectionReason}
                     onChange={(e) => setRejectionReason(e.target.value)}
-                    placeholder="却下理由を入力してください（任意）"
+                    placeholder={t("detail.rejectionReasonPlaceholder")}
                     rows={2}
                     className="block w-full rounded-lg border border-gray-700 bg-slate-700 px-3 py-2 text-sm/6 text-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
                   />
@@ -441,13 +452,12 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
                       className="flex flex-row items-center justify-center gap-1 hover:bg-slate-600"
                     >
                       <CrossLargeIcon height={16} width={16} color="red" />
-                      却下
+                      {t("detail.reject")}
                     </Button>
                   </div>
                 </div>
               )}
 
-              {/* マージ */}
               {isAdmin && proposal.status === ProposalStatus.APPROVED && (
                 <Button
                   onClick={() =>
@@ -459,11 +469,10 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
                   className="flex flex-row items-center justify-center gap-1 hover:bg-slate-600"
                 >
                   <ArrowMergeIcon height={16} width={16} color="green" />
-                  マージ
+                  {t("detail.merge")}
                 </Button>
               )}
 
-              {/* 取り下げ */}
               {isProposer &&
                 (
                   [
@@ -480,7 +489,7 @@ export const ProposalDetail: React.FC<ProposalDetailProps> = ({
                     disabled={isSubmitting}
                     className="w-full"
                   >
-                    取り下げ
+                    {t("detail.cancel")}
                   </Button>
                 )}
             </div>

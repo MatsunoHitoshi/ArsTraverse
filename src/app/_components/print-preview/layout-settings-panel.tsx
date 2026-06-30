@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import type { PrintLayoutSettings, PageSizeTemplate, SizeUnit, PageOrientation, ColorMode, MetaGraphDisplayMode, LayoutOrientation, DetailedGraphDisplayMode } from "./types";
 import { PAGE_SIZE_TEMPLATES, convertUnit } from "./types";
 import { Button } from "@/app/_components/button/button";
@@ -18,6 +19,7 @@ export function LayoutSettingsPanel({
   onSettingsChange,
   onReSimulation,
 }: LayoutSettingsPanelProps) {
+  const t = useTranslations("print");
   const [isExpanded, setIsExpanded] = useState({
     pageSize: false,
     margins: false,
@@ -148,11 +150,11 @@ export function LayoutSettingsPanel({
     <div className="flex flex-col gap-4 p-4 text-slate-200">
       <div className="flex items-center gap-2">
         <div className="font-bold">
-          プリントプレビュー
+          {t("printPreview")}
         </div>
       </div>
 
-      <h2 className="text-lg font-bold">レイアウト設定</h2>
+      <h2 className="text-lg font-bold">{t("layoutSettings")}</h2>
 
       {/* ページサイズ設定 */}
       <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
@@ -162,7 +164,7 @@ export function LayoutSettingsPanel({
           }
           className="flex w-full items-center justify-between"
         >
-          <h3 className="font-semibold">ページサイズ</h3>
+          <h3 className="font-semibold">{t("pageSize")}</h3>
           <span className="text-sm text-slate-400">
             {isExpanded.pageSize ? "−" : "+"}
           </span>
@@ -180,7 +182,7 @@ export function LayoutSettingsPanel({
                   : "bg-slate-700"
                   }`}
               >
-                テンプレート
+                {t("template")}
               </Button>
               <Button
                 size="small"
@@ -190,14 +192,14 @@ export function LayoutSettingsPanel({
                   : "bg-slate-700"
                   }`}
               >
-                カスタム
+                {t("custom")}
               </Button>
             </div>
 
             {/* テンプレート選択 */}
             {settings.pageSize.mode === "template" && (
               <div>
-                <label className="mb-2 block text-sm">テンプレート</label>
+                <label className="mb-2 block text-sm">{t("template")}</label>
                 <select
                   value={settings.pageSize.template ?? "A3"}
                   onChange={(e) =>
@@ -218,7 +220,7 @@ export function LayoutSettingsPanel({
             {settings.pageSize.mode === "custom" && (
               <div className="space-y-3">
                 <div>
-                  <label className="mb-2 block text-sm">単位</label>
+                  <label className="mb-2 block text-sm">{t("unit")}</label>
                   <div className="flex gap-2">
                     {(["mm", "cm", "inch"] as SizeUnit[]).map((unit) => (
                       <Button
@@ -239,7 +241,7 @@ export function LayoutSettingsPanel({
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <div className="mb-2 flex items-center gap-2">
-                      <label className="block text-sm">幅</label>
+                      <label className="block text-sm">{t("width")}</label>
                       <Button
                         size="small"
                         onClick={handleSwapDimensions}
@@ -275,7 +277,7 @@ export function LayoutSettingsPanel({
                     />
                   </div>
                   <div>
-                    <label className="mb-2 block text-sm">高さ</label>
+                    <label className="mb-2 block text-sm">{t("height")}</label>
                     <input
                       type="number"
                       value={settings.pageSize.customHeight ?? 2500}
@@ -294,7 +296,7 @@ export function LayoutSettingsPanel({
 
             {/* 向き選択 */}
             <div>
-              <label className="mb-2 block text-sm">向き</label>
+              <label className="mb-2 block text-sm">{t("orientation")}</label>
               <div className="flex gap-2">
                 <Button
                   size="small"
@@ -304,7 +306,7 @@ export function LayoutSettingsPanel({
                     : "bg-slate-700"
                     }`}
                 >
-                  縦
+                  {t("portrait")}
                 </Button>
                 <Button
                   size="small"
@@ -314,14 +316,14 @@ export function LayoutSettingsPanel({
                     : "bg-slate-700"
                     }`}
                 >
-                  横
+                  {t("landscape")}
                 </Button>
               </div>
             </div>
 
             {/* プレビューサイズ表示 */}
             <div className="rounded bg-slate-800 p-2 text-xs text-slate-400">
-              <div>プレビューサイズ:</div>
+              <div>{t("previewSize")}</div>
               <div className="font-mono">
                 {getPageSizeInMm().width.toFixed(1)}mm ×{" "}
                 {getPageSizeInMm().height.toFixed(1)}mm
@@ -339,7 +341,7 @@ export function LayoutSettingsPanel({
           }
           className="flex w-full items-center justify-between"
         >
-          <h3 className="font-semibold">余白 (mm)</h3>
+          <h3 className="font-semibold">{t("margins")}</h3>
           <span className="text-sm text-slate-400">
             {isExpanded.margins ? "−" : "+"}
           </span>
@@ -348,7 +350,7 @@ export function LayoutSettingsPanel({
         {isExpanded.margins && (
           <div className="mt-4 grid grid-cols-2 gap-2">
             <div>
-              <label className="mb-2 block text-sm">上</label>
+              <label className="mb-2 block text-sm">{t("marginTop")}</label>
               <input
                 type="number"
                 value={settings.margins.top}
@@ -365,7 +367,7 @@ export function LayoutSettingsPanel({
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm">右</label>
+              <label className="mb-2 block text-sm">{t("marginRight")}</label>
               <input
                 type="number"
                 value={settings.margins.right}
@@ -382,7 +384,7 @@ export function LayoutSettingsPanel({
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm">下</label>
+              <label className="mb-2 block text-sm">{t("marginBottom")}</label>
               <input
                 type="number"
                 value={settings.margins.bottom}
@@ -399,7 +401,7 @@ export function LayoutSettingsPanel({
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm">左</label>
+              <label className="mb-2 block text-sm">{t("marginLeft")}</label>
               <input
                 type="number"
                 value={settings.margins.left}
@@ -427,7 +429,7 @@ export function LayoutSettingsPanel({
           }
           className="flex w-full items-center justify-between"
         >
-          <h3 className="font-semibold">フォントサイズ (pt)</h3>
+          <h3 className="font-semibold">{t("fontSize")}</h3>
           <span className="text-sm text-slate-400">
             {isExpanded.fontSize ? "−" : "+"}
           </span>
@@ -436,7 +438,7 @@ export function LayoutSettingsPanel({
         {isExpanded.fontSize && (
           <div className="mt-4 space-y-3">
             <div>
-              <label className="mb-2 block text-sm">ワークスペースタイトル</label>
+              <label className="mb-2 block text-sm">{t("workspaceTitle")}</label>
               <input
                 type="number"
                 value={((v: unknown) => (typeof v === "number" && !Number.isNaN(v) ? v : 21))(settings.fontSize?.workspaceTitle)}
@@ -454,7 +456,7 @@ export function LayoutSettingsPanel({
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm">セクションタイトル</label>
+              <label className="mb-2 block text-sm">{t("sectionTitle")}</label>
               <input
                 type="number"
                 value={((v: unknown) => (typeof v === "number" && !Number.isNaN(v) ? v : 14))(settings.fontSize?.sectionTitle)}
@@ -472,7 +474,7 @@ export function LayoutSettingsPanel({
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm">本文</label>
+              <label className="mb-2 block text-sm">{t("body")}</label>
               <input
                 type="number"
                 value={settings.fontSize.body}
@@ -490,7 +492,7 @@ export function LayoutSettingsPanel({
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm">ノード</label>
+              <label className="mb-2 block text-sm">{t("node")}</label>
               <input
                 type="number"
                 value={settings.fontSize.node}
@@ -508,7 +510,7 @@ export function LayoutSettingsPanel({
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm">エッジ</label>
+              <label className="mb-2 block text-sm">{t("edge")}</label>
               <input
                 type="number"
                 value={((v: unknown) => (typeof v === "number" && !Number.isNaN(v) ? v : 6))(settings.fontSize?.edge)}
@@ -537,7 +539,7 @@ export function LayoutSettingsPanel({
           }
           className="flex w-full items-center justify-between"
         >
-          <h3 className="font-semibold">グラフサイズ</h3>
+          <h3 className="font-semibold">{t("graphSize")}</h3>
           <span className="text-sm text-slate-400">
             {isExpanded.graphSize ? "−" : "+"}
           </span>
@@ -560,13 +562,13 @@ export function LayoutSettingsPanel({
                   }
                   className="rounded"
                 />
-                <span className="text-sm">自動調整</span>
+                <span className="text-sm">{t("autoFit")}</span>
               </label>
             </div>
             {!settings.graphSize.autoFit && (
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="mb-2 block text-sm">幅 (px)</label>
+                  <label className="mb-2 block text-sm">{t("widthPx")}</label>
                   <input
                     type="number"
                     value={settings.graphSize.width}
@@ -584,7 +586,7 @@ export function LayoutSettingsPanel({
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm">高さ (px)</label>
+                  <label className="mb-2 block text-sm">{t("heightPx")}</label>
                   <input
                     type="number"
                     value={settings.graphSize.height}
@@ -615,7 +617,7 @@ export function LayoutSettingsPanel({
           }
           className="flex w-full items-center justify-between"
         >
-          <h3 className="font-semibold">カラーモード</h3>
+          <h3 className="font-semibold">{t("colorMode")}</h3>
           <span className="text-sm text-slate-400">
             {isExpanded.colorMode ? "−" : "+"}
           </span>
@@ -634,7 +636,7 @@ export function LayoutSettingsPanel({
                   : "bg-slate-700"
                   }`}
               >
-                カラー
+                {t("color")}
               </Button>
               <Button
                 size="small"
@@ -646,7 +648,7 @@ export function LayoutSettingsPanel({
                   : "bg-slate-700"
                   }`}
               >
-                グレースケール
+                {t("grayscale")}
               </Button>
             </div>
           </div>
@@ -656,16 +658,16 @@ export function LayoutSettingsPanel({
       {/* シミュレーション再実行 */}
       {onReSimulation && (
         <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
-          <h3 className="mb-2 font-semibold">グラフレイアウト</h3>
+          <h3 className="mb-2 font-semibold">{t("graphLayout")}</h3>
           <p className="mb-3 text-sm text-slate-400">
-            コミュニティの中心座標は維持したまま、ノード配置を再計算します。ノードの個別微調整はクリアされます。
+            {t("reSimulationDescription")}
           </p>
           <Button
             size="small"
             onClick={onReSimulation}
             className="w-full bg-slate-700 hover:bg-slate-600"
           >
-            シミュレーションを再実行
+            {t("reSimulation")}
           </Button>
         </div>
       )}
@@ -673,7 +675,7 @@ export function LayoutSettingsPanel({
       {/* レイアウト方向設定 */}
       <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold">レイアウト方向</h3>
+          <h3 className="font-semibold">{t("layoutOrientation")}</h3>
           <Button
             size="small"
             onClick={() => {
@@ -695,7 +697,7 @@ export function LayoutSettingsPanel({
       {/* メタグラフ表示設定 */}
       <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold">コミュニティ表示</h3>
+          <h3 className="font-semibold">{t("communityDisplay")}</h3>
           <Button
             size="small"
             onClick={() => {
@@ -707,9 +709,9 @@ export function LayoutSettingsPanel({
             }}
             className="bg-slate-700 hover:bg-slate-600"
           >
-            {settings.metaGraphDisplay === "none" && "非表示"}
-            {settings.metaGraphDisplay === "story" && "ストーリーのみ"}
-            {settings.metaGraphDisplay === "all" && "全て表示"}
+            {settings.metaGraphDisplay === "none" && t("hidden")}
+            {settings.metaGraphDisplay === "story" && t("storyOnly")}
+            {settings.metaGraphDisplay === "all" && t("showAll")}
           </Button>
         </div>
       </div>
@@ -717,7 +719,7 @@ export function LayoutSettingsPanel({
       {/* テキストオーバーレイ表示設定 */}
       <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold">ストーリー表示</h3>
+          <h3 className="font-semibold">{t("storyDisplay")}</h3>
           <Switch
             checked={settings.textOverlayDisplay === "show"}
             onChange={(checked) => {
@@ -733,7 +735,7 @@ export function LayoutSettingsPanel({
       {/* ワークスペースタイトル表示設定 */}
       <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold">タイトル表示</h3>
+          <h3 className="font-semibold">{t("titleDisplay")}</h3>
           <Switch
             checked={settings.workspaceTitleDisplay === "show"}
             onChange={(checked) => {
@@ -749,7 +751,7 @@ export function LayoutSettingsPanel({
       {/* 詳細グラフ表示設定 */}
       <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold">ノード表示</h3>
+          <h3 className="font-semibold">{t("nodeDisplay")}</h3>
           <Button
             size="small"
             onClick={() => {
@@ -760,7 +762,7 @@ export function LayoutSettingsPanel({
             }}
             className="bg-slate-700 hover:bg-slate-600"
           >
-            {settings.detailedGraphDisplay === "story" ? "ストーリーのみ" : "全て表示"}
+            {settings.detailedGraphDisplay === "story" ? t("storyOnly") : t("showAll")}
           </Button>
         </div>
       </div>
@@ -768,7 +770,7 @@ export function LayoutSettingsPanel({
       {/* エッジラベル表示設定 */}
       <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold">エッジラベル表示</h3>
+          <h3 className="font-semibold">{t("edgeLabelDisplay")}</h3>
           <Switch
             checked={settings.showEdgeLabels ?? false}
             onChange={(checked) => {
@@ -783,10 +785,10 @@ export function LayoutSettingsPanel({
 
       {/* エッジ色設定 */}
       <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
-        <h3 className="mb-3 font-semibold">エッジ色</h3>
+        <h3 className="mb-3 font-semibold">{t("edgeColor")}</h3>
         <div className="space-y-4">
           <div>
-            <label className="mb-2 block text-sm text-slate-400">通常エッジ</label>
+            <label className="mb-2 block text-sm text-slate-400">{t("normalEdge")}</label>
             <div className="flex items-center gap-3">
               {(() => {
                 const raw = settings.edgeColor;
@@ -812,7 +814,7 @@ export function LayoutSettingsPanel({
             </div>
           </div>
           <div>
-            <label className="mb-2 block text-sm text-slate-400">フォーカスエッジ</label>
+            <label className="mb-2 block text-sm text-slate-400">{t("focusEdge")}</label>
             <div className="flex items-center gap-3">
               {(() => {
                 const raw = settings.edgeFocusColor;
@@ -842,10 +844,10 @@ export function LayoutSettingsPanel({
 
       {/* ノード色設定 */}
       <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
-        <h3 className="mb-3 font-semibold">ノード色</h3>
+        <h3 className="mb-3 font-semibold">{t("nodeColor")}</h3>
         <div className="space-y-4">
           <div>
-            <label className="mb-2 block text-sm text-slate-400">通常ノード</label>
+            <label className="mb-2 block text-sm text-slate-400">{t("normalNode")}</label>
             <div className="flex items-center gap-3">
               {(() => {
                 const raw = settings.nodeColor;
@@ -871,7 +873,7 @@ export function LayoutSettingsPanel({
             </div>
           </div>
           <div>
-            <label className="mb-2 block text-sm text-slate-400">フォーカスノード</label>
+            <label className="mb-2 block text-sm text-slate-400">{t("focusNode")}</label>
             <div className="flex items-center gap-3">
               {(() => {
                 const raw = settings.nodeFocusColor;
@@ -910,7 +912,7 @@ export function LayoutSettingsPanel({
             type="text"
             value={settings.pdfFilename ?? ""}
             onChange={(e) => updateSettings({ pdfFilename: e.target.value || undefined })}
-            placeholder="例: ストーリーグラフ"
+            placeholder={t("pdfFilenamePlaceholder")}
             className="w-full rounded border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500"
           />
         </div>

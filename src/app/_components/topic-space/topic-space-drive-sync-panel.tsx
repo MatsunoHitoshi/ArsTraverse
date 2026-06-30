@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname } from "i18n/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/trpc/react";
 import { GoogleDriveFolderPicker } from "./google-drive-folder-picker";
 
@@ -15,6 +16,9 @@ export function TopicSpaceDriveSyncPanel({
   onSynced,
 }: TopicSpaceDriveSyncPanelProps) {
   const pathname = usePathname();
+  const locale = useLocale();
+  const t = useTranslations("topicSpace");
+  const tCommon = useTranslations("common");
   const statusQuery = api.topicSpaces.getDriveSyncStatus.useQuery({
     id: topicSpaceId,
   });
@@ -63,23 +67,20 @@ export function TopicSpaceDriveSyncPanel({
 
   return (
     <div className="flex flex-col gap-3 rounded-md border border-slate-700/60 bg-slate-900/30 p-3">
-      <div className="text-sm font-semibold">Google Drive 同期</div>
-      <p className="text-xs text-slate-400">
-        ログイン中の Google アカウントの Drive フォルダを選び、資料をリポジトリ
-        に取り込みます。
-      </p>
+      <div className="text-sm font-semibold">{t("driveSync")}</div>
+      <p className="text-xs text-slate-400">{t("driveSyncDescription")}</p>
 
       <div className="flex flex-wrap items-center gap-2 text-xs">
         {driveConnection?.connected ? (
           <>
-            <span className="text-emerald-400">Drive 連携済み</span>
+            <span className="text-emerald-400">{t("driveConnected")}</span>
             <button
               type="button"
               disabled={isBusy}
               onClick={() => disconnectDrive.mutate()}
               className="text-slate-400 underline hover:text-slate-200"
             >
-              連携解除
+              {t("disconnectDrive")}
             </button>
           </>
         ) : (
@@ -87,7 +88,7 @@ export function TopicSpaceDriveSyncPanel({
             href={connectUrl}
             className="rounded bg-blue-600 px-3 py-1 text-white hover:bg-blue-500"
           >
-            Google Drive を連携
+            {t("connectGoogleDrive")}
           </a>
         )}
       </div>
@@ -96,8 +97,10 @@ export function TopicSpaceDriveSyncPanel({
         <div className="flex flex-col gap-2 rounded border border-slate-700/50 p-2">
           <div className="text-xs text-slate-300">
             {folderName || status?.driveFolderName
-              ? `選択中: ${folderName || status?.driveFolderName}`
-              : "同期フォルダ未選択"}
+              ? t("selectedFolder", {
+                name: folderName ?? status?.driveFolderName ?? "",
+              })
+              : t("syncFolderNotSelected")}
           </div>
           <GoogleDriveFolderPicker
             disabled={isBusy}
@@ -112,7 +115,7 @@ export function TopicSpaceDriveSyncPanel({
           checked={recursive}
           onChange={(event) => setRecursive(event.target.checked)}
         />
-        サブフォルダも再帰的に同期
+        {t("syncSubfoldersRecursively")}
       </label>
 
       <div className="flex flex-wrap gap-2">
@@ -133,7 +136,7 @@ export function TopicSpaceDriveSyncPanel({
             }
             className="rounded bg-slate-700 px-3 py-1 text-xs hover:bg-slate-600 disabled:opacity-50"
           >
-            設定を保存
+            {tCommon("save")}
           </button>
         )}
         <button
@@ -142,7 +145,7 @@ export function TopicSpaceDriveSyncPanel({
           onClick={() => syncDrive.mutate({ id: topicSpaceId })}
           className="rounded bg-orange-600 px-3 py-1 text-xs hover:bg-orange-500 disabled:opacity-50"
         >
-          {syncDrive.isPending ? "同期中..." : "今すぐ同期"}
+          {syncDrive.isPending ? t("syncing") : t("syncNow")}
         </button>
         {status?.driveFolderUrl && (
           <a
@@ -151,14 +154,18 @@ export function TopicSpaceDriveSyncPanel({
             rel="noreferrer"
             className="rounded border border-slate-600 px-3 py-1 text-xs hover:bg-slate-800"
           >
-            フォルダを開く
+            {t("openFolder")}
           </a>
         )}
       </div>
 
       {status?.lastSyncedAt && (
         <div className="text-xs text-slate-400" suppressHydrationWarning>
-          最終同期: {new Date(status.lastSyncedAt).toLocaleString("ja-JP")}
+          {t("lastSynced", {
+            date: new Date(status.lastSyncedAt).toLocaleString(
+              locale === "ja" ? "ja-JP" : "en-US",
+            ),
+          })}
           {status.lastSyncStatus ? ` (${status.lastSyncStatus})` : ""}
         </div>
       )}
@@ -167,8 +174,12 @@ export function TopicSpaceDriveSyncPanel({
       )}
       {syncDrive.data && (
         <div className="text-xs text-emerald-400">
-          作成 {syncDrive.data.created} / 更新 {syncDrive.data.updated} / スキップ{" "}
-          {syncDrive.data.skipped} / 削除 {syncDrive.data.detached}
+          {t("syncResult", {
+            created: syncDrive.data.created,
+            updated: syncDrive.data.updated,
+            skipped: syncDrive.data.skipped,
+            detached: syncDrive.data.detached,
+          })}
         </div>
       )}
       {(upsertConfig.error ?? syncDrive.error ?? disconnectDrive.error) && (

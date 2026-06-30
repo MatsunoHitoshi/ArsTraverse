@@ -12,6 +12,7 @@ import {
   getSegmentNodeIdsFromMetaGraphStoryData,
 } from "@/app/_utils/story-scroll-utils";
 import { useWindowSize } from "@/app/_hooks/use-window-size";
+import { useTranslations } from "next-intl";
 
 /** セグメントがビューポートに入ったときにフェードインするラッパー */
 function SegmentFadeIn({ children }: { children: React.ReactNode }) {
@@ -61,6 +62,7 @@ export function ScrollStorytellingViewer({
   graphDocument,
   metaGraphData,
 }: ScrollStorytellingViewerProps) {
+  const t = useTranslations("article");
   const [innerWidth] = useWindowSize();
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [progressStepIndex, setProgressStepIndex] = useState(0);
@@ -247,7 +249,7 @@ export function ScrollStorytellingViewer({
   if (steps.length === 0) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center text-slate-400">
-        表示するストーリーがありません
+        {t("noStory")}
       </div>
     );
   }

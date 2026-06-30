@@ -3,7 +3,8 @@
 import React from "react";
 import { api } from "@/trpc/react";
 import type { CustomNodeType } from "@/app/const/types";
-import Link from "next/link";
+import { Link } from "i18n/navigation";
+import { useTranslations } from "next-intl";
 
 interface NodeReferencePanelProps {
   node: CustomNodeType;
@@ -14,6 +15,7 @@ export const NodeReferencePanel: React.FC<NodeReferencePanelProps> = ({
   node,
   topicSpaceId,
 }) => {
+  const t = useTranslations("view");
   const {
     data: nodeReferences,
     isLoading,
@@ -44,7 +46,7 @@ export const NodeReferencePanel: React.FC<NodeReferencePanelProps> = ({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="text-gray-400">引用箇所を検索中...</div>
+        <div className="text-gray-400">{t("searchingReferences")}</div>
       </div>
     );
   }
@@ -52,7 +54,7 @@ export const NodeReferencePanel: React.FC<NodeReferencePanelProps> = ({
   if (error) {
     return (
       <div className="py-8 text-center text-red-400">
-        <p>引用箇所の取得中にエラーが発生しました。</p>
+        <p>{t("referenceFetchError")}</p>
       </div>
     );
   }
@@ -60,7 +62,7 @@ export const NodeReferencePanel: React.FC<NodeReferencePanelProps> = ({
   if (!nodeReferences || nodeReferences.length === 0) {
     return (
       <div className="py-8 text-center text-gray-400">
-        <p>「{node.name}」に関する引用箇所が見つかりませんでした。</p>
+        <p>{t("noReferencesFound", { name: node.name })}</p>
       </div>
     );
   }
@@ -73,7 +75,7 @@ export const NodeReferencePanel: React.FC<NodeReferencePanelProps> = ({
   if (filteredReferences.length === 0) {
     return (
       <div className="py-8 text-center text-gray-400">
-        <p>「{node.name}」に関する引用箇所が見つかりませんでした。</p>
+        <p>{t("noReferencesFound", { name: node.name })}</p>
       </div>
     );
   }
@@ -82,7 +84,7 @@ export const NodeReferencePanel: React.FC<NodeReferencePanelProps> = ({
     <div className="space-y-4">
       <div className="mb-4">
         <p className="mt-2 text-sm text-gray-400">
-          {filteredReferences.length}個のドキュメントで言及されています
+          {t("mentionedInDocuments", { count: filteredReferences.length })}
         </p>
       </div>
 

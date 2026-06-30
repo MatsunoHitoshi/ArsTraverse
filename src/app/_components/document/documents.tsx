@@ -1,6 +1,7 @@
 "use client";
 import { api } from "@/trpc/react";
 import { useSession } from "next-auth/react";
+import { useTranslations } from "next-intl";
 import { TabsContainer } from "../tab/tab";
 import { DocumentList, DocumentListMenuButton } from "../list/document-list";
 import { DocumentDetail } from "./document-detail";
@@ -11,6 +12,8 @@ import { DocumentEditModal } from "./document-edit-modal";
 import { DocumentSendModal } from "./document-send-modal";
 import { Pagination } from "../pagination/pagination";
 export const Documents = ({ id }: { id?: string }) => {
+  const t = useTranslations("document");
+  const tCommon = useTranslations("common");
   const { data: session } = useSession();
   const [page, setPage] = useState(1);
   const { data, refetch } = api.sourceDocument.getListBySession.useQuery({
@@ -54,7 +57,7 @@ export const Documents = ({ id }: { id?: string }) => {
                           setSendModalOpen(true);
                         }}
                       >
-                        <div className="text-white">ユーザに送る</div>
+                        <div className="text-white">{t("sendToUser")}</div>
                       </DocumentListMenuButton>
                       <DocumentListMenuButton
                         icon={
@@ -65,7 +68,7 @@ export const Documents = ({ id }: { id?: string }) => {
                           setEditModalOpen(true);
                         }}
                       >
-                        <div className="text-white">名前を編集</div>
+                        <div className="text-white">{t("editName")}</div>
                       </DocumentListMenuButton>
                       <DocumentListMenuButton
                         icon={
@@ -76,7 +79,7 @@ export const Documents = ({ id }: { id?: string }) => {
                           setDeleteModalOpen(true);
                         }}
                       >
-                        <div className="text-error-red">削除</div>
+                        <div className="text-error-red">{tCommon("delete")}</div>
                       </DocumentListMenuButton>
                     </div>
                   );
@@ -96,7 +99,7 @@ export const Documents = ({ id }: { id?: string }) => {
             <DocumentDetail documentId={id} />
           ) : (
             <div className="m-4 rounded-md border border-slate-400 p-4">
-              ドキュメントを選択してください
+              {t("selectDocumentPrompt")}
             </div>
           )}
         </div>

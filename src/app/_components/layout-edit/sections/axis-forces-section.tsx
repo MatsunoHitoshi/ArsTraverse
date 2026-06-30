@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type { LayoutInstruction } from "@/app/const/types";
 
 type AxisType = NonNullable<NonNullable<LayoutInstruction["forces"]>["x_axis"]>;
@@ -21,17 +22,18 @@ export const AxisForcesSection = ({
   onUpdateYAxis,
   parseGroupsJson,
 }: AxisForcesSectionProps) => {
+  const t = useTranslations("layoutEdit");
+
   return (
     <div className="min-w-[500px] flex-1 rounded-lg border border-slate-700 bg-slate-900 p-4">
       <h3 className="mb-2 text-sm font-semibold text-slate-300">
-        X軸・Y軸設定
+        {t("axisSettings")}
       </h3>
       <div className="space-y-4">
-        {/* タイプ設定 */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="mb-1 block text-xs text-slate-400">
-              X軸タイプ
+              {t("xAxisType")}
             </label>
             <select
               value={xAxis?.type ?? "none"}
@@ -46,15 +48,15 @@ export const AxisForcesSection = ({
               }
               className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-sm text-slate-200"
             >
-              <option value="none">なし</option>
-              <option value="linear">線形配置</option>
-              <option value="timeline">時系列配置</option>
-              <option value="category_separation">カテゴリ分離</option>
+              <option value="none">{t("axisNone")}</option>
+              <option value="linear">{t("axisLinear")}</option>
+              <option value="timeline">{t("axisTimeline")}</option>
+              <option value="category_separation">{t("axisCategorySeparation")}</option>
             </select>
           </div>
           <div>
             <label className="mb-1 block text-xs text-slate-400">
-              Y軸タイプ
+              {t("yAxisType")}
             </label>
             <select
               value={yAxis?.type ?? "none"}
@@ -69,15 +71,14 @@ export const AxisForcesSection = ({
               }
               className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-sm text-slate-200"
             >
-              <option value="none">なし</option>
-              <option value="linear">線形配置</option>
-              <option value="timeline">時系列配置</option>
-              <option value="category_separation">カテゴリ分離</option>
+              <option value="none">{t("axisNone")}</option>
+              <option value="linear">{t("axisLinear")}</option>
+              <option value="timeline">{t("axisTimeline")}</option>
+              <option value="category_separation">{t("axisCategorySeparation")}</option>
             </select>
           </div>
         </div>
 
-        {/* 属性名設定 */}
         {(xAxis?.type === "timeline" ||
           xAxis?.type === "category_separation" ||
           yAxis?.type === "timeline" ||
@@ -87,13 +88,13 @@ export const AxisForcesSection = ({
               xAxis?.type === "category_separation") && (
               <div>
                 <label className="mb-1 block text-xs text-slate-400">
-                  X軸属性名
+                  {t("xAxisAttribute")}
                 </label>
                 <input
                   type="text"
                   value={xAxis?.attribute ?? ""}
                   onChange={(e) => onUpdateXAxis({ attribute: e.target.value })}
-                  placeholder="例: mentionedAt"
+                  placeholder={t("attributePlaceholder")}
                   className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-sm text-slate-200"
                 />
               </div>
@@ -102,13 +103,13 @@ export const AxisForcesSection = ({
               yAxis?.type === "category_separation") && (
               <div>
                 <label className="mb-1 block text-xs text-slate-400">
-                  Y軸属性名
+                  {t("yAxisAttribute")}
                 </label>
                 <input
                   type="text"
                   value={yAxis?.attribute ?? ""}
                   onChange={(e) => onUpdateYAxis({ attribute: e.target.value })}
-                  placeholder="例: mentionedAt"
+                  placeholder={t("attributePlaceholder")}
                   className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-sm text-slate-200"
                 />
               </div>
@@ -116,11 +117,12 @@ export const AxisForcesSection = ({
           </div>
         )}
 
-        {/* 強度設定（スライダー） */}
         <div className="space-y-4">
           <div>
             <label className="mb-1 block text-xs text-slate-400">
-              X軸強度: {(xAxis?.strength ?? 0.5).toFixed(2)}
+              {t("xAxisStrength", {
+                value: (xAxis?.strength ?? 0.5).toFixed(2),
+              })}
             </label>
             <input
               type="range"
@@ -136,7 +138,9 @@ export const AxisForcesSection = ({
           </div>
           <div>
             <label className="mb-1 block text-xs text-slate-400">
-              Y軸強度: {(yAxis?.strength ?? 0.5).toFixed(2)}
+              {t("yAxisStrength", {
+                value: (yAxis?.strength ?? 0.5).toFixed(2),
+              })}
             </label>
             <input
               type="range"
@@ -152,11 +156,10 @@ export const AxisForcesSection = ({
           </div>
         </div>
 
-        {/* グループ設定 */}
         {xAxis?.type === "category_separation" && (
           <div>
             <label className="mb-1 block text-xs text-slate-400">
-              X軸グループ設定 (JSON形式)
+              {t("xAxisGroups")}
             </label>
             <textarea
               value={JSON.stringify(xAxis?.groups ?? {}, null, 2)}
@@ -174,7 +177,7 @@ export const AxisForcesSection = ({
         {yAxis?.type === "category_separation" && (
           <div>
             <label className="mb-1 block text-xs text-slate-400">
-              Y軸グループ設定 (JSON形式)
+              {t("yAxisGroups")}
             </label>
             <textarea
               value={JSON.stringify(yAxis?.groups ?? {}, null, 2)}

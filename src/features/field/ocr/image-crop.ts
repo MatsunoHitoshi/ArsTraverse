@@ -18,7 +18,7 @@ export async function rotateImageFile90CounterClockwise(
 
     const ctx = canvas.getContext("2d");
     if (!ctx) {
-      throw new Error("Canvas が利用できません");
+      throw new Error("Canvas is not available");
     }
 
     ctx.translate(0, canvas.height);
@@ -32,7 +32,7 @@ export async function rotateImageFile90CounterClockwise(
             resolve(result);
             return;
           }
-          reject(new Error("回転画像の生成に失敗しました"));
+          reject(new Error("Failed to generate rotated image"));
         },
         mimeType,
         0.92,
@@ -61,7 +61,7 @@ export function cropRegionFromBitmap(
 
   const ctx = canvas.getContext("2d");
   if (!ctx) {
-    throw new Error("Canvas が利用できません");
+    throw new Error("Canvas is not available");
   }
 
   ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, sw, sh);
@@ -81,7 +81,7 @@ export async function cropRegionToBlob(
           resolve(blob);
           return;
         }
-        reject(new Error("切り出し画像の生成に失敗しました"));
+        reject(new Error("Failed to generate cropped image"));
       },
       mimeType,
       0.92,

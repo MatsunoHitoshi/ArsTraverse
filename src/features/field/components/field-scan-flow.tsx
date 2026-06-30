@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "i18n/navigation";
+import { useTranslations } from "next-intl";
 import { signIn, useSession } from "next-auth/react";
 import { api } from "@/trpc/react";
 import { Button } from "@/app/_components/button/button";
@@ -23,22 +24,38 @@ import {
   type NormalizedOcrRegion,
 } from "@/features/field/ocr/region-types";
 import {
-  getOcrStatusLabel,
   runOcrOnRegions,
   type OcrLanguage,
   type OcrProgressUpdate,
 } from "@/features/field/ocr/tesseract-client";
 
-const LANGUAGE_OPTIONS: { value: OcrLanguage; label: string }[] = [
-  { value: "jpn", label: "日本語（横書き）" },
-  { value: "jpn_vert", label: "日本語（縦書き）" },
-  { value: "eng", label: "English" },
-];
-
 type ScanStep = "camera" | "trim" | "processing" | "preview";
 type PipelineStage = "ocr" | "normalize" | "graph" | null;
 
+function getLocalizedOcrStatusLabel(
+  t: ReturnType<typeof useTranslations<"field">>,
+  update: OcrProgressUpdate,
+): string {
+  const statusLabels: Record<string, string> = {
+    "loading tesseract core": t("ocrStatusLoadingTesseractCore"),
+    "initializing tesseract": t("ocrStatusInitializingTesseract"),
+    "loading language traineddata": t("ocrStatusLoadingLanguage"),
+    "initializing api": t("ocrStatusInitializingApi"),
+    "recognizing text": t("ocrStatusRecognizingText"),
+  };
+  const base = statusLabels[update.status] ?? t("ocrStatusPreparing");
+  if (update.regionIndex != null && update.regionCount != null) {
+    return t("ocrStatusRegionProgress", {
+      label: base,
+      index: update.regionIndex + 1,
+      total: update.regionCount,
+    });
+  }
+  return base;
+}
+
 export function FieldScanFlow() {
+  const t = useTranslations("field");
   const router = useRouter();
   const { data: session } = useSession();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -70,6 +87,15 @@ export function FieldScanFlow() {
   const [isRotatingImage, setIsRotatingImage] = useState(false);
   const [pipelineStage, setPipelineStage] = useState<PipelineStage>(null);
   const [pipelineProgress, setPipelineProgress] = useState(0);
+
+  const languageOptions = useMemo(
+    (): { value: OcrLanguage; label: string }[] => [
+      { value: "jpn", label: t("languageJpn") },
+      { value: "jpn_vert", label: t("languageJpnVert") },
+      { value: "eng", label: t("languageEng") },
+    ],
+    [t],
+  );
 
   const createFromScan = api.scan.createFromScan.useMutation();
   const normalizeOcrText = api.scan.normalizeOcrText.useMutation();
@@ -130,20 +156,20 @@ export function FieldScanFlow() {
   const pipelineLabel = useMemo(() => {
     if (pipelineStage === "ocr") {
       return ocrProgress
-        ? `${getOcrStatusLabel(ocrProgress)}${ocrProgress.status === "recognizing text"
+        ? `${getLocalizedOcrStatusLabel(t, ocrProgress)}${ocrProgress.status === "recognizing text"
           ? ` ${Math.round(ocrProgress.progress * 100)}%`
           : ""
         }`
-        : "OCR を実行中...";
+        : t("runningOcr");
     }
-    if (pipelineStage === "normalize") return "AIでテキストを整形中...";
-    if (pipelineStage === "graph") return "グラフを抽出中...";
+    if (pipelineStage === "normalize") return t("normalizingText");
+    if (pipelineStage === "graph") return t("extractingGraph");
     return "";
-  }, [pipelineStage, ocrProgress]);
+  }, [pipelineStage, ocrProgress, t]);
 
   const setSelectedImage = (file: File) => {
     if (!file.type.startsWith("image/")) {
-      setErrorMessage("画像ファイルを選択してください。");
+      setErrorMessage(t("selectImageFile"));
       return;
     }
 
@@ -164,7 +190,7 @@ export function FieldScanFlow() {
 
     if (!sessionName) {
       const baseName = file.name.replace(/\.[^.]+$/, "");
-      setSessionName(baseName.length > 0 ? baseName : "現地スキャン");
+      setSessionName(baseName.length > 0 ? baseName : t("defaultSessionName"));
     }
   };
 
@@ -217,7 +243,7 @@ export function FieldScanFlow() {
       setOcrMetadata(undefined);
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : "画像の回転に失敗しました",
+        error instanceof Error ? error.message : t("imageRotateFailed"),
       );
     } finally {
       setIsRotatingImage(false);
@@ -226,12 +252,12 @@ export function FieldScanFlow() {
 
   const handleRunPipeline = async () => {
     if (!imageFile) {
-      setErrorMessage("先に画像を選択してください");
+      setErrorMessage(t("selectImageFirst"));
       return;
     }
 
     if (ocrRegions.length === 0) {
-      setErrorMessage("OCR する文字領域を指定してください");
+      setErrorMessage(t("specifyOcrRegion"));
       return;
     }
 
@@ -259,7 +285,7 @@ export function FieldScanFlow() {
       );
       setOcrMetadata(ocrResult.ocrMetadata);
       if (!ocrResult.plainText.trim()) {
-        throw new Error("テキストを認識できませんでした。");
+        throw new Error(t("textNotRecognized"));
       }
 
       setPipelineStage("normalize");
@@ -282,7 +308,7 @@ export function FieldScanFlow() {
       });
       const graph = graphResult.data?.graph;
       if (!graph) {
-        throw new Error(graphResult.data?.error ?? "グラフ抽出に失敗しました");
+        throw new Error(graphResult.data?.error ?? t("graphExtractFailed"));
       }
 
       setGraphPreview(graph as GraphDocumentForFrontend);
@@ -290,7 +316,7 @@ export function FieldScanFlow() {
       setStep("preview");
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : "処理に失敗しました",
+        error instanceof Error ? error.message : t("processingFailed"),
       );
       setStep("trim");
     } finally {
@@ -306,7 +332,7 @@ export function FieldScanFlow() {
   const handleReExtractGraph = async () => {
     const inputText = plainText.trim();
     if (!inputText) {
-      setErrorMessage("再抽出するテキストが空です");
+      setErrorMessage(t("reExtractTextEmpty"));
       return;
     }
     setErrorMessage(null);
@@ -319,13 +345,13 @@ export function FieldScanFlow() {
       });
       const graph = graphResult.data?.graph;
       if (!graph) {
-        throw new Error(graphResult.data?.error ?? "グラフ再抽出に失敗しました");
+        throw new Error(graphResult.data?.error ?? t("graphReExtractFailed"));
       }
       setGraphPreview(graph as GraphDocumentForFrontend);
       setPipelineProgress(100);
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : "グラフ再抽出に失敗しました",
+        error instanceof Error ? error.message : t("graphReExtractFailed"),
       );
     } finally {
       setIsRunningGraph(false);
@@ -350,7 +376,7 @@ export function FieldScanFlow() {
         BUCKETS.PATH_TO_INPUT_TXT,
       );
       if (!sourceTextUrl) {
-        throw new Error("OCR テキストのアップロードに失敗しました");
+        throw new Error(t("ocrTextUploadFailed"));
       }
 
       let sourceImageUrl: string | undefined;
@@ -360,7 +386,7 @@ export function FieldScanFlow() {
           BUCKETS.PATH_TO_INPUT_SCAN,
         );
         if (!uploadedUrl) {
-          throw new Error("スキャン画像のアップロードに失敗しました");
+          throw new Error(t("scanImageUploadFailed"));
         }
         sourceImageUrl = uploadedUrl;
       }
@@ -377,7 +403,7 @@ export function FieldScanFlow() {
       router.push(`/field/scan/${result.sourceDocument.id}`);
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : "グラフ作成に失敗しました",
+        error instanceof Error ? error.message : t("graphCreateFailed"),
       );
       setIsSubmitting(false);
     }
@@ -403,13 +429,13 @@ export function FieldScanFlow() {
       <FadeIn>
         <div className="mx-auto flex w-full max-w-lg flex-col gap-6 px-4 py-8">
           <p className="text-center text-sm text-slate-300">
-            スキャンを保存するにはログインが必要です。
+            {t("loginRequiredForScan")}
           </p>
           <Button
             onClick={() => signIn("google", { callbackUrl: "/field/scan" })}
             className="w-full bg-orange-400 text-white hover:bg-orange-500"
           >
-            Google でログイン
+            {t("signInWithGoogle")}
           </Button>
         </div>
       </FadeIn>
@@ -455,14 +481,14 @@ export function FieldScanFlow() {
               </div>
             </LinkButton>
             <div>
-              <h1 className="text-xl font-bold text-slate-50">新規スキャン</h1>
+              <h1 className="text-xl font-bold text-slate-50">{t("newScan")}</h1>
             </div>
           </div>
 
           {previewUrl && (step === "trim" || step === "processing") && (
             <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
               <label className="mb-2 block text-sm font-medium text-slate-200">
-                文字領域を指定
+                {t("selectTextRegion")}
               </label>
               <ScanRegionSelector
                 imageUrl={previewUrl}
@@ -483,7 +509,7 @@ export function FieldScanFlow() {
                   className="w-1/2 bg-slate-700 text-white"
                   disabled={step === "processing"}
                 >
-                  撮り直す
+                  {t("retake")}
                 </Button>
                 <Button
                   onClick={handleRunPipeline}
@@ -496,7 +522,7 @@ export function FieldScanFlow() {
                   isLoading={step === "processing" || isRunningOcr}
                   className="w-1/2 bg-orange-400 text-white hover:bg-orange-500"
                 >
-                  この範囲で解析
+                  {t("analyzeThisRegion")}
                 </Button>
               </div>
             </section>
@@ -505,7 +531,7 @@ export function FieldScanFlow() {
           {(step === "trim" || step === "processing") && (
             <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
               <label className="mb-2 block text-sm font-medium text-slate-200">
-                OCR 言語
+                {t("ocrLanguage")}
               </label>
               <select
                 value={language}
@@ -514,7 +540,7 @@ export function FieldScanFlow() {
                 }
                 className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
               >
-                {LANGUAGE_OPTIONS.map((option) => (
+                {languageOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -544,15 +570,15 @@ export function FieldScanFlow() {
               {previewUrl && (
                 <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
                   <label className="mb-2 block text-sm font-medium text-slate-200">
-                    指定した文字領域
+                    {t("selectedTextRegion")}
                   </label>
                   <ScanImageWithRegions
                     imageUrl={previewUrl}
                     regions={ocrRegions}
-                    alt="指定した文字領域"
+                    alt={t("selectedTextRegion")}
                   />
                   <p className="mt-2 text-xs text-slate-500">
-                    領域の変更は「領域を再調整」から全画面で行えます。
+                    {t("regionAdjustHint")}
                   </p>
                 </section>
               )}
@@ -562,13 +588,13 @@ export function FieldScanFlow() {
                   htmlFor="session-name"
                   className="mb-2 block text-sm font-medium text-slate-200"
                 >
-                  セッション名
+                  {t("sessionName")}
                 </label>
                 <input
                   id="session-name"
                   value={sessionName}
                   onChange={(event) => setSessionName(event.target.value)}
-                  placeholder="例: 展覧会パンフレット p.3"
+                  placeholder={t("sessionNamePlaceholder")}
                   className="mb-4 w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
                 />
 
@@ -576,7 +602,7 @@ export function FieldScanFlow() {
                   htmlFor="ocr-text"
                   className="mb-2 block text-sm font-medium text-slate-200"
                 >
-                  OCR テキスト（AI整形済み）
+                  {t("ocrTextNormalized")}
                 </label>
                 <textarea
                   id="ocr-text"
@@ -605,7 +631,7 @@ export function FieldScanFlow() {
                     onClick={() => setStep("trim")}
                     className="w-1/3 bg-slate-700 text-white"
                   >
-                    領域を再調整
+                    {t("readjustRegion")}
                   </Button>
                   <Button
                     onClick={() => void handleReExtractGraph()}
@@ -613,7 +639,7 @@ export function FieldScanFlow() {
                     disabled={!plainText.trim() || isRunningGraph}
                     className="w-1/3 bg-slate-700 text-white"
                   >
-                    再抽出して更新
+                    {t("reExtractAndUpdate")}
                   </Button>
                   <Button
                     onClick={() => void handleSubmit()}
@@ -621,7 +647,7 @@ export function FieldScanFlow() {
                     isLoading={isSubmitting}
                     className="w-1/3 bg-orange-400 text-white hover:bg-orange-500 disabled:opacity-50"
                   >
-                    保存して詳細へ
+                    {t("saveAndGoToDetail")}
                   </Button>
                 </div>
               </section>

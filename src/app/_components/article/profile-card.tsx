@@ -2,6 +2,7 @@
 
 import React from "react";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import { api } from "@/trpc/react";
 
 interface ProfileCardProps {
@@ -9,6 +10,7 @@ interface ProfileCardProps {
 }
 
 export const ProfileCard: React.FC<ProfileCardProps> = ({ userId }) => {
+  const t = useTranslations("article");
   const { data: user, isLoading } = api.user.getByIdPublic.useQuery(
     { id: userId },
     {
@@ -36,7 +38,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ userId }) => {
         {user.image ? (
           <Image
             src={user.image}
-            alt={user.name ?? "ユーザー"}
+            alt={user.name ?? t("userAlt")}
             width={24}
             height={24}
             className="rounded-full border border-slate-600"
@@ -48,7 +50,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ userId }) => {
         )}
         <div className="flex flex-col">
           <div className="text-sm font-semibold text-slate-100">
-            {user.name ?? "未設定"}
+            {user.name ?? t("nameNotSet")}
           </div>
         </div>
       </div>

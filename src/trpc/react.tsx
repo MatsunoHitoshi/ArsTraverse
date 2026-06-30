@@ -54,6 +54,12 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
           headers: () => {
             const headers = new Headers();
             headers.set("x-trpc-source", "nextjs-react");
+            if (typeof document !== "undefined") {
+              const lang = document.documentElement.lang;
+              if (lang === "ja" || lang === "en") {
+                headers.set("x-locale", lang);
+              }
+            }
             return headers;
           },
         }),

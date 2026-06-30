@@ -1,6 +1,11 @@
-import Link from "next/link";
+"use client";
+
+import { Link } from "i18n/navigation";
+import { useTranslations } from "next-intl";
 
 export const ArticleFooter = () => {
+  const t = useTranslations("article");
+
   return (
     <footer className="bg-background border-t px-8">
       <div className="flex flex-col items-center justify-between gap-4 py-10 md:h-24 md:flex-row md:py-0">
@@ -10,7 +15,7 @@ export const ArticleFooter = () => {
             className="text-sm underline hover:no-underline"
             rel="noopener noreferrer"
           >
-            記事トップへ移動
+            {t("backToArticles")}
           </Link>
           <Link
             href={"/"}
@@ -18,7 +23,7 @@ export const ArticleFooter = () => {
             target="_blank"
             rel="noopener noreferrer"
           >
-            ツールへ移動
+            {t("goToTool")}
           </Link>
         </div>
         <div className="text-muted-foreground text-center text-sm leading-loose md:text-left">

@@ -14,6 +14,7 @@ import { updateGraphEditProposal } from "@/server/services/graph-edit-proposal/u
 import { mergeGraphEditProposal } from "@/server/services/graph-edit-proposal/merge-proposal.service";
 import { rollbackGraphChange } from "@/server/services/graph-edit-proposal/rollback-change.service";
 import { createDraftProposal as createDraftProposalRecord } from "@/server/services/graph-edit-proposal/draft-proposal.service";
+import { getGraphEditProposalMessage } from "@/server/lib/i18n/prompts/graph-edit-proposal";
 import {
   deleteNodeInDraft,
   deleteRelationshipInDraft,
@@ -300,7 +301,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!proposal) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "変更提案が見つかりません",
+          message: getGraphEditProposalMessage(ctx.locale, "notFound"),
         });
       }
 
@@ -308,7 +309,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (proposal.proposerId !== ctx.session.user.id) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "この変更提案を提出する権限がありません",
+          message: getGraphEditProposalMessage(ctx.locale, "submitForbidden"),
         });
       }
 
@@ -316,7 +317,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (proposal.status !== ProposalStatus.DRAFT) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "この状態の変更提案は提出できません",
+          message: getGraphEditProposalMessage(ctx.locale, "submitInvalidState"),
         });
       }
 
@@ -386,7 +387,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!proposal) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "変更提案が見つかりません",
+          message: getGraphEditProposalMessage(ctx.locale, "notFound"),
         });
       }
 
@@ -399,7 +400,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!isAdmin && !isProposer) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "この変更提案を閲覧する権限がありません",
+          message: getGraphEditProposalMessage(ctx.locale, "viewForbidden"),
         });
       }
 
@@ -429,7 +430,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!topicSpace) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "リポジトリが見つかりません",
+          message: getGraphEditProposalMessage(ctx.locale, "repositoryNotFound"),
         });
       }
 
@@ -440,7 +441,10 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!isAdmin) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "このリポジトリの変更提案を閲覧する権限がありません",
+          message: getGraphEditProposalMessage(
+            ctx.locale,
+            "repositoryViewForbidden",
+          ),
         });
       }
 
@@ -512,7 +516,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!proposal) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "変更提案が見つかりません",
+          message: getGraphEditProposalMessage(ctx.locale, "notFound"),
         });
       }
 
@@ -523,7 +527,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!isAdmin) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "この変更提案をロックする権限がありません",
+          message: getGraphEditProposalMessage(ctx.locale, "lockForbidden"),
         });
       }
 
@@ -531,7 +535,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (proposal.lockedById && proposal.lockedById !== ctx.session.user.id) {
         throw new TRPCError({
           code: "CONFLICT",
-          message: "この変更提案は他のユーザーによってロックされています",
+          message: getGraphEditProposalMessage(ctx.locale, "lockedByOther"),
         });
       }
 
@@ -574,7 +578,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!proposal) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "変更提案が見つかりません",
+          message: getGraphEditProposalMessage(ctx.locale, "notFound"),
         });
       }
 
@@ -587,7 +591,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!isAdmin && !isLockedBy) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "この変更提案のロックを解除する権限がありません",
+          message: getGraphEditProposalMessage(ctx.locale, "unlockForbidden"),
         });
       }
 
@@ -621,7 +625,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!proposal) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "変更提案が見つかりません",
+          message: getGraphEditProposalMessage(ctx.locale, "notFound"),
         });
       }
 
@@ -632,7 +636,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!isAdmin) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "この変更提案をレビューする権限がありません",
+          message: getGraphEditProposalMessage(ctx.locale, "reviewForbidden"),
         });
       }
 
@@ -640,7 +644,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (proposal.status !== ProposalStatus.PENDING) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "この状態の変更提案はレビューできません",
+          message: getGraphEditProposalMessage(ctx.locale, "reviewInvalidState"),
         });
       }
 
@@ -683,7 +687,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!proposal) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "変更提案が見つかりません",
+          message: getGraphEditProposalMessage(ctx.locale, "notFound"),
         });
       }
 
@@ -694,7 +698,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!isAdmin) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "この変更提案を承認する権限がありません",
+          message: getGraphEditProposalMessage(ctx.locale, "approveForbidden"),
         });
       }
 
@@ -702,7 +706,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (proposal.status !== ProposalStatus.IN_REVIEW) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "この状態の変更提案は承認できません",
+          message: getGraphEditProposalMessage(ctx.locale, "approveInvalidState"),
         });
       }
 
@@ -740,7 +744,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!proposal) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "変更提案が見つかりません",
+          message: getGraphEditProposalMessage(ctx.locale, "notFound"),
         });
       }
 
@@ -751,7 +755,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!isAdmin) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "この変更提案を却下する権限がありません",
+          message: getGraphEditProposalMessage(ctx.locale, "rejectForbidden"),
         });
       }
 
@@ -759,7 +763,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (proposal.status !== ProposalStatus.IN_REVIEW) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "この状態の変更提案は却下できません",
+          message: getGraphEditProposalMessage(ctx.locale, "rejectInvalidState"),
         });
       }
 
@@ -799,7 +803,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!proposal) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "変更提案が見つかりません",
+          message: getGraphEditProposalMessage(ctx.locale, "notFound"),
         });
       }
 
@@ -807,7 +811,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (proposal.proposerId !== ctx.session.user.id) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "この変更提案を取り下げる権限がありません",
+          message: getGraphEditProposalMessage(ctx.locale, "withdrawForbidden"),
         });
       }
 
@@ -819,7 +823,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       ) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "この状態の変更提案は取り下げできません",
+          message: getGraphEditProposalMessage(ctx.locale, "withdrawInvalidState"),
         });
       }
 
@@ -852,7 +856,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!proposal) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "変更提案が見つかりません",
+          message: getGraphEditProposalMessage(ctx.locale, "notFound"),
         });
       }
 
@@ -865,7 +869,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!isAdmin && !isProposer) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "この変更提案にコメントする権限がありません",
+          message: getGraphEditProposalMessage(ctx.locale, "commentForbidden"),
         });
       }
 
@@ -908,7 +912,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!proposal) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "変更提案が見つかりません",
+          message: getGraphEditProposalMessage(ctx.locale, "notFound"),
         });
       }
 
@@ -921,7 +925,10 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!isAdmin && !isProposer) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "この変更提案のコメントを閲覧する権限がありません",
+          message: getGraphEditProposalMessage(
+            ctx.locale,
+            "commentsViewForbidden",
+          ),
         });
       }
 
@@ -993,7 +1000,7 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!topicSpace) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "リポジトリが見つかりません",
+          message: getGraphEditProposalMessage(ctx.locale, "repositoryNotFound"),
         });
       }
 
@@ -1004,7 +1011,10 @@ export const graphEditProposalRouter = createTRPCRouter({
       if (!isAdmin) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "このリポジトリの変更履歴を閲覧する権限がありません",
+          message: getGraphEditProposalMessage(
+            ctx.locale,
+            "historyViewForbidden",
+          ),
         });
       }
 

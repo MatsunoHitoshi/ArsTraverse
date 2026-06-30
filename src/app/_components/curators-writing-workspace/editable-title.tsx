@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 
 interface EditableTitleProps {
   title: string;
@@ -21,6 +22,7 @@ export const EditableTitle = ({
   titleClassName = "cursor-pointer text-lg font-semibold text-gray-400 hover:text-white",
   inputClassName = "bg-transparent text-lg font-semibold text-gray-400 outline-none focus:text-white disabled:opacity-50",
 }: EditableTitleProps) => {
+  const t = useTranslations("workspace");
   const [isEditing, setIsEditing] = useState(false);
   const [editingTitle, setEditingTitle] = useState(title);
   const [isComposing, setIsComposing] = useState(false);
@@ -90,7 +92,7 @@ export const EditableTitle = ({
     <h2
       className={`${titleClassName} ${className}`}
       onClick={() => handleEdit(title)}
-      title="クリックして編集"
+      title={t("clickToEdit")}
     >
       {title}
     </h2>

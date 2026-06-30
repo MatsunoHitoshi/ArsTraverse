@@ -1,3 +1,5 @@
+"use client";
+
 import React, {
   useEffect,
   useRef,
@@ -5,6 +7,7 @@ import React, {
   useContext,
   useState,
 } from "react";
+import { useTranslations } from "next-intl";
 import { useEditor, EditorContent, type JSONContent } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
 import { EntityHighlight } from "./extensions/entity-highlight-extension";
@@ -59,6 +62,7 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
   setIsGraphSelectionMode,
   completionWithSubgraphRef,
 }) => {
+  const t = useTranslations("workspace");
   const editorRef = useRef<HTMLDivElement>(null);
   const debounceTimeoutRef = useRef<NodeJS.Timeout>();
   const updateTimeoutRef = useRef<NodeJS.Timeout>();
@@ -185,7 +189,7 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
                       .chain()
                       .insertContentAt(
                         currentPos,
-                        '<p><span style="color: #545476" class="text-v2-semantic-text-place-holder">読み込み中…</span></p>',
+                        `<p><span style="color: #545476" class="text-v2-semantic-text-place-holder">${t("editorLoadingImage")}</span></p>`,
                       )
                       .focus()
                       .run();
@@ -196,7 +200,7 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
                       BUCKETS.PATH_TO_RICH_TEXT_IMAGES,
                     );
                     if (!imageURL) {
-                      throw new Error("画像URLの取得に失敗しました");
+                      throw new Error(t("imageUrlFailed"));
                     }
 
                     // 読み込み中メッセージを削除して画像を挿入
@@ -209,10 +213,7 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
                     // 次の画像の位置を更新（画像挿入後の位置）
                     currentPos = currentEditor.state.selection.anchor;
                   } catch (error) {
-                    console.error(
-                      "画像のアップロード中にエラーが発生しました:",
-                      error,
-                    );
+                    console.error(t("imageUploadError"), error);
                   }
                 }
 
@@ -352,9 +353,7 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
   const handleClick = (e: React.MouseEvent) => {
     // テキスト提案モードがアクティブな場合、マウスクリックで無効化
     if (textCompletion.isTextSuggestionMode) {
-      console.log(
-        "テキスト提案モードがアクティブな場合、マウスクリックで無効化!!",
-      );
+      console.log("Disable text suggestion mode on mouse click");
       textCompletion.disableTextSuggestionMode(editor);
     }
 
@@ -377,7 +376,7 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
   };
 
   if (!editor) {
-    return <div className="text-gray-400">エディタを初期化中...</div>;
+    return <div className="text-gray-400">{t("editorInitializing")}</div>;
   }
 
   return (
@@ -414,7 +413,7 @@ export const TipTapEditorContent: React.FC<TipTapEditorContentProps> = ({
               >
                 <div className="flex items-center space-x-1 rounded-md bg-slate-950/60 px-2 py-1 shadow-lg backdrop-blur-sm">
                   <div className="h-3 w-3 animate-spin rounded-full border border-white border-t-transparent"></div>
-                  <span className="text-xs text-white">生成中...</span>
+                  <span className="text-xs text-white">{t("editorGenerating")}</span>
                 </div>
               </div>
             )}

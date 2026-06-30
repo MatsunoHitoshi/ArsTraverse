@@ -7,6 +7,7 @@ import Image from "next/image";
 import { Button } from "../button/button";
 import { api } from "@/trpc/react";
 import { TrashIcon } from "../icons";
+import { useTranslations } from "next-intl";
 
 const NODE_IMAGE_MAX_BYTES = 10 * 1024 * 1024; // 10MB
 const IMAGE_KEYS = ["imageUrl", "imageCaption", "imageAlt"] as const;
@@ -20,6 +21,8 @@ export const NodeImageFormSection = ({
   node: CustomNodeType;
   onSaveSuccess: (updatedNode: CustomNodeType) => void;
 }) => {
+  const t = useTranslations("form");
+  const tCommon = useTranslations("common");
   const updateProperty = api.topicSpaces.updateGraphProperties.useMutation();
   const uploadNodeImage = api.topicSpaces.uploadNodeImage.useMutation();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -70,7 +73,7 @@ export const NodeImageFormSection = ({
         },
         onError: (e) => {
           console.error(e);
-          alert(e.message ?? "保存に失敗しました。");
+          alert(e.message ?? t("saveFailed"));
         },
       },
     );
@@ -80,7 +83,7 @@ export const NodeImageFormSection = ({
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > NODE_IMAGE_MAX_BYTES) {
-      alert("画像サイズは10MB以内にしてください。");
+      alert(t("imageTooLarge"));
       e.target.value = "";
       return;
     }
@@ -89,7 +92,7 @@ export const NodeImageFormSection = ({
     reader.onload = () => {
       const dataUrl = reader.result as string;
       if (!dataUrl.startsWith("data:image/")) {
-        alert("画像ファイルを選択してください。");
+        alert(t("selectImageFile"));
         return;
       }
       uploadNodeImage.mutate(
@@ -97,7 +100,7 @@ export const NodeImageFormSection = ({
         {
           onSuccess: (res) => {
             if (!res.url) {
-              alert("画像URLの取得に失敗しました。");
+              alert(t("imageUrlFailed"));
               return;
             }
             setImageUrl(res.url);
@@ -120,13 +123,13 @@ export const NodeImageFormSection = ({
                   onSaveSuccess({ ...node, properties: nextProperties });
                 },
                 onError: (err) => {
-                  alert(err.message ?? "保存に失敗しました。");
+                  alert(err.message ?? t("saveFailed"));
                 },
               },
             );
           },
           onError: (err) => {
-            alert(err.message ?? "アップロードに失敗しました。");
+            alert(err.message ?? t("uploadFailed"));
           },
         },
       );
@@ -153,7 +156,7 @@ export const NodeImageFormSection = ({
           onSaveSuccess({ ...node, properties });
         },
         onError: (e) => {
-          alert(e.message ?? "削除に失敗しました。");
+          alert(e.message ?? t("deleteFailed"));
         },
       },
     );
@@ -166,7 +169,7 @@ export const NodeImageFormSection = ({
 
   return (
     <div className="flex flex-col gap-2 rounded-md border border-slate-600 p-3">
-      <span className="text-sm font-medium text-slate-300">ノード画像</span>
+      <span className="text-sm font-medium text-slate-300">{t("nodeImage")}</span>
       {imageUrl ? (
         <>
           <div className="relative aspect-square w-full max-w-[200px] overflow-hidden rounded">
@@ -188,14 +191,14 @@ export const NodeImageFormSection = ({
           </div>
           <input
             type="text"
-            placeholder="キャプション（任意）"
+            placeholder={t("captionPlaceholder")}
             className="w-full rounded-md bg-slate-600 px-2 py-1 text-sm text-slate-50"
             value={imageCaption}
             onChange={(e) => setImageCaption(e.target.value)}
           />
           <input
             type="text"
-            placeholder="代替テキスト（任意・アクセシビリティ）"
+            placeholder={t("altPlaceholder")}
             className="w-full rounded-md bg-slate-600 px-2 py-1 text-sm text-slate-50"
             value={imageAlt}
             onChange={(e) => setImageAlt(e.target.value)}
@@ -207,7 +210,7 @@ export const NodeImageFormSection = ({
               onClick={saveImageProperties}
               disabled={updateProperty.isPending}
             >
-              {updateProperty.isPending ? "保存中…" : "キャプションを保存"}
+              {updateProperty.isPending ? tCommon("saving") : t("savingCaption")}
             </Button>
           )}
         </>
@@ -226,11 +229,9 @@ export const NodeImageFormSection = ({
             onClick={() => fileInputRef.current?.click()}
             disabled={uploadNodeImage.isPending}
           >
-            {uploadNodeImage.isPending ? "アップロード中…" : "画像を選択"}
+            {uploadNodeImage.isPending ? t("uploading") : t("selectImage")}
           </Button>
-          <span className="text-xs text-slate-400">
-            10MB以内（JPEG/PNG/WebP/GIF）
-          </span>
+          <span className="text-xs text-slate-400">{t("imageSizeHint")}</span>
         </div>
       )}
     </div>

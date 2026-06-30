@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import type { AnnotationType } from "@prisma/client";
@@ -35,10 +36,24 @@ export const AnnotationForm: React.FC<AnnotationFormProps> = ({
 }) => {
   if (parentAnnotationId)
     console.log("parentAnnotationId: ", parentAnnotationId);
+  const t = useTranslations("annotation");
+  const tCommon = useTranslations("common");
   const [annotationType, setAnnotationType] = useState<AnnotationType>(
     defaultAnnotationType,
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const annotationTypeOptions = useMemo(
+    () => [
+      { value: "COMMENT", label: t("comment") },
+      { value: "INTERPRETATION", label: t("interpretation") },
+      { value: "QUESTION", label: t("question") },
+      { value: "CLARIFICATION", label: t("clarification") },
+      { value: "CRITICISM", label: t("criticism") },
+      { value: "SUPPORT", label: t("support") },
+    ],
+    [t],
+  );
 
   const editor = useEditor({
     extensions: [StarterKit],
@@ -65,13 +80,13 @@ export const AnnotationForm: React.FC<AnnotationFormProps> = ({
     },
     onError: (error) => {
       console.error("注釈作成エラー:", error);
-      alert("注釈の作成に失敗しました");
+      alert(t("createFailed"));
     },
   });
 
   const handleSubmit = async () => {
     if (!editor?.getHTML()) {
-      alert("注釈の内容を入力してください");
+      alert(t("contentRequired"));
       return;
     }
 
@@ -95,29 +110,18 @@ export const AnnotationForm: React.FC<AnnotationFormProps> = ({
     }
   };
 
-  const annotationTypeOptions = [
-    { value: "COMMENT", label: "コメント" },
-    { value: "INTERPRETATION", label: "解釈" },
-    { value: "QUESTION", label: "質問" },
-    { value: "CLARIFICATION", label: "補足" },
-    { value: "CRITICISM", label: "批評" },
-    { value: "SUPPORT", label: "支持" },
-  ];
-
   return (
     <Modal
       isOpen={isOpen}
       setIsOpen={setIsOpen}
-      title={parentAnnotationId ? "返信を追加" : "新しい注釈を追加"}
+      title={parentAnnotationId ? t("addReply") : t("addNewAnnotation")}
       size="extra-large"
     >
       <div className="flex flex-col overflow-hidden">
-        {/* スクロール可能なコンテンツエリア */}
         <div className="flex-1 overflow-y-auto">
-          {/* 注釈タイプ選択 */}
           <div className="mb-4">
             <label className="mb-2 block text-sm font-medium text-gray-500">
-              注釈の種類
+              {t("annotationType")}
             </label>
             <ListboxInput
               options={annotationTypeOptions}
@@ -125,11 +129,10 @@ export const AnnotationForm: React.FC<AnnotationFormProps> = ({
               setSelected={(value) =>
                 setAnnotationType(value as AnnotationType)
               }
-              placeholder="注釈の種類を選択"
+              placeholder={t("selectAnnotationType")}
             />
           </div>
 
-          {/* エディター */}
           <div className="mb-4">
             <div className="rounded-md bg-slate-800">
               <TiptapEditorToolbar
@@ -144,20 +147,19 @@ export const AnnotationForm: React.FC<AnnotationFormProps> = ({
           </div>
         </div>
 
-        {/* 固定ボタンエリア */}
         <div className="flex justify-end gap-2 border-t border-gray-600 pt-4">
           <Button
             onClick={() => setIsOpen(false)}
             disabled={isSubmitting}
             className="border border-gray-300"
           >
-            キャンセル
+            {tCommon("cancel")}
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={isSubmitting || !editor?.getHTML()}
           >
-            {isSubmitting ? "作成中..." : "作成"}
+            {isSubmitting ? tCommon("creating") : tCommon("create")}
           </Button>
         </div>
       </div>

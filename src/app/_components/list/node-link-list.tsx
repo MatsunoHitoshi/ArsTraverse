@@ -1,3 +1,4 @@
+"use client";
 import { GraphIcon } from "@/app/_components/icons";
 import type { CustomNodeType } from "@/app/const/types";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -6,7 +7,9 @@ import { CheckboxInput } from "../input/checkbox-input";
 import { MergeNodesForm } from "../form/merge-nodes-form";
 import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { PropertiesSummaryPanel } from "../d3/force/graph-info-panel";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "i18n/navigation";
+import { useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 type NodesSortType = "name" | "centrality" | "none";
 
@@ -43,6 +46,7 @@ export const NodeLinkList = ({
   /** 更新 API 送信中かどうか（更新ボタンの loading 表示用） */
   isGraphUpdatePending?: boolean;
 }) => {
+  const t = useTranslations("list");
   const [isNodeMergeMode, setIsNodeMergeMode] = useState<boolean>(false);
   const [mergeNodes, setMergeNodes] = useState<CustomNodeType[]>();
   const [isMergeNodesEditModalOpen, setIsMergeNodesEditModalOpen] =
@@ -136,7 +140,7 @@ export const NodeLinkList = ({
               className="!text-xs"
               onClick={() => setIsNodeMergeMode(!isNodeMergeMode)}
             >
-              {isNodeMergeMode ? "統合をキャンセル" : "ノードの統合"}
+              {isNodeMergeMode ? t("cancelMerge") : t("mergeNodes")}
             </Button>
 
             {isNodeMergeMode && mergeNodes && mergeNodes.length > 0 && (
@@ -144,7 +148,7 @@ export const NodeLinkList = ({
                 className="!text-xs"
                 onClick={() => setIsMergeNodesEditModalOpen(true)}
               >
-                統合
+                {t("merge")}
               </Button>
             )}
           </>
@@ -162,9 +166,9 @@ export const NodeLinkList = ({
           }
           className={`!text-xs ${sortType === "none" ? "" : "!text-orange-500"}`}
         >
-          {sortType === "name" && "名称順"}
-          {sortType === "centrality" && "中心度順"}
-          {sortType === "none" && "並び替え"}
+          {sortType === "name" && t("sortByName")}
+          {sortType === "centrality" && t("sortByCentrality")}
+          {sortType === "none" && t("sort")}
         </Button>
 
         {highlightedNodes.length > 0 && (
@@ -172,7 +176,7 @@ export const NodeLinkList = ({
             <Button
               className="!min-w-0 !px-2 !text-xs"
               onClick={goToPrevMatch}
-              aria-label="前のハイライトへ"
+              aria-label={t("prevHighlight")}
             >
               ‹
             </Button>
@@ -182,7 +186,7 @@ export const NodeLinkList = ({
             <Button
               className="!min-w-0 !px-2 !text-xs"
               onClick={goToNextMatch}
-              aria-label="次のハイライトへ"
+              aria-label={t("nextHighlight")}
             >
               ›
             </Button>
@@ -195,7 +199,7 @@ export const NodeLinkList = ({
             onClick={onGraphUpdate}
             isLoading={isGraphUpdatePending}
           >
-            更新
+            {t("update")}
           </Button>
         )}
       </div>

@@ -1,23 +1,20 @@
-import { notFound } from "next/navigation";
 import { getRequestConfig } from "next-intl/server";
 
-// サポートする言語のリスト
-export const locales = ["ja", "en"] as const;
-export type Locale = (typeof locales)[number];
+import { routing, type Locale } from "./routing";
 
-// デフォルト言語
-export const defaultLocale: Locale = "ja";
+export const locales = routing.locales;
+export type { Locale };
+export const defaultLocale = routing.defaultLocale;
 
-// ロケール検証関数
 export function isValidLocale(locale: string): locale is Locale {
-  return locales.includes(locale as Locale);
+  return routing.locales.includes(locale as Locale);
 }
 
-// next-intlの設定
-export default getRequestConfig(async ({ locale }) => {
-  // ロケールが有効でない場合は404を返す
+export default getRequestConfig(async ({ requestLocale }) => {
+  let locale = await requestLocale;
+
   if (!locale || !isValidLocale(locale)) {
-    notFound();
+    locale = defaultLocale;
   }
 
   return {

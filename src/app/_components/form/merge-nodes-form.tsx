@@ -1,9 +1,12 @@
+"use client";
+
 import { api } from "@/trpc/react";
 import { Button } from "../button/button";
 import type { CustomNodeType } from "@/app/const/types";
 import { Modal } from "../modal/modal";
 import { PropertiesSummaryPanel } from "../d3/force/graph-info-panel";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 
 export const MergeNodesForm = ({
   isOpen,
@@ -24,6 +27,8 @@ export const MergeNodesForm = ({
   refetch: () => void;
   setIsNodeMergeMode: React.Dispatch<React.SetStateAction<boolean>>;
 }) => {
+  const t = useTranslations("form");
+  const tCommon = useTranslations("common");
 
   const [isMerging, setIsMerging] = useState(false);
   const mergeGraphNodes = api.topicSpaces.mergeGraphNodes.useMutation();
@@ -51,10 +56,10 @@ export const MergeNodesForm = ({
     );
   };
   return (
-    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title="ノードの統合">
+    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title={t("mergeTitle")}>
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
-          <div>下記のノードを統合します</div>
+          <div>{t("mergeDescription")}</div>
           <div className="flex flex-col gap-1 ">
             {mergeNodes.map((node) => {
               return (
@@ -78,7 +83,7 @@ export const MergeNodesForm = ({
         </div>
 
         <div className="flex flex-col gap-2">
-          <div>統合後のノード</div>
+          <div>{t("mergedNode")}</div>
 
           <div className="flex flex-col gap-2 rounded-md bg-slate-700 p-2 text-sm">
             <div className="flex flex-row items-center gap-2">
@@ -104,7 +109,7 @@ export const MergeNodesForm = ({
             className="text-sm"
             onClick={() => setIsOpen(false)}
           >
-            キャンセル
+            {tCommon("cancel")}
           </Button>
           <Button
             type="button"
@@ -113,7 +118,7 @@ export const MergeNodesForm = ({
             isLoading={isMerging}
             disabled={isMerging}
           >
-            統合する
+            {t("mergeAction")}
           </Button>
         </div>
       </div>

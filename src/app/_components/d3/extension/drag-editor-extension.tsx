@@ -21,6 +21,7 @@ export const dragEditorExtension = ({
   setDragState,
   onGraphUpdate,
   graphIdentifier,
+  formatNewNodeName,
 }: {
   tempLineRef: React.RefObject<SVGLineElement>;
   tempCircleRef: React.RefObject<SVGCircleElement>;
@@ -30,6 +31,7 @@ export const dragEditorExtension = ({
   setDragState: React.Dispatch<React.SetStateAction<DragState>>;
   onGraphUpdate?: (additionalGraph: GraphDocumentForFrontend) => void;
   graphIdentifier: string;
+  formatNewNodeName: (id: string) => string;
 }) => {
   let dragStateInExtension = dragState;
   const dragReset = () => {
@@ -73,7 +75,7 @@ export const dragEditorExtension = ({
 
     const newNode: CustomNodeType = {
       id: newNodeId,
-      name: `新しいノード${newNodeId}`,
+      name: formatNewNodeName(newNodeId),
       label: "Entity",
       properties: {},
       x: targetX,

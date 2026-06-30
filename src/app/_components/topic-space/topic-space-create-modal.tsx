@@ -9,7 +9,8 @@ import {
   ComboboxOption,
 } from "@headlessui/react";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "i18n/navigation";
+import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import { api } from "@/trpc/react";
 import type { SubmitErrorHandler, SubmitHandler } from "react-hook-form";
@@ -51,6 +52,7 @@ export const TopicSpaceCreateModal = ({
   const createTopicSpace = api.topicSpaces.create.useMutation();
   const [query, setQuery] = useState("");
   const router = useRouter();
+  const t = useTranslations("topicSpace");
 
   const filteredDocuments =
     query === ""
@@ -83,27 +85,27 @@ export const TopicSpaceCreateModal = ({
   if (!filteredDocuments || !session) return null;
 
   return (
-    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title="リポジトリを作成">
+    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title={t("createRepository")}>
       <form onSubmit={methods.handleSubmit(submit, isInValid)}>
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
-            <div className="text-sm font-semibold">マップの名前</div>
+            <div className="text-sm font-semibold">{t("mapName")}</div>
             <Input
               type="text"
-              placeholder="名前を入力"
+              placeholder={t("enterName")}
               className={clsx(
                 "block w-full rounded-lg border-none bg-white/5 px-3 py-1.5 text-sm/6",
                 "focus:outline-none data-[focus]:outline-1 data-[focus]:-outline-offset-2 data-[focus]:outline-slate-400",
               )}
               {...methods.register("name", {
-                required: "必須入力です",
+                required: t("requiredField"),
               })}
             />
           </div>
           <div className="flex flex-col gap-1">
-            <div className="text-sm font-semibold">説明</div>
+            <div className="text-sm font-semibold">{t("description")}</div>
             <Textarea
-              placeholder="説明を入力"
+              placeholder={t("enterDescription")}
               className={clsx(
                 "block w-full resize-none rounded-lg border-none bg-white/5 px-3 py-1.5 text-sm/6 text-white",
                 "focus:outline-none data-[focus]:outline-1 data-[focus]:-outline-offset-2 data-[focus]:outline-slate-400",
@@ -113,7 +115,7 @@ export const TopicSpaceCreateModal = ({
             />
           </div>
           <div className="flex flex-col gap-1">
-            <div className="text-sm font-semibold">ドキュメントを選択</div>
+            <div className="text-sm font-semibold">{t("selectDocument")}</div>
             <Combobox
               value={selectedDocument}
               onChange={(val) => {
@@ -127,7 +129,7 @@ export const TopicSpaceCreateModal = ({
                   document ? document.name : ""
                 }
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="ドキュメント名を入力"
+                placeholder={t("enterDocumentName")}
                 className={clsx(
                   "w-full rounded-lg border-none bg-white/5 py-1.5 pl-3 pr-8 text-sm/6 text-white",
                   "focus:outline-none data-[focus]:outline-1 data-[focus]:-outline-offset-2 data-[focus]:outline-slate-400",
@@ -151,7 +153,7 @@ export const TopicSpaceCreateModal = ({
           </div>
           <div className="flex flex-row justify-end">
             <Button type="submit" className="text-sm">
-              作成
+              {t("create")}
             </Button>
           </div>
         </div>

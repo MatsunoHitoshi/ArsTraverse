@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { GraphDocumentForFrontend } from "@/app/const/types";
 import { D3ForceGraph } from "@/app/_components/d3/force/graph";
 import type { CustomNodeType, CustomLinkType } from "@/app/const/types";
@@ -10,6 +11,7 @@ interface GraphPreviewProps {
 }
 
 export const GraphPreview: React.FC<GraphPreviewProps> = ({ graphData }) => {
+  const t = useTranslations("workspace");
   const svgRef = useRef<SVGSVGElement>(null);
   const [currentScale, setCurrentScale] = useState(1);
   const [focusedNode, setFocusedNode] = useState<CustomNodeType | undefined>();
@@ -21,7 +23,7 @@ export const GraphPreview: React.FC<GraphPreviewProps> = ({ graphData }) => {
   if (graphData.nodes.length === 0 && graphData.relationships.length === 0) {
     return (
       <div className="flex h-96 items-center justify-center rounded-lg border border-slate-600 bg-slate-800">
-        <div className="text-slate-400">グラフデータがありません</div>
+        <div className="text-slate-400">{t("graphDataEmpty")}</div>
       </div>
     );
   }

@@ -1,4 +1,7 @@
-import { useState } from "react";
+"use client";
+
+import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Modal } from "../modal/modal";
 import { Button } from "../button/button";
 import { TextInput } from "../input/text-input";
@@ -21,10 +24,17 @@ export const ProposalCreateModal: React.FC<ProposalCreateModalProps> = ({
   graphDocument,
   onSuccess,
 }) => {
-  const [title, setTitle] = useState("グラフの変更提案");
-  const [description, setDescription] = useState(
-    "ワークスペースからグラフの変更を提案します",
+  const t = useTranslations("workspace");
+  const tCommon = useTranslations("common");
+  const defaults = useMemo(
+    () => ({
+      title: t("proposalDefaultTitle"),
+      description: t("proposalDefaultDescription"),
+    }),
+    [t],
   );
+  const [title, setTitle] = useState(defaults.title);
+  const [description, setDescription] = useState(defaults.description);
 
   const createProposal = api.graphEditProposal.createProposal.useMutation({
     onSuccess: (response) => {
@@ -32,18 +42,18 @@ export const ProposalCreateModal: React.FC<ProposalCreateModalProps> = ({
     },
     onError: (error) => {
       console.error("変更提案の作成に失敗しました", error);
-      alert("変更提案の作成に失敗しました。");
+      alert(t("proposalCreateFailed"));
     },
   });
 
   const handleSubmit = () => {
     if (!title.trim()) {
-      alert("タイトルを入力してください");
+      alert(t("proposalTitleRequired"));
       return;
     }
 
     if (!description.trim() || description.trim().length < 10) {
-      alert("説明を10文字以上入力してください");
+      alert(t("proposalDescriptionMinLength"));
       return;
     }
 
@@ -57,33 +67,32 @@ export const ProposalCreateModal: React.FC<ProposalCreateModalProps> = ({
 
   const handleCancel = () => {
     setIsOpen(false);
-    // フォームをリセット
-    setTitle("グラフの変更提案");
-    setDescription("ワークスペースからグラフの変更を提案します");
+    setTitle(defaults.title);
+    setDescription(defaults.description);
   };
 
   return (
-    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title="変更提案を作成">
+    <Modal isOpen={isOpen} setIsOpen={setIsOpen} title={t("createProposalTitle")}>
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
           <label className="text-sm font-medium text-white">
-            タイトル <span className="text-red-400">*</span>
+            {t("proposalTitleLabel")} <span className="text-red-400">*</span>
           </label>
           <TextInput
             value={title}
             onChange={setTitle}
-            placeholder="変更提案のタイトルを入力"
+            placeholder={t("proposalTitlePlaceholder")}
           />
         </div>
 
         <div className="flex flex-col gap-2">
           <label className="text-sm font-medium text-white">
-            メッセージ <span className="text-red-400">*</span>
+            {t("proposalMessageLabel")} <span className="text-red-400">*</span>
           </label>
           <Textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="変更提案に関するメッセージを入力（10文字以上）"
+            placeholder={t("proposalMessagePlaceholder")}
             className="block w-full rounded-lg border-none bg-white/5 px-3 py-2 text-sm/6 text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
           />
         </div>
@@ -95,7 +104,7 @@ export const ProposalCreateModal: React.FC<ProposalCreateModalProps> = ({
             className="bg-slate-600 hover:bg-slate-700"
             disabled={createProposal.isPending}
           >
-            キャンセル
+            {tCommon("cancel")}
           </Button>
           <Button
             type="button"
@@ -107,7 +116,9 @@ export const ProposalCreateModal: React.FC<ProposalCreateModalProps> = ({
               description.trim().length < 10
             }
           >
-            {createProposal.isPending ? "作成中..." : "変更提案を作成"}
+            {createProposal.isPending
+              ? tCommon("creating")
+              : t("createProposalAction")}
           </Button>
         </div>
       </div>

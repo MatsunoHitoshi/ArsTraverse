@@ -20,6 +20,7 @@ import { select, zoomTransform, pointer, zoom } from "d3";
 import type * as d3 from "d3";
 import { BottomSheet } from "../modal/bottom-sheet";
 import { PublicNodeAnnotationSection } from "../view/node/public-node-annotation-section";
+import { useTranslations } from "next-intl";
 
 interface PublicArticleViewerProps {
   content: JSONContent;
@@ -38,6 +39,7 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
   userName,
   userImage,
 }: PublicArticleViewerProps) => {
+  const t = useTranslations("workspace");
   const [innerWidth, innerHeight] = useWindowSize();
   const [activeEntity, setActiveEntity] = useState<CustomNodeType | undefined>(
     undefined,
@@ -368,7 +370,7 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
                     </>
                   ) : (
                     <div className="flex h-full w-full items-center justify-center">
-                      <p>グラフデータが見つかりません</p>
+                      <p>{t("graphNotFound")}</p>
                     </div>
                   )}
                   <div
@@ -493,7 +495,7 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
                 </>
               ) : (
                 <p className="text-sm text-gray-400">
-                  グラフデータが見つかりません
+                  {t("graphNotFound")}
                 </p>
               )}
             </div>
