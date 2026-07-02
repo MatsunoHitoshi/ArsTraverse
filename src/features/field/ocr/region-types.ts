@@ -194,6 +194,25 @@ export function clampRegion(region: NormalizedOcrRegion): NormalizedOcrRegion {
   return { x, y, w, h };
 }
 
+export function areRegionsEqual(
+  left: NormalizedOcrRegion[],
+  right: NormalizedOcrRegion[] | undefined,
+): boolean {
+  if (!right || left.length !== right.length) return false;
+
+  return left.every((region, index) => {
+    const other = right[index];
+    if (!other) return false;
+
+    return (
+      region.x === other.x &&
+      region.y === other.y &&
+      region.w === other.w &&
+      region.h === other.h
+    );
+  });
+}
+
 export function regionToOverlayStyle(
   region: NormalizedOcrRegion,
   layout: DisplayedImageLayout,

@@ -51,7 +51,40 @@ const config = {
           },
         ],
       },
+      {
+        source: "/ocr/:path*",
+        headers: [
+          {
+            key: "Cross-Origin-Resource-Policy",
+            value: "cross-origin",
+          },
+        ],
+      },
+      {
+        source: "/api/ndlocr-models/:path*",
+        headers: [
+          {
+            key: "Cross-Origin-Resource-Policy",
+            value: "cross-origin",
+          },
+        ],
+      },
+      {
+        source: "/_next/static/:path*",
+        headers: [
+          {
+            key: "Cross-Origin-Resource-Policy",
+            value: "cross-origin",
+          },
+        ],
+      },
     ];
+  },
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.output.workerPublicPath = "/_next/";
+    }
+    return config;
   },
 };
 
