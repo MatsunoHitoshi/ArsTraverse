@@ -68,6 +68,18 @@ export function cropRegionFromBitmap(
   return canvas;
 }
 
+export function cropRegionToImageData(
+  bitmap: ImageBitmap,
+  region: NormalizedOcrRegion,
+): ImageData {
+  const canvas = cropRegionFromBitmap(bitmap, region);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("Canvas is not available");
+  }
+  return ctx.getImageData(0, 0, canvas.width, canvas.height);
+}
+
 export async function cropRegionToBlob(
   bitmap: ImageBitmap,
   region: NormalizedOcrRegion,

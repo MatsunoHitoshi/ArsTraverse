@@ -15,6 +15,7 @@ import { LinkButton } from "@/app/_components/button/link-button";
 import { ChevronLeftIcon } from "@/app/_components/icons";
 import { GraphSummary } from "@/features/field/components/graph-summary";
 import { LiveCameraScanner } from "@/features/field/components/live-camera-scanner";
+import { OcrLanguageSelect } from "@/features/field/components/ocr-language-select";
 import { ScanRegionSelector } from "@/features/field/components/scan-region-selector";
 import { ScanImageWithRegions } from "@/features/field/components/scan-image-with-regions";
 import { rotateImageFile90CounterClockwise } from "@/features/field/ocr/image-crop";
@@ -27,7 +28,8 @@ import {
   runOcrOnRegions,
   type OcrLanguage,
   type OcrProgressUpdate,
-} from "@/features/field/ocr/tesseract-client";
+} from "@/features/field/ocr/ocr-runner";
+import type { OcrMetadata } from "@/server/api/schemas/scan";
 
 type ScanStep = "camera" | "trim" | "processing" | "preview";
 type PipelineStage = "ocr" | "normalize" | "graph" | null;
@@ -42,6 +44,14 @@ function getLocalizedOcrStatusLabel(
     "loading language traineddata": t("ocrStatusLoadingLanguage"),
     "initializing api": t("ocrStatusInitializingApi"),
     "recognizing text": t("ocrStatusRecognizingText"),
+    ndlocr_preparing: t("ndlocrStatusPreparing"),
+    ndlocr_initializing: t("ndlocrStatusInitializing"),
+    ndlocr_loading_models: t("ndlocrStatusLoadingModels"),
+    ndlocr_initializing_models: t("ndlocrStatusInitializingModels"),
+    ndlocr_layout_detection: t("ndlocrStatusLayoutDetection"),
+    ndlocr_text_recognition: t("ndlocrStatusTextRecognition"),
+    ndlocr_reading_order: t("ndlocrStatusReadingOrder"),
+    ndlocr_generating_output: t("ndlocrStatusGeneratingOutput"),
   };
   const base = statusLabels[update.status] ?? t("ocrStatusPreparing");
   if (update.regionIndex != null && update.regionCount != null) {
@@ -76,9 +86,7 @@ export function FieldScanFlow() {
   const [ocrProgress, setOcrProgress] = useState<OcrProgressUpdate | null>(
     null,
   );
-  const [ocrMetadata, setOcrMetadata] = useState<
-    Record<string, unknown> | undefined
-  >();
+  const [ocrMetadata, setOcrMetadata] = useState<OcrMetadata | undefined>();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRunningOcr, setIsRunningOcr] = useState(false);
   const [isNormalizingText, setIsNormalizingText] = useState(false);
@@ -88,14 +96,29 @@ export function FieldScanFlow() {
   const [pipelineStage, setPipelineStage] = useState<PipelineStage>(null);
   const [pipelineProgress, setPipelineProgress] = useState(0);
 
-  const languageOptions = useMemo(
-    (): { value: OcrLanguage; label: string }[] => [
-      { value: "jpn", label: t("languageJpn") },
-      { value: "jpn_vert", label: t("languageJpnVert") },
-      { value: "eng", label: t("languageEng") },
-    ],
-    [t],
-  );
+  const lastOcrRegions = ocrMetadata?.regions;
+  const lastOcrLanguage = ocrMetadata?.language;
+  const isOcrStale = useMemo(() => {
+    if (!ocrMetadata) return false;
+
+    const regionsChanged =
+      lastOcrRegions == null ||
+      ocrRegions.length !== lastOcrRegions.length ||
+      ocrRegions.some((region, index) => {
+        const other = lastOcrRegions[index];
+        if (!other) return true;
+        return (
+          region.x !== other.x ||
+          region.y !== other.y ||
+          region.w !== other.w ||
+          region.h !== other.h
+        );
+      });
+    const languageChanged =
+      lastOcrLanguage != null && lastOcrLanguage !== language;
+
+    return regionsChanged || languageChanged;
+  }, [language, lastOcrLanguage, lastOcrRegions, ocrMetadata, ocrRegions]);
 
   const createFromScan = api.scan.createFromScan.useMutation();
   const normalizeOcrText = api.scan.normalizeOcrText.useMutation();
@@ -156,7 +179,9 @@ export function FieldScanFlow() {
   const pipelineLabel = useMemo(() => {
     if (pipelineStage === "ocr") {
       return ocrProgress
-        ? `${getLocalizedOcrStatusLabel(t, ocrProgress)}${ocrProgress.status === "recognizing text"
+        ? `${getLocalizedOcrStatusLabel(t, ocrProgress)}${ocrProgress.status === "recognizing text" ||
+          ocrProgress.status === "ndlocr_text_recognition" ||
+          ocrProgress.status === "ndlocr_layout_detection"
           ? ` ${Math.round(ocrProgress.progress * 100)}%`
           : ""
         }`
@@ -267,7 +292,7 @@ export function FieldScanFlow() {
     setIsRunningGraph(true);
     setPipelineStage("ocr");
     setPipelineProgress(3);
-    setOcrProgress({ progress: 0, status: "loading tesseract core" });
+    setOcrProgress({ progress: 0, status: language === "jpn_vert" ? "ndlocr_preparing" : "loading tesseract core" });
 
     try {
       const ocrResult = await runOcrOnRegions(
@@ -276,7 +301,9 @@ export function FieldScanFlow() {
         language,
         (update) => {
           setOcrProgress(update);
-          if (update.status === "recognizing text") {
+          if (update.status === "recognizing text" ||
+            update.status === "ndlocr_text_recognition" ||
+            update.status === "ndlocr_layout_detection") {
             setPipelineProgress(5 + Math.round(update.progress * 60));
           } else {
             setPipelineProgress(8);
@@ -485,6 +512,18 @@ export function FieldScanFlow() {
             </div>
           </div>
 
+          {graphPreview && step === "trim" && (
+            <div className="flex justify-end">
+              <Button
+                onClick={() => setStep("preview")}
+                className="bg-slate-700 px-3 py-1.5 text-xs text-white"
+                size="small"
+              >
+                {t("backToPreview")}
+              </Button>
+            </div>
+          )}
+
           {previewUrl && (step === "trim" || step === "processing") && (
             <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
               <label className="mb-2 block text-sm font-medium text-slate-200">
@@ -498,7 +537,7 @@ export function FieldScanFlow() {
                 requireFullscreenChangeToComplete={graphPreview != null}
                 onCancelFullscreen={handleCancelRegionAdjust}
                 onCompleteFullscreen={() => {
-                  if (graphPreview) setStep("preview");
+                  // Stay on trim so the user can re-run OCR after adjusting regions.
                 }}
                 onRotateImage={() => void handleRotateImage()}
                 isRotatingImage={isRotatingImage}
@@ -522,30 +561,38 @@ export function FieldScanFlow() {
                   isLoading={step === "processing" || isRunningOcr}
                   className="w-1/2 bg-orange-400 text-white hover:bg-orange-500"
                 >
-                  {t("analyzeThisRegion")}
+                  {graphPreview
+                    ? t("analyzeThisRegionAgain")
+                    : t("analyzeThisRegion")}
                 </Button>
               </div>
+              {graphPreview && (
+                <p className="mt-2 text-xs text-slate-500">
+                  {t("regionRerunHint")}
+                </p>
+              )}
             </section>
           )}
 
           {(step === "trim" || step === "processing") && (
             <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
-              <label className="mb-2 block text-sm font-medium text-slate-200">
+              <label
+                htmlFor="ocr-language-trim"
+                className="mb-2 block text-sm font-medium text-slate-200"
+              >
                 {t("ocrLanguage")}
               </label>
-              <select
+              <OcrLanguageSelect
+                id="ocr-language-trim"
                 value={language}
-                onChange={(event) =>
-                  setLanguage(event.target.value as OcrLanguage)
-                }
-                className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-              >
-                {languageOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                onChange={setLanguage}
+                disabled={step === "processing" || isPipelineRunning}
+              />
+              {language === "jpn_vert" && (
+                <p className="mt-2 text-xs text-slate-500">
+                  {t("ndlocrFirstRunHint")}
+                </p>
+              )}
 
               {isPipelineRunning && pipelineStage && (
                 <div className="mt-3">
@@ -580,13 +627,41 @@ export function FieldScanFlow() {
                   <p className="mt-2 text-xs text-slate-500">
                     {t("regionAdjustHint")}
                   </p>
+                  {isOcrStale && (
+                    <p className="mt-2 rounded-md border border-orange-400/60 bg-orange-400/15 px-2 py-1.5 text-xs font-medium text-orange-300">
+                      {t("ocrStaleHint")}
+                    </p>
+                  )}
                 </section>
               )}
 
               <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
                 <label
-                  htmlFor="session-name"
+                  htmlFor="ocr-language-preview"
                   className="mb-2 block text-sm font-medium text-slate-200"
+                >
+                  {t("ocrLanguage")}
+                </label>
+                <OcrLanguageSelect
+                  id="ocr-language-preview"
+                  value={language}
+                  onChange={setLanguage}
+                  disabled={isPipelineRunning}
+                />
+                {language === "jpn_vert" && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    {t("ndlocrFirstRunHint")}
+                  </p>
+                )}
+                {isOcrStale && (
+                  <p className="mt-2 rounded-md border border-orange-400/60 bg-orange-400/15 px-2 py-1.5 text-xs font-medium text-orange-300">
+                    {t("ocrStaleHint")}
+                  </p>
+                )}
+
+                <label
+                  htmlFor="session-name"
+                  className="mb-2 mt-4 block text-sm font-medium text-slate-200"
                 >
                   {t("sessionName")}
                 </label>
@@ -626,29 +701,49 @@ export function FieldScanFlow() {
                   </div>
                 )}
 
-                <div className="mt-3 flex gap-2">
-                  <Button
-                    onClick={() => setStep("trim")}
-                    className="w-1/3 bg-slate-700 text-white"
-                  >
-                    {t("readjustRegion")}
-                  </Button>
-                  <Button
-                    onClick={() => void handleReExtractGraph()}
-                    isLoading={isRunningGraph}
-                    disabled={!plainText.trim() || isRunningGraph}
-                    className="w-1/3 bg-slate-700 text-white"
-                  >
-                    {t("reExtractAndUpdate")}
-                  </Button>
-                  <Button
-                    onClick={() => void handleSubmit()}
-                    disabled={!canSubmit || isSubmitting}
-                    isLoading={isSubmitting}
-                    className="w-1/3 bg-orange-400 text-white hover:bg-orange-500 disabled:opacity-50"
-                  >
-                    {t("saveAndGoToDetail")}
-                  </Button>
+                <div className="mt-3 flex flex-col gap-2">
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => setStep("trim")}
+                      className="w-1/2 bg-slate-700 text-white"
+                      disabled={isPipelineRunning}
+                    >
+                      {t("readjustRegion")}
+                    </Button>
+                    <Button
+                      onClick={() => void handleRunPipeline()}
+                      isLoading={isRunningOcr}
+                      disabled={
+                        !imageFile ||
+                        isPipelineRunning ||
+                        ocrRegions.length === 0
+                      }
+                      className="w-1/2 bg-orange-400 text-white hover:bg-orange-500"
+                    >
+                      {t("rerunOcrAndUpdate")}
+                    </Button>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => void handleReExtractGraph()}
+                      isLoading={isRunningGraph && pipelineStage === "graph"}
+                      disabled={
+                        !plainText.trim() ||
+                        isPipelineRunning
+                      }
+                      className="w-1/2 bg-slate-700 text-white"
+                    >
+                      {t("reExtractGraphFromText")}
+                    </Button>
+                    <Button
+                      onClick={() => void handleSubmit()}
+                      disabled={!canSubmit || isSubmitting || isPipelineRunning}
+                      isLoading={isSubmitting}
+                      className="w-1/2 bg-orange-400 text-white hover:bg-orange-500 disabled:opacity-50"
+                    >
+                      {t("saveAndGoToDetail")}
+                    </Button>
+                  </div>
                 </div>
               </section>
 

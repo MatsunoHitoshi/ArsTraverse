@@ -37,5 +37,19 @@ const config = {
       },
     ],
   },
+  overrides: [
+    {
+      files: ["src/features/field/ocr/ndlocr/worker/**/*.{ts,tsx}"],
+      rules: {
+        "@typescript-eslint/ban-ts-comment": "off",
+        "@typescript-eslint/no-unsafe-assignment": "off",
+        "@typescript-eslint/no-unsafe-member-access": "off",
+        "@typescript-eslint/no-unsafe-argument": "off",
+        "@typescript-eslint/no-unsafe-return": "off",
+        "@typescript-eslint/no-floating-promises": "off",
+        "prefer-const": "off",
+      },
+    },
+  ],
 };
 module.exports = config;

@@ -3,26 +3,17 @@ import {
   cropRegionToBlob,
   loadImageBitmapFromFile,
 } from "@/features/field/ocr/image-crop";
+import type {
+  OcrLanguage,
+  OcrProgressHandler,
+  OcrResult,
+} from "@/features/field/ocr/ocr-types";
 import {
   DEFAULT_OCR_REGION,
   type NormalizedOcrRegion,
 } from "@/features/field/ocr/region-types";
 
-export type OcrLanguage = "jpn" | "jpn_vert" | "eng";
-
-export type OcrResult = {
-  plainText: string;
-  ocrMetadata: OcrMetadata;
-};
-
-export type OcrProgressUpdate = {
-  progress: number;
-  status: string;
-  regionIndex?: number;
-  regionCount?: number;
-};
-
-export type OcrProgressHandler = (update: OcrProgressUpdate) => void;
+export type { OcrLanguage } from "@/features/field/ocr/ocr-types";
 
 const OCR_STATUS_LABELS: Record<string, string> = {
   "loading tesseract core": "Loading OCR engine",
@@ -32,7 +23,11 @@ const OCR_STATUS_LABELS: Record<string, string> = {
   "recognizing text": "Recognizing text",
 };
 
-export function getOcrStatusLabel(update: OcrProgressUpdate): string {
+export function getOcrStatusLabel(update: {
+  status: string;
+  regionIndex?: number;
+  regionCount?: number;
+}): string {
   const base = OCR_STATUS_LABELS[update.status] ?? "Preparing OCR";
   if (update.regionIndex != null && update.regionCount != null) {
     return `${base} (region ${update.regionIndex + 1}/${update.regionCount})`;
@@ -40,43 +35,10 @@ export function getOcrStatusLabel(update: OcrProgressUpdate): string {
   return base;
 }
 
-export async function runOcr(
-  imageSource: string | File | Blob,
-  language: OcrLanguage = "jpn",
-  onProgress?: OcrProgressHandler,
-): Promise<OcrResult> {
-  const { createWorker } = await import("tesseract.js");
-  const worker = await createWorker(language, 1, {
-    logger: (message) => {
-      onProgress?.({
-        progress: message.progress ?? 0,
-        status: message.status,
-      });
-    },
-  });
-
-  try {
-    const { data } = await worker.recognize(imageSource);
-    const plainText = data.text.trim();
-
-    return {
-      plainText,
-      ocrMetadata: {
-        engine: "tesseract.js",
-        language,
-        confidence: data.confidence,
-        processedAt: new Date().toISOString(),
-      },
-    };
-  } finally {
-    await worker.terminate();
-  }
-}
-
-export async function runOcrOnRegions(
+export async function runTesseractOnRegions(
   file: File,
   regions: NormalizedOcrRegion[],
-  language: OcrLanguage = "jpn",
+  language: Exclude<OcrLanguage, "jpn_vert"> = "jpn",
   onProgress?: OcrProgressHandler,
 ): Promise<OcrResult> {
   const effectiveRegions =
@@ -128,7 +90,7 @@ export async function runOcrOnRegions(
             recognizedCount > 0 ? confidenceSum / recognizedCount : undefined,
           regions: effectiveRegions,
           processedAt: new Date().toISOString(),
-        },
+        } satisfies OcrMetadata,
       };
     } finally {
       await worker.terminate();

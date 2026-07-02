@@ -22,15 +22,18 @@ flowchart TB
         C[OCR 領域の矩形指定]
     end
 
-    subgraph ClientOCR["2. クライアント OCR（Tesseract.js）"]
+    subgraph ClientOCR["2. クライアント OCR"]
         D[領域ごとにクロップ]
-        E[言語: jpn / jpn_vert / eng]
-        F[plainText + ocrMetadata]
+        E{言語}
+        E -->|jpn / eng| F1[Tesseract.js]
+        E -->|jpn_vert| F2[NDLOCR-Lite Web]
+        F1 --> OCR_OUT[plainText + ocrMetadata]
+        F2 --> OCR_OUT
     end
 
     subgraph ServerPipeline["3. サーバー処理"]
-        G[scan.normalizeOcrText<br/>gpt-5-nano で整形]
-        H[kg.extractKGFromPlainText<br/>グラフ抽出]
+        G[scan.normalizeOcrText]
+        H[kg.extractKGFromPlainText]
     end
 
     subgraph Preview["4. プレビュー"]
@@ -45,9 +48,8 @@ flowchart TB
         N[INPUT_SCAN SourceDocument 作成]
     end
 
-    A --> B --> C --> D --> E --> F
-    F --> G --> H --> I
-    I --> J
+    A --> B --> C --> D --> E
+    OCR_OUT --> G --> H --> I
     I --> K
     K --> L --> M --> N
 ```
@@ -111,11 +113,14 @@ npm run supabase:ensure-buckets
 
 ## OCR 実装の要点
 
-- **エンジン**: ブラウザ上の Tesseract.js（`tesseract-client.ts`）
+- **ルーティング**: `ocr-runner.ts` が言語に応じてエンジンを切り替え
+- **横書き日本語 / 英語**: Tesseract.js（`tesseract-client.ts`）
+- **縦書き日本語**: [ndlocrlite-web](https://github.com/yuta1984/ndlocrlite-web) ベースの NDLOCR-Lite（`ndlocr/ndlocr-client.ts` + Web Worker）
 - **領域 OCR**: 画像を `image-crop.ts` で領域ごとにクロップしてから認識。複数領域のテキストは結合される
-- **言語**: `jpn`（横書き）/ `jpn_vert`（縦書き）/ `eng`
-- **カメラ**: `camera-capture.ts` が解像度フォールバック（4K → 1080p → 720p → 環境カメラのみ）と `ImageCapture` API を利用
-- **整形**: `normalize-ocr-text.service.ts` が `gpt-5-nano` で改行・スペースノイズを除去（意味は変更しない）
+- **NDLOCR モデル**: 初回 ~150MB を同一オリジンの `/api/ndlocr-models/*` 経由で取得し IndexedDB にキャッシュ（`NEXT_PUBLIC_NDL_OCR_MODEL_BASE_URL` で変更可）
+- **ONNX Runtime**: `numThreads: 1` の WASM 推論（COOP/COEP は不要。Field ページの Worker・Supabase 画像との両立のため付与しない）
+- **カメラ**: `camera-capture.ts` が解像度フォールバックと `ImageCapture` API を利用
+- **整形**: `normalize-ocr-text.service.ts` が LLM で改行・スペースノイズを除去（意味は変更しない）
 
 ## データモデル
 
@@ -142,7 +147,12 @@ npm run supabase:ensure-buckets
 
 ### OCR
 
-- `src/features/field/ocr/tesseract-client.ts`
+- `src/features/field/ocr/ocr-runner.ts` — 言語別 OCR ルーティング
+- `src/features/field/ocr/tesseract-client.ts` — Tesseract（横書き・英語）
+- `src/features/field/ocr/ndlocr/ndlocr-client.ts` — NDLOCR（縦書き）
+- `src/features/field/ocr/ndlocr/worker/` — ONNX Worker 群
+- `public/ocr/config/NDLmoji.yaml` — 文字セット
+- `public/ocr/wasm/` — onnxruntime-web WASM（`npm run ocr:copy-wasm`）
 - `src/features/field/ocr/camera-capture.ts`
 - `src/features/field/ocr/image-crop.ts`
 - `src/features/field/ocr/region-types.ts`
