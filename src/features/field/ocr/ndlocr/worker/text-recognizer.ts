@@ -24,7 +24,10 @@ export class TextRecognizer {
   private session: OrtType.InferenceSession | null = null
   private initialized = false
   private config: RecognizerConfig
-  private configPath = "/ocr/config/NDLmoji.yaml";
+  private configPath =
+    typeof self !== "undefined" && self.location?.origin
+      ? `${self.location.origin}/ocr/config/NDLmoji.yaml`
+      : "/ocr/config/NDLmoji.yaml";
 
   constructor(inputShape?: [number, number, number, number]) {
     this.config = {

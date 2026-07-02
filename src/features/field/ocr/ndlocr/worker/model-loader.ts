@@ -114,7 +114,11 @@ async function downloadWithProgress(
   );
   let receivedLength = 0;
 
-  const reader = response.body!.getReader();
+  if (!response.body) {
+    throw new Error("Response body is empty");
+  }
+
+  const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
 
   while (true) {

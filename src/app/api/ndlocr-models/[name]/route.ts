@@ -25,7 +25,16 @@ export async function GET(
     return NextResponse.json({ error: "Unknown model" }, { status: 404 });
   }
 
-  const upstream = await fetch(`${R2_BASE}/${fileName}`);
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${R2_BASE}/${fileName}`);
+  } catch (error) {
+    console.error("Failed to fetch model from upstream:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch model from upstream" },
+      { status: 500 },
+    );
+  }
 
   if (!upstream.ok) {
     return NextResponse.json(

@@ -22,6 +22,7 @@ const NDL_OCR_ENGINE = "ndlocr-lite-web";
 const INIT_TIMEOUT_MS = 10 * 60 * 1000;
 
 function isMobileDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
   return /iPhone|iPad|Android/i.test(navigator.userAgent);
 }
 
@@ -167,6 +168,22 @@ function processRegion(
   return new Promise((resolve, reject) => {
     const id = `field-region-${Date.now()}-${regionIndex}`;
 
+    const cleanup = () => {
+      worker.removeEventListener("message", handler);
+      worker.removeEventListener("error", errorHandler);
+      worker.removeEventListener("messageerror", messageErrorHandler);
+    };
+
+    const errorHandler = (event: ErrorEvent) => {
+      cleanup();
+      reject(new Error(formatWorkerLoadError(event)));
+    };
+
+    const messageErrorHandler = () => {
+      cleanup();
+      reject(new Error("NDLOCR worker failed to deserialize a message"));
+    };
+
     const handler = (event: MessageEvent<WorkerOutMessage>) => {
       const message = event.data;
       if (message.id !== id) return;
@@ -182,7 +199,7 @@ function processRegion(
       }
 
       if (message.type === "OCR_COMPLETE") {
-        worker.removeEventListener("message", handler);
+        cleanup();
         const confidences = message.textBlocks
           .map((block) => block.confidence)
           .filter((value) => Number.isFinite(value));
@@ -200,12 +217,14 @@ function processRegion(
       }
 
       if (message.type === "OCR_ERROR") {
-        worker.removeEventListener("message", handler);
+        cleanup();
         reject(new Error(message.error));
       }
     };
 
     worker.addEventListener("message", handler);
+    worker.addEventListener("error", errorHandler);
+    worker.addEventListener("messageerror", messageErrorHandler);
     worker.postMessage(
       {
         type: "OCR_PROCESS",

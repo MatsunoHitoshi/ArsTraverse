@@ -21,9 +21,11 @@ import { ScanImageWithRegions } from "@/features/field/components/scan-image-wit
 import { rotateImageFile90CounterClockwise } from "@/features/field/ocr/image-crop";
 import {
   DEFAULT_OCR_REGION,
+  areRegionsEqual,
   rotateRegion90CounterClockwise,
   type NormalizedOcrRegion,
 } from "@/features/field/ocr/region-types";
+import { terminateNdlOcrWorker } from "@/features/field/ocr/ndlocr/ndlocr-client";
 import {
   runOcrOnRegions,
   type OcrLanguage,
@@ -86,6 +88,13 @@ export function FieldScanFlow() {
   const [ocrProgress, setOcrProgress] = useState<OcrProgressUpdate | null>(
     null,
   );
+
+  useEffect(() => {
+    return () => {
+      terminateNdlOcrWorker();
+    };
+  }, []);
+
   const [ocrMetadata, setOcrMetadata] = useState<OcrMetadata | undefined>();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRunningOcr, setIsRunningOcr] = useState(false);
@@ -103,17 +112,7 @@ export function FieldScanFlow() {
 
     const regionsChanged =
       lastOcrRegions == null ||
-      ocrRegions.length !== lastOcrRegions.length ||
-      ocrRegions.some((region, index) => {
-        const other = lastOcrRegions[index];
-        if (!other) return true;
-        return (
-          region.x !== other.x ||
-          region.y !== other.y ||
-          region.w !== other.w ||
-          region.h !== other.h
-        );
-      });
+      !areRegionsEqual(ocrRegions, lastOcrRegions);
     const languageChanged =
       lastOcrLanguage != null && lastOcrLanguage !== language;
 

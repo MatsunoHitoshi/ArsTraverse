@@ -148,8 +148,8 @@ class OCRWorker {
   /** charCountCategory に応じたモデルを選択 */
   private selectRecognizer(charCountCategory?: number): TextRecognizer {
     if (!this.layoutOnly) {
-      if (charCountCategory === 3) return this.recognizer30!
-      if (charCountCategory === 2) return this.recognizer50!
+      if (charCountCategory === 3 && this.recognizer30) return this.recognizer30
+      if (charCountCategory === 2 && this.recognizer50) return this.recognizer50
     }
     return this.recognizer100!  // モバイルは常に rec100
   }
@@ -333,3 +333,11 @@ self.onerror = (error) => {
     error: message,
   } satisfies WorkerOutMessage)
 }
+
+self.addEventListener('unhandledrejection', (event) => {
+  const message = event.reason instanceof Error ? event.reason.message : String(event.reason)
+  self.postMessage({
+    type: 'OCR_ERROR',
+    error: `Unhandled rejection: ${message}`,
+  } satisfies WorkerOutMessage)
+})
