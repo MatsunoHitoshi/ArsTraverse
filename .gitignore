@@ -56,6 +56,7 @@ yarn-error.log*
 /public/json
 /public/speech
 /public/tmp
+/public/ocr/wasm
 
 
 # electron
@@ -75,3 +76,6 @@ yarn-error.log*
 
 # KG alignment agent — local run logs and test reports
 .alignment-runs/
+
+# supabase CLI temp cache
+/supabase/.temp
