@@ -111,15 +111,7 @@ export const DocumentForm = ({
       });
       const uniqueNodes = Array.from(uniqueNodesMap.values());
 
-      // Build Context
-      const contextString = uniqueNodes
-        .map((n) => {
-          const ja = n.properties?.name_ja ? `(${n.properties.name_ja})` : "";
-          return `- ${n.name} [${n.label}] ${ja}`;
-        })
-        .join("\n");
-
-      // 3. Phase 2 Loop
+      // 3. Phase 2 Loop (chunk-local context on server)
       for (let i = 0; i < documents.length; i += BATCH_SIZE) {
         const batch = documents.slice(i, i + BATCH_SIZE);
         setProgress(
@@ -131,7 +123,7 @@ export const DocumentForm = ({
 
         const res = await extractPhase2.mutateAsync({
           documents: batch,
-          contextualInfo: contextString,
+          phase1Nodes: uniqueNodes,
           customMappingRules,
         });
 

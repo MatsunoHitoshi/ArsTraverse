@@ -328,15 +328,15 @@ export const ExtractPhase1InputSchema = z.object({
   customMappingRules: ExtractInputSchema.shape.customMappingRules,
 });
 
-export const ExtractPhase2InputSchema = ExtractPhase1InputSchema.extend({
-  contextualInfo: z.string(),
-});
-
 export const NodeInputSchema = z.object({
   id: z.string(),
   name: z.string(),
   label: z.string(),
   properties: z.record(z.string()),
+});
+
+export const ExtractPhase2InputSchema = ExtractPhase1InputSchema.extend({
+  phase1Nodes: z.array(NodeInputSchema),
 });
 
 export const RelationshipInputSchema = z.object({

@@ -9,6 +9,7 @@ import type {
   ExtractorOptions,
   NodesAndRelationships,
 } from "./base";
+import { buildLocalContextFromNodes } from "./build-local-context";
 import { buildMappingPrompt, buildSystemPrompt } from "./base";
 import type {
   NodeTypeForFrontend,
@@ -21,13 +22,22 @@ import type {
 } from "node_modules/@langchain/community/dist/graphs/document";
 import type { Document } from "@langchain/core/documents";
 
+const PHASE1_MODEL = "gpt-4o";
+const PHASE2_MODEL = "gpt-4o-mini";
+
 export class IterativeGraphExtractor implements Extractor {
-  private llm: ChatOpenAI;
+  private phase1Llm: ChatOpenAI;
+  private phase2Llm: ChatOpenAI;
 
   constructor() {
-    this.llm = new ChatOpenAI({
+    this.phase1Llm = new ChatOpenAI({
       temperature: 0.1,
-      model: "gpt-4o", // Using a cost-effective but capable model
+      model: PHASE1_MODEL,
+      maxTokens: 16000,
+    });
+    this.phase2Llm = new ChatOpenAI({
+      temperature: 0.1,
+      model: PHASE2_MODEL,
       maxTokens: 16000,
     });
   }
@@ -88,11 +98,12 @@ export class IterativeGraphExtractor implements Extractor {
       const phase1Data = await this.extractPhase1(documents, options);
       if (!phase1Data) return null;
 
-      // Build context from Phase 1
-      const context = this.buildContextFromNodes(phase1Data.nodes);
-
-      // Phase 2 execution
-      const phase2Data = await this.extractPhase2(documents, context, options);
+      // Phase 2 execution (chunk-local context, gpt-4o-mini)
+      const phase2Data = await this.extractPhase2(
+        documents,
+        phase1Data.nodes,
+        options,
+      );
       if (!phase2Data) return phase1Data;
 
       // Merge results
@@ -203,7 +214,7 @@ export class IterativeGraphExtractor implements Extractor {
     ]);
 
     const transformer = new LLMGraphTransformer({
-      llm: this.llm,
+      llm: this.phase1Llm,
       allowedNodes: schema?.allowedNodes,
       allowedRelationships: schema?.allowedRelationships,
       prompt: customPrompt,
@@ -215,19 +226,44 @@ export class IterativeGraphExtractor implements Extractor {
 
   async extractPhase2(
     documents: Document[],
+    phase1Nodes: NodeTypeForFrontend[],
+    options: ExtractorOptions,
+  ): Promise<NodesAndRelationships> {
+    console.log("--- Starting Phase 2: Contextual Refinement ---");
+
+    const chunkResults = await Promise.all(
+      documents.map((document) => {
+        const localContext = buildLocalContextFromNodes(
+          document.pageContent,
+          phase1Nodes,
+        );
+        return this.extractPhase2ForDocument(document, localContext, options);
+      }),
+    );
+
+    let merged: NodesAndRelationships = { nodes: [], relationships: [] };
+    for (const chunkResult of chunkResults) {
+      merged = this.mergeResults(merged, chunkResult);
+    }
+
+    return merged;
+  }
+
+  private async extractPhase2ForDocument(
+    document: Document,
     contextualInfo: string,
     options: ExtractorOptions,
   ): Promise<NodesAndRelationships> {
     const { schema, additionalPrompt, customMappingRules } = options;
 
-    console.log("--- Starting Phase 2: Contextual Refinement ---");
-
     const mappingPrompt = buildMappingPrompt(customMappingRules);
-    const fullContext = `IMPORTANT: The following entities have already been identified in the document set. 
+    const fullContext = contextualInfo.trim()
+      ? `IMPORTANT: The following entities have already been identified in this text segment.
 Focus on finding relationships involving these entities that might have been missed in the first pass.
 
 EXISTING ENTITIES:
-${contextualInfo}`;
+${contextualInfo}`
+      : `IMPORTANT: Focus on finding relationships between entities mentioned in this text segment that might have been missed in the first pass.`;
 
     const systemPrompt = buildSystemPrompt({
       mappingPrompt,
@@ -244,13 +280,15 @@ ${contextualInfo}`;
     ]);
 
     const transformer = new LLMGraphTransformer({
-      llm: this.llm,
+      llm: this.phase2Llm,
       allowedNodes: schema?.allowedNodes,
       allowedRelationships: schema?.allowedRelationships,
       prompt: customPrompt,
     });
 
-    const graphDocuments = await transformer.convertToGraphDocuments(documents);
+    const graphDocuments = await transformer.convertToGraphDocuments([
+      document,
+    ]);
     return this.convertToFrontendFormat(graphDocuments);
   }
 
