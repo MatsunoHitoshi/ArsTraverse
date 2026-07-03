@@ -231,18 +231,18 @@ export class IterativeGraphExtractor implements Extractor {
   ): Promise<NodesAndRelationships> {
     console.log("--- Starting Phase 2: Contextual Refinement ---");
 
-    let merged: NodesAndRelationships = { nodes: [], relationships: [] };
+    const chunkResults = await Promise.all(
+      documents.map((document) => {
+        const localContext = buildLocalContextFromNodes(
+          document.pageContent,
+          phase1Nodes,
+        );
+        return this.extractPhase2ForDocument(document, localContext, options);
+      }),
+    );
 
-    for (const document of documents) {
-      const localContext = buildLocalContextFromNodes(
-        document.pageContent,
-        phase1Nodes,
-      );
-      const chunkResult = await this.extractPhase2ForDocument(
-        document,
-        localContext,
-        options,
-      );
+    let merged: NodesAndRelationships = { nodes: [], relationships: [] };
+    for (const chunkResult of chunkResults) {
       merged = this.mergeResults(merged, chunkResult);
     }
 
