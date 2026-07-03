@@ -118,7 +118,7 @@ export const extractionProcedures = {
     .mutation(async ({ input }) => {
       const {
         documents,
-        contextualInfo,
+        phase1Nodes,
         schema,
         additionalPrompt,
         customMappingRules,
@@ -128,7 +128,7 @@ export const extractionProcedures = {
         const extractor = new IterativeGraphExtractor();
         const nodesAndRelationships = await extractor.extractPhase2(
           documents,
-          contextualInfo,
+          phase1Nodes,
           {
             localFilePath: "",
             isPlaneTextMode: false,

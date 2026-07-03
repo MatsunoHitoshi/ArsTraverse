@@ -12,6 +12,7 @@ import {
   type PrismaClient,
 } from "@prisma/client";
 import { finalizeAccumulatedKg } from "./finalize-accumulated-kg.service";
+import { resyncDocumentGraphToTopicSpace } from "./resync-document-graph-to-topic-space.service";
 
 const EMPTY_GRAPH = { nodes: [], relationships: [] };
 
@@ -162,7 +163,6 @@ export async function processKgExtractionJob(
       }
 
       const uniqueNodes = dedupeNodesByName(accumulatedNodes);
-      const contextSnapshot = extractor.buildContextFromNodes(uniqueNodes);
 
       await db.kgExtractionJob.update({
         where: { id: job.id },
@@ -170,7 +170,7 @@ export async function processKgExtractionJob(
           phase: KgExtractionPhase.PHASE2,
           totalChunks,
           processedChunks: 0,
-          contextSnapshot,
+          contextSnapshot: null,
           accumulatedNodes: uniqueNodes,
           accumulatedRelationships,
           status: JobStatus.PENDING,
@@ -189,18 +189,15 @@ export async function processKgExtractionJob(
     }
 
     if (job.phase === KgExtractionPhase.PHASE2) {
-      if (!job.contextSnapshot) {
-        throw new Error("Phase2 の contextSnapshot が未設定です");
+      const phase1Nodes = parseAccumulatedNodes(job.accumulatedNodes);
+      if (phase1Nodes.length === 0) {
+        throw new Error("Phase2 の accumulatedNodes が未設定です");
       }
 
       const start = job.processedChunks;
       const end = Math.min(start + job.batchSize, totalChunks);
       const batch = documents.slice(start, end);
-      const result = await extractor.extractPhase2(
-        batch,
-        job.contextSnapshot,
-        options,
-      );
+      const result = await extractor.extractPhase2(batch, phase1Nodes, options);
 
       accumulatedNodes = [...accumulatedNodes, ...result.nodes];
       accumulatedRelationships = [
@@ -238,6 +235,14 @@ export async function processKgExtractionJob(
         sourceDocumentId: job.sourceDocumentId,
         dataJson,
       });
+
+      if (job.topicSpaceId) {
+        await resyncDocumentGraphToTopicSpace(db, {
+          userId: job.userId,
+          topicSpaceId: job.topicSpaceId,
+          sourceDocumentId: job.sourceDocumentId,
+        });
+      }
 
       await db.kgExtractionJob.update({
         where: { id: job.id },
