@@ -25,6 +25,14 @@ export async function enqueuePdfExtractionJob(
       },
     });
     if (existing) return existing;
+  } else if (input.driveFileId) {
+    const existing = await db.pdfExtractionJob.findFirst({
+      where: {
+        driveFileId: input.driveFileId,
+        status: { in: [JobStatus.PENDING, JobStatus.PROCESSING] },
+      },
+    });
+    if (existing) return existing;
   }
 
   return db.pdfExtractionJob.create({

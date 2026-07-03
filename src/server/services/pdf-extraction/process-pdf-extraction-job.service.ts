@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { writeLocalFileFromUrl } from "@/app/_utils/sys/file";
 import {
   buildDriveSourceMetadata,
+  parseDefaultOcrLanguage,
   resolveJobOcrLanguage,
 } from "@/server/lib/google-drive/source-metadata";
 import { getGoogleDriveClientForUser } from "@/server/lib/google-drive/user-oauth";
@@ -79,11 +80,15 @@ export async function processPdfExtractionJob(
       job.ocrLanguage,
       job.topicSpace?.defaultOcrLanguage,
     );
+    const lockedForceLanguage =
+      job.ocrLanguage === "auto" && job.detectedLanguage
+        ? parseDefaultOcrLanguage(job.detectedLanguage)
+        : ocrLanguageConfig.forceLanguage;
     const buffer = await loadPdfBufferForJob(db, job);
     const startPage = job.processedPages + 1;
     const extraction = await extractPdfTextFromBuffer(buffer, {
       defaultOcrLanguage: ocrLanguageConfig.defaultLanguage,
-      forceOcrLanguage: ocrLanguageConfig.forceLanguage,
+      forceOcrLanguage: lockedForceLanguage,
       forceOcr: true,
       processOcr: true,
       startPage,
@@ -156,18 +161,28 @@ export async function processPdfExtractionJob(
           plainText,
         };
 
-    const contentHash =
-      job.driveFileId && job.driveFileName
-        ? computeDriveContentHash(
-            {
-              id: job.driveFileId,
-              name: job.driveFileName,
-              mimeType: "application/pdf",
-              modifiedTime: new Date().toISOString(),
-            },
-            plainText,
-          )
-        : undefined;
+    let contentHash: string | undefined;
+    if (job.driveFileId && job.driveFileName) {
+      const drive = await getGoogleDriveClientForUser(db, job.userId);
+      const fileMeta = await drive.files.get({
+        fileId: job.driveFileId,
+        fields: "id,name,mimeType,modifiedTime,md5Checksum",
+      });
+      const modifiedTime = fileMeta.data.modifiedTime;
+      if (!modifiedTime) {
+        throw new Error("Drive ファイルの modifiedTime を取得できませんでした");
+      }
+      contentHash = computeDriveContentHash(
+        {
+          id: job.driveFileId,
+          name: job.driveFileName,
+          mimeType: "application/pdf",
+          modifiedTime,
+          md5Checksum: fileMeta.data.md5Checksum,
+        },
+        plainText,
+      );
+    }
 
     let sourceDocumentId = job.sourceDocumentId;
     let kgQueued = false;

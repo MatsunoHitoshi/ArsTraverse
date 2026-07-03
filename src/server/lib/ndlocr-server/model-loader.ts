@@ -56,6 +56,8 @@ async function writeCachedModel(
   ]);
 }
 
+const downloadPromises = new Map<string, Promise<ArrayBuffer>>();
+
 export async function loadNdlOcrModel(modelType: string): Promise<ArrayBuffer> {
   const fileName = MODEL_FILES[modelType];
   if (!fileName) {
@@ -65,14 +67,26 @@ export async function loadNdlOcrModel(modelType: string): Promise<ArrayBuffer> {
   const cached = await readCachedModel(modelType);
   if (cached) return cached;
 
-  const response = await fetch(`${R2_BASE}/${fileName}`);
-  if (!response.ok) {
-    throw new Error(
-      `Failed to download NDLOCR model ${modelType}: ${response.status}`,
-    );
-  }
+  const inFlight = downloadPromises.get(modelType);
+  if (inFlight) return inFlight;
 
-  const data = await response.arrayBuffer();
-  await writeCachedModel(modelType, data);
-  return data;
+  const downloadPromise = (async () => {
+    const response = await fetch(`${R2_BASE}/${fileName}`);
+    if (!response.ok) {
+      throw new Error(
+        `Failed to download NDLOCR model ${modelType}: ${response.status}`,
+      );
+    }
+
+    const data = await response.arrayBuffer();
+    await writeCachedModel(modelType, data);
+    return data;
+  })();
+
+  downloadPromises.set(modelType, downloadPromise);
+  try {
+    return await downloadPromise;
+  } finally {
+    downloadPromises.delete(modelType);
+  }
 }

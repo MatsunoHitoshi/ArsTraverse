@@ -108,39 +108,62 @@ async function rasterizeWithMuPdf(
   const maxPages = options?.maxPages ?? Number.POSITIVE_INFINITY;
 
   const doc = mupdf.Document.openDocument(buffer, "application/pdf");
-  const pageCount = doc.countPages();
-  const endPage = Math.min(pageCount, startPage + maxPages - 1);
-  const pages: RasterizedPdfPage[] = [];
-  const matrix = mupdf.Matrix.scale(scale, scale);
+  try {
+    const pageCount = doc.countPages();
+    const endPage = Math.min(pageCount, startPage + maxPages - 1);
+    const pages: RasterizedPdfPage[] = [];
+    const matrix = mupdf.Matrix.scale(scale, scale);
 
-  for (let pageNumber = startPage; pageNumber <= endPage; pageNumber++) {
-    const page = doc.loadPage(pageNumber - 1);
-    const pixmap = page.toPixmap(
-      matrix,
-      mupdf.ColorSpace.DeviceRGB,
-      false,
-      true,
-    );
-    const png = pixmap.asPNG();
-    const img = await loadImage(png);
-    const canvas = createCanvas(img.width, img.height);
-    const context = canvas.getContext("2d");
-    if (!context) {
-      throw new Error("Canvas 2D context の取得に失敗しました");
+    for (let pageNumber = startPage; pageNumber <= endPage; pageNumber++) {
+      const page = doc.loadPage(pageNumber - 1);
+      try {
+        const pixmap = page.toPixmap(
+          matrix,
+          mupdf.ColorSpace.DeviceRGB,
+          false,
+          true,
+        );
+        try {
+          const png = pixmap.asPNG();
+          const img = await loadImage(png);
+          const canvas = createCanvas(img.width, img.height);
+          const context = canvas.getContext("2d");
+          if (!context) {
+            throw new Error("Canvas 2D context の取得に失敗しました");
+          }
+          context.drawImage(img, 0, 0);
+          const imageData = context.getImageData(0, 0, img.width, img.height);
+
+          pages.push({
+            pageNumber,
+            width: img.width,
+            height: img.height,
+            imageData,
+            pngBuffer: Buffer.from(png),
+          });
+        } finally {
+          destroyMuPdfResource(pixmap);
+        }
+      } finally {
+        destroyMuPdfResource(page);
+      }
     }
-    context.drawImage(img, 0, 0);
-    const imageData = context.getImageData(0, 0, img.width, img.height);
 
-    pages.push({
-      pageNumber,
-      width: img.width,
-      height: img.height,
-      imageData,
-      pngBuffer: Buffer.from(png),
-    });
+    return { pageCount, pages };
+  } finally {
+    destroyMuPdfResource(doc);
   }
+}
 
-  return { pageCount, pages };
+function destroyMuPdfResource(resource: unknown): void {
+  if (
+    resource &&
+    typeof resource === "object" &&
+    "destroy" in resource &&
+    typeof resource.destroy === "function"
+  ) {
+    resource.destroy();
+  }
 }
 
 export async function rasterizePdfPages(

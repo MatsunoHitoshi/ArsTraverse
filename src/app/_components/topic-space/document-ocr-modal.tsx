@@ -54,7 +54,7 @@ export function DocumentOcrModal({
   const statusQuery = api.topicSpaces.getDocumentOcrStatus.useQuery(
     {
       topicSpaceId,
-      documentId: documentId!,
+      documentId: documentId ?? "",
     },
     {
       enabled: isOpen && !!documentId,

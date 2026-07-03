@@ -107,18 +107,17 @@ export class ServerTextRecognizer {
     const [, channels, height, width] = this.config.inputShape;
     const imgWidth = imageData.width;
     const imgHeight = imageData.height;
-    const canvas = createOffscreenCanvas(1, 1);
+    const isVertical = imgHeight > imgWidth;
+    const canvas = createOffscreenCanvas(
+      isVertical ? imgHeight : imgWidth,
+      isVertical ? imgWidth : imgHeight,
+    );
     const ctx = getCanvas2dContext(canvas);
 
-    if (imgHeight > imgWidth) {
-      canvas.width = imgHeight;
-      canvas.height = imgWidth;
+    if (isVertical) {
       ctx.translate(canvas.width / 2, canvas.height / 2);
       ctx.rotate(-Math.PI / 2);
       ctx.translate(-canvas.height / 2, -canvas.width / 2);
-    } else {
-      canvas.width = imgWidth;
-      canvas.height = imgHeight;
     }
 
     const tempCanvas = createOffscreenCanvas(imgWidth, imgHeight);
@@ -155,12 +154,19 @@ export class ServerTextRecognizer {
   private decodeOutput(
     outputs: Record<string, OrtType.Tensor>,
   ): RecognitionResult {
-    const outputName = this.session!.outputNames[0]!;
-    const rawLogits = outputs[outputName]!.data as Float32Array;
+    const outputName = this.session?.outputNames[0];
+    if (!outputName) {
+      throw new Error("Text recognizer session output names are empty");
+    }
+    const outputTensor = outputs[outputName];
+    if (!outputTensor) {
+      throw new Error(`Output tensor "${outputName}" is missing`);
+    }
+    const rawLogits = outputTensor.data as Float32Array;
     const logits = Array.from(rawLogits).map((value) =>
       typeof value === "bigint" ? Number(value) : value,
     );
-    const dims = outputs[outputName]!.dims;
+    const dims = outputTensor.dims;
     const seqLength = dims[1] ?? 0;
     const vocabSize = dims[2] ?? 0;
     const resultClassIds: number[] = [];

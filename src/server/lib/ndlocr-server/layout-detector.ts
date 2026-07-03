@@ -152,11 +152,21 @@ export class ServerLayoutDetector {
       throw new Error("Layout model missing expected outputs");
     }
 
-    const classIdsRaw = output[classOutputName]!.data as ArrayLike<number>;
-    const bboxesData = output[bboxOutputName]!.data as Float32Array;
-    const scoresData = output[scoreOutputName]!.data as Float32Array;
-    const charCountsData = charCountOutputName
-      ? (output[charCountOutputName]!.data as Float32Array)
+    const classOutput = output[classOutputName];
+    const bboxOutput = output[bboxOutputName];
+    const scoreOutput = output[scoreOutputName];
+    if (!classOutput || !bboxOutput || !scoreOutput) {
+      throw new Error("Layout model output tensors are missing");
+    }
+
+    const classIdsRaw = classOutput.data as ArrayLike<number>;
+    const bboxesData = bboxOutput.data as Float32Array;
+    const scoresData = scoreOutput.data as Float32Array;
+    const charCountTensor = charCountOutputName
+      ? output[charCountOutputName]
+      : undefined;
+    const charCountsData = charCountTensor
+      ? (charCountTensor.data as Float32Array)
       : null;
     const scaleX = metadata.maxWH / this.inputSize.width;
     const scaleY = metadata.maxWH / this.inputSize.height;
