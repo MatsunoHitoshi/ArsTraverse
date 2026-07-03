@@ -2,59 +2,48 @@ import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { Document } from "@langchain/core/documents";
 import { TokenTextSplitter } from "@langchain/textsplitters";
 import * as fs from "fs";
+import { extractPdfTextFromBuffer } from "@/server/lib/pdf/extract-pdf-text";
 
-// pdf-parseの型定義
-interface PDFData {
-  numpages: number;
-  numrender: number;
-  info: Record<string, unknown>;
-  metadata: Record<string, unknown>;
-  version: string;
-  text: string;
-}
-
-type PDFParseFunction = (buffer: Buffer) => Promise<PDFData>;
-
-// pdf-parseを使用した改良されたPDFテキスト抽出関数
 const extractTextFromPDF = async (filePath: string): Promise<string[]> => {
-  try {
-    // pdf-parseを使用（より高精度なテキスト抽出）
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const pdfParse = require("pdf-parse/lib/pdf-parse.js") as PDFParseFunction;
-    const dataBuffer = fs.readFileSync(filePath);
-    const pdfData = await pdfParse(dataBuffer);
+  const dataBuffer = fs.readFileSync(filePath);
+  const extracted = await extractPdfTextFromBuffer(dataBuffer, {
+    processOcr: true,
+  });
+  const fullText = extracted.plainText;
+  const pageCount = Math.max(extracted.pageCount, 1);
 
-    // テキストをページごとに分割（簡易的な実装）
-    const fullText = pdfData.text;
+  const cleanedText = fullText
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\s+/g, " ")
+    .trim();
 
-    // テキストを適切にクリーンアップ
-    const cleanedText = fullText
-      .replace(/\r\n/g, "\n") // Windows改行を統一
-      .replace(/\r/g, "\n") // Mac改行を統一
-      .replace(/\n{3,}/g, "\n\n") // 複数の改行を2つに制限
-      .replace(/\s+/g, " ") // 複数の空白を単一に
-      .trim();
+  const estimatedPageLength = Math.ceil(cleanedText.length / pageCount);
+  const textChunks: string[] = [];
 
-    // ページ分割のヒューリスティック（実際のページ数に基づく）
-    const estimatedPageLength = Math.ceil(
-      cleanedText.length / pdfData.numpages,
-    );
-    const textChunks = [];
-
-    for (let i = 0; i < cleanedText.length; i += estimatedPageLength) {
-      const chunk = cleanedText.slice(i, i + estimatedPageLength);
-      if (chunk.trim()) {
-        textChunks.push(chunk.trim());
-      }
+  for (let i = 0; i < cleanedText.length; i += estimatedPageLength) {
+    const chunk = cleanedText.slice(i, i + estimatedPageLength);
+    if (chunk.trim()) {
+      textChunks.push(chunk.trim());
     }
+  }
 
-    return textChunks.length > 0 ? textChunks : [cleanedText];
-  } catch (error) {
-    console.error("pdf-parseでの抽出に失敗、フォールバックを使用:", error);
-    // フォールバック: 元のPDFLoaderを使用
+  if (textChunks.length > 0) {
+    return textChunks;
+  }
+
+  if (!cleanedText) {
+    return [];
+  }
+
+  try {
     const loader = new PDFLoader(filePath);
     const docs = await loader.load();
     return docs.map((doc) => doc.pageContent);
+  } catch (error) {
+    console.error("PDFLoader fallback failed:", error);
+    return [cleanedText];
   }
 };
 

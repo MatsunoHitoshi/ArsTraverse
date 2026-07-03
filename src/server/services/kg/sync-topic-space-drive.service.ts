@@ -1,16 +1,19 @@
 import type { PrismaClient } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
-import { KnowledgeGraphInputSchema } from "@/server/api/schemas/knowledge-graph";
-import { runExtractKGFromPlainText } from "@/server/api/routers/kg-extraction";
 import { buildDriveWebViewUrl } from "@/server/lib/google-drive/urls";
 import {
   computeDriveContentHash,
-  fetchDriveFileText,
+  fetchDrivePdfBuffer,
   listDriveFilesInFolder,
   resolveDocumentTypeFromDriveMime,
   type DriveFileMeta,
 } from "@/server/lib/google-drive/fetch-document-text";
-import { buildDriveSourceMetadata } from "@/server/lib/google-drive/source-metadata";
+import {
+  buildDriveSourceMetadata,
+  parseDefaultOcrLanguage,
+} from "@/server/lib/google-drive/source-metadata";
+import { extractPdfTextFromBuffer } from "@/server/lib/pdf/extract-pdf-text";
+import { enqueuePdfExtractionJob } from "@/server/services/pdf-extraction/enqueue-pdf-extraction-job.service";
 import {
   getDriveClientForTopicSpaceSync,
   isDriveSyncAvailable,
@@ -20,6 +23,7 @@ import { attachDocumentsToTopicSpace } from "@/server/services/kg/attach-documen
 import { createSourceDocumentWithGraph } from "@/server/services/kg/create-source-document-with-graph.service";
 import { detachDocumentsFromTopicSpace } from "@/server/services/kg/detach-documents.service";
 import { replaceDocumentGraphFromExtraction } from "@/server/services/kg/replace-document-graph-from-extraction.service";
+import { extractKgForDocument } from "@/server/services/kg-extraction/extract-kg-for-document.service";
 
 type SyncCtx = {
   db: PrismaClient;
@@ -32,8 +36,45 @@ export type DriveSyncResult = {
   updated: number;
   skipped: number;
   detached: number;
+  pendingOcr: number;
+  pendingKg: number;
   errors: { fileName: string; message: string }[];
 };
+
+const EMPTY_GRAPH = { nodes: [], relationships: [] };
+
+async function applyKgExtractionForDocument(
+  ctx: SyncCtx,
+  input: {
+    topicSpaceId: string;
+    plainText: string;
+    sourceDocumentId: string;
+  },
+): Promise<"inline" | "queued"> {
+  const kgResult = await extractKgForDocument(ctx.db, {
+    userId: ctx.session.user.id,
+    plainText: input.plainText,
+    sourceDocumentId: input.sourceDocumentId,
+    topicSpaceId: input.topicSpaceId,
+  });
+
+  if (kgResult.mode === "inline") {
+    const document = await ctx.db.sourceDocument.findFirst({
+      where: { id: input.sourceDocumentId, isDeleted: false },
+      include: { graph: true },
+    });
+    if (!document?.graph) {
+      throw new Error("既存 SourceDocument の DocumentGraph が見つかりません");
+    }
+    await replaceDocumentGraphFromExtraction(ctx.db, {
+      documentGraphId: document.graph.id,
+      dataJson: kgResult.dataJson,
+    });
+    return "inline";
+  }
+
+  return "queued";
+}
 
 async function upsertDriveSourceDocument(
   ctx: SyncCtx,
@@ -44,16 +85,19 @@ async function upsertDriveSourceDocument(
     contentHash: string;
     isAttached: boolean;
     existingDocumentId?: string;
+    driveMetadata?: ReturnType<typeof buildDriveSourceMetadata>;
   },
-): Promise<"created" | "updated" | "skipped"> {
+): Promise<{ action: "created" | "updated" | "skipped"; kgQueued: boolean }> {
   const documentType = resolveDocumentTypeFromDriveMime(input.file.mimeType);
   const webViewUrl =
     input.file.webViewLink ?? buildDriveWebViewUrl(input.file.id);
   const externalModifiedAt = new Date(input.file.modifiedTime);
-  const driveMetadata = buildDriveSourceMetadata({
-    fileId: input.file.id,
-    mimeType: input.file.mimeType,
-  });
+  const driveMetadata =
+    input.driveMetadata ??
+    buildDriveSourceMetadata({
+      fileId: input.file.id,
+      mimeType: input.file.mimeType,
+    });
 
   const existing = input.existingDocumentId
     ? await ctx.db.sourceDocument.findFirst({
@@ -68,22 +112,16 @@ async function upsertDriveSourceDocument(
         id: input.topicSpaceId,
         documentIds: [existing.id],
       });
-      return "updated";
+      return { action: "updated", kgQueued: false };
     }
-    return "skipped";
+    return { action: "skipped", kgQueued: false };
   }
-
-  const extracted = await runExtractKGFromPlainText(input.plainText);
-  if (!extracted) {
-    throw new Error("知識グラフの抽出に失敗しました");
-  }
-  const dataJson = KnowledgeGraphInputSchema.parse(extracted);
 
   if (!existing) {
     const { sourceDocument } = await createSourceDocumentWithGraph(ctx, {
       name: input.file.name,
       url: webViewUrl,
-      dataJson,
+      dataJson: EMPTY_GRAPH,
       documentType,
       ocrMetadata: driveMetadata,
       externalSourceId: input.file.id,
@@ -96,7 +134,16 @@ async function upsertDriveSourceDocument(
       documentIds: [sourceDocument.id],
     });
 
-    return "created";
+    const kgMode = await applyKgExtractionForDocument(ctx, {
+      topicSpaceId: input.topicSpaceId,
+      plainText: input.plainText,
+      sourceDocumentId: sourceDocument.id,
+    });
+
+    return {
+      action: "created",
+      kgQueued: kgMode === "queued",
+    };
   }
 
   if (!existing.graph) {
@@ -109,11 +156,6 @@ async function upsertDriveSourceDocument(
       documentId: existing.id,
     });
   }
-
-  await replaceDocumentGraphFromExtraction(ctx.db, {
-    documentGraphId: existing.graph.id,
-    dataJson,
-  });
 
   await ctx.db.sourceDocument.update({
     where: { id: existing.id },
@@ -133,7 +175,16 @@ async function upsertDriveSourceDocument(
     documentIds: [existing.id],
   });
 
-  return "updated";
+  const kgMode = await applyKgExtractionForDocument(ctx, {
+    topicSpaceId: input.topicSpaceId,
+    plainText: input.plainText,
+    sourceDocumentId: existing.id,
+  });
+
+  return {
+    action: "updated",
+    kgQueued: kgMode === "queued",
+  };
 }
 
 export async function syncTopicSpaceDriveFolder(
@@ -193,6 +244,8 @@ export async function syncTopicSpaceDriveFolder(
     updated: 0,
     skipped: 0,
     detached: 0,
+    pendingOcr: 0,
+    pendingKg: 0,
     errors: [],
   };
 
@@ -215,15 +268,61 @@ export async function syncTopicSpaceDriveFolder(
       topicSpace.sourceDocuments.map((doc) => doc.id),
     );
 
+    const defaultOcrLanguage = parseDefaultOcrLanguage(
+      topicSpace.defaultOcrLanguage,
+    );
+
     for (const file of driveFiles) {
       try {
-        const plainText = await fetchDriveFileText(file, driveClient);
+        let plainText = "";
+        let contentHash = "";
+        let driveMetadata = buildDriveSourceMetadata({
+          fileId: file.id,
+          mimeType: file.mimeType,
+        });
+
+        if (file.mimeType === "application/pdf") {
+          const buffer = await fetchDrivePdfBuffer(file, driveClient);
+          const extraction = await extractPdfTextFromBuffer(buffer, {
+            defaultOcrLanguage,
+            processOcr: false,
+          });
+
+          if (extraction.needsOcr) {
+            const existing = existingByDriveId.get(file.id);
+            await enqueuePdfExtractionJob(ctx.db, {
+              userId: ctx.session.user.id,
+              topicSpaceId: input.topicSpaceId,
+              sourceDocumentId: existing?.id,
+              sourceType: "drive",
+              driveFileId: file.id,
+              driveFileName: file.name,
+              pageCount: extraction.pageCount,
+            });
+            result.pendingOcr += 1;
+            continue;
+          }
+
+          plainText = extraction.plainText;
+          contentHash = computeDriveContentHash(file, plainText);
+          driveMetadata = buildDriveSourceMetadata({
+            fileId: file.id,
+            mimeType: file.mimeType,
+            extraction: extraction.extraction,
+          });
+        } else {
+          const { fetchDriveFileText } = await import(
+            "@/server/lib/google-drive/fetch-document-text"
+          );
+          plainText = await fetchDriveFileText(file, driveClient);
+          contentHash = computeDriveContentHash(file, plainText);
+        }
+
         if (!plainText.trim()) {
           result.skipped += 1;
           continue;
         }
 
-        const contentHash = computeDriveContentHash(file, plainText);
         const existing = existingByDriveId.get(file.id);
         const outcome = await upsertDriveSourceDocument(ctx, {
           topicSpaceId: input.topicSpaceId,
@@ -232,11 +331,13 @@ export async function syncTopicSpaceDriveFolder(
           contentHash,
           isAttached: existing ? attachedDocumentIds.has(existing.id) : false,
           existingDocumentId: existing?.id,
+          driveMetadata,
         });
 
-        if (outcome === "created") result.created += 1;
-        else if (outcome === "updated") result.updated += 1;
+        if (outcome.action === "created") result.created += 1;
+        else if (outcome.action === "updated") result.updated += 1;
         else result.skipped += 1;
+        if (outcome.kgQueued) result.pendingKg += 1;
       } catch (error) {
         result.errors.push({
           fileName: file.name,
@@ -321,6 +422,8 @@ export async function syncAllEnabledTopicSpaceDriveFolders(
         updated: 0,
         skipped: 0,
         detached: 0,
+        pendingOcr: 0,
+        pendingKg: 0,
         errors: [
           {
             fileName: config.topicSpace.name,
@@ -345,6 +448,8 @@ export async function syncAllEnabledTopicSpaceDriveFolders(
         updated: 0,
         skipped: 0,
         detached: 0,
+        pendingOcr: 0,
+        pendingKg: 0,
         errors: [
           {
             fileName: config.topicSpace.name,

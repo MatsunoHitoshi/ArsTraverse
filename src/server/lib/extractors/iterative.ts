@@ -104,7 +104,7 @@ export class IterativeGraphExtractor implements Extractor {
   }
 
   // Helper to build context string from frontend nodes
-  private buildContextFromNodes(nodes: NodeTypeForFrontend[]): string {
+  buildContextFromNodes(nodes: NodeTypeForFrontend[]): string {
     return nodes
       .map((n) => {
         const ja = n.properties?.name_ja ? `(${n.properties.name_ja})` : "";
@@ -114,7 +114,7 @@ export class IterativeGraphExtractor implements Extractor {
   }
 
   // Helper to merge two graph results
-  private mergeResults(
+  mergeResults(
     r1: NodesAndRelationships,
     r2: NodesAndRelationships,
   ): NodesAndRelationships {

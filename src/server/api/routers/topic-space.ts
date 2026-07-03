@@ -17,7 +17,7 @@ import type {
 import { nodePathSearch } from "@/app/_utils/kg/bfs";
 import { getNeighborNodes } from "@/app/_utils/kg/get-tree-layout-data";
 import type { Prisma } from "@prisma/client";
-import { type PrismaClient } from "@prisma/client";
+import { JobStatus, type PrismaClient } from "@prisma/client";
 import {
   formGraphDataForFrontend,
   formNodeDataForFrontend,
@@ -34,6 +34,11 @@ import { attachDocumentsToTopicSpace } from "@/server/services/kg/attach-documen
 import { detachDocumentsFromTopicSpace } from "@/server/services/kg/detach-documents.service";
 import { mergeGraphNodes as mergeGraphNodesService } from "@/server/services/kg/merge-graph-nodes.service";
 import { syncTopicSpaceDriveFolder } from "@/server/services/kg/sync-topic-space-drive.service";
+import {
+  advanceManualDocumentOcr,
+  getDocumentOcrJobStatus,
+  startManualDocumentOcr,
+} from "@/server/services/pdf-extraction/manual-document-ocr.service";
 import { updateTopicSpaceGraph } from "@/server/services/kg/update-topic-space-graph.service";
 import { updateTopicSpaceGraphProperties } from "@/server/services/kg/update-topic-space-graph-properties.service";
 import { getTextReference } from "./source-document";
@@ -758,6 +763,18 @@ ${referenceText}
         ctx.db,
         ctx.session.user.id,
       );
+      const pendingOcrJobs = await ctx.db.pdfExtractionJob.count({
+        where: {
+          topicSpaceId: input.id,
+          status: { in: [JobStatus.PENDING, JobStatus.PROCESSING] },
+        },
+      });
+      const pendingKgJobs = await ctx.db.kgExtractionJob.count({
+        where: {
+          topicSpaceId: input.id,
+          status: { in: [JobStatus.PENDING, JobStatus.PROCESSING] },
+        },
+      });
 
       return {
         configured: Boolean(driveSync),
@@ -772,6 +789,9 @@ ${referenceText}
         lastSyncedAt: driveSync?.lastSyncedAt?.toISOString() ?? null,
         lastSyncStatus: driveSync?.lastSyncStatus ?? null,
         lastSyncError: driveSync?.lastSyncError ?? null,
+        defaultOcrLanguage: topicSpace.defaultOcrLanguage,
+        pendingOcrJobs,
+        pendingKgJobs,
         userDriveConnected,
         canUsePicker: userDriveConnected,
       };
@@ -785,6 +805,7 @@ ${referenceText}
         driveFolderName: z.string().optional(),
         enabled: z.boolean().default(true),
         recursive: z.boolean().default(true),
+        defaultOcrLanguage: z.enum(["jpn", "jpn_vert", "eng"]).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -829,12 +850,21 @@ ${referenceText}
         },
       });
 
+      if (input.defaultOcrLanguage) {
+        await ctx.db.topicSpace.update({
+          where: { id: input.id },
+          data: { defaultOcrLanguage: input.defaultOcrLanguage },
+        });
+      }
+
       return {
         driveFolderId: driveSync.driveFolderId,
         driveFolderName: driveSync.driveFolderName,
         driveFolderUrl: buildDriveFolderUrl(driveSync.driveFolderId),
         enabled: driveSync.enabled,
         recursive: driveSync.recursive,
+        defaultOcrLanguage:
+          input.defaultOcrLanguage ?? topicSpace.defaultOcrLanguage,
       };
     }),
 
@@ -842,5 +872,52 @@ ${referenceText}
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       return syncTopicSpaceDriveFolder(ctx, { topicSpaceId: input.id });
+    }),
+
+  getDocumentOcrStatus: protectedProcedure
+    .input(
+      z.object({
+        topicSpaceId: z.string(),
+        documentId: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      return getDocumentOcrJobStatus(ctx.db, {
+        topicSpaceId: input.topicSpaceId,
+        documentId: input.documentId,
+        userId: ctx.session.user.id,
+      });
+    }),
+
+  startDocumentOcr: protectedProcedure
+    .input(
+      z.object({
+        topicSpaceId: z.string(),
+        documentId: z.string(),
+        ocrLanguage: z.enum(["auto", "jpn", "jpn_vert", "eng"]),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return startManualDocumentOcr(ctx.db, {
+        topicSpaceId: input.topicSpaceId,
+        documentId: input.documentId,
+        userId: ctx.session.user.id,
+        ocrLanguage: input.ocrLanguage,
+      });
+    }),
+
+  advanceDocumentOcr: protectedProcedure
+    .input(
+      z.object({
+        topicSpaceId: z.string(),
+        documentId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return advanceManualDocumentOcr(ctx.db, {
+        topicSpaceId: input.topicSpaceId,
+        documentId: input.documentId,
+        userId: ctx.session.user.id,
+      });
     }),
 });

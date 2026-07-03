@@ -3,7 +3,11 @@ import { getTextFromDocumentFile } from "@/app/_utils/text/text";
 import type { OcrMetadata } from "@/server/api/schemas/scan";
 import { db } from "@/server/db";
 import { fetchDriveFileText } from "@/server/lib/google-drive/fetch-document-text";
-import { readDriveMimeType } from "@/server/lib/google-drive/source-metadata";
+import {
+  parseDefaultOcrLanguage,
+  readCachedPlainText,
+  readDriveMimeType,
+} from "@/server/lib/google-drive/source-metadata";
 import { getGoogleDriveClientForUser } from "@/server/lib/google-drive/user-oauth";
 import { resolveScanPlainText } from "@/server/services/scan/resolve-scan-plain-text";
 
@@ -14,16 +18,21 @@ type SourceDocumentTextSource = {
   documentType: DocumentType;
   ocrMetadata: unknown;
   externalSourceId?: string | null;
+  defaultOcrLanguage?: ReturnType<typeof parseDefaultOcrLanguage>;
 };
 
 async function resolveDriveBackedPlainText(
   document: SourceDocumentTextSource,
+  defaultOcrLanguage?: ReturnType<typeof parseDefaultOcrLanguage>,
 ): Promise<string> {
   const fileId = document.externalSourceId?.trim();
   const userId = document.userId?.trim();
   if (!fileId || !userId) {
     throw new Error("Drive ドキュメントの externalSourceId または userId が未設定です");
   }
+
+  const cached = readCachedPlainText(document.ocrMetadata);
+  if (cached) return cached;
 
   const mimeType =
     readDriveMimeType(document.ocrMetadata) ??
@@ -40,6 +49,11 @@ async function resolveDriveBackedPlainText(
       modifiedTime: new Date().toISOString(),
     },
     drive,
+    {
+      defaultOcrLanguage,
+      processOcr: mimeType === "application/pdf",
+      ocrMetadata: document.ocrMetadata,
+    },
   );
 }
 
@@ -68,7 +82,10 @@ export async function resolveSourceDocumentPlainText(
       document.documentType === DocumentType.INPUT_PDF)
   ) {
     try {
-      return await resolveDriveBackedPlainText(document);
+      return await resolveDriveBackedPlainText(
+        document,
+        document.defaultOcrLanguage,
+      );
     } catch (error) {
       console.error("Failed to load drive-backed document text", {
         documentType: document.documentType,

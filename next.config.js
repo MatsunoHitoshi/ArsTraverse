@@ -15,6 +15,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import("next").NextConfig} */
 const config = {
+  serverExternalPackages: [
+    "onnxruntime-node",
+    "@napi-rs/canvas",
+    "pdfjs-dist",
+    "tesseract.js",
+    "mupdf",
+  ],
   outputFileTracingRoot: path.join(__dirname),
   turbopack: {
     root: path.join(__dirname),

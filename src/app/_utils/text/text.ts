@@ -1,29 +1,31 @@
 import fs from "fs";
-import { createRequire } from "module";
 import { DocumentType } from "@prisma/client";
 import { isFetchableStoragePublicUrl } from "../supabase/storage-url";
 import { writeLocalFileFromUrl } from "../sys/file";
 import { BUCKETS } from "../supabase/const";
-
-const require = createRequire(import.meta.url);
+import { extractPdfTextFromBuffer } from "@/server/lib/pdf/extract-pdf-text";
+import { readCachedPlainText } from "@/server/lib/google-drive/source-metadata";
+import type { OcrLanguage } from "@/server/lib/pdf-extraction/types";
 
 type GetTextOptions = {
   externalSourceId?: string | null;
   mimeType?: string | null;
   fileName?: string | null;
   ocrMetadata?: unknown;
+  defaultOcrLanguage?: OcrLanguage;
+  processOcr?: boolean;
 };
 
-type PdfParseResult = { text: string };
-
-async function extractPdfTextFromLocalFile(filePath: string): Promise<string> {
-  // index.js runs a debug read when `!module.parent` (true under createRequire).
-  const pdfParse = require("pdf-parse/lib/pdf-parse.js") as (
-    buffer: Buffer,
-  ) => Promise<PdfParseResult>;
+async function extractPdfTextFromLocalFile(
+  filePath: string,
+  options?: Pick<GetTextOptions, "defaultOcrLanguage" | "processOcr">,
+): Promise<string> {
   const dataBuffer = await fs.promises.readFile(filePath);
-  const pdfData = await pdfParse(dataBuffer);
-  return pdfData.text.trim();
+  const result = await extractPdfTextFromBuffer(dataBuffer, {
+    defaultOcrLanguage: options?.defaultOcrLanguage ?? "jpn",
+    processOcr: options?.processOcr ?? true,
+  });
+  return result.plainText.trim();
 }
 
 export const getTextFromDocumentFile = async (
@@ -50,8 +52,14 @@ export const getTextFromDocumentFile = async (
       );
     }
 
+    const cached = readCachedPlainText(options?.ocrMetadata);
+    if (cached) return cached;
+
     const localFilePath = await writeLocalFileFromUrl(trimmedUrl, "input.pdf");
-    return extractPdfTextFromLocalFile(localFilePath);
+    return extractPdfTextFromLocalFile(localFilePath, {
+      defaultOcrLanguage: options?.defaultOcrLanguage,
+      processOcr: options?.processOcr ?? true,
+    });
   }
 
   if (type !== DocumentType.INPUT_TXT && type !== DocumentType.INPUT_SCAN) {
