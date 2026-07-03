@@ -31,10 +31,9 @@ export async function resyncDocumentGraphToTopicSpace(
       id: input.topicSpaceId,
       documentId: input.sourceDocumentId,
     });
+    await attachDocumentsToTopicSpace(ctx, {
+      id: input.topicSpaceId,
+      documentIds: [input.sourceDocumentId],
+    });
   }
-
-  await attachDocumentsToTopicSpace(ctx, {
-    id: input.topicSpaceId,
-    documentIds: [input.sourceDocumentId],
-  });
 }
