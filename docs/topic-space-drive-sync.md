@@ -109,6 +109,8 @@ Drive 同期および Storage アップロードの PDF は共通パイプライ
 
 リポジトリ画面の Drive 同期パネルで **OCR 言語** を設定できます。NDLOCR モデルは初回利用時に R2 から `.cache/ndlocr-models/` へダウンロードされます。
 
+縦書き OCR（NDLOCR-Lite）のライセンス・帰属表示要件は [NDLOCR ライセンス](./ndlocr-license.md) を参照。
+
 ## MCP / CLI
 
 | 手段 | 説明 |

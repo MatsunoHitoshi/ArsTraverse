@@ -118,6 +118,7 @@ npm run supabase:ensure-buckets
 - **縦書き日本語**: [ndlocrlite-web](https://github.com/yuta1984/ndlocrlite-web) ベースの NDLOCR-Lite（`ndlocr/ndlocr-client.ts` + Web Worker）
 - **領域 OCR**: 画像を `image-crop.ts` で領域ごとにクロップしてから認識。複数領域のテキストは結合される
 - **NDLOCR モデル**: 初回 ~150MB を同一オリジンの `/api/ndlocr-models/*` 経由で取得し IndexedDB にキャッシュ（`NEXT_PUBLIC_NDL_OCR_MODEL_BASE_URL` で変更可）
+- **ライセンス・帰属表示**: 縦書き OCR は NDLOCR-Lite（CC BY 4.0）を利用。要件は [NDLOCR ライセンス](./ndlocr-license.md) を参照
 - **ONNX Runtime**: `numThreads: 1` の WASM 推論（COOP/COEP は不要。Field ページの Worker・Supabase 画像との両立のため付与しない）
 - **カメラ**: `camera-capture.ts` が解像度フォールバックと `ImageCapture` API を利用
 - **整形**: `normalize-ocr-text.service.ts` が LLM で改行・スペースノイズを除去（意味は変更しない）
