@@ -83,7 +83,9 @@ model User {
 
   googleDriveConnection UserGoogleDriveConnection?
   configuredDriveSyncs  TopicSpaceDriveSync[] @relation("DriveSyncConfiguredBy")
-  
+  pdfExtractionJobs     PdfExtractionJob[]
+  kgExtractionJobs      KgExtractionJob[]
+
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
 }
@@ -122,6 +124,8 @@ model SourceDocument {
   
   // 注釈から統合された場合の関連
   annotations Annotation[]
+  pdfExtractionJobs PdfExtractionJob[]
+  kgExtractionJobs  KgExtractionJob[]
 }
 
 enum DocumentType {
@@ -217,6 +221,8 @@ model TopicSpace {
   isDeleted       Boolean         @default(false)
 
   mcpToolIdentifier String?
+  /// OCR フォールバック時のデフォルト言語 (jpn | jpn_vert | eng)
+  defaultOcrLanguage String @default("jpn")
 
   graphNodes GraphNode[] @relation("TopicSpaceNodes")
   graphRelationships GraphRelationship[] @relation("TopicSpaceEdges")
@@ -243,6 +249,81 @@ model TopicSpace {
   nodeProvenances TopicSpaceDocumentNodeProvenance[]
 
   driveSync TopicSpaceDriveSync?
+  pdfExtractionJobs PdfExtractionJob[]
+  kgExtractionJobs  KgExtractionJob[]
+}
+
+model PdfExtractionJob {
+  id                  String    @id @default(cuid())
+  status              JobStatus @default(PENDING)
+  sourceDocumentId    String?
+  topicSpaceId        String?
+  userId              String
+
+  sourceType          String    // drive | storage
+  driveFileId         String?
+  driveFileName       String?
+  storageUrl          String?
+
+  pageCount           Int?
+  processedPages      Int       @default(0)
+  accumulatedPlainText String?  @db.Text
+  /// auto | jpn | jpn_vert | eng — manual OCR 時の言語指定（auto はレイアウト自動判定）
+  ocrLanguage         String    @default("auto")
+  detectedLanguage    String?
+  writingDirection    String?
+  directionConfidence Float?
+
+  error               String?   @db.Text
+  startedAt           DateTime?
+  completedAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  sourceDocument SourceDocument? @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  topicSpace     TopicSpace?     @relation(fields: [topicSpaceId], references: [id], onDelete: SetNull)
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([sourceDocumentId])
+  @@index([topicSpaceId])
+}
+
+enum KgExtractionPhase {
+  PHASE1
+  PHASE2
+  FINALIZE
+}
+
+model KgExtractionJob {
+  id                     String            @id @default(cuid())
+  status                 JobStatus         @default(PENDING)
+  phase                  KgExtractionPhase @default(PHASE1)
+  userId                 String
+  sourceDocumentId       String?
+  topicSpaceId           String?
+  plainText              String            @db.Text
+
+  totalChunks            Int               @default(0)
+  processedChunks        Int               @default(0)
+  batchSize              Int               @default(3)
+  contextSnapshot        String?           @db.Text
+  accumulatedNodes       Json?
+  accumulatedRelationships Json?
+
+  error                  String?           @db.Text
+  startedAt              DateTime?
+  completedAt            DateTime?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceDocument SourceDocument? @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  topicSpace     TopicSpace?     @relation(fields: [topicSpaceId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([sourceDocumentId])
+  @@index([topicSpaceId])
 }
 
 model TopicSpaceDriveSync {

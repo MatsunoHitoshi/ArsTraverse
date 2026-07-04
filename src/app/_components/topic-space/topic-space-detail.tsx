@@ -28,6 +28,10 @@ import { TopicSpaceChangeHistory } from "./topic-space-change-history";
 import { ProposalList } from "../graph-edit-proposal/proposal-list";
 import { MemberListModal } from "./member-list-modal";
 import { TopicSpaceDriveSyncPanel } from "./topic-space-drive-sync-panel";
+import {
+  DocumentOcrModal,
+  isOcrEligibleDocument,
+} from "./document-ocr-modal";
 
 export const TopicSpaceDetail = ({ id }: { id: string }) => {
   const t = useTranslations("topicSpace");
@@ -85,6 +89,9 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
     useState<boolean>(false);
   const [documentEditModalOpen, setDocumentEditModalOpen] =
     useState<boolean>(false);
+  const [documentOcrModalOpen, setDocumentOcrModalOpen] =
+    useState<boolean>(false);
+  const [ocrDocument, setOcrDocument] = useState<DocumentResponse | null>(null);
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [memberModalOpen, setMemberModalOpen] = useState<boolean>(false);
 
@@ -246,6 +253,25 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
                     menu={(document) => {
                       return (
                         <div className="flex min-w-[150px] flex-col">
+                          {isOcrEligibleDocument(document) && (
+                            <DocumentListMenuButton
+                              icon={
+                                <FileTextIcon
+                                  width={16}
+                                  height={16}
+                                  color="white"
+                                />
+                              }
+                              onClick={() => {
+                                setOcrDocument(document);
+                                setDocumentOcrModalOpen(true);
+                              }}
+                            >
+                              <div className="text-white">
+                                {t("reextractWithOcr")}
+                              </div>
+                            </DocumentListMenuButton>
+                          )}
                           <DocumentListMenuButton
                             icon={
                               <TrashIcon
@@ -328,6 +354,13 @@ export const TopicSpaceDetail = ({ id }: { id: string }) => {
         setIsOpen={setDocumentEditModalOpen}
         documentId={documentId}
         refetch={refetch}
+      />
+      <DocumentOcrModal
+        isOpen={documentOcrModalOpen}
+        setIsOpen={setDocumentOcrModalOpen}
+        topicSpaceId={id}
+        document={ocrDocument}
+        onCompleted={() => void refetch()}
       />
       <MemberListModal
         isOpen={memberModalOpen}

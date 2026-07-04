@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
 import { DocumentType } from "@prisma/client";
 import type { drive_v3 } from "googleapis";
+import { extractPdfTextFromBuffer } from "@/server/lib/pdf/extract-pdf-text";
+import type { OcrLanguage } from "@/server/lib/pdf-extraction/types";
+import { readCachedPlainText } from "@/server/lib/google-drive/source-metadata";
 
 export type DriveFileMeta = {
   id: string;
@@ -109,11 +112,33 @@ export async function listDriveFilesInFolder(
   return files;
 }
 
+export async function fetchDrivePdfBuffer(
+  meta: DriveFileMeta,
+  driveClient: drive_v3.Drive,
+): Promise<Buffer> {
+  const response = await driveClient.files.get(
+    { fileId: meta.id, alt: "media" },
+    { responseType: "arraybuffer" },
+  );
+  return Buffer.from(response.data as ArrayBuffer);
+}
+
+export type FetchDriveFileTextOptions = {
+  defaultOcrLanguage?: OcrLanguage;
+  processOcr?: boolean;
+  ocrMetadata?: unknown;
+};
+
 export async function fetchDriveFileText(
   meta: DriveFileMeta,
   driveClient: drive_v3.Drive,
+  options?: FetchDriveFileTextOptions,
 ): Promise<string> {
   const drive = driveClient;
+  const cachedPlainText = readCachedPlainText(options?.ocrMetadata);
+  if (cachedPlainText) {
+    return cachedPlainText;
+  }
 
   if (meta.mimeType === GOOGLE_DOC_MIME) {
     const response = await drive.files.export(
@@ -125,18 +150,12 @@ export async function fetchDriveFileText(
   }
 
   if (meta.mimeType === "application/pdf") {
-    const response = await drive.files.get(
-      { fileId: meta.id, alt: "media" },
-      { responseType: "arraybuffer" },
-    );
-    const buffer = Buffer.from(response.data as ArrayBuffer);
-    const { createRequire } = await import("module");
-    const require = createRequire(import.meta.url);
-    const pdfParse = require("pdf-parse/lib/pdf-parse.js") as (
-      data: Buffer,
-    ) => Promise<{ text: string }>;
-    const parsed = await pdfParse(buffer);
-    return parsed.text.trim();
+    const buffer = await fetchDrivePdfBuffer(meta, drive);
+    const extraction = await extractPdfTextFromBuffer(buffer, {
+      defaultOcrLanguage: options?.defaultOcrLanguage ?? "jpn",
+      processOcr: options?.processOcr ?? false,
+    });
+    return extraction.plainText.trim();
   }
 
   const response = await drive.files.get(

@@ -1,4 +1,4 @@
-import { DocumentType, type PrismaClient } from "@prisma/client";
+import { DocumentType, JobStatus, type PrismaClient } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { formGraphDataForFrontend } from "@/app/_utils/kg/frontend-properties";
 import { runExtractKGFromPlainText } from "@/server/api/routers/kg-extraction";
@@ -557,6 +557,19 @@ export async function mcpGetTopicSpaceDriveSyncStatus(
   }
 
   const driveSync = topicSpace.driveSync;
+  const pendingOcrJobs = await ctx.db.pdfExtractionJob.count({
+    where: {
+      topicSpaceId: topicSpace.id,
+      status: { in: [JobStatus.PENDING, JobStatus.PROCESSING] },
+    },
+  });
+  const pendingKgJobs = await ctx.db.kgExtractionJob.count({
+    where: {
+      topicSpaceId: topicSpace.id,
+      status: { in: [JobStatus.PENDING, JobStatus.PROCESSING] },
+    },
+  });
+
   return {
     topicSpaceId: topicSpace.id,
     configured: Boolean(driveSync),
@@ -571,6 +584,9 @@ export async function mcpGetTopicSpaceDriveSyncStatus(
     lastSyncedAt: driveSync?.lastSyncedAt?.toISOString() ?? null,
     lastSyncStatus: driveSync?.lastSyncStatus ?? null,
     lastSyncError: driveSync?.lastSyncError ?? null,
+    defaultOcrLanguage: topicSpace.defaultOcrLanguage,
+    pendingOcrJobs,
+    pendingKgJobs,
   };
 }
 
@@ -585,6 +601,6 @@ export async function mcpSyncTopicSpaceDriveFolder(
 
   return {
     ...result,
-    message: `Drive 同期完了: 作成 ${result.created}, 更新 ${result.updated}, スキップ ${result.skipped}, 削除 ${result.detached}`,
+    message: `Drive 同期完了: 作成 ${result.created}, 更新 ${result.updated}, スキップ ${result.skipped}, 削除 ${result.detached}, OCR待ち ${result.pendingOcr}, KG待ち ${result.pendingKg}`,
   };
 }

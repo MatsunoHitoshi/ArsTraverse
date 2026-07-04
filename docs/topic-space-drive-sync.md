@@ -89,6 +89,27 @@ schedule: 0 */6 * * *
 - `TopicSpaceDriveSync.driveFolderName` — Picker で選んだ表示名
 - `SourceDocument.externalSourceId` — Drive ファイル ID（同一ファイルの upsert キー）
 - `SourceDocument.contentHash` — 変更検知用
+- `TopicSpace.defaultOcrLanguage` — PDF の OCR フォールバック時のデフォルト言語（`jpn` / `jpn_vert` / `eng`）
+- `PdfExtractionJob` — テキスト層品質が低い PDF の非同期 OCR ジョブ
+
+## PDF テキスト抽出パイプライン
+
+Drive 同期および Storage アップロードの PDF は共通パイプラインで処理します。
+
+1. **テキスト層抽出** — `pdf-parse` / PDFLoader で plain text を取得
+2. **品質判定** — 文字化け・空ページ・異常な改行などをヒューリスティックで評価
+3. **品質 OK** — そのまま KG 抽出へ
+4. **品質 NG（Drive 同期）** — `PdfExtractionJob` を enqueue。同期結果に `pendingOcr` 件数を表示
+5. **品質 NG（インライン OCR）** — ページをラスタライズし、レイアウトから読み方向を判定
+   - 縦書き日本語 → サーバー NDLOCR
+   - 横書き / 英語 → Tesseract + LLM 正規化
+6. **Cron** — `/api/cron/pdf-extraction` が 1 分ごとにジョブを処理（本番は `CRON_SECRET` 必須。Vercel では 3009MB メモリ推奨）
+
+複数ページ PDF は 10 ページずつ OCR し、`PdfExtractionJob.accumulatedPlainText` に結合してから KG 抽出します。リポジトリ画面では処理待ちジョブ数（`pendingOcrJobs`）も確認できます。
+
+リポジトリ画面の Drive 同期パネルで **OCR 言語** を設定できます。NDLOCR モデルは初回利用時に R2 から `.cache/ndlocr-models/` へダウンロードされます。
+
+縦書き OCR（NDLOCR-Lite）のライセンス・帰属表示要件は [NDLOCR ライセンス](./ndlocr-license.md) を参照。
 
 ## MCP / CLI
 

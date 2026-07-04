@@ -3,6 +3,14 @@
   "functions": {
     "app/api/**/*": {
       "maxDuration": 300
+    },
+    "app/api/cron/pdf-extraction/route.ts": {
+      "maxDuration": 300,
+      "memory": 3009
+    },
+    "app/api/cron/kg-extraction/route.ts": {
+      "maxDuration": 300,
+      "memory": 3009
     }
   },
   "crons": [
@@ -17,6 +25,14 @@
     {
       "path": "/api/cron/topic-space-drive-sync",
       "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/pdf-extraction",
+      "schedule": "*/1 * * * *"
+    },
+    {
+      "path": "/api/cron/kg-extraction",
+      "schedule": "*/1 * * * *"
     }
   ]
 }

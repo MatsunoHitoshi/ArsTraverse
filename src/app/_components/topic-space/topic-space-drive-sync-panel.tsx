@@ -41,6 +41,9 @@ export function TopicSpaceDriveSyncPanel({
 
   const [folderName, setFolderName] = useState("");
   const [recursive, setRecursive] = useState(true);
+  const [defaultOcrLanguage, setDefaultOcrLanguage] = useState<
+    "jpn" | "jpn_vert" | "eng"
+  >("jpn");
 
   const status = statusQuery.data;
   const driveConnection = driveConnectionQuery.data;
@@ -50,7 +53,11 @@ export function TopicSpaceDriveSyncPanel({
   useEffect(() => {
     if (status?.driveFolderName) setFolderName(status.driveFolderName);
     if (status?.recursive !== undefined) setRecursive(status.recursive);
-  }, [status?.driveFolderName, status?.recursive]);
+    const lang = status?.defaultOcrLanguage;
+    if (lang === "jpn" || lang === "jpn_vert" || lang === "eng") {
+      setDefaultOcrLanguage(lang);
+    }
+  }, [status?.driveFolderName, status?.recursive, status?.defaultOcrLanguage]);
 
   const connectUrl = `/api/google-drive/connect?returnTo=${encodeURIComponent(pathname)}`;
 
@@ -62,6 +69,7 @@ export function TopicSpaceDriveSyncPanel({
       driveFolderName: folder.name,
       enabled: true,
       recursive,
+      defaultOcrLanguage,
     });
   };
 
@@ -69,6 +77,7 @@ export function TopicSpaceDriveSyncPanel({
     <div className="flex flex-col gap-3 rounded-md border border-slate-700/60 bg-slate-900/30 p-3">
       <div className="text-sm font-semibold">{t("driveSync")}</div>
       <p className="text-xs text-slate-400">{t("driveSyncDescription")}</p>
+      <p className="text-xs text-slate-500">{t("manualOcrHint")}</p>
 
       <div className="flex flex-wrap items-center gap-2 text-xs">
         {driveConnection?.connected ? (
@@ -109,6 +118,24 @@ export function TopicSpaceDriveSyncPanel({
         </div>
       )}
 
+      <label className="flex flex-col gap-1 text-xs">
+        <span>{t("defaultOcrLanguage")}</span>
+        <select
+          value={defaultOcrLanguage}
+          onChange={(event) =>
+            setDefaultOcrLanguage(
+              event.target.value as "jpn" | "jpn_vert" | "eng",
+            )
+          }
+          disabled={isBusy}
+          className="rounded-md border border-slate-600 bg-slate-900 px-2 py-1 text-slate-100"
+        >
+          <option value="jpn">{t("ocrLanguageJpn")}</option>
+          <option value="jpn_vert">{t("ocrLanguageJpnVert")}</option>
+          <option value="eng">{t("ocrLanguageEng")}</option>
+        </select>
+      </label>
+
       <label className="flex items-center gap-2 text-xs">
         <input
           type="checkbox"
@@ -132,6 +159,7 @@ export function TopicSpaceDriveSyncPanel({
                   : (status.driveFolderName ?? undefined),
                 enabled: true,
                 recursive,
+                defaultOcrLanguage,
               })
             }
             className="rounded bg-slate-700 px-3 py-1 text-xs hover:bg-slate-600 disabled:opacity-50"
@@ -172,6 +200,16 @@ export function TopicSpaceDriveSyncPanel({
       {status?.lastSyncError && (
         <div className="text-xs text-red-400">{status.lastSyncError}</div>
       )}
+      {typeof status?.pendingOcrJobs === "number" && status.pendingOcrJobs > 0 && (
+        <div className="text-xs text-amber-400">
+          {t("pendingOcrJobs", { count: status.pendingOcrJobs })}
+        </div>
+      )}
+      {typeof status?.pendingKgJobs === "number" && status.pendingKgJobs > 0 && (
+        <div className="text-xs text-amber-400">
+          {t("pendingKgJobs", { count: status.pendingKgJobs })}
+        </div>
+      )}
       {syncDrive.data && (
         <div className="text-xs text-emerald-400">
           {t("syncResult", {
@@ -179,6 +217,8 @@ export function TopicSpaceDriveSyncPanel({
             updated: syncDrive.data.updated,
             skipped: syncDrive.data.skipped,
             detached: syncDrive.data.detached,
+            pendingOcr: syncDrive.data.pendingOcr,
+            pendingKg: syncDrive.data.pendingKg,
           })}
         </div>
       )}

@@ -45,6 +45,7 @@ const emptyTopicSpace: TopicSpaceResponse = {
   createdAt: new Date(),
   updatedAt: new Date(),
   isDeleted: false,
+  defaultOcrLanguage: "jpn",
 };
 
 interface TopicSpaceAttachForm {
@@ -133,6 +134,7 @@ export const TopicSpaceAttachModal = ({
         createdAt: new Date(),
         updatedAt: new Date(),
         isDeleted: false,
+        defaultOcrLanguage: "jpn",
       };
 
       setSearchedTopicSpace({

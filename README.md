@@ -183,6 +183,7 @@ Concept and flow diagrams for the writing workspace, story generation, auto-high
 - `docs/story-generation-text-mode-flow.md` — text-to-meta-graph pipeline
 - `docs/auto-annotation-information-reference-flow.md` — entity highlight ↔ graph focus
 - `docs/field-research-scan-flow.md` — mobile field scan (OCR → graph → node matching)
+- `docs/ndlocr-license.md` — NDLOCR-Lite / ndlocrlite-web license and attribution
 - `docs/graph-statistics-panel.md` — D3 graph info panel metrics and degree distribution
 - `docs/storytelling-scroll-viewer.md` — published article `ScrollStorytellingViewerUnified`, URL params, scroll guards
 - `docs/topic-space-drive-sync.md` — Google Drive folder sync into TopicSpace (user OAuth, Cron)
@@ -256,6 +257,7 @@ supabase/
 - [テキストからストーリー生成（処理フロー）](./docs/story-generation-text-mode-flow.md)
 - [自動アノテーションと情報参照](./docs/auto-annotation-information-reference-flow.md)
 - [フィールドリサーチ：現地スキャンから知識グラフ作成](./docs/field-research-scan-flow.md)
+- [NDLOCR ライセンスと帰属表示](./docs/ndlocr-license.md)
 - [グラフ統計パネル（D3 可視化）](./docs/graph-statistics-panel.md)
 - [公開記事のストーリーテリングと URL クエリ](./docs/storytelling-public-viewer-and-urls.md)
 - [公開 Unified ビューのスクロール・ガード・レイアウト詳細](./docs/storytelling-scroll-viewer.md)
