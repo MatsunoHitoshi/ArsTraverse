@@ -4,7 +4,7 @@ const config = {
   parserOptions: {
     project: true,
   },
-  ignorePatterns: ["supabase/functions/**/*"],
+  ignorePatterns: ["supabase/functions/**/*", "**/*.test.ts"],
   plugins: ["@typescript-eslint"],
   extends: [
     "next/core-web-vitals",
