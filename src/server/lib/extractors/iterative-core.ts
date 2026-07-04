@@ -22,6 +22,8 @@ import type { Document } from "@langchain/core/documents";
 
 const PHASE1_MODEL = "gpt-4o";
 const PHASE2_MODEL = "gpt-4o-mini";
+const FALLBACK_RELATIONSHIP_TYPE = "RELATED_TO";
+const EMPTY_GRAPH: NodesAndRelationships = { nodes: [], relationships: [] };
 
 export class IterativeGraphExtractorCore {
   private phase1Llm: ChatOpenAI;
@@ -144,9 +146,18 @@ export class IterativeGraphExtractorCore {
       allowedNodes: schema?.allowedNodes,
       allowedRelationships: schema?.allowedRelationships,
       prompt: customPrompt,
+      fallbackRelationshipType: FALLBACK_RELATIONSHIP_TYPE,
     });
 
-    const graphDocuments = await transformer.convertToGraphDocuments(documents);
+    const graphDocuments: GraphDocument[] = [];
+    for (const document of documents) {
+      try {
+        const docs = await transformer.convertToGraphDocuments([document]);
+        graphDocuments.push(...docs);
+      } catch (error) {
+        console.error("[KG Phase1] chunk extraction failed:", error);
+      }
+    }
     return this.convertToFrontendFormat(graphDocuments);
   }
 
@@ -210,12 +221,18 @@ ${contextualInfo}`
       allowedNodes: schema?.allowedNodes,
       allowedRelationships: schema?.allowedRelationships,
       prompt: customPrompt,
+      fallbackRelationshipType: FALLBACK_RELATIONSHIP_TYPE,
     });
 
-    const graphDocuments = await transformer.convertToGraphDocuments([
-      document,
-    ]);
-    return this.convertToFrontendFormat(graphDocuments);
+    try {
+      const graphDocuments = await transformer.convertToGraphDocuments([
+        document,
+      ]);
+      return this.convertToFrontendFormat(graphDocuments);
+    } catch (error) {
+      console.error("[KG Phase2] chunk extraction failed:", error);
+      return EMPTY_GRAPH;
+    }
   }
 
   // Helper to convert LangChain GraphDocuments to Frontend format

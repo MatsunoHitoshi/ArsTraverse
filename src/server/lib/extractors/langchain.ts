@@ -54,10 +54,12 @@ export class LangChainExtractor implements Extractor {
             allowedNodes: schema.allowedNodes,
             allowedRelationships: schema.allowedRelationships,
             prompt: customPrompt,
+            fallbackRelationshipType: "RELATED_TO",
           }
         : {
             llm,
             prompt: customPrompt,
+            fallbackRelationshipType: "RELATED_TO",
           };
       const llmTransformer = new LLMGraphTransformer(transformerOptions);
 
