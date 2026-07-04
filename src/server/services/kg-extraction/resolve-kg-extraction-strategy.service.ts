@@ -1,4 +1,4 @@
-import { textInspectFromPlainText } from "@/app/_utils/text/text-inspector";
+import { textInspectFromPlainText } from "@/app/_utils/text/text-inspector-plain";
 import type { Document } from "@langchain/core/documents";
 import {
   KG_EXTRACTION_INLINE_CHUNK_THRESHOLD,

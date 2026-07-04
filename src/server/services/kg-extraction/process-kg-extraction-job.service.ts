@@ -2,9 +2,9 @@ import type {
   NodeTypeForFrontend,
   RelationshipTypeForFrontend,
 } from "@/app/const/types";
-import { textInspectFromPlainText } from "@/app/_utils/text/text-inspector";
+import { textInspectFromPlainText } from "@/app/_utils/text/text-inspector-plain";
 import { KnowledgeGraphInputSchema } from "@/server/api/schemas/knowledge-graph";
-import { IterativeGraphExtractor } from "@/server/lib/extractors/iterative";
+import { IterativeGraphExtractorCore } from "@/server/lib/extractors/iterative-core";
 import { replaceDocumentGraphFromExtraction } from "@/server/services/kg/replace-document-graph-from-extraction.service";
 import {
   JobStatus,
@@ -112,7 +112,7 @@ export async function processKgExtractionJob(
       };
     }
 
-    const extractor = new IterativeGraphExtractor();
+    const extractor = new IterativeGraphExtractorCore();
     const schema = {
       allowedNodes: [] as string[],
       allowedRelationships: [] as string[],

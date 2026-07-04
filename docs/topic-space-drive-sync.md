@@ -128,6 +128,7 @@ Platform MCP の認証・設定例は [MCP 認証](./mcp-authentication.md) を�
 | Picker が開かない | `NEXT_PUBLIC_GOOGLE_PICKER_API_KEY` / `NEXT_PUBLIC_GOOGLE_APP_ID` を確認 |
 | 同期で token エラー | Drive 連携を解除して再連携 |
 | Cron が止まる | 設定者の token 失効 → 再連携 |
+| Vercel デプロイで関数サイズ超過 | PDF/OCR Cron は ONNX 等で 250MB 超になる。Vercel 環境変数に `VERCEL_SUPPORT_LARGE_FUNCTIONS=1` を設定して再デプロイ |
 | `PRECONDITION_FAILED: Drive 同期が有効化されていません` | Picker でフォルダを選び `upsertDriveSyncConfig` 相当の保存を実行 |
 | ファイル単位の errors | 同期結果 JSON の `errors[]` にファイル名とメッセージ。他ファイルは継続処理 |
 

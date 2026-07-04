@@ -23,6 +23,17 @@ const config = {
     "mupdf",
   ],
   outputFileTracingRoot: path.join(__dirname),
+  outputFileTracingExcludes: {
+    "/api/cron/kg-extraction": [
+      "./node_modules/onnxruntime-node/**",
+      "./node_modules/onnxruntime-common/**",
+      "./node_modules/@napi-rs/**",
+      "./node_modules/mupdf/**",
+      "./node_modules/tesseract.js/**",
+      "./node_modules/tesseract.js-core/**",
+      "./.cache/**",
+    ],
+  },
   turbopack: {
     root: path.join(__dirname),
   },
