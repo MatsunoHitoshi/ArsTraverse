@@ -3,14 +3,6 @@
   "functions": {
     "app/api/**/*": {
       "maxDuration": 300
-    },
-    "app/api/cron/pdf-extraction/route.ts": {
-      "maxDuration": 300,
-      "memory": 3009
-    },
-    "app/api/cron/kg-extraction/route.ts": {
-      "maxDuration": 300,
-      "memory": 3009
     }
   },
   "crons": [

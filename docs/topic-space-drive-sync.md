@@ -103,7 +103,7 @@ Drive 同期および Storage アップロードの PDF は共通パイプライ
 5. **品質 NG（インライン OCR）** — ページをラスタライズし、レイアウトから読み方向を判定
    - 縦書き日本語 → サーバー NDLOCR
    - 横書き / 英語 → Tesseract + LLM 正規化
-6. **Cron** — `/api/cron/pdf-extraction` が 1 分ごとにジョブを処理（本番は `CRON_SECRET` 必須。Vercel では 3009MB メモリ推奨）
+6. **Cron** — `/api/cron/pdf-extraction` が 1 分ごとにジョブを処理（本番は `CRON_SECRET` 必須。Vercel Functions は Dashboard で **4 GB / 2 vCPU（Performance）** 推奨）
 
 複数ページ PDF は 10 ページずつ OCR し、`PdfExtractionJob.accumulatedPlainText` に結合してから KG 抽出します。リポジトリ画面では処理待ちジョブ数（`pendingOcrJobs`）も確認できます。
 
