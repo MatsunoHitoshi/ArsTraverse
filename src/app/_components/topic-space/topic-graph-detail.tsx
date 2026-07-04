@@ -20,7 +20,6 @@ import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { MultiDocumentGraphDetailViewer } from "../view/graph-view/multi-document-graph-detail-viewer";
 import { TopicSpaceDocumentListSection } from "./document-list-section";
-import { TopicSpaceDriveSyncPanel } from "./topic-space-drive-sync-panel";
 
 export const circlePosition = (
   index: number,
@@ -88,7 +87,7 @@ export const TopicGraphDetail = ({
   const searchParams = useSearchParams();
   const cutOff = searchParams.get("cut-off");
   const withBetweenNodes = searchParams.get("with-between-nodes");
-  const { data: topicSpace, refetch } = api.topicSpaces.getByIdPublic.useQuery(
+  const { data: topicSpace } = api.topicSpaces.getByIdPublic.useQuery(
     filterOption
       ? {
           id: id,
@@ -219,13 +218,6 @@ export const TopicGraphDetail = ({
                 <></>
               )}
             </div>
-
-            {session && (
-              <TopicSpaceDriveSyncPanel
-                topicSpaceId={id}
-                onSynced={() => void refetch()}
-              />
-            )}
 
             <TopicSpaceDocumentListSection
               documents={topicSpace.sourceDocuments as DocumentResponse[]}
