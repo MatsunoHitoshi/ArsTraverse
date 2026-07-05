@@ -27,13 +27,15 @@ export function attachNodePositionDrag({
   nodeMapRef,
   onPositionChange,
   enabled,
+  svgRef,
 }: {
   graphIdentifier: string;
   nodeMapRef: RefObject<Map<string, CustomNodeType>>;
   onPositionChange: () => void;
   enabled: boolean;
+  svgRef: RefObject<SVGSVGElement | null>;
 }): () => void {
-  if (!enabled) return () => undefined;
+  if (!enabled || !svgRef.current) return () => undefined;
 
   let dragNodeId: string | null = null;
   let rafId: number | null = null;
@@ -90,7 +92,9 @@ export function attachNodePositionDrag({
     schedulePositionChange();
   };
 
-  const selection = d3.selectAll<Element, unknown>(`.${graphIdentifier}-node`);
+  const selection = d3
+    .select(svgRef.current)
+    .selectAll<Element, unknown>(`.${graphIdentifier}-node`);
   selection.call(
     drag<Element, unknown>()
       .clickDistance(4)

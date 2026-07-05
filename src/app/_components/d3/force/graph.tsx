@@ -93,6 +93,15 @@ type GraphNodeCircleProps = {
   /** 親レンダー時点の座標（in-place 更新でも memo が検知できるよう graphNode とは別 props） */
   nodeX: number;
   nodeY: number;
+  /** in-place 更新される視覚属性も graphNode 参照ではなく個別 props で渡す */
+  nodeVisible: boolean;
+  isAddedInHistory: boolean;
+  isRemovedInHistory: boolean;
+  isMergeTarget: boolean;
+  isAdditional: boolean;
+  isExistingContext: boolean;
+  nodeColor?: string;
+  neighborLinkCount: number;
   isFocused: boolean;
   isSelected?: boolean;
   isPathNode: boolean;
@@ -120,19 +129,18 @@ function graphNodeCirclePropsAreEqual(
   prev: GraphNodeCircleProps,
   next: GraphNodeCircleProps,
 ): boolean {
-  const pn = prev.graphNode;
-  const nn = next.graphNode;
   return (
     prev.nodeX === next.nodeX &&
     prev.nodeY === next.nodeY &&
-    pn.visible === nn.visible &&
-    pn.isAddedInHistory === nn.isAddedInHistory &&
-    pn.isRemovedInHistory === nn.isRemovedInHistory &&
-    pn.isMergeTarget === nn.isMergeTarget &&
-    pn.isAdditional === nn.isAdditional &&
-    pn.isExistingContext === nn.isExistingContext &&
-    pn.nodeColor === nn.nodeColor &&
-    pn.name === nn.name &&
+    prev.nodeVisible === next.nodeVisible &&
+    prev.isAddedInHistory === next.isAddedInHistory &&
+    prev.isRemovedInHistory === next.isRemovedInHistory &&
+    prev.isMergeTarget === next.isMergeTarget &&
+    prev.isAdditional === next.isAdditional &&
+    prev.isExistingContext === next.isExistingContext &&
+    prev.nodeColor === next.nodeColor &&
+    prev.neighborLinkCount === next.neighborLinkCount &&
+    prev.graphNode.name === next.graphNode.name &&
     prev.isFocused === next.isFocused &&
     prev.isSelected === next.isSelected &&
     prev.isPathNode === next.isPathNode &&
@@ -157,6 +165,14 @@ const GraphNodeCircle = memo(function GraphNodeCircle({
   graphNode,
   nodeX,
   nodeY,
+  nodeVisible: _nodeVisible,
+  isAddedInHistory,
+  isRemovedInHistory,
+  isMergeTarget,
+  isAdditional,
+  isExistingContext,
+  nodeColor,
+  neighborLinkCount,
   isFocused,
   isSelected,
   isPathNode,
@@ -181,7 +197,7 @@ const GraphNodeCircle = memo(function GraphNodeCircle({
 
   const baseR =
     1.6 *
-    ((graphNode.neighborLinkCount ?? 0) * 0.1 + 3.6) *
+    (neighborLinkCount * 0.1 + 3.6) *
     (isNodeFiltered(graphNode, filterOption) ? 1 : 0.5) *
     nodeMagnification;
   const imageUrl = graphNode.properties?.imageUrl as string | undefined;
@@ -193,37 +209,35 @@ const GraphNodeCircle = memo(function GraphNodeCircle({
       ? "#ef7234"
       : isPathNode
         ? "#eae80c"
-        : graphNode.isAddedInHistory
+        : isAddedInHistory
           ? "#10b981"
-          : graphNode.isRemovedInHistory
+          : isRemovedInHistory
             ? "#ef4444"
-            : graphNode.isMergeTarget
+            : isMergeTarget
               ? "#10b981"
-              : graphNode.isAdditional
+              : isAdditional
                 ? "#8b9dc3"
                 : graphUnselected
                   ? "#324557"
-                  : isClustered && graphNode.nodeColor
-                    ? graphNode.nodeColor
+                  : isClustered && nodeColor
+                    ? nodeColor
                     : "whitesmoke";
   const opacity =
-    graphNode.isExistingContext
+    isExistingContext
       ? 0.3
       : isNodeFiltered(graphNode, filterOption)
         ? 0.9
         : 0.6;
   const stroke =
-    graphNode.isAddedInHistory
+    isAddedInHistory
       ? "#10b981"
-      : graphNode.isRemovedInHistory
+      : isRemovedInHistory
         ? "#ef4444"
-        : graphNode.isMergeTarget
+        : isMergeTarget
           ? "#10b981"
           : "#eae80c";
   const strokeWidth =
-    (graphNode.isAddedInHistory ??
-      graphNode.isRemovedInHistory ??
-      graphNode.isMergeTarget)
+    (isAddedInHistory ?? isRemovedInHistory ?? isMergeTarget)
       ? 2.5
       : queryFiltered
         ? 2.5
@@ -278,16 +292,16 @@ const GraphNodeCircle = memo(function GraphNodeCircle({
             stroke={fill}
             strokeWidth={strokeWidth || 1}
             data-node-id={graphNode.id}
-            data-is-added={graphNode.isAddedInHistory}
-            data-is-removed={graphNode.isRemovedInHistory}
+            data-is-added={isAddedInHistory}
+            data-is-removed={isRemovedInHistory}
           />
         </>
       ) : (
         <circle
           r={r}
           data-node-id={graphNode.id}
-          data-is-added={graphNode.isAddedInHistory}
-          data-is-removed={graphNode.isRemovedInHistory}
+          data-is-added={isAddedInHistory}
+          data-is-removed={isRemovedInHistory}
           fill={fill}
           opacity={opacity}
           stroke={stroke}
@@ -660,11 +674,13 @@ export const D3ForceGraph = ({
   const nodeCount = initNodes.length;
   const tickThrottleMs = nodeCount > 1000 ? 32 : nodeCount > 500 ? 24 : 16;
 
-  const simulationDataKey = useMemo(
-    () =>
-      `${initNodes.length}:${initLinks.length}:${isClustered}:${enableLiveSimulation}`,
-    [initNodes.length, initLinks.length, isClustered, enableLiveSimulation],
-  );
+  const simulationDataKey = useMemo(() => {
+    const nodeIdsSignature = initNodes
+      .map((n) => n.id)
+      .sort()
+      .join(",");
+    return `${nodeIdsSignature}:${initLinks.length}:${isClustered}:${enableLiveSimulation}`;
+  }, [initNodes, initLinks.length, isClustered, enableLiveSimulation]);
   const hasValidDimensions = width > 0 && height > 0;
 
   useEffect(() => {
@@ -988,6 +1004,7 @@ export const D3ForceGraph = ({
       nodeMapRef,
       onPositionChange: handleNodeDragPositionChange,
       enabled: true,
+      svgRef,
     });
 
     return cleanup;
@@ -998,6 +1015,7 @@ export const D3ForceGraph = ({
     graphIdentifier,
     graphNodes.length,
     handleNodeDragPositionChange,
+    svgRef,
   ]);
 
   return (
@@ -1355,6 +1373,14 @@ export const D3ForceGraph = ({
                       graphNode={graphNode}
                       nodeX={graphNode.x ?? 0}
                       nodeY={graphNode.y ?? 0}
+                      nodeVisible={graphNode.visible ?? false}
+                      isAddedInHistory={graphNode.isAddedInHistory ?? false}
+                      isRemovedInHistory={graphNode.isRemovedInHistory ?? false}
+                      isMergeTarget={graphNode.isMergeTarget ?? false}
+                      isAdditional={graphNode.isAdditional ?? false}
+                      isExistingContext={graphNode.isExistingContext ?? false}
+                      nodeColor={graphNode.nodeColor}
+                      neighborLinkCount={graphNode.neighborLinkCount ?? 0}
                       isFocused={visibility.isFocused}
                       isSelected={selectedNodeNames.has(graphNode.name)}
                       isPathNode={visibility.isPathNode}
@@ -1409,6 +1435,14 @@ export const D3ForceGraph = ({
                       graphNode={graphNode}
                       nodeX={graphNode.x ?? 0}
                       nodeY={graphNode.y ?? 0}
+                      nodeVisible={graphNode.visible ?? false}
+                      isAddedInHistory={graphNode.isAddedInHistory ?? false}
+                      isRemovedInHistory={graphNode.isRemovedInHistory ?? false}
+                      isMergeTarget={graphNode.isMergeTarget ?? false}
+                      isAdditional={graphNode.isAdditional ?? false}
+                      isExistingContext={graphNode.isExistingContext ?? false}
+                      nodeColor={graphNode.nodeColor}
+                      neighborLinkCount={graphNode.neighborLinkCount ?? 0}
                       isFocused={visibility.isFocused}
                       isSelected={selectedNodeNames.has(graphNode.name)}
                       isPathNode={visibility.isPathNode}
