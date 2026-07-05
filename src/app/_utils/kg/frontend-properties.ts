@@ -101,7 +101,7 @@ export const formTopicSpaceForFrontendPrivate = ({
         return {
           ...doc,
           graph: {
-            id: doc.graph.id,
+            ...doc.graph,
             dataJson: (doc.graph.dataJson ?? {
               nodes: [],
               relationships: [],
@@ -168,7 +168,7 @@ export const formTopicSpaceForFrontendPublic = (
         return {
           ...doc,
           graph: {
-            id: doc.graph.id,
+            ...doc.graph,
             dataJson: (doc.graph.dataJson ?? {
               nodes: [],
               relationships: [],
