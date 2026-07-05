@@ -12,6 +12,7 @@ import { usePathname } from "i18n/navigation";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { DirectedLinksToggleButton } from "./directed-links-toggle-button";
+import { LiveSimulationToggleButton } from "./live-simulation-toggle-button";
 
 export const GraphTool = ({
   svgRef,
@@ -28,6 +29,8 @@ export const GraphTool = ({
   setIsDirectedLinks,
   magnifierMode = 0,
   setMagnifierMode,
+  enableLiveSimulation = false,
+  setEnableLiveSimulation,
 }: {
   setIsGraphFullScreen?: React.Dispatch<React.SetStateAction<boolean>>;
   isGraphFullScreen?: boolean;
@@ -43,6 +46,8 @@ export const GraphTool = ({
   setIsDirectedLinks?: React.Dispatch<React.SetStateAction<boolean>>;
   magnifierMode?: number;
   setMagnifierMode?: React.Dispatch<React.SetStateAction<number>>;
+  enableLiveSimulation?: boolean;
+  setEnableLiveSimulation?: React.Dispatch<React.SetStateAction<boolean>>;
 }) => {
   const t = useTranslations("view");
   const searchParams = useSearchParams();
@@ -72,6 +77,15 @@ export const GraphTool = ({
           <DirectedLinksToggleButton
             isDirectedLinks={isDirectedLinks}
             setIsDirectedLinks={setIsDirectedLinks}
+          />
+        ) : (
+          <></>
+        )}
+        {!!setEnableLiveSimulation ? (
+          <LiveSimulationToggleButton
+            enableLiveSimulation={enableLiveSimulation}
+            setEnableLiveSimulation={setEnableLiveSimulation}
+            title={t("liveSimulation")}
           />
         ) : (
           <></>

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 
 export const ContainerSizeProvider = ({
   children,
@@ -14,25 +14,29 @@ export const ContainerSizeProvider = ({
   setContainerWidth?: React.Dispatch<React.SetStateAction<number>>;
   setContainerHeight?: React.Dispatch<React.SetStateAction<number>>;
 }) => {
-  useEffect(() => {
-    const updateWidth = () => {
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
+  useLayoutEffect(() => {
+    const updateSize = () => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      if (rect.width > 0) {
         setContainerWidth?.(rect.width);
+      }
+      if (rect.height > 0) {
         setContainerHeight?.(rect.height);
       }
     };
 
-    updateWidth();
-    const resizeObserver = new ResizeObserver(updateWidth);
-    if (containerRef.current) {
-      resizeObserver.observe(containerRef.current);
+    updateSize();
+    const resizeObserver = new ResizeObserver(updateSize);
+    const element = containerRef.current;
+    if (element) {
+      resizeObserver.observe(element);
     }
 
     return () => {
       resizeObserver.disconnect();
     };
-  }, []);
+  }, [containerRef, setContainerWidth, setContainerHeight]);
 
   return (
     <div className={className} ref={containerRef}>

@@ -491,6 +491,7 @@
     "noReferencesFound": "「{name}」に関する引用箇所が見つかりませんでした。",
     "mentionedInDocuments": "{count}個のドキュメントで言及されています",
     "filterByTag": "タグで絞り込む",
+    "liveSimulation": "ライブレイアウト（常時シミュレーション）",
     "partialGraphDisplay": "ノード数が多いため一部のみが表示されています",
     "showAll": "全て表示",
     "referenceLabel": "参照：",

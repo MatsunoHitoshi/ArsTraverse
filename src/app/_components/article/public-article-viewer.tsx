@@ -310,8 +310,7 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
                           className="h-full w-full"
                           height={graphSize.height}
                           width={graphSize.width}
-                          setFocusedNode={setActiveEntity}
-                          focusedNode={activeEntity}
+                          onSelectNode={setActiveEntity}
                           onClose={() => updateActiveEntity(undefined)}
                         />
                       ) : (
@@ -435,8 +434,7 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
                       className="h-full w-full"
                       height={graphSize.height}
                       width={graphSize.width}
-                      setFocusedNode={setActiveEntity}
-                      focusedNode={activeEntity}
+                      onSelectNode={setActiveEntity}
                       onClose={() => updateActiveEntity(undefined)}
                     />
                   ) : (
