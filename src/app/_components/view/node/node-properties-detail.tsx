@@ -6,7 +6,7 @@ import Image from "next/image";
 import { usePathname, useRouter } from "i18n/navigation";
 import { useTranslations } from "next-intl";
 import { api } from "@/trpc/react";
-import { useEffect, useState } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { Loading } from "../../loading/loading";
 import { PropertiesDetailPanel } from "../../d3/force/graph-info-panel";
 import { NodePropertiesForm } from "../../form/node-properties-form";
@@ -39,13 +39,19 @@ export const NodePropertiesDetail = ({
 
   const [onEdit, setOnEdit] = useState<boolean>(false);
   const [isGraphEditorMode, setIsGraphEditorMode] = useState<boolean>(false);
-  const [focusedNode, setFocusedNode] = useState<CustomNodeType | undefined>(
-    undefined,
-  );
+  const [, startTransition] = useTransition();
 
-  useEffect(() => {
-    router.push(`${pathname}?list=true&nodeId=${focusedNode?.id}`);
-  }, [focusedNode]);
+  const navigateToNode = useCallback(
+    (targetNode: CustomNodeType) => {
+      if (targetNode.id === node?.id) return;
+      startTransition(() => {
+        router.replace(`${pathname}?list=true&nodeId=${targetNode.id}`, {
+          scroll: false,
+        });
+      });
+    },
+    [node?.id, pathname, router, startTransition],
+  );
 
   if (!node) {
     return null;
@@ -121,8 +127,7 @@ export const NodePropertiesDetail = ({
                 node={node}
                 contextId={contextId}
                 contextType={contextType}
-                setFocusedNode={setFocusedNode}
-                focusedNode={focusedNode}
+                onSelectNode={navigateToNode}
                 className="flex w-full flex-col gap-1 rounded-md border border-gray-600"
               />
               {contextType === "topicSpace" && (
@@ -194,7 +199,11 @@ export const NodePropertiesDetail = ({
                 <NodeAnnotationSection
                   node={node}
                   topicSpaceId={contextType === "topicSpace" ? contextId : ""}
-                  setFocusedNode={setFocusedNode}
+                  setFocusedNode={(target) => {
+                    const resolved =
+                      typeof target === "function" ? target(node) : target;
+                    if (resolved) navigateToNode(resolved);
+                  }}
                   setIsGraphEditor={setIsGraphEditorMode}
                   onGraphUpdate={onGraphUpdate}
                 />

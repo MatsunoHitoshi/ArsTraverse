@@ -100,6 +100,7 @@ export const MultiDocumentGraphEditor = ({
     (2 * (innerWidth ?? 100)) / (isGraphFullScreen ? 2 : 3) - 22;
   const graphAreaHeight = (innerHeight ?? 300) - 128;
   const [isDirectedLinks, setIsDirectedLinks] = useState(false);
+  const [enableLiveSimulation, setEnableLiveSimulation] = useState(false);
 
   const searchParams = useSearchParams();
   const isList = searchParams.get("list") === "true";
@@ -204,6 +205,7 @@ export const MultiDocumentGraphEditor = ({
                 isLinkFiltered={isLinkFiltered}
                 nodeSearchQuery={nodeSearchQuery}
                 isDirectedLinks={isDirectedLinks}
+                enableLiveSimulation={enableLiveSimulation}
                 onGraphUpdate={isEditor ? onGraphUpdate : undefined}
                 onNodeContextMenu={isEditor ? onNodeContextMenu : undefined}
                 onLinkContextMenu={isEditor ? onLinkContextMenu : undefined}
@@ -223,6 +225,8 @@ export const MultiDocumentGraphEditor = ({
                       setIsGraphFullScreen={setIsGraphFullScreen}
                       isDirectedLinks={isDirectedLinks}
                       setIsDirectedLinks={setIsDirectedLinks}
+                      enableLiveSimulation={enableLiveSimulation}
+                      setEnableLiveSimulation={setEnableLiveSimulation}
                       magnifierMode={magnifierMode}
                       setMagnifierMode={setMagnifierMode}
                     />

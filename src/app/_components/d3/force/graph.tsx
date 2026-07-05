@@ -10,6 +10,7 @@ import {
   forceX,
   forceY,
   forceCollide,
+  type ForceLink,
 } from "d3";
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 import { useTranslations } from "next-intl";
@@ -19,9 +20,9 @@ import {
   dragEditorExtension,
   type DragState,
 } from "../extension/drag-editor-extension";
+import { attachNodePositionDrag } from "../extension/node-position-drag-extension";
 
 import type { CustomNodeType, CustomLinkType } from "@/app/const/types";
-import { getNodeByIdForFrontend } from "@/app/_utils/kg/filter";
 import { MagnifierLens } from "../magnifier/magnifier-lens";
 import { getMaxEdgeLabelFontSizeByLength } from "@/app/_utils/graph-label-utils";
 import { useEdgeSemanticAnimation } from "./storytelling-graph/hooks/use-edge-semantic-animation";
@@ -50,6 +51,30 @@ function getNodePairKey(link: CustomLinkType): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
 
+function getLinkEndpointIds(link: CustomLinkType): {
+  sourceId: string;
+  targetId: string;
+} {
+  const sourceId =
+    typeof link.source === "object" && link.source !== null && "id" in link.source
+      ? link.source.id
+      : link.sourceId;
+  const targetId =
+    typeof link.target === "object" && link.target !== null && "id" in link.target
+      ? link.target.id
+      : link.targetId;
+  return { sourceId, targetId };
+}
+
+function getVisibleByScaling(currentScale: number): number {
+  if (currentScale > 4) return 0;
+  if (currentScale > 3) return 0;
+  if (currentScale > 2) return 4;
+  if (currentScale > 1) return 6;
+  if (currentScale > 0.9) return 8;
+  return 10;
+}
+
 const isNodeFiltered = (
   node: CustomNodeType,
   filterOption?: TopicGraphFilterOption,
@@ -63,30 +88,11 @@ const isNodeFiltered = (
   }
 };
 
-// ノード描画用のコンポーネント（メモ化）
-const GraphNodeCircle = memo(function GraphNodeCircle({
-  graphNode,
-  isFocused,
-  isSelected,
-  isPathNode,
-  graphUnselected,
-  queryFiltered,
-  nodeMagnification,
-  isDragEditorTarget,
-  filterOption,
-  currentScale,
-  isGraphFullScreen,
-  isClustered,
-  focusedNode,
-  setFocusedNode,
-  onNodeContextMenu,
-  graphIdentifier,
-  nodeRef,
-  isSelectionMode,
-  onNodeSelectionToggle,
-  pairTransform,
-}: {
+type GraphNodeCircleProps = {
   graphNode: CustomNodeType;
+  /** 親レンダー時点の座標（in-place 更新でも memo が検知できるよう graphNode とは別 props） */
+  nodeX: number;
+  nodeY: number;
   isFocused: boolean;
   isSelected?: boolean;
   isPathNode: boolean;
@@ -108,7 +114,69 @@ const GraphNodeCircle = memo(function GraphNodeCircle({
   isSelectionMode?: boolean;
   onNodeSelectionToggle?: (node: CustomNodeType) => void;
   pairTransform?: NodePairTransform | null;
-}) {
+};
+
+function graphNodeCirclePropsAreEqual(
+  prev: GraphNodeCircleProps,
+  next: GraphNodeCircleProps,
+): boolean {
+  const pn = prev.graphNode;
+  const nn = next.graphNode;
+  return (
+    prev.nodeX === next.nodeX &&
+    prev.nodeY === next.nodeY &&
+    pn.visible === nn.visible &&
+    pn.isAddedInHistory === nn.isAddedInHistory &&
+    pn.isRemovedInHistory === nn.isRemovedInHistory &&
+    pn.isMergeTarget === nn.isMergeTarget &&
+    pn.isAdditional === nn.isAdditional &&
+    pn.isExistingContext === nn.isExistingContext &&
+    pn.nodeColor === nn.nodeColor &&
+    pn.name === nn.name &&
+    prev.isFocused === next.isFocused &&
+    prev.isSelected === next.isSelected &&
+    prev.isPathNode === next.isPathNode &&
+    prev.graphUnselected === next.graphUnselected &&
+    prev.queryFiltered === next.queryFiltered &&
+    prev.nodeMagnification === next.nodeMagnification &&
+    prev.isDragEditorTarget === next.isDragEditorTarget &&
+    prev.currentScale === next.currentScale &&
+    prev.isGraphFullScreen === next.isGraphFullScreen &&
+    prev.isClustered === next.isClustered &&
+    prev.focusedNode?.id === next.focusedNode?.id &&
+    prev.isSelectionMode === next.isSelectionMode &&
+    prev.filterOption === next.filterOption &&
+    prev.pairTransform?.dx === next.pairTransform?.dx &&
+    prev.pairTransform?.dy === next.pairTransform?.dy &&
+    prev.pairTransform?.scale === next.pairTransform?.scale
+  );
+}
+
+// ノード描画用のコンポーネント（メモ化）
+const GraphNodeCircle = memo(function GraphNodeCircle({
+  graphNode,
+  nodeX,
+  nodeY,
+  isFocused,
+  isSelected,
+  isPathNode,
+  graphUnselected,
+  queryFiltered,
+  nodeMagnification,
+  isDragEditorTarget,
+  filterOption,
+  currentScale,
+  isGraphFullScreen,
+  isClustered,
+  focusedNode,
+  setFocusedNode,
+  onNodeContextMenu,
+  graphIdentifier,
+  nodeRef,
+  isSelectionMode,
+  onNodeSelectionToggle,
+  pairTransform,
+}: GraphNodeCircleProps) {
   const [imageFailed, setImageFailed] = useState(false);
 
   const baseR =
@@ -168,7 +236,7 @@ const GraphNodeCircle = memo(function GraphNodeCircle({
       key={graphNode.id}
       ref={nodeRef}
       className={`${graphIdentifier}-node cursor-pointer`}
-      transform={`translate(${(graphNode.x ?? 0) + (pairTransform?.dx ?? 0) * pairLayoutScale}, ${(graphNode.y ?? 0) + (pairTransform?.dy ?? 0) * pairLayoutScale})`}
+      transform={`translate(${nodeX + (pairTransform?.dx ?? 0) * pairLayoutScale}, ${nodeY + (pairTransform?.dy ?? 0) * pairLayoutScale})`}
       onClick={() => {
         if (isSelectionMode) {
           onNodeSelectionToggle?.(graphNode);
@@ -255,15 +323,15 @@ const GraphNodeCircle = memo(function GraphNodeCircle({
       </g>
     </g>
   );
-});
+}, graphNodeCirclePropsAreEqual);
 
 const linkFilter = (nodes: CustomNodeType[], links: CustomLinkType[]) => {
-  const filteredNodes = nodes.filter((node) => {
-    return links.find((link) => {
-      return link.sourceId === node.id || link.targetId === node.id;
-    });
-  });
-  return filteredNodes;
+  const connectedIds = new Set<string>();
+  for (const link of links) {
+    connectedIds.add(link.sourceId);
+    connectedIds.add(link.targetId);
+  }
+  return nodes.filter((node) => connectedIds.has(node.id));
 };
 
 // const circlePosition = (index: number, length: number, type: "sin" | "cos") => {
@@ -309,6 +377,8 @@ export const D3ForceGraph = ({
   highlightData,
   showEdgeSemanticAnimation = false,
   topicSpaceId,
+  enableLiveSimulation = false,
+  enableNodeDrag,
 }: {
   svgRef: React.RefObject<SVGSVGElement>;
   height: number;
@@ -353,27 +423,27 @@ export const D3ForceGraph = ({
   showEdgeSemanticAnimation?: boolean;
   /** エッジ分類キャッシュに使用する TopicSpace ID */
   topicSpaceId?: string;
+  /** true: 従来どおり force シミュレーションを常時稼働。false（デフォルト）: 収束後に固定配置 */
+  enableLiveSimulation?: boolean;
+  /** 固定配置時にノードをドラッグで移動可能にする（デフォルト: !enableLiveSimulation && !isEditor） */
+  enableNodeDrag?: boolean;
 }) => {
   const t = useTranslations("graph");
+  const nodeDragEnabled = enableNodeDrag ?? (!enableLiveSimulation && !isEditor);
   const { nodes, relationships } = graphDocument;
   const initLinks = relationships as CustomLinkType[];
   const initNodes = isLinkFiltered ? linkFilter(nodes, initLinks) : nodes;
 
   // ハイライト情報は後で適用するため、initNodesとnewLinksはhighlightDataに依存しない
   const newLinks = useMemo(() => {
+    const nodeById = new Map(initNodes.map((node) => [node.id, node]));
     return initLinks.map((d) => {
-      const source = getNodeByIdForFrontend(
-        d.sourceId,
-        initNodes,
-      ) as CustomNodeType;
-      const target = getNodeByIdForFrontend(
-        d.targetId,
-        initNodes,
-      ) as CustomNodeType;
+      const source = nodeById.get(d.sourceId) as CustomNodeType;
+      const target = nodeById.get(d.targetId) as CustomNodeType;
       return {
         ...d,
-        source: source,
-        target: target,
+        source,
+        target,
       };
     });
   }, [initLinks, initNodes]);
@@ -411,43 +481,51 @@ export const D3ForceGraph = ({
   useEffect(() => {
     if (!highlightData) {
       // highlightDataがない場合は、プロパティをクリア
-      setGraphNodes((prevNodes) =>
-        prevNodes.map((node) => ({
-          ...node,
-          isAddedInHistory: false,
-          isRemovedInHistory: false,
-        })),
-      );
-      setGraphLinks((prevLinks) =>
-        prevLinks.map((link) => ({
-          ...link,
-          isAddedInHistory: false,
-          isRemovedInHistory: false,
-        })),
-      );
+      setGraphNodes((prevNodes) => {
+        prevNodes.forEach((node) => {
+          node.isAddedInHistory = false;
+          node.isRemovedInHistory = false;
+        });
+        return [...prevNodes];
+      });
+      setGraphLinks((prevLinks) => {
+        prevLinks.forEach((link) => {
+          link.isAddedInHistory = false;
+          link.isRemovedInHistory = false;
+        });
+        return [...prevLinks];
+      });
       return;
     }
 
-    // 既存のノードとリンクのプロパティのみを更新
-    setGraphNodes((prevNodes) =>
-      prevNodes.map((node) => ({
-        ...node,
-        isAddedInHistory: highlightData.addedNodeIds.has(node.id),
-        isRemovedInHistory: highlightData.removedNodeIds.has(node.id),
-      })),
-    );
+    // 既存のノードとリンクのプロパティのみを更新（参照は維持してリンク位置を同期）
+    setGraphNodes((prevNodes) => {
+      prevNodes.forEach((node) => {
+        node.isAddedInHistory = highlightData.addedNodeIds.has(node.id);
+        node.isRemovedInHistory = highlightData.removedNodeIds.has(node.id);
+      });
+      return [...prevNodes];
+    });
 
-    setGraphLinks((prevLinks) =>
-      prevLinks.map((link) => ({
-        ...link,
-        isAddedInHistory: highlightData.addedLinkIds.has(link.id),
-        isRemovedInHistory: highlightData.removedLinkIds.has(link.id),
-      })),
-    );
+    setGraphLinks((prevLinks) => {
+      prevLinks.forEach((link) => {
+        link.isAddedInHistory = highlightData.addedLinkIds.has(link.id);
+        link.isRemovedInHistory = highlightData.removedLinkIds.has(link.id);
+      });
+      return [...prevLinks];
+    });
   }, [highlightData]);
 
   const [nodesInMagnifier, setNodesInMagnifier] = useState<string[]>([]);
   const [linksInMagnifier, setLinksInMagnifier] = useState<string[]>([]);
+  const nodesInMagnifierSet = useMemo(
+    () => new Set(nodesInMagnifier),
+    [nodesInMagnifier],
+  );
+  const linksInMagnifierSet = useMemo(
+    () => new Set(linksInMagnifier),
+    [linksInMagnifier],
+  );
   /** クリックでラベルを垂直展開したノード対キー（null で閉じる） */
   const [expandedEdgePairKey, setExpandedEdgePairKey] = useState<string | null>(
     null,
@@ -522,7 +600,7 @@ export const D3ForceGraph = ({
         !!nodeSearchQuery &&
         nodeSearchQuery !== "" &&
         graphNode.name.toLowerCase().includes(nodeSearchQuery.toLowerCase());
-      const isInMagnifier = nodesInMagnifier.includes(graphNode.id);
+      const isInMagnifier = nodesInMagnifierSet.has(graphNode.id);
       const nodeMagnification = isInMagnifier
         ? (nodeMagnifications.get(graphNode.id) ?? 1)
         : 1;
@@ -540,7 +618,7 @@ export const D3ForceGraph = ({
     focusedNode,
     pathNodeIds,
     nodeSearchQuery,
-    nodesInMagnifier,
+    nodesInMagnifierSet,
     nodeMagnifications,
   ]);
 
@@ -548,14 +626,14 @@ export const D3ForceGraph = ({
   const linkMagnificationMap = useMemo(() => {
     const map = new Map<string, number>();
     graphLinks.forEach((link) => {
-      const isInMagnifier = linksInMagnifier.includes(link.id);
+      const isInMagnifier = linksInMagnifierSet.has(link.id);
       map.set(
         link.id,
         isInMagnifier ? (linkMagnifications.get(link.id) ?? 1) : 1,
       );
     });
     return map;
-  }, [graphLinks, linksInMagnifier, linkMagnifications]);
+  }, [graphLinks, linksInMagnifierSet, linkMagnifications]);
 
   /** 同一ノード対ごとのエッジグループ（代表ラベル＋クリック展開用） */
   const linksByNodePair = useMemo(() => {
@@ -571,15 +649,39 @@ export const D3ForceGraph = ({
   // アニメーションフレームのスロットリング用
   const animationFrameRef = useRef<number | null>(null);
   const lastUpdateTimeRef = useRef<number>(0);
-  const THROTTLE_MS = 16; // 約60fps
+  const simulationRef = useRef<ReturnType<
+    typeof forceSimulation<CustomNodeType, CustomLinkType>
+  > | null>(null);
+  const layoutSettledRef = useRef(false);
+  const simulationDataKeyRef = useRef("");
+  const layoutDimensionsRef = useRef({ width: 0, height: 0 });
+  const initNodesMapRef = useRef<Map<string, CustomNodeType>>(new Map());
+  const [isLayoutSettled, setIsLayoutSettled] = useState(false);
+  const nodeCount = initNodes.length;
+  const tickThrottleMs = nodeCount > 1000 ? 32 : nodeCount > 500 ? 24 : 16;
+
+  const simulationDataKey = useMemo(
+    () =>
+      `${initNodes.length}:${initLinks.length}:${isClustered}:${enableLiveSimulation}`,
+    [initNodes.length, initLinks.length, isClustered, enableLiveSimulation],
+  );
+  const hasValidDimensions = width > 0 && height > 0;
+
+  useEffect(() => {
+    initNodesMapRef.current = new Map(initNodes.map((node) => [node.id, node]));
+  }, [initNodes]);
 
   // graphNodesとgraphLinksの最新の状態をrefで保持して、updateGraph内で参照できるようにする
   const graphNodesRef = useRef<CustomNodeType[]>(graphNodes);
   const graphLinksRef = useRef<CustomLinkType[]>(graphLinks);
+  const nodeMapRef = useRef<Map<string, CustomNodeType>>(new Map());
 
   // graphNodesとgraphLinksが変更されたらrefを更新
   useEffect(() => {
     graphNodesRef.current = graphNodes;
+    const map = new Map<string, CustomNodeType>();
+    graphNodes.forEach((node) => map.set(node.id, node));
+    nodeMapRef.current = map;
   }, [graphNodes]);
 
   useEffect(() => {
@@ -621,13 +723,42 @@ export const D3ForceGraph = ({
   const magnifierRadius =
     magnifierMode === 1 ? 150 : magnifierMode === 2 ? 250 : 0;
 
+  // ズーム変更時はノード可視性のみ更新（シミュレーションは再起動しない）
+  useEffect(() => {
+    const visibleByScaling = getVisibleByScaling(currentScale);
+    setGraphNodes((prev) => {
+      let changed = false;
+      prev.forEach((node) => {
+        const nextVisible =
+          isGraphFullScreen ||
+          !(isLargeGraph && (node.neighborLinkCount ?? 0) <= visibleByScaling);
+        if (node.visible !== nextVisible) {
+          node.visible = nextVisible;
+          changed = true;
+        }
+      });
+      return changed ? [...prev] : prev;
+    });
+  }, [currentScale, isGraphFullScreen, isLargeGraph]);
+
   useEffect(() => {
     // width/heightが無効な値の場合はシミュレーションを初期化しない
     if (width <= 0 || height <= 0 || !initNodes.length || !newLinks.length) {
       return;
     }
 
-    // リセット
+    // レイアウト確定済みかつグラフデータ不変なら再シミュレーションしない（サイズ変更は別 effect で平行移動）
+    if (
+      layoutSettledRef.current &&
+      simulationDataKeyRef.current === simulationDataKey &&
+      !enableLiveSimulation
+    ) {
+      return;
+    }
+
+    simulationDataKeyRef.current = simulationDataKey;
+    layoutSettledRef.current = false;
+    setIsLayoutSettled(false);
     lastUpdateTimeRef.current = 0;
     if (animationFrameRef.current !== null) {
       cancelAnimationFrame(animationFrameRef.current);
@@ -636,6 +767,13 @@ export const D3ForceGraph = ({
 
     const centerX = width / 2;
     const centerY = height / 2;
+
+    for (const node of initNodes) {
+      const simNode = node as CustomNodeType;
+      simNode.fx = null;
+      simNode.fy = null;
+    }
+
     const simulation = forceSimulation<CustomNodeType, CustomLinkType>(
       initNodes,
     )
@@ -650,13 +788,18 @@ export const D3ForceGraph = ({
           )
           .strength((d) => 0.125 / (distance(d) * distance(d) || 1)),
       )
-      .force("center", forceCenter(centerX, centerY))
-      .force("charge", forceManyBody().strength(-40))
+      .force("center", forceCenter(centerX, centerY));
+    const chargeForce = forceManyBody().strength(-40);
+    if (nodeCount > 500) {
+      chargeForce.distanceMax(400);
+    }
+    simulation
+      .force("charge", chargeForce)
       .force(
         "x",
         forceX().x(function (d) {
           const nodeData = d as CustomNodeType;
-          const node = nodeMap.get(nodeData.id);
+          const node = initNodesMapRef.current.get(nodeData.id);
           return (
             centerX + (isClustered && node?.clustered?.x ? node.clustered.x : 0)
           );
@@ -666,7 +809,7 @@ export const D3ForceGraph = ({
         "y",
         forceY().y(function (d) {
           const nodeData = d as CustomNodeType;
-          const node = nodeMap.get(nodeData.id);
+          const node = initNodesMapRef.current.get(nodeData.id);
           return (
             centerY + (isClustered && node?.clustered?.y ? node.clustered.y : 0)
           );
@@ -674,122 +817,85 @@ export const D3ForceGraph = ({
       )
       .force("collision", forceCollide(1));
 
-    simulation.alpha(0.5);
-    simulation.alphaDecay(0.0228); // より遅い減衰で、シミュレーションを継続させる
-    simulation.alphaMin(0.001); // 最小alpha値を設定して、シミュレーションが終了しないようにする
-    simulation.alphaTarget(0); // 目標alpha値は0（通常通り）
+    setGraphLinks(newLinks);
 
-    // requestAnimationFrameでスロットリングしてsetStateを最適化
-    // graphNodesRefとgraphLinksRefは既にトップレベルで定義されているので、ここでは使用するだけ
+    simulationRef.current = simulation;
+    simulation.alpha(0.5);
+
+    if (enableLiveSimulation) {
+      simulation.alphaDecay(0.0228);
+      simulation.alphaMin(0.001);
+    } else {
+      simulation.alphaDecay(nodeCount > 1000 ? 0.08 : nodeCount > 500 ? 0.05 : 0.028);
+      simulation.alphaMin(0.01);
+    }
+    simulation.alphaTarget(0);
+
+    const visibleByScaling = getVisibleByScaling(currentScale);
+
+    const syncNodeVisualProps = (node: CustomNodeType) => {
+      const currentGraphNode = graphNodesRef.current.find((n) => n.id === node.id);
+      if (!currentGraphNode) return;
+      node.isAddedInHistory = currentGraphNode.isAddedInHistory;
+      node.isRemovedInHistory = currentGraphNode.isRemovedInHistory;
+      node.isAdditional = currentGraphNode.isAdditional;
+      node.isExistingContext = currentGraphNode.isExistingContext;
+      node.isMergeTarget = currentGraphNode.isMergeTarget;
+      node.nodeColor = currentGraphNode.nodeColor;
+    };
 
     const updateGraph = () => {
-      // シミュレーションの最新のノードデータを取得
       const currentNodes = simulation.nodes();
       const updateTime = performance.now();
 
-      const visibleByScaling =
-        currentScale > 4
-          ? 0
-          : currentScale > 3
-            ? 0
-            : currentScale > 2
-              ? 4
-              : currentScale > 1
-                ? 6
-                : currentScale > 0.9
-                  ? 8
-                  : 10;
-
-      // graphNodesの最新の状態からプロパティを取得するためのMapを作成
-      const currentGraphNodesMap = new Map<string, CustomNodeType>();
-      graphNodesRef.current.forEach((node) =>
-        currentGraphNodesMap.set(node.id, node),
-      );
-
-      // シミュレーションで更新された位置情報（x, y, vx, vy, fx, fy）と
-      // 最新のノードのプロパティ（nodeColor, isAdditional, isAddedInHistoryなど）をマージ
-      const updatedNodes = currentNodes.map((node) => {
-        const currentGraphNode = currentGraphNodesMap.get(node.id);
-        const nodeVisible =
+      for (const node of currentNodes) {
+        syncNodeVisualProps(node);
+        node.visible =
           isGraphFullScreen ||
           !(isLargeGraph && (node.neighborLinkCount ?? 0) <= visibleByScaling);
+      }
 
-        // currentGraphNodeが存在する場合は最新のプロパティを保持し、存在しない場合はnodeをそのまま使用
-        return {
-          ...(currentGraphNode ?? node), // 最新のノードのプロパティ（nodeColor, isAdditional, isAddedInHistoryなど）を保持
-          ...node, // シミュレーションで更新された位置情報（x, y, vx, vy, fx, fy）を上書き
-          visible: nodeVisible,
-        };
-      });
-
-      setGraphNodes(updatedNodes);
-      // リンクはソースとターゲットへの参照なので、ノードが更新されれば自動的に更新される
-      // シミュレーションの最新のリンクを取得（sourceとtargetが最新のノード位置を参照）
-      // currentNodesからノードのMapを作成して、リンクのsourceとtargetを更新
-      const nodeMapForLinks = new Map<string, CustomNodeType>();
-      updatedNodes.forEach((node) => nodeMapForLinks.set(node.id, node));
-
-      // graphLinksの最新の状態からプロパティを取得するためのMapを作成
-      const currentGraphLinksMap = new Map<string, CustomLinkType>();
-      graphLinksRef.current.forEach((link) =>
-        currentGraphLinksMap.set(link.id, link),
-      );
-
-      // newLinksのsourceとtargetを最新のノードに更新し、最新のプロパティを保持
-      const updatedLinks = newLinks.map((link) => {
-        // link.sourceとlink.targetはCustomNodeType型なので、直接idにアクセス可能
-        const sourceId =
-          typeof link.source === "object" &&
-            link.source !== null &&
-            "id" in link.source
-            ? link.source.id
-            : link.sourceId;
-        const targetId =
-          typeof link.target === "object" &&
-            link.target !== null &&
-            "id" in link.target
-            ? link.target.id
-            : link.targetId;
-        const sourceNode = nodeMapForLinks.get(sourceId);
-        const targetNode = nodeMapForLinks.get(targetId);
-
-        if (sourceNode && targetNode) {
-          const currentGraphLink = currentGraphLinksMap.get(link.id);
-          return {
-            ...(currentGraphLink ?? link), // 最新のリンクのプロパティ（isAddedInHistoryなど）を保持
-            ...link, // 元のリンクのプロパティ
-            source: sourceNode,
-            target: targetNode,
-          };
-        }
-        return link;
-      });
-
-      // Reactの再レンダリングのために新しい配列を作成
-      setGraphLinks(updatedLinks);
+      setGraphNodes([...currentNodes]);
       lastUpdateTimeRef.current = updateTime;
+    };
+
+    const settleLayout = () => {
+      const currentNodes = simulation.nodes();
+      for (const node of currentNodes) {
+        syncNodeVisualProps(node);
+        node.visible =
+          isGraphFullScreen ||
+          !(isLargeGraph && (node.neighborLinkCount ?? 0) <= visibleByScaling);
+        if (node.x != null && node.y != null) {
+          node.fx = node.x;
+          node.fy = node.y;
+        }
+      }
+      setGraphNodes([...currentNodes]);
+      const linkForce = simulation.force("link")!;
+      setGraphLinks([...(linkForce as ForceLink<CustomNodeType, CustomLinkType>).links()]);
+      layoutSettledRef.current = true;
+      layoutDimensionsRef.current = { width, height };
+      setIsLayoutSettled(true);
+      simulation.stop();
     };
 
     simulation.on("tick", () => {
       const now = performance.now();
       const timeSinceLastUpdate = now - lastUpdateTimeRef.current;
 
-      // 最後の更新から一定時間経過している場合、またはまだ更新されていない場合
       if (
-        timeSinceLastUpdate >= THROTTLE_MS ||
+        timeSinceLastUpdate >= tickThrottleMs ||
         lastUpdateTimeRef.current === 0
       ) {
-        // 既存のアニメーションフレームをキャンセル（最新の状態を反映するため）
         if (animationFrameRef.current !== null) {
           cancelAnimationFrame(animationFrameRef.current);
         }
-        // 新しいアニメーションフレームをスケジュール
         animationFrameRef.current = requestAnimationFrame(() => {
           animationFrameRef.current = null;
           updateGraph();
         });
       } else if (animationFrameRef.current === null) {
-        // まだアニメーションフレームがスケジュールされていない場合
         animationFrameRef.current = requestAnimationFrame(() => {
           animationFrameRef.current = null;
           updateGraph();
@@ -798,12 +904,14 @@ export const D3ForceGraph = ({
     });
 
     simulation.on("end", () => {
-      // シミュレーションが終了した場合、再度開始する（alpha値をリセット）
-      // ただし、alphaが非常に小さい場合のみ（通常の終了）
-      if (simulation.alpha() < simulation.alphaMin()) {
-        simulation.alpha(0.3); // 小さなalpha値で再開
-        simulation.restart(); // シミュレーションを再開
+      if (enableLiveSimulation) {
+        if (simulation.alpha() < simulation.alphaMin()) {
+          simulation.alpha(0.3);
+          simulation.restart();
+        }
+        return;
       }
+      settleLayout();
     });
 
     if (isEditor && !!onGraphUpdate && !!dragState) {
@@ -826,20 +934,70 @@ export const D3ForceGraph = ({
         animationFrameRef.current = null;
       }
       simulation.stop();
+      simulationRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    simulationDataKey,
     newLinks,
     initNodes,
-    width,
-    height,
-    initLinks,
-    currentScale,
-    nodes.length,
-    isClustered,
+    hasValidDimensions,
     isGraphFullScreen,
     isLargeGraph,
-    nodeMap,
+    enableLiveSimulation,
+    nodeCount,
+    tickThrottleMs,
+  ]);
+
+  // レイアウト確定後のサイズ変更は再シミュレーションせず、中心に合わせて平行移動
+  useEffect(() => {
+    if (!layoutSettledRef.current || width <= 0 || height <= 0) return;
+
+    const prev = layoutDimensionsRef.current;
+    if (prev.width <= 0 || prev.height <= 0) {
+      layoutDimensionsRef.current = { width, height };
+      return;
+    }
+    if (prev.width === width && prev.height === height) return;
+
+    const dx = width / 2 - prev.width / 2;
+    const dy = height / 2 - prev.height / 2;
+    layoutDimensionsRef.current = { width, height };
+    if (dx === 0 && dy === 0) return;
+
+    setGraphNodes((prevNodes) => {
+      prevNodes.forEach((node) => {
+        if (node.x != null) node.x += dx;
+        if (node.y != null) node.y += dy;
+        if (node.fx != null) node.fx += dx;
+        if (node.fy != null) node.fy += dy;
+      });
+      return [...prevNodes];
+    });
+  }, [width, height]);
+
+  const handleNodeDragPositionChange = useCallback(() => {
+    setGraphNodes((prev) => [...prev]);
+  }, []);
+
+  useEffect(() => {
+    if (!nodeDragEnabled || !isLayoutSettled || isEditor) return;
+
+    const cleanup = attachNodePositionDrag({
+      graphIdentifier,
+      nodeMapRef,
+      onPositionChange: handleNodeDragPositionChange,
+      enabled: true,
+    });
+
+    return cleanup;
+  }, [
+    nodeDragEnabled,
+    isLayoutSettled,
+    isEditor,
+    graphIdentifier,
+    graphNodes.length,
+    handleNodeDragPositionChange,
   ]);
 
   return (
@@ -874,16 +1032,25 @@ export const D3ForceGraph = ({
                 </defs>
               )}
               {graphLinks.map((graphLink, linkIndex) => {
-                const { source, target, type } = graphLink;
-                const modSource = source as CustomNodeType;
-                const modTarget = target as CustomNodeType;
+                const { sourceId, targetId } = getLinkEndpointIds(graphLink);
+                const { type } = graphLink;
+                const sourceNode = nodeMap.get(sourceId);
+                const targetNode = nodeMap.get(targetId);
+                if (
+                  !sourceNode ||
+                  !targetNode ||
+                  sourceNode.x == null ||
+                  targetNode.x == null ||
+                  sourceNode.y == null ||
+                  targetNode.y == null
+                ) {
+                  return null;
+                }
                 const isFocused = graphLink.id === focusedLink?.id;
                 const isPathLink = pathLinkIds.has(graphLink.id);
                 const isSelectedLink =
                   selectedLinkIds.has(graphLink.id) ||
-                  selectedLinkSourceTargetPairs.has(
-                    `${modSource.id}-${modTarget.id}`,
-                  );
+                  selectedLinkSourceTargetPairs.has(`${sourceId}-${targetId}`);
                 const linkMagnification =
                   linkMagnificationMap.get(graphLink.id) ?? 1;
                 const cdtMotionConfig =
@@ -891,58 +1058,28 @@ export const D3ForceGraph = ({
                     ? getEdgeMotionConfig(graphLink.id)
                     : null;
 
-                const sourceNode = nodeMap.get(modSource.id);
-                const targetNode = nodeMap.get(modTarget.id);
-                const sourceNodeVisible = sourceNode?.visible ?? false;
-                const targetNodeVisible = targetNode?.visible ?? false;
+                const sourceNodeVisible = sourceNode.visible ?? false;
+                const targetNodeVisible = targetNode.visible ?? false;
 
-                if (
-                  (sourceNodeVisible || targetNodeVisible) &&
-                  modSource.x !== undefined &&
-                  modTarget.x !== undefined &&
-                  modSource.y !== undefined &&
-                  modTarget.y !== undefined
-                ) {
+                if (sourceNodeVisible || targetNodeVisible) {
                   const isGradient = sourceNodeVisible !== targetNodeVisible;
-                  // const gradientTo: number | undefined =
-                  //   isGradient && targetNodeVisible
-                  //     ? sourceNode?.id
-                  //     : targetNode?.id;
-
-                  // const gradientFrom: number | undefined =
-                  //   gradientTo === sourceNode?.id
-                  //     ? targetNode?.id
-                  //     : sourceNode?.id;
-
-                  // console.log("-----");
-                  // console.log(
-                  //   "sourceNode: ",
-                  //   sourceNode?.id,
-                  //   sourceNode?.visible,
-                  // );
-                  // console.log(
-                  //   "targetNode: ",
-                  //   targetNode?.id,
-                  //   targetNode?.visible,
-                  // );
-                  // console.log(gradientFrom, " -> ", gradientTo);
 
                   const srcPair = showEdgeSemanticAnimation
-                    ? getNodePairTransform(modSource.id)
+                    ? getNodePairTransform(sourceId)
                     : null;
                   const tgtPair = showEdgeSemanticAnimation
-                    ? getNodePairTransform(modTarget.id)
+                    ? getNodePairTransform(targetId)
                     : null;
                   const pairLayoutScale = nodePairOffsetLayoutScale(currentScale);
                   const srcPos = layoutPosWithNodePair(
-                    modSource.x ?? 0,
-                    modSource.y ?? 0,
+                    sourceNode.x ?? 0,
+                    sourceNode.y ?? 0,
                     srcPair,
                     pairLayoutScale,
                   );
                   const tgtPos = layoutPosWithNodePair(
-                    modTarget.x ?? 0,
-                    modTarget.y ?? 0,
+                    targetNode.x ?? 0,
+                    targetNode.y ?? 0,
                     tgtPair,
                     pairLayoutScale,
                   );
@@ -950,7 +1087,7 @@ export const D3ForceGraph = ({
                   return (
                     <g
                       className="link cursor-pointer"
-                      key={`link-${linkIndex}-${graphLink.id ?? `${modSource.id}-${type}-${modTarget.id}`}`}
+                      key={`link-${linkIndex}-${graphLink.id ?? `${sourceId}-${type}-${targetId}`}`}
                       onClick={() => {
                         if (graphLink.id === focusedLink?.id) {
                           setFocusedLink(undefined);
@@ -1076,20 +1213,21 @@ export const D3ForceGraph = ({
                   ([pairKey, linksInPair]) => {
                     const link = linksInPair[0];
                     if (!link) return null;
-                    const modSource = link.source as CustomNodeType;
-                    const modTarget = link.target as CustomNodeType;
+                    const { sourceId, targetId } = getLinkEndpointIds(link);
+                    const sourceNode = nodeMap.get(sourceId);
+                    const targetNode = nodeMap.get(targetId);
                     if (
-                      modSource.x == null ||
-                      modTarget.x == null ||
-                      modSource.y == null ||
-                      modTarget.y == null
+                      !sourceNode ||
+                      !targetNode ||
+                      sourceNode.x == null ||
+                      targetNode.x == null ||
+                      sourceNode.y == null ||
+                      targetNode.y == null
                     ) {
                       return null;
                     }
-                    const sourceNode = nodeMap.get(modSource.id);
-                    const targetNode = nodeMap.get(modTarget.id);
-                    const sourceNodeVisible = sourceNode?.visible ?? false;
-                    const targetNodeVisible = targetNode?.visible ?? false;
+                    const sourceNodeVisible = sourceNode.visible ?? false;
+                    const targetNodeVisible = targetNode.visible ?? false;
                     if (!sourceNodeVisible && !targetNodeVisible) return null;
 
                     const pairCount = linksInPair.length;
@@ -1099,21 +1237,21 @@ export const D3ForceGraph = ({
                     if (typesInPair.length === 0) return null;
 
                     const srcPair = showEdgeSemanticAnimation
-                      ? getNodePairTransform(modSource.id)
+                      ? getNodePairTransform(sourceId)
                       : null;
                     const tgtPair = showEdgeSemanticAnimation
-                      ? getNodePairTransform(modTarget.id)
+                      ? getNodePairTransform(targetId)
                       : null;
                     const pairLayoutScale = nodePairOffsetLayoutScale(currentScale);
                     const srcPos = layoutPosWithNodePair(
-                      modSource.x ?? 0,
-                      modSource.y ?? 0,
+                      sourceNode.x ?? 0,
+                      sourceNode.y ?? 0,
                       srcPair,
                       pairLayoutScale,
                     );
                     const tgtPos = layoutPosWithNodePair(
-                      modTarget.x ?? 0,
-                      modTarget.y ?? 0,
+                      targetNode.x ?? 0,
+                      targetNode.y ?? 0,
                       tgtPair,
                       pairLayoutScale,
                     );
@@ -1215,6 +1353,8 @@ export const D3ForceGraph = ({
                     <GraphNodeCircle
                       key={graphNode.id}
                       graphNode={graphNode}
+                      nodeX={graphNode.x ?? 0}
+                      nodeY={graphNode.y ?? 0}
                       isFocused={visibility.isFocused}
                       isSelected={selectedNodeNames.has(graphNode.name)}
                       isPathNode={visibility.isPathNode}
@@ -1267,6 +1407,8 @@ export const D3ForceGraph = ({
                     <GraphNodeCircle
                       key={graphNode.id}
                       graphNode={graphNode}
+                      nodeX={graphNode.x ?? 0}
+                      nodeY={graphNode.y ?? 0}
                       isFocused={visibility.isFocused}
                       isSelected={selectedNodeNames.has(graphNode.name)}
                       isPathNode={visibility.isPathNode}

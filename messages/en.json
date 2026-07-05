@@ -491,6 +491,7 @@
     "noReferencesFound": "No references found for \"{name}\".",
     "mentionedInDocuments": "Mentioned in {count} documents",
     "filterByTag": "Filter by tag",
+    "liveSimulation": "Live layout (continuous simulation)",
     "partialGraphDisplay": "Only part of the graph is shown due to the large number of nodes",
     "showAll": "Show all",
     "referenceLabel": "Reference:",

@@ -138,15 +138,14 @@ export const GraphViewContainer = ({
   if (activeEntity) {
     return (
       <RelatedNodesAndLinksViewer
-        key={`related-${graphSize.width}-${graphSize.height}-${activeEntity.id}`}
+        key={`related-${graphSize.width}-${graphSize.height}`}
         node={activeEntity}
         contextId={topicSpace?.id ?? ""}
         contextType="topicSpace"
         className="h-full w-full"
         height={graphSize.height}
         width={graphSize.width}
-        setFocusedNode={setFocusedNode}
-        focusedNode={activeEntity}
+        onSelectNode={setFocusedNode}
         onClose={() => setFocusedNode(undefined)}
       />
     );
