@@ -185,6 +185,8 @@ Concept and flow diagrams for the writing workspace, story generation, auto-high
 - `docs/field-research-scan-flow.md` — mobile field scan (OCR → graph → node matching)
 - `docs/ndlocr-license.md` — NDLOCR-Lite / ndlocrlite-web license and attribution
 - `docs/graph-statistics-panel.md` — D3 graph info panel metrics and degree distribution
+- `docs/d3-force-graph-performance.md` — D3 force layout modes, LOD, and related-node navigation (PR #77)
+- `docs/kg-batched-extraction-pipeline.md` — async Phase1/Phase2 KG extraction for long documents
 - `docs/storytelling-scroll-viewer.md` — published article `ScrollStorytellingViewerUnified`, URL params, scroll guards
 - `docs/topic-space-drive-sync.md` — Google Drive folder sync into TopicSpace (user OAuth, Cron)
 - `docs/topic-space-node-provenance.md` — SourceDocument ↔ unified graph node/edge tracking
@@ -259,6 +261,8 @@ supabase/
 - [フィールドリサーチ：現地スキャンから知識グラフ作成](./docs/field-research-scan-flow.md)
 - [NDLOCR ライセンスと帰属表示](./docs/ndlocr-license.md)
 - [グラフ統計パネル（D3 可視化）](./docs/graph-statistics-panel.md)
+- [D3 フォースグラフの描画パフォーマンス](./docs/d3-force-graph-performance.md)
+- [KG バッチ抽出パイプライン（Phase1 / Phase2）](./docs/kg-batched-extraction-pipeline.md)
 - [公開記事のストーリーテリングと URL クエリ](./docs/storytelling-public-viewer-and-urls.md)
 - [公開 Unified ビューのスクロール・ガード・レイアウト詳細](./docs/storytelling-scroll-viewer.md)
 - [MCP 認証（外部クライアント向け API キー）](./docs/mcp-authentication.md)
