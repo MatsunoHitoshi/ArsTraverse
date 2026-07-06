@@ -107,6 +107,8 @@ Drive 同期および Storage アップロードの PDF は共通パイプライ
 
 複数ページ PDF は 10 ページずつ OCR し、`PdfExtractionJob.accumulatedPlainText` に結合してから KG 抽出します。リポジトリ画面では処理待ちジョブ数（`pendingOcrJobs`）も確認できます。
 
+テキストが 10 チャンクを超える場合、KG 抽出は `KgExtractionJob` にキューイングされ、Cron `/api/cron/kg-extraction` で Phase1（gpt-4o）→ Phase2（gpt-4o-mini）のバッチ処理が行われます。詳細は [KG バッチ抽出パイプライン](./kg-batched-extraction-pipeline.md) を参照。
+
 リポジトリ画面の Drive 同期パネルで **OCR 言語** を設定できます。NDLOCR モデルは初回利用時に R2 から `.cache/ndlocr-models/` へダウンロードされます。
 
 縦書き OCR（NDLOCR-Lite）のライセンス・帰属表示要件は [NDLOCR ライセンス](./ndlocr-license.md) を参照。
