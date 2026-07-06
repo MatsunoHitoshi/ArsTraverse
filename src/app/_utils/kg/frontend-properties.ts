@@ -88,13 +88,27 @@ export const formTopicSpaceForFrontendPrivate = ({
         nodes: topicSpace.nodes,
         relationships: topicSpace.relationships,
       }),
-      sourceDocuments: topicSpace.sourceDocuments?.map((doc) => ({
-        ...doc,
-        graph:
-          doc.graph && doc.graph.graphNodes && doc.graph.graphRelationships
-            ? formDocumentGraphForFrontend(doc.graph, preferredLocale)
-            : null,
-      })),
+      sourceDocuments: topicSpace.sourceDocuments?.map((doc) => {
+        if (!doc.graph) {
+          return { ...doc, graph: null };
+        }
+        if (doc.graph.graphNodes && doc.graph.graphRelationships) {
+          return {
+            ...doc,
+            graph: formDocumentGraphForFrontend(doc.graph, preferredLocale),
+          };
+        }
+        return {
+          ...doc,
+          graph: {
+            ...doc.graph,
+            dataJson: (doc.graph.dataJson ?? {
+              nodes: [],
+              relationships: [],
+            }) as GraphDocumentForFrontend,
+          },
+        };
+      }),
       tags: topicSpace.tags,
       admins: topicSpace.admins,
     };
@@ -141,13 +155,27 @@ export const formTopicSpaceForFrontendPublic = (
         nodes: topicSpace.nodes,
         relationships: topicSpace.relationships,
       }),
-      sourceDocuments: topicSpace.sourceDocuments?.map((doc) => ({
-        ...doc,
-        graph:
-          doc.graph && doc.graph.graphNodes && doc.graph.graphRelationships
-            ? formDocumentGraphForFrontend(doc.graph, preferredLocale)
-            : null,
-      })),
+      sourceDocuments: topicSpace.sourceDocuments?.map((doc) => {
+        if (!doc.graph) {
+          return { ...doc, graph: null };
+        }
+        if (doc.graph.graphNodes && doc.graph.graphRelationships) {
+          return {
+            ...doc,
+            graph: formDocumentGraphForFrontend(doc.graph, preferredLocale),
+          };
+        }
+        return {
+          ...doc,
+          graph: {
+            ...doc.graph,
+            dataJson: (doc.graph.dataJson ?? {
+              nodes: [],
+              relationships: [],
+            }) as GraphDocumentForFrontend,
+          },
+        };
+      }),
       tags: topicSpace.tags,
       admins: topicSpace.admins,
     };

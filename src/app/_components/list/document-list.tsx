@@ -88,7 +88,10 @@ export const DocumentList = ({
                 <Button
                   className="z-10 !h-8 !w-8 bg-transparent !p-2 text-sm hover:bg-slate-50/10"
                   onClick={() => {
-                    router.push(`/graph/${document.graph?.id}`);
+                    const graphId = document.graph?.id;
+                    if (graphId) {
+                      router.push(`/graph/${graphId}`);
+                    }
                   }}
                 >
                   <GraphIcon height={16} width={16} color="white" />
