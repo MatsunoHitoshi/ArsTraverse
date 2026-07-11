@@ -20,26 +20,56 @@ import type {
 } from "node_modules/@langchain/community/dist/graphs/document";
 import type { Document } from "@langchain/core/documents";
 
-const PHASE1_MODEL = "gpt-4o";
-const PHASE2_MODEL = "gpt-4o-mini";
+// Phase1: 初期抽出。ノード/エッジの網羅性が品質を決める工程。
+// Phase2: 取りこぼした関係の補完。大規模文書でも安価に回したい工程。
+// gpt-4o / gpt-4o-mini は deprecated かつ、gpt-4o-mini は structured output で
+// 空を返す不具合が確認されたため、コスト最適な GPT-5.4 mini/nano を既定とする。
+// いずれも環境変数で上書き可能。
+const PHASE1_MODEL = process.env.KG_PHASE1_MODEL ?? "gpt-5.4-mini";
+const PHASE2_MODEL = process.env.KG_PHASE2_MODEL ?? "gpt-5.4-nano";
+// reasoning 系モデルの推論強度。コスト・レイテンシ抑制のため既定は "low"。
+// 有効値: none | low | medium | high | xhigh(モデル依存)。空文字ならモデル既定に委ねる。
+// ※ GPT-5.4 系は "minimal" 非対応(none/low/medium/high/xhigh のみ)。
+const PHASE1_REASONING_EFFORT = process.env.KG_PHASE1_REASONING_EFFORT ?? "low";
+const PHASE2_REASONING_EFFORT = process.env.KG_PHASE2_REASONING_EFFORT ?? "low";
 const FALLBACK_RELATIONSHIP_TYPE = "RELATED_TO";
 const EMPTY_GRAPH: NodesAndRelationships = { nodes: [], relationships: [] };
+
+/** reasoning 系(GPT-5 / o シリーズ)は temperature 固定(=1)かつ reasoning_effort を受け付ける。 */
+function isReasoningModel(model: string): boolean {
+  return /^(gpt-5|o\d)/i.test(model);
+}
+
+/**
+ * モデル名に応じて ChatOpenAI を生成する。
+ * reasoning 系は temperature=1 + reasoning_effort(modelKwargs 経由)を指定し、
+ * 非 reasoning 系(gpt-4.1 等)は低 temperature で決定的に抽出する。
+ * ※ reasoning_effort はコンストラクタの型に無いため modelKwargs で API へ直接渡す。
+ */
+function createChatModel(model: string, reasoningEffort: string): ChatOpenAI {
+  if (isReasoningModel(model)) {
+    const effort = reasoningEffort.trim();
+    return new ChatOpenAI({
+      model,
+      temperature: 1,
+      maxTokens: 16000,
+      modelKwargs: effort ? { reasoning_effort: effort } : undefined,
+    });
+  }
+  return new ChatOpenAI({
+    model,
+    temperature: 0.1,
+    maxTokens: 16000,
+  });
+}
 
 export class IterativeGraphExtractorCore {
   private phase1Llm: ChatOpenAI;
   private phase2Llm: ChatOpenAI;
 
   constructor() {
-    this.phase1Llm = new ChatOpenAI({
-      temperature: 0.1,
-      model: PHASE1_MODEL,
-      maxTokens: 16000,
-    });
-    this.phase2Llm = new ChatOpenAI({
-      temperature: 0.1,
-      model: PHASE2_MODEL,
-      maxTokens: 16000,
-    });
+    this.phase1Llm = createChatModel(PHASE1_MODEL, PHASE1_REASONING_EFFORT);
+    this.phase2Llm = createChatModel(PHASE2_MODEL, PHASE2_REASONING_EFFORT);
   }
 
   // Helper to build context string from frontend nodes
@@ -195,12 +225,14 @@ export class IterativeGraphExtractorCore {
 
     const mappingPrompt = buildMappingPrompt(customMappingRules);
     const fullContext = contextualInfo.trim()
-      ? `IMPORTANT: The following entities have already been identified in this text segment.
-Focus on finding relationships involving these entities that might have been missed in the first pass.
+      ? `The following entities were already identified in this text segment:
+${contextualInfo}
 
-EXISTING ENTITIES:
-${contextualInfo}`
-      : `IMPORTANT: Focus on finding relationships between entities mentioned in this text segment that might have been missed in the first pass.`;
+Re-read the text and extract ALL relationships among these entities and any additional entities you find.
+It is fine to include relationships that may already exist; duplicates are de-duplicated later.
+Maximize correct relationship coverage.`
+      : `Re-read the text and extract ALL relationships among the entities mentioned.
+Maximize correct relationship coverage; duplicates are de-duplicated later.`;
 
     const systemPrompt = buildSystemPrompt({
       mappingPrompt,
@@ -244,38 +276,56 @@ ${contextualInfo}`
 
     for (const doc of docs) {
       for (const node of doc.nodes) {
-        if (!allNodesMap.has(node.id.toString())) {
-          allNodesMap.set(node.id.toString(), node);
+        if (node.id === null || node.id === undefined) continue;
+        const key = node.id.toString();
+        if (key.trim() === "") continue;
+        if (!allNodesMap.has(key)) {
+          allNodesMap.set(key, node);
         }
       }
       allRelationships.push(...doc.relationships);
     }
 
+    // LLM が稀に id(=ノード名)が空/undefined のノード・関係を返すため、
+    // name を必ず非空文字列に正規化し、無効なものはスキップする(finalizeGraph の Zod 検証対策)。
+    const toName = (value: unknown): string =>
+      value === null || value === undefined ? "" : String(value).trim();
+
     const finalNodesRaw = Array.from(allNodesMap.values());
-    const finalNodes: NodeTypeForFrontend[] = finalNodesRaw.map((n) => {
-      const allProperties = n.properties || {};
-      const properties: Record<string, string> = {};
+    const finalNodes: NodeTypeForFrontend[] = finalNodesRaw
+      .map((n) => {
+        const allProperties = n.properties || {};
+        const properties: Record<string, string> = {};
 
-      for (const [key, value] of Object.entries(allProperties)) {
-        properties[key] = String(value ?? "");
-      }
+        for (const [key, value] of Object.entries(allProperties)) {
+          properties[key] = String(value ?? "");
+        }
 
-      if (!properties.name_ja) properties.name_ja = "";
-      if (!properties.name_en) properties.name_en = "";
+        if (!properties.name_ja) properties.name_ja = "";
+        if (!properties.name_en) properties.name_en = "";
 
-      return {
-        id: createId(),
-        name: n.id as string,
-        label: n.type,
-        properties,
-      };
-    });
+        return {
+          id: createId(),
+          name: toName(n.id),
+          label: n.type,
+          properties,
+        };
+      })
+      .filter((n) => n.name !== "");
 
     const finalRelationships: RelationshipTypeForFrontend[] =
-      allRelationships.map((rel) => {
+      allRelationships.flatMap((rel) => {
+        const sourceName = toName(rel.source?.id);
+        const targetName = toName(rel.target?.id);
+
+        // 端点の名前が無い関係は有効なノードを特定できないためスキップ
+        if (sourceName === "" || targetName === "") {
+          return [];
+        }
+
         const sourceNode =
-          finalNodes.find((n) => n.name === rel.source.id) ??
-          createExtraNode(rel.source.id as string, rel.source.type, finalNodes);
+          finalNodes.find((n) => n.name === sourceName) ??
+          createExtraNode(sourceName, rel.source.type, finalNodes);
 
         // Ensure sourceNode exists and is added to finalNodes if created via createExtraNode
         if (!finalNodes.find((n) => n.id === sourceNode.id)) {
@@ -283,8 +333,8 @@ ${contextualInfo}`
         }
 
         const targetNode =
-          finalNodes.find((n) => n.name === rel.target.id) ??
-          createExtraNode(rel.target.id as string, rel.target.type, finalNodes);
+          finalNodes.find((n) => n.name === targetName) ??
+          createExtraNode(targetName, rel.target.type, finalNodes);
 
         // Ensure targetNode exists and is added to finalNodes if created via createExtraNode
         if (!finalNodes.find((n) => n.id === targetNode.id)) {
@@ -298,13 +348,15 @@ ${contextualInfo}`
           relProperties[key] = String(value ?? "");
         }
 
-        return {
-          id: createId(),
-          sourceId: sourceNode.id,
-          targetId: targetNode.id,
-          type: rel.type,
-          properties: relProperties,
-        };
+        return [
+          {
+            id: createId(),
+            sourceId: sourceNode.id,
+            targetId: targetNode.id,
+            type: rel.type,
+            properties: relProperties,
+          },
+        ];
       });
 
     // Debug logging to check for data integrity
