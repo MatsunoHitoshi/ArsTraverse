@@ -52,7 +52,8 @@ function createChatModel(model: string, reasoningEffort: string): ChatOpenAI {
     return new ChatOpenAI({
       model,
       temperature: 1,
-      maxTokens: 16000,
+      // reasoning モデルでは maxTokens ではなく maxCompletionTokens が正式
+      maxCompletionTokens: 16000,
       modelKwargs: effort ? { reasoning_effort: effort } : undefined,
     });
   }
@@ -325,7 +326,7 @@ Maximize correct relationship coverage; duplicates are de-duplicated later.`;
 
         const sourceNode =
           finalNodes.find((n) => n.name === sourceName) ??
-          createExtraNode(sourceName, rel.source.type, finalNodes);
+          createExtraNode(sourceName, rel.source.type ?? "Entity", finalNodes);
 
         // Ensure sourceNode exists and is added to finalNodes if created via createExtraNode
         if (!finalNodes.find((n) => n.id === sourceNode.id)) {
@@ -334,7 +335,7 @@ Maximize correct relationship coverage; duplicates are de-duplicated later.`;
 
         const targetNode =
           finalNodes.find((n) => n.name === targetName) ??
-          createExtraNode(targetName, rel.target.type, finalNodes);
+          createExtraNode(targetName, rel.target.type ?? "Entity", finalNodes);
 
         // Ensure targetNode exists and is added to finalNodes if created via createExtraNode
         if (!finalNodes.find((n) => n.id === targetNode.id)) {
