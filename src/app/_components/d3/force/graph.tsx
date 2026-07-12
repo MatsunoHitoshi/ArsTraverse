@@ -462,6 +462,14 @@ export const D3ForceGraph = ({
     });
   }, [initLinks, initNodes]);
 
+  // シミュレーション構築 effect からは参照ではなく ref 経由で最新値を読む。
+  // （graphDocument の参照ブレで newLinks/initNodes の参照が毎レンダー変わっても
+  //   effect を再実行させず、無限ループを防ぐ。実データの変化は simulationDataKey で検知する）
+  const initNodesRef = useRef(initNodes);
+  initNodesRef.current = initNodes;
+  const newLinksRef = useRef(newLinks);
+  newLinksRef.current = newLinks;
+
   /** 分類対象はフォーカス中のエッジ1本のみ（LLM負荷抑制） */
   const linksForEdgeSemanticAnimation = useMemo(() => {
     if (!focusedLink?.id || !focusedLink.type) return [];
@@ -758,6 +766,8 @@ export const D3ForceGraph = ({
   }, [currentScale, isGraphFullScreen, isLargeGraph]);
 
   useEffect(() => {
+    const initNodes = initNodesRef.current;
+    const newLinks = newLinksRef.current;
     // width/heightが無効な値の場合はシミュレーションを初期化しない
     if (width <= 0 || height <= 0 || !initNodes.length || !newLinks.length) {
       return;
@@ -955,8 +965,6 @@ export const D3ForceGraph = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     simulationDataKey,
-    newLinks,
-    initNodes,
     hasValidDimensions,
     isGraphFullScreen,
     isLargeGraph,
