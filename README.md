@@ -53,7 +53,7 @@ The ultimate goal is to democratize cultural knowledge creation and make the ric
 
 ### AI & Knowledge Graph
 
-- **OpenAI GPT-4** - Large Language Model for text processing
+- **OpenAI GPT-4 / GPT-5** - Large Language Models for text processing and KG extraction (Phase1/Phase2 configurable via env)
 - **LangChain** - LLM application framework
 - **D3.js** - Interactive graph visualization
 
@@ -89,7 +89,7 @@ ArsTraverse follows a monolithic Next.js architecture with clear separation of c
 ### Knowledge Graph Processing Flow
 
 1. **Document Upload** - PDF/text processing and storage
-2. **LLM Extraction** - Automated relationship extraction using GPT-4
+2. **LLM Extraction** - Automated relationship extraction (GPT-5.4 mini/nano by default; see `docs/kg-batched-extraction-pipeline.md`)
 3. **Graph Construction** - Node and edge creation with embeddings
 4. **Visualization** - Interactive D3.js graph rendering
 5. **Collaboration** - Annotation and editing capabilities
@@ -127,6 +127,11 @@ ArsTraverse follows a monolithic Next.js architecture with clear separation of c
 
    # OpenAI
    OPENAI_API_KEY="your-openai-api-key"
+   # 任意: KG 抽出モデル（未設定時は gpt-5.4-mini / gpt-5.4-nano）
+   # KG_PHASE1_MODEL="gpt-5.4-mini"
+   # KG_PHASE2_MODEL="gpt-5.4-nano"
+   # KG_PHASE1_REASONING_EFFORT="low"
+   # KG_PHASE2_REASONING_EFFORT="low"
 
    # NextAuth
    NEXTAUTH_SECRET="your-nextauth-secret"
@@ -185,8 +190,8 @@ Concept and flow diagrams for the writing workspace, story generation, auto-high
 - `docs/field-research-scan-flow.md` — mobile field scan (OCR → graph → node matching)
 - `docs/ndlocr-license.md` — NDLOCR-Lite / ndlocrlite-web license and attribution
 - `docs/graph-statistics-panel.md` — D3 graph info panel metrics and degree distribution
-- `docs/d3-force-graph-performance.md` — D3 force layout modes, LOD, and related-node navigation (PR #77)
-- `docs/kg-batched-extraction-pipeline.md` — async Phase1/Phase2 KG extraction for long documents
+- `docs/d3-force-graph-performance.md` — D3 force layout modes, LOD, live simulation defaults, related-node navigation (PR #77, #80)
+- `docs/kg-batched-extraction-pipeline.md` — async Phase1/Phase2 KG extraction, GPT-5.4 models, env tuning (PR #80)
 - `docs/storytelling-scroll-viewer.md` — published article `ScrollStorytellingViewerUnified`, URL params, scroll guards
 - `docs/topic-space-drive-sync.md` — Google Drive folder sync into TopicSpace (user OAuth, Cron)
 - `docs/topic-space-node-provenance.md` — SourceDocument ↔ unified graph node/edge tracking
@@ -227,7 +232,7 @@ supabase/
 
 ### Knowledge Graph Generation
 
-- **LLM-Powered Extraction** - Automated relationship detection using GPT-4
+- **LLM-Powered Extraction** - Automated relationship detection (GPT-5.4 mini/nano; configurable)
 - **Schema-Based Processing** - Configurable node and relationship types
 - **Vector Embeddings** - Semantic search and similarity matching
 
