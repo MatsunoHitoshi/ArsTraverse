@@ -5,6 +5,8 @@ import { useTranslations } from "next-intl";
 import { Button } from "../button/button";
 import type { EdgeType } from "@/app/_utils/kg/get-tree-layout-data";
 import { ZoomInIcon } from "../icons";
+import { LiveSimulationToggleButton } from "../view/graph-view/live-simulation-toggle-button";
+import { DirectedLinksToggleButton } from "../view/graph-view/directed-links-toggle-button";
 type ToolbarProps = {
   isLinkFiltered?: boolean;
   setIsLinkFiltered?: React.Dispatch<React.SetStateAction<boolean>>;
@@ -18,6 +20,10 @@ type ToolbarProps = {
   setEdgeType?: React.Dispatch<React.SetStateAction<EdgeType>>;
   magnifierMode?: number;
   setMagnifierMode?: React.Dispatch<React.SetStateAction<number>>;
+  enableLiveSimulation?: boolean;
+  setEnableLiveSimulation?: React.Dispatch<React.SetStateAction<boolean>>;
+  isDirectedLinks?: boolean;
+  setIsDirectedLinks?: React.Dispatch<React.SetStateAction<boolean>>;
 };
 export const Toolbar = ({
   isLinkFiltered,
@@ -32,6 +38,10 @@ export const Toolbar = ({
   setEdgeType,
   magnifierMode,
   setMagnifierMode,
+  enableLiveSimulation = false,
+  setEnableLiveSimulation,
+  isDirectedLinks = false,
+  setIsDirectedLinks,
 }: ToolbarProps) => {
   const t = useTranslations("view");
   const tGraph = useTranslations("graph");
@@ -39,6 +49,19 @@ export const Toolbar = ({
   return (
     <div className="flex h-[46px] w-full flex-row items-center justify-between">
       <div className="flex w-full flex-row items-center gap-4">
+        {!!setEnableLiveSimulation && (
+          <LiveSimulationToggleButton
+            enableLiveSimulation={enableLiveSimulation}
+            setEnableLiveSimulation={setEnableLiveSimulation}
+            title={t("liveSimulation")}
+          />
+        )}
+        {!!setIsDirectedLinks && (
+          <DirectedLinksToggleButton
+            isDirectedLinks={isDirectedLinks}
+            setIsDirectedLinks={setIsDirectedLinks}
+          />
+        )}
         {!!setMagnifierMode && magnifierMode !== undefined && (
           <button
             onClick={() => setMagnifierMode((prev) => (prev + 1) % 3)}

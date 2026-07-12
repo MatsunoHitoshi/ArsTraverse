@@ -11,7 +11,10 @@ import { api } from "@/trpc/react";
 import { exportTxt } from "@/app/_utils/sys/svg";
 import { useRef, useState } from "react";
 import type { CustomNodeType, CustomLinkType } from "@/app/const/types";
+import { useTranslations } from "next-intl";
+import { LiveSimulationToggleButton } from "../view/graph-view/live-simulation-toggle-button";
 export const DocumentDetail = ({ documentId }: { documentId: string }) => {
+  const t = useTranslations("view");
   const router = useRouter();
   const [innerWidth, innerHeight] = useWindowSize();
   const graphAreaWidth = (innerWidth ?? 100) / 2 - 24;
@@ -26,6 +29,8 @@ export const DocumentDetail = ({ documentId }: { documentId: string }) => {
   const [focusedLink, setFocusedLink] = useState<CustomLinkType | undefined>(
     undefined,
   );
+  const [enableLiveSimulation, setEnableLiveSimulation] =
+    useState<boolean>(true);
   const svgRef = useRef<SVGSVGElement>(null);
 
   if (!document) return null;
@@ -43,6 +48,7 @@ export const DocumentDetail = ({ documentId }: { documentId: string }) => {
         setFocusedNode={setFocusedNode}
         focusedLink={focusedLink}
         setFocusedLink={setFocusedLink}
+        enableLiveSimulation={enableLiveSimulation}
         toolComponent={
           <>
             <div
@@ -89,6 +95,11 @@ export const DocumentDetail = ({ documentId }: { documentId: string }) => {
                       <Link2Icon height={16} width={16} color="white" />
                     </div>
                   </UrlCopy>
+                  <LiveSimulationToggleButton
+                    enableLiveSimulation={enableLiveSimulation}
+                    setEnableLiveSimulation={setEnableLiveSimulation}
+                    title={t("liveSimulation")}
+                  />
                 </div>
                 <div className="text-lg">{document.name}</div>
               </div>

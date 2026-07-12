@@ -86,6 +86,9 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
   const [currentScale, setCurrentScale] = useState<number>(1);
   const [textPanelFull, setTextPanelFull] = useState<boolean>(false);
   const [magnifierMode, setMagnifierMode] = useState(0);
+  const [enableLiveSimulation, setEnableLiveSimulation] =
+    useState<boolean>(true);
+  const [isDirectedLinks, setIsDirectedLinks] = useState<boolean>(true);
 
   const nodeId = searchParams.get("nodeId");
   const node = graphDocument?.nodes.find((n) => String(n.id) === nodeId);
@@ -138,6 +141,10 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
               setNodeSearchQuery={setNodeSearchQuery}
               magnifierMode={magnifierMode}
               setMagnifierMode={setMagnifierMode}
+              enableLiveSimulation={enableLiveSimulation}
+              setEnableLiveSimulation={setEnableLiveSimulation}
+              isDirectedLinks={isDirectedLinks}
+              setIsDirectedLinks={setIsDirectedLinks}
               rightArea={
                 <div className="flex flex-row items-center gap-4">
                   <button
@@ -241,6 +248,8 @@ export const SingleDocumentGraphViewer = ({ graphId }: { graphId: string }) => {
                 focusedLink={focusedLink}
                 isLargeGraph={false}
                 isEditor={isEditor}
+                isDirectedLinks={isDirectedLinks}
+                enableLiveSimulation={enableLiveSimulation}
                 onGraphUpdate={isEditor ? onGraphFormUpdate : undefined}
                 onNodeContextMenu={isEditor ? onNodeContextMenu : undefined}
                 onLinkContextMenu={isEditor ? onLinkContextMenu : undefined}
