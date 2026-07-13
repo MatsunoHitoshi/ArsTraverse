@@ -34,6 +34,8 @@ export const NodeReferencePanel: React.FC<NodeReferencePanelProps> = ({
   });
 
   // ハイライト対象語: 表示名 + ローカライズ名(name_ja/name_en)
+  // 正規表現のオルタネーションで短い語が先にマッチして長い語のハイライトが
+  // 欠けるのを防ぐため、文字数の降順（長い順）に並べる。
   const highlightTerms = Array.from(
     new Set(
       [
@@ -45,7 +47,7 @@ export const NodeReferencePanel: React.FC<NodeReferencePanelProps> = ({
           typeof value === "string" && value.trim() !== "",
       ),
     ),
-  );
+  ).sort((a, b) => b.length - a.length);
 
   const escapeRegExp = (value: string) =>
     value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
