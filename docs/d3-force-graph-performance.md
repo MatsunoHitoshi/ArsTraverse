@@ -1,6 +1,6 @@
 # D3 フォースグラフの描画パフォーマンス
 
-トピックスペース・ドキュメント画面の `D3ForceGraph`（`src/app/_components/d3/force/graph.tsx`）は、大規模グラフでも操作可能な速度を保つため、**確定レイアウト（既定）** と **ライブシミュレーション（任意）** の 2 モードを持つ。PR #77 で関連ノード遷移のちらつき修正とあわせて導入された。
+トピックスペース・ドキュメント画面の `D3ForceGraph`（`src/app/_components/d3/force/graph.tsx`）は、大規模グラフでも操作可能な速度を保つため、**確定レイアウト（既定）** と **ライブシミュレーション（任意）** の 2 モードを持つ。PR #77 で関連ノード遷移のちらつき修正とあわせて導入され、PR #80 で単一ドキュメントビューにもライブ切替 UI が展開された。
 
 統計パネル（次数・密度など）の仕様は [グラフ統計パネル](./graph-statistics-panel.md) を参照。
 
@@ -11,8 +11,12 @@
 | `multi-document-graph-viewer` | ノード > 1300 | 既定 `false`、ツールバーで切替可 | メインのリポジトリグラフ |
 | `multi-document-graph-detail-viewer` | 同上 | 同上 | ドキュメント詳細内グラフ |
 | `multi-document-graph-editor` | 同上 | 同上 | 編集モード |
-| `related-nodes-viewer` | `false` | `true` | 近傍サブグラフ（常時ライブ） |
+| `single-document-graph-viewer` | `false` | 既定 **`true`**、ツールバーで切替可 | `/graph/[id]` 単一ドキュメントグラフ |
+| `document-detail` | `false` | 既定 **`true`**、`LiveSimulationToggleButton` | ドキュメント詳細プレビュー |
+| `related-nodes-viewer` | `false` | `true`（固定） | 近傍サブグラフ（常時ライブ） |
 | その他（公開記事・フィールドプレビュー等） | `false` | 既定 `false` | 小規模グラフ |
+
+**既定値の使い分け:** リポジトリ統合グラフ（1300 ノード超の可能性）はパフォーマンス優先でライブ OFF。単一ドキュメントビューはノード数が少ない前提のため、初回表示からライブ ON（微動で関係性を把握しやすくする）。
 
 `isLargeGraph` の閾値は **1300 ノード**（各ビューアで `graphDocument.nodes.length > 1300`）。
 
@@ -116,6 +120,7 @@ flowchart TD
 | リサイズでグラフが飛ぶ | 確定後は平行移動のみ。データ変更で再レイアウトされた可能性 |
 | 近傍グラフで nodeId が揺れる | `handleGraphNodeSelect` / `navigateToNode` の同一 ID ガードを確認 |
 | ドラッグが効かない | ライブ ON または `isEditor` ではドラッグ無効 |
+| 単一ドキュメントで常に微動する | 既定がライブ ON。ツールバー / `LiveSimulationToggleButton` で OFF にできる |
 
 ## 関連ファイル
 
@@ -125,4 +130,6 @@ flowchart TD
 - `src/app/_components/view/graph-view/graph-tool.tsx` — ツールバー統合
 - `src/app/_components/view/graph-view/related-nodes-viewer.tsx` — 近傍サブグラフ
 - `src/app/_components/view/node/node-properties-detail.tsx` — URL 駆動ノード遷移
+- `src/app/_components/view/graph-view/single-document-graph-viewer.tsx` — 単一ドキュメントグラフ（ライブ既定 ON）
+- `src/app/_components/document/document-detail.tsx` — ドキュメント詳細プレビュー
 - `src/providers/container-size.tsx` — ResizeObserver によるコンテナ計測

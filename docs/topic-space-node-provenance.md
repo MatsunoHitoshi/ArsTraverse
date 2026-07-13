@@ -111,6 +111,19 @@ npm run export:topic-space -- --topic-space-id=<id> [--out=snapshot.json] [--use
 
 MCP と同じ `mcpGetTopicSpaceGraph` を呼び、`version` / `exportedAt` / `stats` を付けた JSON を出力します。管理者未指定時は TopicSpace の先頭 admin を使用します。
 
+## フロントエンドでの DocumentGraph シリアライズ
+
+TopicSpace 一覧やドキュメントリストでは、パフォーマンスのため `DocumentGraph` を **`id` のみ** で取得することがある（`sourceDocument.getList` の `graph: { select: { id: true } }`）。
+
+`formTopicSpaceForFrontendPrivate` / `Public`（`src/app/_utils/kg/frontend-properties.ts`）は、ネストされた `sourceDocuments[].graph` を次のように正規化する:
+
+| 取得内容 | フロント向け `graph` |
+|----------|----------------------|
+| `graphNodes` + `graphRelationships` あり | `formDocumentGraphForFrontend` で `dataJson` を構築 |
+| 上記なし（`id` のみ等） | **`DocumentGraph` の Prisma フィールド（`id` 含む）を保持**し、`dataJson` は空グラフまたは既存 `dataJson` にフォールバック |
+
+**なぜ重要か:** 以前は部分取得時に `dataJson` だけ返し `id` が欠落し、ドキュメントリストのグラフアイコンが `/graph/undefined` に遷移していた（PR #78）。UI 側も `document.graph?.id` の存在チェックを行う（`document-list.tsx` / `topic-graph-document-list.tsx`）。
+
 ## 関連ファイル
 
 | パス | 役割 |
@@ -121,6 +134,7 @@ MCP と同じ `mcpGetTopicSpaceGraph` を呼び、`version` / `exportedAt` / `st
 | `src/server/services/kg/detach-documents.service.ts` | detach 時削除ロジック |
 | `src/server/mcp/platform-handlers.ts` | MCP エクスポート |
 | `scripts/export-topic-space-graph.ts` | CLI エクスポート |
+| `src/app/_utils/kg/frontend-properties.ts` | TopicSpace / DocumentGraph のフロント向け正規化 |
 
 ## 関連ドキュメント
 

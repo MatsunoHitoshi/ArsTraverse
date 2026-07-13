@@ -31,14 +31,16 @@ stateDiagram-v2
 
 ### Phase1 — エンティティ抽出
 
-- モデル: **gpt-4o**（`IterativeGraphExtractorCore` の `PHASE1_MODEL`）
+- モデル: **`gpt-5.4-mini`**（`IterativeGraphExtractorCore` の `PHASE1_MODEL`、環境変数 `KG_PHASE1_MODEL` で上書き可）
+- reasoning 系モデル（`gpt-5*` / `o*`）は `temperature: 1` + `reasoning_effort`（既定 **`low`**、`KG_PHASE1_REASONING_EFFORT`）+ **`maxCompletionTokens: 16000`**
 - 1 Cron 実行あたり最大 **3 チャンク**（`KG_EXTRACTION_BATCH_SIZE`）
 - 各バッチの nodes / relationships を `accumulatedNodes` / `accumulatedRelationships` に追記
 - 全チャンク完了後、ノードを **名前で重複排除** し Phase2 へ
 
 ### Phase2 — 関係の精緻化
 
-- モデル: **gpt-4o-mini**（`PHASE2_MODEL`）
+- モデル: **`gpt-5.4-nano`**（`PHASE2_MODEL`、環境変数 `KG_PHASE2_MODEL` で上書き可）
+- reasoning 強度は `KG_PHASE2_REASONING_EFFORT`（既定 **`low`**）
 - Phase1 で得た全ノードをコンテキストとして各チャンクを処理
 - チャンク内に出現するノードのみを `buildLocalContextFromNodes` でフィルタし、プロンプトに渡す
 - バッチ内のチャンク LLM 呼び出しは `Promise.all` で **並列実行**
@@ -46,6 +48,36 @@ stateDiagram-v2
 - 全チャンク完了後 `finalizeAccumulatedKg` → `replaceDocumentGraphFromExtraction`
 
 `topicSpaceId` が付いているジョブは完了時に `resyncDocumentGraphToTopicSpace` でリポジトリへ再 attach する。
+
+### finalize 前の LLM 出力正規化
+
+`convertToFrontendFormat`（`iterative-core.ts`）は finalize 直前の Zod 検証失敗を防ぐ:
+
+- ノード ID（= LLM が返す `name`）が空・undefined のノードは **スキップ**
+- 関係の端点が空の場合も **スキップ**
+- 端点ノードが Phase1 結果に無い場合は `createExtraNode` で補完
+- Phase1 / Phase2 各チャンクの LLM 失敗は **ログのみ** で当該チャンクを空グラフ扱い（ジョブ全体は継続）
+
+完了時 `finalizeAccumulatedKg` → `dataDisambiguation` → `completeTranslateProperties` → DB 保存。
+
+## モデル設定（環境変数）
+
+`.env.example` および `src/server/lib/extractors/iterative-core.ts`:
+
+| 変数 | 既定 | 用途 |
+|------|------|------|
+| `KG_PHASE1_MODEL` | `gpt-5.4-mini` | Phase1 エンティティ抽出 |
+| `KG_PHASE2_MODEL` | `gpt-5.4-nano` | Phase2 関係補完 |
+| `KG_PHASE1_REASONING_EFFORT` | `low` | Phase1 reasoning 強度 |
+| `KG_PHASE2_REASONING_EFFORT` | `low` | Phase2 reasoning 強度 |
+
+**reasoning 強度の有効値:** `none` | `low` | `medium` | `high` | `xhigh`（モデル依存）。空文字にするとモデル既定に委ねる。
+
+**注意:**
+
+- 旧 `gpt-4o` / `gpt-4o-mini` は deprecated。`gpt-4o-mini` は structured output で空応答になる不具合が確認されているため、既定から切り替え済み（PR #80）。
+- GPT-5.4 系は **`minimal` 非対応**（`none` / `low` / `medium` / `high` / `xhigh` のみ）。
+- reasoning 系以外（例: `gpt-4.1`）を指定した場合は `temperature: 0.1` + `maxTokens: 16000` にフォールバック。
 
 ## Cron 実行
 
@@ -98,6 +130,8 @@ schedule: */1 * * * *
 | ジョブが `FAILED` | `error` フィールド。Phase2 で `accumulatedNodes` 未設定はデータ不整合 |
 | 関係が薄い | Phase2 はチャンク内に出現するノードのみコンテキスト化。固有名の表記ゆれは Phase1 ノード名に依存 |
 | Vercel タイムアウト | `batchSize`（3）を下げるか `maxDuration` を確認。インライン閾値（10 チャンク）未満なら即時経路 |
+| finalize で Zod エラー | LLM が空ノード名を返した可能性。`[KG Phase1/Phase2] chunk extraction failed` ログを確認 |
+| 抽出品質・コスト調整 | `KG_PHASE*_MODEL` / `KG_PHASE*_REASONING_EFFORT` を変更。高 effort はレイテンシ・コスト増 |
 
 ## 関連ファイル
 
