@@ -338,6 +338,7 @@
     "fullGraph": "Full graph",
     "recordingSvgFetchFailed": "Failed to get SVG element",
     "unknownError": "Unknown error",
+    "integrateFailed": "Failed to apply the graph",
     "annotationMap": {
       "group": "Group: {title}",
       "type": "Type: {type}",
@@ -487,6 +488,9 @@
     "replyCount": "{count} replies",
     "viewAllReplies": "View all replies ( + {more} more)",
     "searchingReferences": "Searching for references...",
+    "searchingOtherReferences": "Searching other documents...",
+    "provenanceReferencesHeading": "Source documents",
+    "otherReferencesHeading": "Other documents",
     "referenceFetchError": "An error occurred while fetching references.",
     "noReferencesFound": "No references found for \"{name}\".",
     "mentionedInDocuments": "Mentioned in {count} documents",

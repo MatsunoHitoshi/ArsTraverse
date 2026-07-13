@@ -16,7 +16,7 @@ export const dragEditorExtension = ({
   tempLineRef,
   tempCircleRef,
   simulation,
-  graphDocument,
+  getGraphDocument,
   dragState,
   setDragState,
   onGraphUpdate,
@@ -26,7 +26,12 @@ export const dragEditorExtension = ({
   tempLineRef: React.RefObject<SVGLineElement>;
   tempCircleRef: React.RefObject<SVGCircleElement>;
   simulation: Simulation<CustomNodeType, CustomLinkType>;
-  graphDocument: GraphDocumentForFrontend;
+  /**
+   * 最新の graphDocument を返す getter。
+   * ドラッグハンドラはアタッチ後も長く生存するため、スナップショットを閉じ込めると
+   * 構造更新後に古いデータを参照してしまう（stale closure）。ドラッグ時に都度最新を読む。
+   */
+  getGraphDocument: () => GraphDocumentForFrontend;
   dragState: DragState;
   setDragState: React.Dispatch<React.SetStateAction<DragState>>;
   onGraphUpdate?: (additionalGraph: GraphDocumentForFrontend) => void;
@@ -57,6 +62,33 @@ export const dragEditorExtension = ({
 
   const distance = (x1: number, y1: number, x2: number, y2: number) => {
     return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
+  };
+
+  // ドラッグ元イベントの DOM ターゲットから data-node-id を辿り、対象ノードを特定する。
+  // 座標距離での判定はノード端クリックやズーム倍率でズレるため、DOM 由来で確実に解決する。
+  const resolveNodeFromEvent = (
+    event: D3DragEvent<SVGCircleElement, CustomNodeType, CustomNodeType>,
+  ): CustomNodeType | null => {
+    const sourceEvent: unknown = event.sourceEvent;
+    if (!(sourceEvent instanceof Event)) return null;
+    const target = sourceEvent.target;
+    if (!(target instanceof Element)) return null;
+    const nodeEl = target.closest(`.${graphIdentifier}-node`);
+    const nodeId = nodeEl
+      ?.querySelector("[data-node-id]")
+      ?.getAttribute("data-node-id");
+    if (!nodeId) return null;
+    return getGraphDocument().nodes.find((node) => node.id === nodeId) ?? null;
+  };
+
+  // ズーム（パン）へイベントが伝播しないようにする。
+  const stopSourceEventPropagation = (
+    event: D3DragEvent<SVGCircleElement, CustomNodeType, CustomNodeType>,
+  ) => {
+    const sourceEvent: unknown = event.sourceEvent;
+    if (sourceEvent instanceof Event) {
+      sourceEvent.stopPropagation();
+    }
   };
 
   // 新しいノードを追加する関数
@@ -128,23 +160,16 @@ export const dragEditorExtension = ({
   function dragStarted(
     event: D3DragEvent<SVGCircleElement, CustomNodeType, CustomNodeType>,
   ) {
-    simulation.stop();
-
-    // ドラッグ開始時のノードを特定
-    const sourceNode = graphDocument.nodes.find((node) => {
-      if (node.id === dragStateInExtension.sourceNode?.id) return false;
-
-      // 位置情報がない場合はスキップ
-      if (!("x" in node) || !("y" in node)) return false;
-
-      const nodeX = (node as CustomNodeType).x ?? 0;
-      const nodeY = (node as CustomNodeType).y ?? 0;
-      return distance(event.x, event.y, nodeX, nodeY) < 5;
-    });
+    // ドラッグ開始時のノードを DOM から特定
+    const sourceNode = resolveNodeFromEvent(event);
 
     if (!sourceNode) {
       return;
     }
+
+    // ズーム（パン）に取られないようにイベント伝播を止める
+    stopSourceEventPropagation(event);
+    simulation.stop();
 
     dragSet({
       isDragging: true,
@@ -152,34 +177,34 @@ export const dragEditorExtension = ({
       targetNode: null,
     });
 
-    event.subject.fx = event.subject.x;
-    event.subject.fy = event.subject.y;
+    const startX = sourceNode.x ?? event.x;
+    const startY = sourceNode.y ?? event.y;
 
     // 一時的な線を表示
     if (tempLineRef.current) {
       tempLineRef.current.style.display = "block";
-      tempLineRef.current.setAttribute("x1", String(event.subject.x));
-      tempLineRef.current.setAttribute("y1", String(event.subject.y));
-      tempLineRef.current.setAttribute("x2", String(event.subject.x));
-      tempLineRef.current.setAttribute("y2", String(event.subject.y));
+      tempLineRef.current.setAttribute("x1", String(startX));
+      tempLineRef.current.setAttribute("y1", String(startY));
+      tempLineRef.current.setAttribute("x2", String(startX));
+      tempLineRef.current.setAttribute("y2", String(startY));
     }
     if (tempCircleRef.current) {
       tempCircleRef.current.style.display = "block";
-      tempCircleRef.current.setAttribute("cx", String(event.subject.x));
-      tempCircleRef.current.setAttribute("cy", String(event.subject.y));
+      tempCircleRef.current.setAttribute("cx", String(startX));
+      tempCircleRef.current.setAttribute("cy", String(startY));
     }
   }
 
   function dragged(
     event: D3DragEvent<SVGCircleElement, CustomNodeType, CustomNodeType>,
   ) {
-    event.subject.fx = event.x;
-    event.subject.fy = event.y;
+    if (!dragStateInExtension.sourceNode) return;
 
+    stopSourceEventPropagation(event);
     simulation.stop();
 
     // targetNodeを更新
-    const targetNode = graphDocument.nodes.find((node) => {
+    const targetNode = getGraphDocument().nodes.find((node) => {
       if (node.id === dragStateInExtension.sourceNode?.id) return false;
 
       // 位置情報がない場合はスキップ
@@ -249,9 +274,6 @@ export const dragEditorExtension = ({
 
     // ドラッグ状態をリセット
     dragReset();
-
-    event.subject.fx = null;
-    event.subject.fy = null;
   }
 
   d3.selectAll<Element, unknown>(`.${graphIdentifier}-node`).call(

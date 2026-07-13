@@ -13,7 +13,6 @@ type TagsInputProps = {
   setSelected: React.Dispatch<React.SetStateAction<TagOption | undefined>>;
   borderRed?: boolean;
   placeholder?: string;
-  defaultOption?: TagOption;
 };
 
 export const TagsInput = ({
@@ -21,7 +20,6 @@ export const TagsInput = ({
   selected,
   setSelected,
   placeholder,
-  defaultOption,
 }: TagsInputProps) => {
   const [query, setQuery] = useState("");
 
@@ -35,7 +33,6 @@ export const TagsInput = ({
   return (
     <Combobox
       value={selected}
-      defaultValue={defaultOption}
       // multiple
       onChange={(val) => {
         if (val) {

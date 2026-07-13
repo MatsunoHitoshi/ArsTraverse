@@ -16,6 +16,7 @@ import { CrossLargeIcon, GraphIcon, ZoomInIcon } from "../icons";
 import Image from "next/image";
 import { findEntityHighlights } from "@/app/_utils/text/find-entity-highlights";
 import { filterGraphByEntityNames } from "@/app/_utils/kg/filter-graph-by-entity-names";
+import { nodeMatchesName } from "@/app/_utils/kg/node-name-match";
 import { select, zoomTransform, pointer, zoom } from "d3";
 import type * as d3 from "d3";
 import { BottomSheet } from "../modal/bottom-sheet";
@@ -232,8 +233,8 @@ export const PublicArticleViewer: React.FC<PublicArticleViewerProps> = ({
 
   const handleEntityClick = (entityName: string) => {
     if (!graphDocument) return;
-    const foundNode = graphDocument.nodes.find(
-      (n: CustomNodeType) => n.name === entityName,
+    const foundNode = graphDocument.nodes.find((n: CustomNodeType) =>
+      nodeMatchesName(n, entityName),
     );
     if (foundNode) {
       setActiveEntity(foundNode);

@@ -139,6 +139,7 @@ export type NodeTypeForFrontend = {
   isAdditional?: boolean;
   isMergeTarget?: boolean;
   isExistingContext?: boolean;
+  isNewlyAdded?: boolean; // これから新規追加されるノード（抽出プレビュー用）
   isAddedInHistory?: boolean; // 変更履歴で追加されたノード
   isRemovedInHistory?: boolean; // 変更履歴で削除されたノード
 };
@@ -153,6 +154,7 @@ export type RelationshipTypeForFrontend = {
   documentGraphId?: string;
   isAdditional?: boolean;
   isExistingContext?: boolean;
+  isNewlyAdded?: boolean; // これから新規追加されるエッジ（抽出プレビュー用）
   isAddedInHistory?: boolean; // 変更履歴で追加されたエッジ
   isRemovedInHistory?: boolean; // 変更履歴で削除されたエッジ
 };

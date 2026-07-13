@@ -1,4 +1,8 @@
 import type { GraphDocumentForFrontend } from "@/app/const/types";
+import {
+  getNodeNameKeys,
+  normalizeNameKey,
+} from "@/app/_utils/kg/node-name-match";
 
 /**
  * エンティティ名のリストに基づいてグラフをフィルタリングする
@@ -16,9 +20,14 @@ export const filterGraphByEntityNames = (
   if (!graphDocument) return undefined;
 
   // エンティティ名に一致するノードをフィルタリング
-  const filteredNodes = graphDocument.nodes.filter((node) =>
-    entityNames.includes(node.name),
-  );
+  // node.name だけでなく name_ja / name_en も考慮し、表記言語の違いを吸収する
+  const entityNameKeys = new Set(entityNames.map(normalizeNameKey));
+  const filteredNodes = graphDocument.nodes.filter((node) => {
+    for (const key of getNodeNameKeys(node)) {
+      if (entityNameKeys.has(key)) return true;
+    }
+    return false;
+  });
 
   const filteredNodeIds = filteredNodes.map((node) => node.id);
 

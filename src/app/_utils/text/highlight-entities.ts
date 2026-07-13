@@ -1,4 +1,5 @@
 import type { CustomNodeType } from "@/app/const/types";
+import { getNodeNameCandidates } from "@/app/_utils/kg/node-name-match";
 
 const NORMALIZE_FORM: "NFC" | "NFD" = "NFC";
 
@@ -49,13 +50,22 @@ export const findEntityMatches = (
   const normalizedText = normalizeForMatch(text);
   const matches: HighlightMatch[] = [];
 
-  // 長いエンティティ名から順に処理（部分一致を防ぐため）
-  const sortedEntities = [...entities]
-    .filter((e) => e.name.length > 0)
-    .sort((a, b) => b.name.length - a.name.length);
+  // エンティティごとに name / name_ja / name_en を候補として展開し、
+  // 表記の言語違い（例: name が英語で本文が日本語）でもハイライトできるようにする。
+  const candidates = entities.flatMap((entity) =>
+    getNodeNameCandidates(entity).map((candidateName) => ({
+      entity,
+      candidateName,
+    })),
+  );
 
-  sortedEntities.forEach((entity) => {
-    const normalizedName = normalizeForMatch(entity.name);
+  // 長い名前から順に処理（部分一致を防ぐため）
+  const sortedCandidates = candidates
+    .filter((c) => c.candidateName.length > 0)
+    .sort((a, b) => b.candidateName.length - a.candidateName.length);
+
+  sortedCandidates.forEach(({ entity, candidateName }) => {
+    const normalizedName = normalizeForMatch(candidateName);
     const regex = new RegExp(escapeRegExp(normalizedName), "gi");
     let match: RegExpExecArray | null;
 

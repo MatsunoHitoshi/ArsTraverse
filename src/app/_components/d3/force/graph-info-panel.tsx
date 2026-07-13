@@ -17,7 +17,6 @@ import {
   DisclosurePanel,
 } from "@headlessui/react";
 import type { GraphDocumentForFrontend } from "@/app/const/types";
-import { usePathname, useRouter } from "i18n/navigation";
 import { getNodeByIdForFrontend } from "@/app/_utils/kg/filter";
 
 import { calculateGraphStatistics } from "@/app/_utils/kg/graph-statistics";
@@ -447,34 +446,20 @@ export const PropertiesSummaryPanel = ({
   node,
   contextId,
   contextType,
-  withDetail = false,
   onEditNode,
 }: {
   node: CustomNodeType;
   contextId: string;
   contextType: "topicSpace" | "document";
-  withDetail?: boolean;
   /** リストからノード編集モーダルを開く場合に指定（「詳細」と同様のボタンで編集を開く） */
   onEditNode?: (node: CustomNodeType) => void;
 }) => {
   const t = useTranslations("graph");
-  const router = useRouter();
-  const pathname = usePathname();
 
   return (
     <div className="flex flex-col gap-1">
       <div className="flex flex-row items-center gap-2">
         <div className="text-xs">{t("properties")}</div>
-        {withDetail && (
-          <Button
-            className="!p-1 !text-sm"
-            onClick={() =>
-              router.push(`${pathname}?list=true&nodeId=${node.id}`)
-            }
-          >
-            {t("detail")}
-          </Button>
-        )}
         {onEditNode && (
           <button
             type="button"
@@ -506,6 +491,7 @@ export const PropertiesSummaryPanel = ({
                   target="_blank"
                   rel="noopener noreferrer"
                   className="underline hover:no-underline"
+                  onClick={(e) => e.stopPropagation()}
                 >
                   {value}
                 </a>
@@ -517,6 +503,7 @@ export const PropertiesSummaryPanel = ({
                       target="_blank"
                       rel="noopener noreferrer"
                       className="underline hover:no-underline"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       {value}
                     </a>

@@ -8,6 +8,7 @@ import type {
   GraphDocumentForFrontend,
 } from "@/app/const/types";
 import { storageUtils } from "@/app/_utils/supabase/supabase";
+import { nodesShareName } from "@/app/_utils/kg/node-name-match";
 import { BUCKETS } from "@/app/_utils/supabase/const";
 import { Loading } from "@/app/_components/loading/loading";
 import AdditionalGraphViewer from "@/app/_components/view/graph-view/additional-graph-viewer";
@@ -54,23 +55,6 @@ export const AdditionalGraphExtractionModal: React.FC<
     useEffect(() => {
       if (extractedGraph != null) setDisplayGraph(extractedGraph);
     }, [extractedGraph]);
-
-    const mergeIntoDisplayGraph = (
-      prev: GraphDocumentForFrontend | null,
-      additional: GraphDocumentForFrontend,
-    ): GraphDocumentForFrontend => {
-      if (!prev) return additional;
-      return {
-        nodes: [
-          ...(prev.nodes ?? []),
-          ...(additional.nodes?.map((n) => ({ ...n, isAdditional: true })) ?? []),
-        ],
-        relationships: [
-          ...(prev.relationships ?? []),
-          ...(additional.relationships?.map((r) => ({ ...r, isAdditional: true })) ?? []),
-        ],
-      };
-    };
 
     const extractKG = api.kg.extractKG.useMutation();
 
@@ -192,7 +176,7 @@ export const AdditionalGraphExtractionModal: React.FC<
       extractedGraph.nodes.forEach((extractedNode) => {
         const matchingEntity = existingEntities.find(
           (entity) =>
-            entity.name === extractedNode.name &&
+            nodesShareName(entity, extractedNode) &&
             entity.label === extractedNode.label,
         );
 
@@ -330,16 +314,6 @@ export const AdditionalGraphExtractionModal: React.FC<
                       }
                     }}
                     hideConfirmButton
-                    additionalGraph={undefined}
-                    setAdditionalGraph={(action) => {
-                      const additional =
-                        typeof action === "function" ? action(undefined) : action;
-                      if (additional != null) {
-                        setDisplayGraph((prev) =>
-                          mergeIntoDisplayGraph(prev, additional),
-                        );
-                      }
-                    }}
                   />
                 )}
                 {activeTab === "list" && (

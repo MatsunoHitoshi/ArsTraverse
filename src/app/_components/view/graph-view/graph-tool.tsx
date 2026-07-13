@@ -139,15 +139,6 @@ export const GraphTool = ({
               setSelected={setTags}
               options={tagOptions}
               placeholder={t("filterByTag")}
-              defaultOption={
-                tagFilterOption?.value && tagFilterOption?.type
-                  ? {
-                    id: "0",
-                    label: tagFilterOption.value,
-                    type: tagFilterOption.type,
-                  }
-                  : undefined
-              }
             />
           </div>
         ) : (
