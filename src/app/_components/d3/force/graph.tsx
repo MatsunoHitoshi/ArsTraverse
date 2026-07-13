@@ -1035,7 +1035,9 @@ export const D3ForceGraph = ({
   );
 
   // 直感編集で参照する値は ref 経由で最新を読む（毎レンダーで参照が変わる
-  // onGraphUpdate / graphDocument を依存に含めず、無駄な再アタッチを防ぐ）
+  // onGraphUpdate / graphDocument を依存に含めず、無駄な再アタッチを防ぐ）。
+  // ドラッグハンドラはアタッチ後も生存するため、graphDocument はスナップショットで
+  // 閉じ込めず getter 経由でドラッグ時に最新を読む（構造更新後の stale closure を防止）。
   const onGraphUpdateRef = useRef(onGraphUpdate);
   onGraphUpdateRef.current = onGraphUpdate;
   const graphDocumentRef = useRef(graphDocument);
@@ -1053,7 +1055,7 @@ export const D3ForceGraph = ({
       tempLineRef,
       tempCircleRef,
       simulation,
-      graphDocument: graphDocumentRef.current,
+      getGraphDocument: () => graphDocumentRef.current,
       dragState,
       setDragState,
       onGraphUpdate: (additionalGraph) =>

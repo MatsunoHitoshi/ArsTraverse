@@ -16,7 +16,7 @@ export const dragEditorExtension = ({
   tempLineRef,
   tempCircleRef,
   simulation,
-  graphDocument,
+  getGraphDocument,
   dragState,
   setDragState,
   onGraphUpdate,
@@ -26,7 +26,12 @@ export const dragEditorExtension = ({
   tempLineRef: React.RefObject<SVGLineElement>;
   tempCircleRef: React.RefObject<SVGCircleElement>;
   simulation: Simulation<CustomNodeType, CustomLinkType>;
-  graphDocument: GraphDocumentForFrontend;
+  /**
+   * 最新の graphDocument を返す getter。
+   * ドラッグハンドラはアタッチ後も長く生存するため、スナップショットを閉じ込めると
+   * 構造更新後に古いデータを参照してしまう（stale closure）。ドラッグ時に都度最新を読む。
+   */
+  getGraphDocument: () => GraphDocumentForFrontend;
   dragState: DragState;
   setDragState: React.Dispatch<React.SetStateAction<DragState>>;
   onGraphUpdate?: (additionalGraph: GraphDocumentForFrontend) => void;
@@ -73,7 +78,7 @@ export const dragEditorExtension = ({
       ?.querySelector("[data-node-id]")
       ?.getAttribute("data-node-id");
     if (!nodeId) return null;
-    return graphDocument.nodes.find((node) => node.id === nodeId) ?? null;
+    return getGraphDocument().nodes.find((node) => node.id === nodeId) ?? null;
   };
 
   // ズーム（パン）へイベントが伝播しないようにする。
@@ -199,7 +204,7 @@ export const dragEditorExtension = ({
     simulation.stop();
 
     // targetNodeを更新
-    const targetNode = graphDocument.nodes.find((node) => {
+    const targetNode = getGraphDocument().nodes.find((node) => {
       if (node.id === dragStateInExtension.sourceNode?.id) return false;
 
       // 位置情報がない場合はスキップ
