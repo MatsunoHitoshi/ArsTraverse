@@ -73,7 +73,6 @@ export const NodePropertyEditModal = ({
                 "focus:outline-none data-[focus]:outline-1 data-[focus]:-outline-offset-2 data-[focus]:outline-slate-400",
               )}
               value={graphNodeField.name}
-              defaultValue={graphNodeField.name}
               onChange={(e) => {
                 const newName = e.target.value;
                 setGraphNodeField({
@@ -98,7 +97,6 @@ export const NodePropertyEditModal = ({
                 "focus:outline-none data-[focus]:outline-1 data-[focus]:-outline-offset-2 data-[focus]:outline-slate-400",
               )}
               value={graphNodeField.label}
-              defaultValue={graphNodeField.label}
               onChange={(e) => {
                 setGraphNodeField({
                   ...graphNodeField,
@@ -240,7 +238,6 @@ export const LinkPropertyEditModal = ({
               "focus:outline-none data-[focus]:outline-1 data-[focus]:-outline-offset-2 data-[focus]:outline-slate-400",
             )}
             value={graphLinkField.type}
-            defaultValue={graphLinkField.type}
             onChange={(e) => {
               setGraphLinkField({
                 ...graphLinkField,

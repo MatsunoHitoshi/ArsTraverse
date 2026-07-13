@@ -32,7 +32,9 @@ export const NodePropertiesDetail = ({
   const tGraph = useTranslations("graph");
   const router = useRouter();
   const pathname = usePathname();
+  const utils = api.useUtils();
   const extractKG = api.kg.extractKG.useMutation();
+  const integrateGraph = api.kg.integrateGraph.useMutation();
   const [isExtracting, setIsExtracting] = useState<boolean>(false);
   const [newGraphDocument, setNewGraphDocument] =
     useState<GraphDocumentForFrontend | null>(null);
@@ -83,6 +85,61 @@ export const NodePropertiesDetail = ({
   };
 
   const onGraphUpdate = (additionalGraph: GraphDocumentForFrontend) => {
+    // トピックスペースの詳細画面では、モーダルの「グラフに反映」で
+    // 抽出・編集したグラフを直接リポジトリの既存グラフへ統合する。
+    if (contextType === "topicSpace" && contextId) {
+      const graphDocumentToIntegrate = {
+        nodes: additionalGraph.nodes
+          .filter((node) => !node.id.startsWith("context-"))
+          .map((node) => ({
+            id: node.id,
+            name: node.name,
+            label: node.label,
+            properties: node.properties ?? {},
+          })),
+        relationships: additionalGraph.relationships
+          .filter(
+            (rel) =>
+              !rel.id.startsWith("context-") &&
+              !rel.sourceId.startsWith("context-") &&
+              !rel.targetId.startsWith("context-"),
+          )
+          .map((rel) => ({
+            id: rel.id,
+            type: rel.type,
+            properties: rel.properties ?? {},
+            sourceId: rel.sourceId,
+            targetId: rel.targetId,
+          })),
+      };
+
+      integrateGraph.mutate(
+        {
+          topicSpaceId: contextId,
+          graphDocument: graphDocumentToIntegrate,
+        },
+        {
+          onSuccess: () => {
+            setNewGraphDocument(null);
+            setIsGraphEditorMode(false);
+            refetch?.();
+            // Node詳細パネルの隣接グラフビュー（getRelatedNodes）を再取得して更新する
+            void utils.kg.getRelatedNodes.invalidate({
+              nodeId: node.id,
+              contextId,
+              contextType,
+            });
+          },
+          onError: (e) => {
+            console.error("グラフの統合に失敗しました", e);
+            alert(tGraph("integrateFailed"));
+          },
+        },
+      );
+      return;
+    }
+
+    // トピックスペース以外（ドキュメント等）は従来どおり編集ビューにステージングする。
     setNewGraphDocument(additionalGraph);
     setIsGraphEditorMode(true);
   };

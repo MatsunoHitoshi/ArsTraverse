@@ -179,16 +179,25 @@ const AdditionalGraphViewer = ({
     });
 
     // 追加グラフのノードにフラグを付与
+    // - 既存グラフに存在するノード（mergeTargetNodeIds に含まれる）は「これまでに存在していたノード」→ 通常表示（白）
+    // - それ以外は「これから新しく追加されるノード」→ 緑で強調
     const annotatedNodes = newGraphDocument.nodes.map((node) => ({
       ...node,
-      isMergeTarget: mergeTargetNodeIds.has(node.id),
-      isExistingContext: false, // 新しく追加される予定のノードは通常表示
+      isMergeTarget: false,
+      isNewlyAdded: !mergeTargetNodeIds.has(node.id),
+      isExistingContext: false,
+    }));
+
+    // 抽出された（これから追加される）エッジは緑で強調（ノードと統一）
+    const annotatedRelationships = newGraphDocument.relationships.map((rel) => ({
+      ...rel,
+      isNewlyAdded: true,
     }));
 
     // 既存コンテキストノードとエッジを追加
     const allNodes = [...annotatedNodes, ...contextNodes];
     const allRelationships = [
-      ...newGraphDocument.relationships,
+      ...annotatedRelationships,
       ...contextRelationships,
     ];
 
@@ -379,6 +388,9 @@ const AdditionalGraphViewer = ({
     controlledAdditionalGraph ?? internalAdditionalGraph;
   const setAdditionalGraph =
     controlledSetAdditionalGraph ?? setInternalAdditionalGraph;
+  // 親が controlled な setAdditionalGraph を渡す（＝グラフ更新を即座に親stateへマージする）
+  // 場合はポップアップを使わない。それ以外（内部stateでの追加編集フロー）はポップアップを出す。
+  const usesControlledAdditionalGraph = controlledSetAdditionalGraph != null;
 
   const [isNodeLinkAttachModalOpen, setIsNodeLinkAttachModalOpen] =
     useState<boolean>(false);
@@ -389,7 +401,10 @@ const AdditionalGraphViewer = ({
   const onGraphUpdate = (nextAdditionalGraph: GraphDocumentForFrontend) => {
     console.log("onGraphUpdate", nextAdditionalGraph);
     setAdditionalGraph(nextAdditionalGraph);
-    if (!onConfirm) {
+    // controlled マージ利用時は即マージするためポップアップは出さない。
+    // それ以外（プレビュー含む内部stateフロー）は追加ノード・エッジの
+    // プロパティ編集ポップアップを開く。
+    if (!usesControlledAdditionalGraph) {
       setIsNodeLinkAttachModalOpen(true);
     }
   };
@@ -486,6 +501,7 @@ const AdditionalGraphViewer = ({
             graphDocument={annotatedGraphDocument}
             isEditor={true}
             isLargeGraph={false}
+            enableLiveSimulation={true}
             setFocusedLink={setFocusedLink}
             toolComponent={<></>}
             onGraphUpdate={onGraphUpdate}
@@ -495,7 +511,7 @@ const AdditionalGraphViewer = ({
           />
         )}
       </ContainerSizeProvider>
-      {!useConfirmButton && (
+      {!usesControlledAdditionalGraph && (
         <NodeLinkEditModal
           isOpen={isNodeLinkAttachModalOpen}
           setIsOpen={setIsNodeLinkAttachModalOpen}

@@ -338,6 +338,7 @@
     "fullGraph": "グラフ全体",
     "recordingSvgFetchFailed": "SVG要素の取得に失敗しました",
     "unknownError": "不明なエラー",
+    "integrateFailed": "グラフの反映に失敗しました",
     "annotationMap": {
       "group": "グループ: {title}",
       "type": "タイプ: {type}",
@@ -487,6 +488,9 @@
     "replyCount": "{count}件の返信",
     "viewAllReplies": "すべての返信を見る ( + {more} 件)",
     "searchingReferences": "引用箇所を検索中...",
+    "searchingOtherReferences": "その他のドキュメントを検索中...",
+    "provenanceReferencesHeading": "ソースドキュメント",
+    "otherReferencesHeading": "その他のドキュメント",
     "referenceFetchError": "引用箇所の取得中にエラーが発生しました。",
     "noReferencesFound": "「{name}」に関する引用箇所が見つかりませんでした。",
     "mentionedInDocuments": "{count}個のドキュメントで言及されています",

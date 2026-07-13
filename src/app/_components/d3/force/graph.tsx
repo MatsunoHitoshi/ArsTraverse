@@ -10,6 +10,7 @@ import {
   forceX,
   forceY,
   forceCollide,
+  selectAll,
   type ForceLink,
 } from "d3";
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
@@ -98,6 +99,7 @@ type GraphNodeCircleProps = {
   isAddedInHistory: boolean;
   isRemovedInHistory: boolean;
   isMergeTarget: boolean;
+  isNewlyAdded: boolean;
   isAdditional: boolean;
   isExistingContext: boolean;
   nodeColor?: string;
@@ -136,6 +138,7 @@ function graphNodeCirclePropsAreEqual(
     prev.isAddedInHistory === next.isAddedInHistory &&
     prev.isRemovedInHistory === next.isRemovedInHistory &&
     prev.isMergeTarget === next.isMergeTarget &&
+    prev.isNewlyAdded === next.isNewlyAdded &&
     prev.isAdditional === next.isAdditional &&
     prev.isExistingContext === next.isExistingContext &&
     prev.nodeColor === next.nodeColor &&
@@ -169,6 +172,7 @@ const GraphNodeCircle = memo(function GraphNodeCircle({
   isAddedInHistory,
   isRemovedInHistory,
   isMergeTarget,
+  isNewlyAdded,
   isAdditional,
   isExistingContext,
   nodeColor,
@@ -215,13 +219,15 @@ const GraphNodeCircle = memo(function GraphNodeCircle({
             ? "#ef4444"
             : isMergeTarget
               ? "#10b981"
-              : isAdditional
-                ? "#8b9dc3"
-                : graphUnselected
-                  ? "#324557"
-                  : isClustered && nodeColor
-                    ? nodeColor
-                    : "whitesmoke";
+              : isNewlyAdded
+                ? "#10b981"
+                : isAdditional
+                  ? "#8b9dc3"
+                  : graphUnselected
+                    ? "#324557"
+                    : isClustered && nodeColor
+                      ? nodeColor
+                      : "whitesmoke";
   const opacity =
     isExistingContext
       ? 0.3
@@ -444,6 +450,8 @@ export const D3ForceGraph = ({
 }) => {
   const t = useTranslations("graph");
   const nodeDragEnabled = enableNodeDrag ?? (!enableLiveSimulation && !isEditor);
+  // 直感編集が有効か（isEditor かつ onGraphUpdate あり）
+  const canEditGraph = isEditor && !!onGraphUpdate;
   const { nodes, relationships } = graphDocument;
   const initLinks = relationships as CustomLinkType[];
   const initNodes = isLinkFiltered ? linkFilter(nodes, initLinks) : nodes;
@@ -768,8 +776,10 @@ export const D3ForceGraph = ({
   useEffect(() => {
     const initNodes = initNodesRef.current;
     const newLinks = newLinksRef.current;
-    // width/heightが無効な値の場合はシミュレーションを初期化しない
-    if (width <= 0 || height <= 0 || !initNodes.length || !newLinks.length) {
+    // width/heightが無効、またはノードが存在しない場合はシミュレーションを初期化しない。
+    // リンクが1本もないグラフ（孤立ノードのみ）でも forceCenter 等で中央に配置するため、
+    // リンク数の条件はガードに含めない（含めると孤立ノードが座標未設定(0,0)のままになる）。
+    if (width <= 0 || height <= 0 || !initNodes.length) {
       return;
     }
 
@@ -940,20 +950,6 @@ export const D3ForceGraph = ({
       settleLayout();
     });
 
-    if (isEditor && !!onGraphUpdate && !!dragState) {
-      dragEditorExtension({
-        tempLineRef,
-        tempCircleRef,
-        simulation,
-        graphDocument,
-        dragState,
-        setDragState,
-        onGraphUpdate,
-        graphIdentifier,
-        formatNewNodeName: (id) => t("newNodeName", { id }),
-      });
-    }
-
     return () => {
       if (animationFrameRef.current !== null) {
         cancelAnimationFrame(animationFrameRef.current);
@@ -1024,6 +1020,59 @@ export const D3ForceGraph = ({
     graphNodes.length,
     handleNodeDragPositionChange,
     svgRef,
+  ]);
+
+  // 実際に描画されているノード数（ドラッグ編集ハンドラの再アタッチ判定に使用）。
+  // ライブシミュレーション中は graphNodes 参照が毎フレーム変わるが、この値は
+  // ノードの増減時のみ変化するため、無駄な再アタッチを避けられる。
+  const renderedNodeCount = useMemo(
+    () =>
+      graphNodes.reduce(
+        (acc, node) => acc + ((node.visible ?? false) ? 1 : 0),
+        0,
+      ),
+    [graphNodes],
+  );
+
+  // 直感編集で参照する値は ref 経由で最新を読む（毎レンダーで参照が変わる
+  // onGraphUpdate / graphDocument を依存に含めず、無駄な再アタッチを防ぐ）
+  const onGraphUpdateRef = useRef(onGraphUpdate);
+  onGraphUpdateRef.current = onGraphUpdate;
+  const graphDocumentRef = useRef(graphDocument);
+  graphDocumentRef.current = graphDocument;
+
+  // 直感編集（ノードからのドラッグでエッジ／ノードを追加）のドラッグハンドラを、
+  // ノードの DOM 要素が描画された後に確実にアタッチする。
+  // （シミュレーション構築 effect 内では描画前のためアタッチできない）
+  useEffect(() => {
+    if (!canEditGraph) return;
+    const simulation = simulationRef.current;
+    if (!simulation || renderedNodeCount === 0) return;
+
+    dragEditorExtension({
+      tempLineRef,
+      tempCircleRef,
+      simulation,
+      graphDocument: graphDocumentRef.current,
+      dragState,
+      setDragState,
+      onGraphUpdate: (additionalGraph) =>
+        onGraphUpdateRef.current?.(additionalGraph),
+      graphIdentifier,
+      formatNewNodeName: (id) => t("newNodeName", { id }),
+    });
+
+    return () => {
+      selectAll<Element, unknown>(`.${graphIdentifier}-node`).on(".drag", null);
+    };
+    // dragState は毎ドラッグで変化するため依存に含めない（アタッチ時の初期値のみ使用）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    canEditGraph,
+    graphIdentifier,
+    renderedNodeCount,
+    simulationDataKey,
+    isLayoutSettled,
   ]);
 
   return (
@@ -1154,9 +1203,11 @@ export const D3ForceGraph = ({
                                     ? "#ef4444" // 変更履歴で削除されたエッジは赤色
                                     : isPathLink
                                       ? "#eae80c"
-                                      : graphLink.isAdditional
-                                        ? "#3769d4"
-                                        : "white"
+                                      : graphLink.isNewlyAdded
+                                        ? "#10b981" // 新規追加予定のエッジは緑色（ノードと統一）
+                                        : graphLink.isAdditional
+                                          ? "#3769d4"
+                                          : "white"
                           }
                           data-link-id={graphLink.id}
                           data-is-added={graphLink.isAddedInHistory}
@@ -1169,13 +1220,15 @@ export const D3ForceGraph = ({
                                 ? 1
                                 : isSelectionMode && isSelectedLink
                                   ? 0.9
-                                  : graphLink.isExistingContext
-                                    ? 0.2 // 既存グラフのコンテキストエッジは薄く
-                                    : isGradient
-                                      ? 0.04
-                                      : (distance(graphLink) ? 0.6 : 0.4) /
-                                      (distance(graphLink) *
-                                        distance(graphLink) || 1)
+                                  : graphLink.isNewlyAdded
+                                    ? 0.9 // 新規追加予定のエッジははっきり表示
+                                    : graphLink.isExistingContext
+                                      ? 0.2 // 既存グラフのコンテキストエッジは薄く
+                                      : isGradient
+                                        ? 0.04
+                                        : (distance(graphLink) ? 0.6 : 0.4) /
+                                          (distance(graphLink) *
+                                            distance(graphLink) || 1)
                           }
                           strokeWidth={
                             (graphLink.isAddedInHistory ??
@@ -1385,6 +1438,7 @@ export const D3ForceGraph = ({
                       isAddedInHistory={graphNode.isAddedInHistory ?? false}
                       isRemovedInHistory={graphNode.isRemovedInHistory ?? false}
                       isMergeTarget={graphNode.isMergeTarget ?? false}
+                      isNewlyAdded={graphNode.isNewlyAdded ?? false}
                       isAdditional={graphNode.isAdditional ?? false}
                       isExistingContext={graphNode.isExistingContext ?? false}
                       nodeColor={graphNode.nodeColor}
@@ -1447,6 +1501,7 @@ export const D3ForceGraph = ({
                       isAddedInHistory={graphNode.isAddedInHistory ?? false}
                       isRemovedInHistory={graphNode.isRemovedInHistory ?? false}
                       isMergeTarget={graphNode.isMergeTarget ?? false}
+                      isNewlyAdded={graphNode.isNewlyAdded ?? false}
                       isAdditional={graphNode.isAdditional ?? false}
                       isExistingContext={graphNode.isExistingContext ?? false}
                       nodeColor={graphNode.nodeColor}

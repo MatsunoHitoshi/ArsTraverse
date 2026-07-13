@@ -103,7 +103,6 @@ export const NodeLinkEditPanel = ({
                         "focus:outline-none data-[focus]:outline-1 data-[focus]:-outline-offset-2 data-[focus]:outline-slate-400",
                       )}
                       value={node.name}
-                      defaultValue={node.name}
                       onChange={(e) => {
                         if (isFullGraphMode && graphDocument) {
                           setGraphDocument({
@@ -150,7 +149,6 @@ export const NodeLinkEditPanel = ({
                         "focus:outline-none data-[focus]:outline-1 data-[focus]:-outline-offset-2 data-[focus]:outline-slate-400",
                       )}
                       value={node.label}
-                      defaultValue={node.label}
                       onChange={(e) => {
                         if (isFullGraphMode && graphDocument) {
                           setGraphDocument({
@@ -218,7 +216,6 @@ export const NodeLinkEditPanel = ({
                       "focus:outline-none data-[focus]:outline-1 data-[focus]:-outline-offset-2 data-[focus]:outline-slate-400",
                     )}
                     value={relationship.type}
-                    defaultValue={relationship.type}
                     onChange={(e) => {
                       if (isFullGraphMode && graphDocument) {
                         setGraphDocument({

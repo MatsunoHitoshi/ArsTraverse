@@ -1,4 +1,5 @@
 import type { GraphEditChange, Prisma, PrismaClient } from "@prisma/client";
+import { nodesShareName } from "@/app/_utils/kg/node-name-match";
 import type { DraftGraphData } from "@/server/services/graph-edit-proposal/draft.service";
 import { reconstructDraftGraphData } from "@/server/services/graph-edit-proposal/draft.service";
 
@@ -76,7 +77,7 @@ export function extractNodeMergePairsFromProposal(
     const canonical = draftGraphData.nodes.find(
       (node) =>
         node.id !== removed.id &&
-        node.name === removed.name &&
+        nodesShareName(node, removed) &&
         node.label === removed.label,
     );
     if (!canonical) {

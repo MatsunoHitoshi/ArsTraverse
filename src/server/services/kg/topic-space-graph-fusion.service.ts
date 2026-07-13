@@ -2,6 +2,7 @@ import {
   attachGraphProperties,
   fuseGraphs,
 } from "@/server/domain/kg/data-disambiguation";
+import { nodesShareName } from "@/app/_utils/kg/node-name-match";
 import type { PrismaClient } from "@prisma/client";
 import type {
   GraphNode,
@@ -169,12 +170,12 @@ export async function detachTopicSpaceGraphData(
     return (
       documentGraph.graphNodes.some(
         (documentGraphNode) =>
-          documentGraphNode.name === topicSpaceNode.name &&
+          nodesShareName(documentGraphNode, topicSpaceNode) &&
           documentGraphNode.label === topicSpaceNode.label,
       ) &&
       !otherDocumentGraphNodes.some(
         (otherDocumentGraphNode) =>
-          otherDocumentGraphNode.name === topicSpaceNode.name &&
+          nodesShareName(otherDocumentGraphNode, topicSpaceNode) &&
           otherDocumentGraphNode.label === topicSpaceNode.label,
       )
     );

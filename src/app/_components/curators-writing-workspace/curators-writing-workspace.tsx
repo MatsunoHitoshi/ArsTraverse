@@ -46,6 +46,7 @@ import { Modal } from "../modal/modal";
 import { useGraphEditor } from "@/app/_hooks/use-graph-editor";
 import { createSubgraphFromSelectedNodes } from "@/app/_utils/kg/create-subgraph-from-selected-nodes";
 import { filterGraphByEntityNames } from "@/app/_utils/kg/filter-graph-by-entity-names";
+import { nodeMatchesName } from "@/app/_utils/kg/node-name-match";
 import { filterGraphByLayoutInstruction } from "@/app/_utils/kg/filter-graph-by-layout-instruction";
 import { getSegmentNodeIdsFromMetaGraphStoryData } from "@/app/_utils/story-scroll-utils";
 import {
@@ -503,7 +504,9 @@ const CuratorsWritingWorkspace = ({
 
   // エンティティ名のクリック処理
   const handleEntityClick = (entityName: string) => {
-    const foundNode = nodes.find((n: CustomNodeType) => n.name === entityName);
+    const foundNode = nodes.find((n: CustomNodeType) =>
+      nodeMatchesName(n, entityName),
+    );
     if (foundNode) {
       updateActiveEntity(foundNode);
     }

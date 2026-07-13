@@ -12,6 +12,7 @@ import {
 import { D3ZoomProvider } from "../zoom";
 import type { TreeNode } from "@/app/const/types";
 import type { GraphDocumentForFrontend } from "@/app/const/types";
+import { nodeMatchesName } from "@/app/_utils/kg/node-name-match";
 import { useRouter } from "i18n/navigation";
 
 type D3RadialTreeProps = {
@@ -78,7 +79,7 @@ export const D3RadialTree = ({
 
     const isSelected = (name: string) => {
       return selectedGraphData?.nodes.some((node) => {
-        return node.name === name;
+        return nodeMatchesName(node, name);
       });
     };
     const inSelected = (d: HierarchyPointNode<TreeNode>) =>

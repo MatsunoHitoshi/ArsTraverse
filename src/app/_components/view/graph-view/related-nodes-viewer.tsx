@@ -95,6 +95,7 @@ export const RelatedNodesAndLinksViewer = ({
     >
       {isContainerReady ? (
         <D3ForceGraph
+          key={node.id}
           graphDocument={relatedNodesAndLinks}
           svgRef={svgRef}
           height={graphHeight}

@@ -1,4 +1,5 @@
 import { createId } from "@/app/_utils/cuid/cuid";
+import { nodesShareName } from "@/app/_utils/kg/node-name-match";
 import type { NodeTypeForFrontend } from "@/app/const/types";
 import type { GraphNode, GraphRelationship } from "@prisma/client";
 
@@ -78,7 +79,7 @@ const mergerGraphsWithDuplicatedNodeName = (p: {
   const duplicatedTargetNodes = targetGraph.nodes.filter((sourceNode) => {
     return sourceGraph.nodes.some((targetNode) => {
       return (
-        targetNode.name === sourceNode.name &&
+        nodesShareName(targetNode, sourceNode) &&
         (labelCheck ? targetNode.label === sourceNode.label : true)
       );
     });
@@ -86,7 +87,7 @@ const mergerGraphsWithDuplicatedNodeName = (p: {
   const additionalNodes = targetGraph.nodes.filter((sourceNode) => {
     return !sourceGraph.nodes.some((targetNode) => {
       return (
-        targetNode.name === sourceNode.name &&
+        nodesShareName(targetNode, sourceNode) &&
         (labelCheck ? targetNode.label === sourceNode.label : true)
       );
     });
@@ -100,7 +101,8 @@ const mergerGraphsWithDuplicatedNodeName = (p: {
     const prevId = dNode.id;
     const newId = newNodes.find((nn) => {
       return (
-        nn.name === dNode.name && (labelCheck ? nn.label === dNode.label : true)
+        nodesShareName(nn, dNode) &&
+        (labelCheck ? nn.label === dNode.label : true)
       );
     })?.id;
     if (newId) {
@@ -154,7 +156,7 @@ const simpleMerge = (graph: {
 
   nodes.forEach((node) => {
     const existingNode = uniqueNodes.find(
-      (n) => n.name === node.name && n.label === node.label,
+      (n) => nodesShareName(n, node) && n.label === node.label,
     );
 
     if (existingNode) {
@@ -205,7 +207,9 @@ export const attachGraphProperties = (
 ) => {
   const newNodesWithProperties = newGraph.nodes.map((nn) => {
     const matchedPrevNode = prevGraph.nodes.find((pn) => {
-      return pn.name === nn.name && (labelCheck ? pn.label === nn.label : true);
+      return (
+        nodesShareName(pn, nn) && (labelCheck ? pn.label === nn.label : true)
+      );
     });
     if (!!matchedPrevNode && !!matchedPrevNode.properties) {
       return { ...nn, properties: matchedPrevNode.properties };

@@ -5,6 +5,7 @@ import {
   formNodeDataForFrontend,
 } from "@/app/_utils/kg/frontend-properties";
 import type {
+  LocaleEnum,
   NodeTypeForFrontend,
   RelationshipTypeForFrontend,
 } from "@/app/const/types";
@@ -49,6 +50,10 @@ export const integrationProcedures = {
     .input(GetRelatedNodesInputSchema)
     .query(async ({ ctx, input }) => {
       const { nodeId, contextId, contextType } = input;
+      // 表示言語（ユーザーのpreferredLocale）に応じてノード名を name_ja / name_en から解決する
+      const preferredLocale = ctx.session?.user.preferredLocale as
+        | LocaleEnum
+        | undefined;
 
       let graphData;
 
@@ -111,7 +116,7 @@ export const integrationProcedures = {
         properties: {},
       };
       const neighborNodes = getNeighborNodes(
-        formGraphDataForFrontend(graphData),
+        formGraphDataForFrontend({ preferredLocale, ...graphData }),
         nodeId,
         "BOTH",
       );
@@ -166,6 +171,7 @@ export const integrationProcedures = {
       );
 
       return formGraphDataForFrontend({
+        preferredLocale,
         ...unifiedGraphData,
         nodes: unifiedGraphData.nodes.map((node) => ({
           documentGraphId: null,

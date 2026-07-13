@@ -115,6 +115,11 @@ export const NodeLinkList = ({
 
   const router = useRouter();
   const searchParams = useSearchParams();
+  const detailNodeId = searchParams.get("nodeId");
+
+  const openNodeDetail = (nodeId: string) => {
+    router.push(`?list=true&nodeId=${nodeId}`, { scroll: false });
+  };
 
   return (
     <div className="flex w-full flex-col gap-2">
@@ -211,17 +216,33 @@ export const NodeLinkList = ({
             nodeSearchQuery !== "" &&
             node.name.toLowerCase().includes(nodeSearchQuery.toLowerCase());
           const isCurrentMatch = currentMatchNode?.id === node.id;
+          const isDetailOpen = detailNodeId === String(node.id);
           return (
             <div
               key={node.id}
               ref={isCurrentMatch ? scrollTargetRef : undefined}
-              className={`flex w-full flex-row items-center p-2 ${focusedNode?.id === node.id
-                  ? "bg-slate-600"
-                  : queryFiltered
-                    ? isCurrentMatch
-                      ? "bg-slate-700 ring-2 ring-inset ring-orange-400"
-                      : "bg-slate-700"
-                    : ""
+              role="button"
+              tabIndex={isNodeMergeMode ? -1 : 0}
+              onClick={() => {
+                if (isNodeMergeMode) return;
+                openNodeDetail(node.id);
+              }}
+              onKeyDown={(e) => {
+                if (isNodeMergeMode) return;
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  openNodeDetail(node.id);
+                }
+              }}
+              className={`flex w-full flex-row items-center p-2 transition-colors ${isNodeMergeMode ? "" : "cursor-pointer"} ${isDetailOpen
+                  ? "bg-sky-950/60 ring-2 ring-inset ring-sky-400"
+                  : focusedNode?.id === node.id
+                    ? "bg-slate-600"
+                    : queryFiltered
+                      ? isCurrentMatch
+                        ? "bg-slate-700 ring-2 ring-inset ring-orange-400"
+                        : "bg-slate-700"
+                      : "hover:bg-slate-50/10"
                 }`}
             >
               {isNodeMergeMode && (
@@ -253,7 +274,6 @@ export const NodeLinkList = ({
                   node={node}
                   contextId={contextId}
                   contextType={contextType}
-                  withDetail={true}
                   onEditNode={isEditor ? onEditNode : undefined}
                 />
               </div>

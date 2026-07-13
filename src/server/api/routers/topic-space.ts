@@ -596,9 +596,15 @@ export const topicSpaceRouter = createTRPCRouter({
     }),
 
   getNodeReference: protectedProcedure
-    .input(z.object({ id: z.string(), nodeId: z.string() }))
+    .input(
+      z.object({
+        id: z.string(),
+        nodeId: z.string(),
+        // provenance: このノードの出自ドキュメントのみ / others: 出自以外のみ / all: 全件（後方互換）
+        scope: z.enum(["provenance", "others", "all"]).default("all"),
+      }),
+    )
     .query(async ({ ctx, input }) => {
-      console.log("======= getNodeReference ========", input);
       const topicSpace = await ctx.db.topicSpace.findFirst({
         where: { id: input.id },
         include: {
@@ -618,18 +624,49 @@ export const topicSpaceRouter = createTRPCRouter({
         throw new Error("Node not found");
       }
 
+      // 検索キーワード: DBの生 name に加え、ローカライズ名(name_ja/name_en)も含める。
+      // これによりドキュメントの言語に依らずヒットしやすくする。
+      const nodeProperties = (node.properties ?? {}) as Record<string, unknown>;
+      const searchTerms = Array.from(
+        new Set(
+          [node.name, nodeProperties.name_ja, nodeProperties.name_en]
+            .filter(
+              (value): value is string =>
+                typeof value === "string" && value.trim() !== "",
+            )
+            .map((value) => value.trim()),
+        ),
+      );
+
+      // scope に応じて検索対象ドキュメントを絞り込む。
+      // provenance/others の場合はこのノードの出自ドキュメントID集合を取得する。
+      let provenanceIds = new Set<string>();
+      if (input.scope !== "all") {
+        const provenanceRows =
+          await ctx.db.topicSpaceDocumentNodeProvenance.findMany({
+            where: { topicSpaceId: input.id, graphNodeId: input.nodeId },
+            select: { sourceDocumentId: true },
+          });
+        provenanceIds = new Set(
+          provenanceRows.map((row) => row.sourceDocumentId),
+        );
+      }
+
+      const targetDocuments = topicSpace.sourceDocuments.filter((doc) => {
+        if (input.scope === "provenance") return provenanceIds.has(doc.id);
+        if (input.scope === "others") return !provenanceIds.has(doc.id);
+        return true;
+      });
+
       const referenceSections: ReferenceSection[] = [];
 
-      console.log("======= node.name ========", node.name);
-
-      for (const sourceDocument of topicSpace.sourceDocuments) {
+      for (const sourceDocument of targetDocuments) {
         const relevantSections = await getTextReference(
           ctx,
           sourceDocument.id,
-          [node.name],
+          searchTerms,
           200,
         );
-        console.log("======= relevantSections ========", relevantSections);
         referenceSections.push({
           sourceDocument: sourceDocument,
           relevantSections: relevantSections.map((section) => section + "..."),
@@ -662,13 +699,34 @@ export const topicSpaceRouter = createTRPCRouter({
         throw new Error("Node not found");
       }
 
+      // 検索キーワード: DBの生 name に加え、ローカライズ名(name_ja/name_en)も含める。
+      // これによりドキュメントの言語に依らずヒットしやすくする（例: name が英語でも日本語文書を検索できる）。
+      const nodeProperties = (node.properties ?? {}) as Record<string, unknown>;
+      const searchTerms = Array.from(
+        new Set(
+          [node.name, nodeProperties.name_ja, nodeProperties.name_en]
+            .filter(
+              (value): value is string =>
+                typeof value === "string" && value.trim() !== "",
+            )
+            .map((value) => value.trim()),
+        ),
+      );
+
+      // 解説文は日本語で生成するため、プロンプトでは日本語名(name_ja)を優先して用いる。
+      const promptNodeName =
+        typeof nodeProperties.name_ja === "string" &&
+        nodeProperties.name_ja.trim() !== ""
+          ? nodeProperties.name_ja.trim()
+          : node.name;
+
       let referenceText = "";
 
       for (const sourceDocument of topicSpace.sourceDocuments) {
         const relevantSections = await getTextReference(
           ctx,
           sourceDocument.id,
-          [node.name],
+          searchTerms,
           800,
         );
         referenceText += relevantSections.join("\n---\n");
@@ -694,13 +752,13 @@ export const topicSpaceRouter = createTRPCRouter({
               },
               {
                 role: "user",
-                content: `ノード名: ${node.name}
+                content: `ノード名: ${promptNodeName}
 ノードラベル: ${node.label}
 
 関連文書:
 ${referenceText}
 
-上記の文書を基に、「${node.name}」についての解説文を作成してください。`,
+上記の文書を基に、「${promptNodeName}」についての解説文を作成してください。`,
               },
             ],
             max_tokens: 500,
