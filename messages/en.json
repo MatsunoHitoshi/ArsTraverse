@@ -603,7 +603,7 @@
     "mappingFailed": "Mapping failed",
     "retry": "Retry",
     "noAnnotationsYet": "No annotations yet",
-    "generateFromDocument": "Generate annotations from document",
+    "generateFromDocument": "Generate annotations from documents",
     "replyCount": "{count} replies",
     "viewAllReplies": "View all replies (+ {count} more)",
     "graphExtraction": "Extract graph",
