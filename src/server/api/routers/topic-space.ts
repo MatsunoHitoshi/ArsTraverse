@@ -48,6 +48,12 @@ import { storageUtils } from "@/app/_utils/supabase/supabase";
 import { TRPCError } from "@trpc/server";
 import { buildDriveFolderUrl } from "@/server/lib/google-drive/urls";
 import { hasUserGoogleDriveConnection } from "@/server/lib/google-drive/user-oauth";
+import {
+  getNodeDescriptionSystemPrompt,
+  getNodeDescriptionUserPrompt,
+  getNodeDescriptionGenerationFailedMessage,
+  getNodeDescriptionNoReferenceMessage,
+} from "@/server/lib/i18n/prompts/node-description";
 import OpenAI from "openai";
 
 const TopicSpaceCreateSchema = z.object({
@@ -713,11 +719,14 @@ export const topicSpaceRouter = createTRPCRouter({
         ),
       );
 
-      // 解説文は日本語で生成するため、プロンプトでは日本語名(name_ja)を優先して用いる。
+      // UI言語に合わせて解説文を生成する。プロンプトのノード名も
+      // 表示言語に対応するローカライズ名(en → name_en / ja → name_ja)を優先する。
+      const locale = ctx.locale;
+      const localizedNameKey = locale === "en" ? "name_en" : "name_ja";
+      const localizedName = nodeProperties[localizedNameKey];
       const promptNodeName =
-        typeof nodeProperties.name_ja === "string" &&
-        nodeProperties.name_ja.trim() !== ""
-          ? nodeProperties.name_ja.trim()
+        typeof localizedName === "string" && localizedName.trim() !== ""
+          ? localizedName.trim()
           : node.name;
 
       let referenceText = "";
@@ -737,32 +746,25 @@ export const topicSpaceRouter = createTRPCRouter({
         try {
           const openai = new OpenAI();
           const stream = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
+            model: "gpt-5.4-mini",
             messages: [
               {
                 role: "system",
-                content: `あなたは専門的な知識を分かりやすく解説するエキスパートです。与えられた文書から、指定されたノード（概念）について、簡潔で分かりやすい解説文を作成してください。
-
-解説文の要件：
-- 200-300文字程度の簡潔な説明
-- 専門用語は適切に説明する
-- 文書の内容を基にした正確な情報
-- 読み手が理解しやすい構成
-- 日本語で記述`,
+                content: getNodeDescriptionSystemPrompt(locale),
               },
               {
                 role: "user",
-                content: `ノード名: ${promptNodeName}
-ノードラベル: ${node.label}
-
-関連文書:
-${referenceText}
-
-上記の文書を基に、「${promptNodeName}」についての解説文を作成してください。`,
+                content: getNodeDescriptionUserPrompt(locale, {
+                  nodeName: promptNodeName,
+                  nodeLabel: node.label,
+                  referenceText,
+                }),
               },
             ],
-            max_tokens: 500,
-            temperature: 0.7,
+            // gpt-5 系は reasoning モデルのため max_completion_tokens を使用し、
+            // temperature は既定値(1)のみ許容されるため指定しない。
+            max_completion_tokens: 1500,
+            reasoning_effort: "low",
             stream: true,
           });
 
@@ -788,14 +790,14 @@ ${referenceText}
           console.error("OpenAI API error:", error);
           yield {
             node: node,
-            description: "解説文の生成に失敗しました。",
+            description: getNodeDescriptionGenerationFailedMessage(locale),
             isComplete: true,
           };
         }
       } else {
         yield {
           node: node,
-          description: "関連する文書が見つかりませんでした。",
+          description: getNodeDescriptionNoReferenceMessage(locale),
           isComplete: true,
         };
       }
