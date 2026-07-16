@@ -116,6 +116,8 @@
     "merge": "統合",
     "sortByName": "名称順",
     "sortByCentrality": "中心度順",
+    "sortByCentralityDesc": "中心度（高い順）",
+    "sortByCentralityAsc": "中心度（低い順）",
     "sort": "並び替え",
     "prevHighlight": "前のハイライトへ",
     "nextHighlight": "次のハイライトへ",

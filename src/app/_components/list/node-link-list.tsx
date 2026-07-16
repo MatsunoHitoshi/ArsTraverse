@@ -11,7 +11,14 @@ import { useRouter } from "i18n/navigation";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 
-type NodesSortType = "name" | "centrality" | "none";
+type NodesSortType = "name" | "centralityDesc" | "centralityAsc" | "none";
+
+const SORT_CYCLE: NodesSortType[] = [
+  "none",
+  "name",
+  "centralityDesc",
+  "centralityAsc",
+];
 
 export const NodeLinkList = ({
   graphDocument,
@@ -57,15 +64,21 @@ export const NodeLinkList = ({
   const sortedGraphNodes = useMemo(() => {
     if (sortType === "name") {
       return [...graphNodes].sort((a, b) => a.name.localeCompare(b.name));
-    } else if (sortType === "centrality") {
+    } else if (
+      sortType === "centralityDesc" ||
+      sortType === "centralityAsc"
+    ) {
       const degrees = new Map<string, number>();
       graphDocument.relationships.forEach((l) => {
         degrees.set(l.sourceId, (degrees.get(l.sourceId) ?? 0) + 1);
         degrees.set(l.targetId, (degrees.get(l.targetId) ?? 0) + 1);
       });
 
+      const direction = sortType === "centralityDesc" ? -1 : 1;
       return [...graphNodes].sort(
-        (a, b) => (degrees.get(b.id) ?? 0) - (degrees.get(a.id) ?? 0),
+        (a, b) =>
+          direction *
+          ((degrees.get(a.id) ?? 0) - (degrees.get(b.id) ?? 0)),
       );
     } else {
       return graphNodes;
@@ -160,19 +173,16 @@ export const NodeLinkList = ({
         )}
 
         <Button
-          onClick={() =>
-            setSortType(
-              sortType === "name"
-                ? "centrality"
-                : sortType === "centrality"
-                  ? "none"
-                  : "name",
-            )
-          }
+          onClick={() => {
+            const currentIndex = SORT_CYCLE.indexOf(sortType);
+            const nextIndex = (currentIndex + 1) % SORT_CYCLE.length;
+            setSortType(SORT_CYCLE[nextIndex]!);
+          }}
           className={`!text-xs ${sortType === "none" ? "" : "!text-orange-500"}`}
         >
           {sortType === "name" && t("sortByName")}
-          {sortType === "centrality" && t("sortByCentrality")}
+          {sortType === "centralityDesc" && t("sortByCentralityDesc")}
+          {sortType === "centralityAsc" && t("sortByCentralityAsc")}
           {sortType === "none" && t("sort")}
         </Button>
 

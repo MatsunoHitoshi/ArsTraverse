@@ -116,6 +116,8 @@
     "merge": "Merge",
     "sortByName": "By name",
     "sortByCentrality": "By centrality",
+    "sortByCentralityDesc": "By centrality (high→low)",
+    "sortByCentralityAsc": "By centrality (low→high)",
     "sort": "Sort",
     "prevHighlight": "Go to previous highlight",
     "nextHighlight": "Go to next highlight",
