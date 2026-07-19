@@ -110,3 +110,16 @@ flowchart LR
 - `maxDegree` は `Math.max(...degreeValues)` を `reduce` で求める（大規模グラフでのスタックオーバーフロー回避）
 - 次数分布・ハブ依存度は PR #65 以降でパネルに追加。研究・キュレーション時のグラフ構造のざっくりした把握に使う
 - フィールドリサーチの `GraphPreview` は統計パネルではなく要約リスト（`GraphSummary`）を使用。統計パネルはデスクトップ D3 グラフ画面専用
+
+## 関連 UI: ノードリンクリストの次数ソート
+
+グラフ画面の `NodeLinkList`（`src/app/_components/list/node-link-list.tsx`）にも次数（degree）に基づくソートがある。統計パネルの「重要エンティティ」と同様、**無向グラフの次数**（各ノードに接続するエッジ数）を用いる。
+
+| ソートモード | 動作 |
+|--------------|------|
+| 既定（`none`） | サーバー返却順のまま |
+| `name` | `node.name` のロケール比較 |
+| `centralityDesc` | 次数の高い順 |
+| `centralityAsc` | 次数の低い順 |
+
+ソートボタンをクリックするたびに `none → name → centralityDesc → centralityAsc` と循環する。次数は `graphDocument.relationships` を走査してクライアント側で都度計算する（`GraphInfoPanel` の `calculateGraphStatistics` とは別経路だが、次数の定義は同じ）。
