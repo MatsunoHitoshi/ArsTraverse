@@ -43,3 +43,9 @@ flowchart LR
 - `src/app/_components/curators-writing-workspace/tiptap/hooks/use-highlight.ts` — useHighlight, triggerHighlightUpdate
 - `src/app/_utils/tiptap/auto-highlight.ts` — performHighlightUpdate
 - `src/app/_components/curators-writing-workspace/tiptap/extensions/entity-highlight-extension.ts` — EntityHighlight Mark
+
+## クロス言語の名前一致
+
+ハイライトは `node.name` だけでなく `properties.name_ja` / `properties.name_en` も候補に展開する（`getNodeNameCandidates`）。本文が日本語でも `name` が英語のノードをハイライトできる。長い名前を優先してマッチし、部分一致の誤検出を防ぐ。
+
+詳細: [クロス言語ノード同一性](./cross-language-node-identity.md)
