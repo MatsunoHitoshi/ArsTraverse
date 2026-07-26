@@ -104,6 +104,7 @@ flowchart LR
 - `src/app/_utils/kg/graph-statistics.ts` — 指標計算の単一ソース
 - `src/app/_utils/kg/bfs.ts` — BFS 距離
 - `src/app/_components/d3/force/graph-info-panel.tsx` — UI・`DegreeDistributionChart`
+- `src/app/_components/list/node-link-list.tsx` — リスト・ソート・検索・マージ UI
 
 ## 実装上の注意
 
@@ -123,3 +124,35 @@ flowchart LR
 | `centralityAsc` | 次数の低い順 |
 
 ソートボタンをクリックするたびに `none → name → centralityDesc → centralityAsc` と循環する。次数は `graphDocument.relationships` を走査してクライアント側で都度計算する（`GraphInfoPanel` の `calculateGraphStatistics` とは別経路だが、次数の定義は同じ）。
+
+## URL 駆動のリスト・詳細
+
+| クエリ | 動作 |
+|--------|------|
+| `?list=true` | ノードリンクリストを開く |
+| `?list=true&nodeId=<id>` | リスト表示 + 当該ノードの詳細パネル（`NodePropertiesDetail`） |
+
+リスト行クリックで `router.push(?list=true&nodeId=...)`。グラフアイコンボタンで `list` のトグル。
+
+## ツールバー検索との連携
+
+`Toolbar` のノード検索入力は `nodeSearchQuery` として `NodeLinkList` に渡される。
+
+| 機能 | 実装 |
+|------|------|
+| フィルタ | `node.name.toLowerCase().includes(q)` のみ（`name_ja` / `name_en` は未対象） |
+| マッチ巡回 | ヒットが複数あるとき `‹ N/M ›` で `matchIndex` を循環 |
+| スクロール | 現在マッチ行へ `scrollIntoView({ block: "nearest" })` |
+
+検索ヒット行は `ring-orange-400`、詳細表示中の行は `ring-sky-400` で強調。
+
+## 編集モード（TopicSpace）
+
+`isEditor === true` かつ `contextType === "topicSpace"` のとき:
+
+| 機能 | 説明 |
+|------|------|
+| ノードマージ | チェックボックスで複数選択 → `MergeNodesForm` |
+| グラフ更新ボタン | `isGraphUpdated` かつ `onGraphUpdate` があるときオレンジの「更新」を表示（モーダル編集の未保存変更をサーバーへ反映） |
+
+各リスト行の `PropertiesSummaryPanel` から、編集モード時は `onEditNode` でプロパティ編集モーダルを開ける。

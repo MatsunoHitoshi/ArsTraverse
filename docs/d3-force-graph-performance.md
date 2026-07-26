@@ -14,6 +14,7 @@
 | `single-document-graph-viewer` | `false` | 既定 **`true`**、ツールバーで切替可 | `/graph/[id]` 単一ドキュメントグラフ |
 | `document-detail` | `false` | 既定 **`true`**、`LiveSimulationToggleButton` | ドキュメント詳細プレビュー |
 | `related-nodes-viewer` | `false` | `true`（固定） | 近傍サブグラフ（常時ライブ） |
+| `additional-graph-viewer` | `false` | **`true`（固定）** | グラフ拡張プレビュー・編集 |
 | その他（公開記事・フィールドプレビュー等） | `false` | 既定 `false` | 小規模グラフ |
 
 **既定値の使い分け:** リポジトリ統合グラフ（1300 ノード超の可能性）はパフォーマンス優先でライブ OFF。単一ドキュメントビューはノード数が少ない前提のため、初回表示からライブ ON（微動で関係性を把握しやすくする）。
@@ -77,6 +78,51 @@ tick ハンドラは `requestAnimationFrame` で React 状態更新をバッチ�
 - in-place 更新される座標・可視属性は `graphNode` 参照ではなく **プリミティブ props**（`nodeX`, `nodeY`, `nodeVisible` 等）で渡す
 - ズーム・LOD 変更はノードオブジェクトを in-place 更新し、変更時のみ配列をスプレッドして再レンダー
 
+## グラフツールバー
+
+`Toolbar`（`toolbar.tsx`）は `graph-tool.tsx` 等から渡された setter の有無でコントロールを出し分ける。
+
+| コントロール | 条件 | 動作 |
+|--------------|------|------|
+| ライブシミュレーション | `setEnableLiveSimulation` あり | `LiveSimulationToggleButton` |
+| 有向リンク表示 | `setIsDirectedLinks` あり | `DirectedLinksToggleButton` |
+| 拡大鏡 | `setMagnifierMode` あり | 0 → 1 → 2 → 0 の 3 段階 |
+| 直接編集 | `isEditor` + `setIsEditing` | グラフ編集モード切替 |
+| リンクフィルタ | `setIsLinkFiltered` あり | フォーカスノード周辺のみ表示 |
+| エッジ方向 | `setEdgeType` あり | IN / OUT / BOTH |
+| ノード検索 | `setNodeSearchQuery` あり | `NodeLinkList` へクエリを渡す |
+| 右エリア | `rightArea` | タグフィルタ等（`graph-tool` 側で注入） |
+
+メインの TopicSpace グラフ（`multi-document-graph-viewer`）はライブ切替・有向リンク・拡大鏡・検索を提供。単一ドキュメントビューはライブ既定 ON。
+
+## インタラクティブグラフ編集（ドラッグエディタ）
+
+`isEditor === true` かつ `onGraphUpdate` が渡されたとき、`canEditGraph` が有効になり `dragEditorExtension`（`drag-editor-extension.tsx`）がノードへ D3 drag をバインドする。
+
+### 操作
+
+| ジェスチャ | 結果 |
+|------------|------|
+| ノードから空白へドラッグ（10px 超） | 新規ノード + `CONNECTS` エッジを `onGraphUpdate` で追加 |
+| ノードから別ノードへドラッグ | 既存ノード間に `CONNECTS` エッジを追加 |
+| ノード右クリック | `onNodeContextMenu` → プロパティ編集モーダル |
+
+新規ノード名は `formatNewNodeName(id)`（i18n）。ノード解決は座標距離ではなく DOM の `data-node-id` を使用（ズーム・端クリックのズレ防止）。
+
+### 位置ドラッグとの排他
+
+| モード | 有効なドラッグ |
+|--------|----------------|
+| `canEditGraph`（構造編集） | `dragEditorExtension` |
+| 確定レイアウト・非エディタ・ライブ OFF | `attachNodePositionDrag`（座標のみ） |
+| ライブシミュレーション ON | いずれも無効（`nodeDragEnabled === false`） |
+
+`additional-graph-viewer` は `isEditor={true}` かつ `enableLiveSimulation={true}` 固定のため、**構造編集ドラッグのみ**（位置固定ドラッグは無効）。
+
+### stale closure 対策
+
+ドラッグハンドラは SVG 存続中ずっと生きる。`getGraphDocument: () => GraphDocumentForFrontend` ゲッターでドラッグ時に最新グラフを読む（PR #82）。スナップショットを閉じ込めると編集後に古いノード集合を参照する。
+
 ## 固定レイアウト時のノードドラッグ
 
 確定レイアウトかつ編集モードでないとき、`attachNodePositionDrag`（`node-position-drag-extension.tsx`）でノードを手動配置できる:
@@ -119,7 +165,8 @@ flowchart TD
 | ノードが動き続ける | ライブシミュレーションが ON。ツールバーで OFF にする |
 | リサイズでグラフが飛ぶ | 確定後は平行移動のみ。データ変更で再レイアウトされた可能性 |
 | 近傍グラフで nodeId が揺れる | `handleGraphNodeSelect` / `navigateToNode` の同一 ID ガードを確認 |
-| ドラッグが効かない | ライブ ON または `isEditor` ではドラッグ無効 |
+| ドラッグが効かない | ライブ ON では位置ドラッグ無効。構造編集は `canEditGraph` が必要 |
+| 編集後にドラッグが古いグラフを参照 | `getGraphDocument` ゲッターが渡されているか確認 |
 | 単一ドキュメントで常に微動する | 既定がライブ ON。ツールバー / `LiveSimulationToggleButton` で OFF にできる |
 
 ## 関連ファイル
@@ -132,4 +179,7 @@ flowchart TD
 - `src/app/_components/view/node/node-properties-detail.tsx` — URL 駆動ノード遷移
 - `src/app/_components/view/graph-view/single-document-graph-viewer.tsx` — 単一ドキュメントグラフ（ライブ既定 ON）
 - `src/app/_components/document/document-detail.tsx` — ドキュメント詳細プレビュー
+- `src/app/_components/d3/extension/drag-editor-extension.tsx` — 構造編集ドラッグ
+- `src/app/_components/toolbar/toolbar.tsx` — グラフツールバー
+- `src/app/_components/view/graph-view/additional-graph-viewer.tsx` — グラフ拡張プレビュー
 - `src/providers/container-size.tsx` — ResizeObserver によるコンテナ計測
