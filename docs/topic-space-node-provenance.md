@@ -38,6 +38,24 @@ provenance は **グラフ統合（fuse）** のたびに書き込まれます�
 
 エッジ provenance は fuse で **新規追加された relationship** のみ記録します。ノード provenance は fuse の `nodeIdRecords`（ローカル ID → 統合 ID の対応）から生成します。
 
+## provenance を記録しない経路
+
+以下の操作は `fuseGraphs` または `applyTopicSpaceGraphDiff` でグラフを更新しますが、**`TopicSpaceDocumentNodeProvenance` / `TopicSpaceDocumentEdgeProvenance` 行は作成しません**。
+
+| 経路 | サービス / API | 影響 |
+|------|----------------|------|
+| ノード詳細からのグラフ拡張 | `kg.integrateGraph` → `integrate-graph.service.ts` | 手動追加ノードは detach 時に名前・ラベル一致フォールバックのみ |
+| 執筆 WS から TopicSpace へ直接統合 | 同上 | 同上 |
+| ノードマージ | `merge-graph-nodes.service.ts` | 既存 provenance は代表ノードへ付け替え（新規作成ではない） |
+
+### 運用上の意味
+
+- **引用パネル**（`getNodeReference` の `scope=provenance`）に手動統合ノードは出ない — [ノード引用パネル](./node-reference-citations.md)
+- **MCP / CLI エクスポート**の `sourceDocumentIds` が空のノードがあり得る
+- **detach** 時、`resolveDetachedNodeIds` の対象外となり、他ドキュメントと名前・ラベルが一致するとレガシー `detachTopicSpaceGraphData` に依存する
+
+手動統合後に provenance が必要な場合は、当該 SourceDocument を再 attach するか、MCP での追跡要件を別途検討する。
+
 ## detach 時の挙動
 
 `detach-documents.service.ts` の流れ:
@@ -140,3 +158,5 @@ TopicSpace 一覧やドキュメントリストでは、パフォーマンスの
 
 - [MCP 認証（プラットフォーム MCP ツール一覧）](./mcp-authentication.md)
 - [Google Drive 同期](./topic-space-drive-sync.md)
+- [TopicSpace グラフ拡張（integrateGraph）](./topic-space-graph-extension.md)
+- [ノード引用パネル](./node-reference-citations.md)

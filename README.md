@@ -194,6 +194,8 @@ Concept and flow diagrams for the writing workspace, story generation, auto-high
 - `docs/kg-batched-extraction-pipeline.md` — async Phase1/Phase2 KG extraction, GPT-5.4 models, env tuning (PR #80)
 - `docs/cross-language-node-identity.md` — name / name_ja / name_en matching, graph fusion, highlight (PR #82)
 - `docs/node-description-generation.md` — locale-aware node description streaming from documents (PR #83)
+- `docs/topic-space-graph-extension.md` — description/text KG extraction, preview, integrateGraph (PR #82)
+- `docs/node-reference-citations.md` — SourceDocument citation panel, provenance scope, admin API (PR #82)
 - `docs/storytelling-scroll-viewer.md` — published article `ScrollStorytellingViewerUnified`, URL params, scroll guards
 - `docs/topic-space-drive-sync.md` — Google Drive folder sync into TopicSpace (user OAuth, Cron)
 - `docs/topic-space-node-provenance.md` — SourceDocument ↔ unified graph node/edge tracking
@@ -272,6 +274,8 @@ supabase/
 - [KG バッチ抽出パイプライン（Phase1 / Phase2）](./docs/kg-batched-extraction-pipeline.md)
 - [クロス言語ノード同一性（name_ja / name_en）](./docs/cross-language-node-identity.md)
 - [ノード解説文の自動生成（UI ロケール対応）](./docs/node-description-generation.md)
+- [TopicSpace グラフ拡張（抽出・プレビュー・統合）](./docs/topic-space-graph-extension.md)
+- [ノード引用パネル（SourceDocument 参照）](./docs/node-reference-citations.md)
 - [公開記事のストーリーテリングと URL クエリ](./docs/storytelling-public-viewer-and-urls.md)
 - [公開 Unified ビューのスクロール・ガード・レイアウト詳細](./docs/storytelling-scroll-viewer.md)
 - [MCP 認証（外部クライアント向け API キー）](./docs/mcp-authentication.md)

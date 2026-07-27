@@ -67,7 +67,23 @@ flowchart TB
 
 ### 引用パネルのハイライト
 
-`NodeReferencePanel` は `name` / `name_ja` / `name_en` をハイライト語として収集し、**文字数降順**で正規表現オルタネーションを構築（短い語が先にマッチして長い語が欠ける問題を防止）。
+`NodeReferencePanel` は `name` / `name_ja` / `name_en` をハイライト語として収集し、**文字数降順**で正規表現オルタネーションを構築（短い語が先にマッチして長い語が欠ける問題を防止）。API 仕様は [ノード引用パネル](./node-reference-citations.md)。
+
+## プレビュー viewer の例外
+
+`AdditionalGraphViewer` のマージプレビューは **`${node.name}:${node.label}`** キーで既存ノードとの重複を判定する。`nodesShareName`（`name_ja` / `name_en` 含む）は使わない。
+
+| 層 | 同一性判定 |
+|----|------------|
+| サーバー `fuseGraphs` / `integrateGraph` | `nodesShareName` |
+| 執筆 WS `additional-graph-extraction-modal`（フロント重複除去） | `nodesShareName` |
+| `AdditionalGraphViewer` プレビュー | `name:label` のみ |
+
+そのため、英語 `name` と日本語 `name_ja` のみが異なる既存ノードは、プレビュー上「新規（緑）」と表示され得る。統合送信後はサーバー側でマージされる場合がある — [TopicSpace グラフ拡張](./topic-space-graph-extension.md)。
+
+## リスト検索の制限
+
+`NodeLinkList` のツールバー検索は **`node.name` の部分一致のみ**。`name_ja` / `name_en` のみが表示名になっているノードはヒットしない。
 
 ## 名前の自動翻訳（finalize 時）
 
@@ -100,6 +116,8 @@ KG 抽出 finalize やアノテーション由来グラフでは `completeTransl
 | 日本語本文でハイライトされない | ノードに `name_ja` が入っているか。finalize 翻訳が走ったか |
 | 統合後に同名ノードが重複 | `nodesShareName` 前にラベル不一致（`labelCheck`）の可能性 |
 | クリックで別ノードにフォーカス | `nodeMatchesName` が複数候補にヒットしていないか（先勝ちロジック側を確認） |
+| プレビューで既存ノードが緑表示 | `AdditionalGraphViewer` は `name:label` 判定。クロス言語は統合時にサーバーで解決される場合あり |
+| リスト検索で見つからない | 検索は `node.name` のみ。`name_ja` / `name_en` は未対象 |
 | `name_ja` と `name_en` が同じ値 | 翻訳前の同一値は英語/CJK 判定で上書き対象になる |
 
 ## 関連ファイル

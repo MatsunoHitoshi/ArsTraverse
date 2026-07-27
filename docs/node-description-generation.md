@@ -12,6 +12,8 @@ TopicSpace のノード詳細から、関連 SourceDocument を参照して LLM 
 
 ユーザーが「ドキュメントから解説を生成」を押すと、注釈フォームを開いたうえでストリーミング mutation を開始する。
 
+**関連機能:** 同じノード詳細パネルには説明文から KG を抽出する「知識グラフを拡張」もある（`generateGraphFromDescription` → `kg.extractKG`）。こちらは注釈ではなくグラフ統合向け — [TopicSpace グラフ拡張](./topic-space-graph-extension.md)。
+
 ## 処理フロー
 
 ```mermaid
