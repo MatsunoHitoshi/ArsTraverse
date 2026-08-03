@@ -199,6 +199,8 @@ Concept and flow diagrams for the writing workspace, story generation, auto-high
 - `docs/storytelling-scroll-viewer.md` — published article `ScrollStorytellingViewerUnified`, URL params, scroll guards
 - `docs/topic-space-drive-sync.md` — Google Drive folder sync into TopicSpace (user OAuth, Cron)
 - `docs/topic-space-node-provenance.md` — SourceDocument ↔ unified graph node/edge tracking
+- `docs/graph-edit-proposal-flow.md` — collaborative graph change proposals (review, merge, rollback)
+- `docs/topic-space-public-rest-api.md` — public REST endpoints for graph JSON, path, history, embeddings
 
 ## Project Structure
 
@@ -281,6 +283,8 @@ supabase/
 - [MCP 認証（外部クライアント向け API キー）](./docs/mcp-authentication.md)
 - [Google Drive 同期（リポジトリ）](./docs/topic-space-drive-sync.md)
 - [TopicSpace ノード・エッジ provenance](./docs/topic-space-node-provenance.md)
+- [グラフ変更提案（レビュー・マージ・ロールバック）](./docs/graph-edit-proposal-flow.md)
+- [TopicSpace 公開 REST API](./docs/topic-space-public-rest-api.md)
 
 ## Available Scripts
 

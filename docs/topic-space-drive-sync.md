@@ -107,9 +107,66 @@ Drive 同期および Storage アップロードの PDF は共通パイプライ
 
 複数ページ PDF は 10 ページずつ OCR し、`PdfExtractionJob.accumulatedPlainText` に結合してから KG 抽出します。リポジトリ画面では処理待ちジョブ数（`pendingOcrJobs`）も確認できます。
 
-テキストが 10 チャンクを超える場合、KG 抽出は `KgExtractionJob` にキューイングされ、Cron `/api/cron/kg-extraction` で Phase1（gpt-4o）→ Phase2（gpt-4o-mini）のバッチ処理が行われます。詳細は [KG バッチ抽出パイプライン](./kg-batched-extraction-pipeline.md) を参照。
+テキストが 10 チャンクを超える場合、KG 抽出は `KgExtractionJob` にキューイングされ、Cron `/api/cron/kg-extraction` で Phase1（`gpt-5.4-mini`）→ Phase2（`gpt-5.4-nano`）のバッチ処理が行われます。詳細は [KG バッチ抽出パイプライン](./kg-batched-extraction-pipeline.md) を参照。
 
 リポジトリ画面の Drive 同期パネルで **OCR 言語** を設定できます。NDLOCR モデルは初回利用時に R2 から `.cache/ndlocr-models/` へダウンロードされます。
+
+## 手動 OCR 再抽出（管理者 UI）
+
+Drive 同期 Cron とは別に、リポジトリ管理者が PDF ドキュメントに対して **手動で OCR を再実行** できます。テキスト層品質が低い PDF の再処理や、言語指定のやり直しに使います。
+
+### 対象ドキュメント
+
+`isOcrEligibleDocument`（`document-ocr-modal.tsx` / `manual-document-ocr.service.ts`）:
+
+| `documentType` | 条件 |
+|----------------|------|
+| `INPUT_PDF` | 常に対象 |
+| `INPUT_DRIVE` | MIME が `application/pdf`、または MIME 未設定 |
+
+### UI
+
+- リポジトリ詳細 → ドキュメント一覧のメニュー → **「OCR で再抽出」**（`DocumentOcrModal`）
+- OCR 言語: `auto` / `jpn` / `jpn_vert` / `eng`
+- 処理中は進捗（`processedPages` / `pageCount`）と検出言語を表示
+- 完了時に `onCompleted` でドキュメント一覧を再取得
+
+### tRPC API（管理者のみ）
+
+| 手続き | 説明 |
+|--------|------|
+| `topicSpaces.getDocumentOcrStatus` | 最新 `PdfExtractionJob` と本文プレビュー（先頭 500 文字） |
+| `topicSpaces.startDocumentOcr` | ジョブ enqueue → 最初のバッチを同期的に処理 |
+| `topicSpaces.advanceDocumentOcr` | 次のバッチ（10 ページ単位）を処理 |
+
+**権限**: `assertTopicSpaceAdmin` — リポジトリ管理者のみ。
+
+**競合**: 同一ドキュメントに `PENDING` / `PROCESSING` のジョブがある場合、`startDocumentOcr` は `CONFLICT` を返す。
+
+### 処理フロー
+
+```mermaid
+sequenceDiagram
+    participant UI as DocumentOcrModal
+    participant API as topicSpaces tRPC
+    participant Job as PdfExtractionJob
+    participant Proc as processPdfExtractionJob
+
+    UI->>API: startDocumentOcr(ocrLanguage)
+    API->>Job: enqueue + status=PROCESSING
+    API->>Proc: 最初のバッチ（最大 10 ページ）
+    Proc-->>API: job 更新
+  loop processedPages < pageCount
+    UI->>API: getDocumentOcrStatus（2 秒間隔）
+    UI->>API: advanceDocumentOcr
+    API->>Proc: 次バッチ
+  end
+    UI->>UI: status=COMPLETED → onCompleted
+```
+
+- `startDocumentOcr` は Drive ファイル（`sourceType: drive`）と Storage アップロード PDF（`sourceType: storage`）の両方に対応
+- ジョブ完了後は通常の KG 抽出パイプラインへ（Cron またはインライン）
+- Cron `/api/cron/pdf-extraction` と **同じ** `processPdfExtractionJob` を共有。手動起動は UI から `advanceDocumentOcr` でバッチを進める点が異なる
 
 縦書き OCR（NDLOCR-Lite）のライセンス・帰属表示要件は [NDLOCR ライセンス](./ndlocr-license.md) を参照。
 
@@ -133,6 +190,8 @@ Platform MCP の認証・設定例は [MCP 認証](./mcp-authentication.md) を�
 | Vercel デプロイで関数サイズ超過 | PDF/OCR Cron は ONNX 等で 250MB 超になる。Vercel 環境変数に `VERCEL_SUPPORT_LARGE_FUNCTIONS=1` を設定して再デプロイ |
 | `PRECONDITION_FAILED: Drive 同期が有効化されていません` | Picker でフォルダを選び `upsertDriveSyncConfig` 相当の保存を実行 |
 | ファイル単位の errors | 同期結果 JSON の `errors[]` にファイル名とメッセージ。他ファイルは継続処理 |
+| 手動 OCR が `CONFLICT` | 同一 PDF に進行中ジョブあり。完了を待つか Cron で処理完了後に再試行 |
+| 手動 OCR 対象外 | `INPUT_PDF` / Drive 上 PDF のみ。テキスト・Google ドキュメントは対象外 |
 
 ## 関連ファイル
 
@@ -141,3 +200,5 @@ Platform MCP の認証・設定例は [MCP 認証](./mcp-authentication.md) を�
 - `src/server/lib/google-drive/fetch-document-text.ts` — MIME 判定・テキスト取得
 - `src/app/api/cron/topic-space-drive-sync/route.ts` — Cron エンドポイント
 - `src/app/_components/topic-space/topic-space-drive-sync-panel.tsx` — UI
+- `src/app/_components/topic-space/document-ocr-modal.tsx` — 手動 OCR モーダル
+- `src/server/services/pdf-extraction/manual-document-ocr.service.ts` — 手動 OCR サービス
