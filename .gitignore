@@ -53,6 +53,12 @@ yarn-error.log*
 # idea files
 .idea
 
+# local editor workspace (multi-root)
+*.code-workspace
+
+# local editor workspace (multi-root)
+*.code-workspace
+
 
 # temporal document file
 /public/documents
