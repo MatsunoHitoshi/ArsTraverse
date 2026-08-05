@@ -108,7 +108,7 @@ export const About = async () => {
                   </MainDescription>
                   <MainDescription
                     title={t("featureEditTitle")}
-                    developing
+                    // developing
                     developingLabel={t("developing")}
                   >
                     <div>{t("featureEditBody")}</div>
@@ -121,7 +121,7 @@ export const About = async () => {
                   </MainDescription>
                   <MainDescription
                     title={t("featureCommunityTitle")}
-                    developing
+                    // developing
                     developingLabel={t("developing")}
                   >
                     <div>{t("featureCommunityBody")}</div>
