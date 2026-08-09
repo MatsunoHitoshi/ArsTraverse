@@ -56,7 +56,8 @@ schedule: 0 */6 * * *
 
 | 経路 | 説明 |
 |------|------|
-| `TopicSpaceDriveSyncPanel` | リポジトリ詳細の Drive 同期 UI |
+| `TopicSpaceDriveSyncPanel` | **管理画面** `/topic-spaces/[id]` の左パネル **「Drive 同期」タブ**（`TopicSpaceDetail`）。公開グラフ `/graph` には含まれない |
+| ドキュメントタブのメニュー | **「OCR で再抽出」** — `DocumentOcrModal`（手動 OCR。下記「手動 OCR 再抽出」） |
 | tRPC `topicSpaces.getDriveSyncStatus` | 設定・最終同期状態 |
 | tRPC `topicSpaces.upsertDriveSyncConfig` | Picker 選択フォルダの保存 |
 | tRPC `topicSpaces.syncDriveFolder` | 手動同期 |

@@ -100,8 +100,15 @@ stateDiagram-v2
 
 ## UI
 
-- 提案詳細: `/[locale]/proposals/[proposal_id]`
-- README の「Edit Proposals — GitHub-like pull request system」がこのワークフローに対応
+| 画面 | パス / 場所 | コンポーネント |
+|------|-------------|----------------|
+| 提案一覧 | `/topic-spaces/[id]` 左パネル **「変更提案」タブ** | `ProposalList`（管理者: `listProposalsByTopicSpace`） |
+| 提案詳細 | `/[locale]/proposals/[proposal_id]` | `ProposalDetail` — diff・コメント・レビュー操作 |
+| 変更履歴 | 同一管理画面 **「変更履歴」タブ** | `TopicSpaceChangeHistory` — ロールバック対象の参照・グラフハイライト |
+
+管理画面のレイアウト・他タブとの関係は [TopicSpace 画面ナビゲーション](./topic-space-repository-ui.md) を参照。
+
+README の「Edit Proposals — GitHub-like pull request system」がこのワークフローに対応。
 
 ## 権限まとめ
 

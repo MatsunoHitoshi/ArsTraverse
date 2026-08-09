@@ -197,6 +197,7 @@ Concept and flow diagrams for the writing workspace, story generation, auto-high
 - `docs/topic-space-graph-extension.md` — description/text KG extraction, preview, integrateGraph (PR #82)
 - `docs/node-reference-citations.md` — SourceDocument citation panel, provenance scope, admin API (PR #82)
 - `docs/storytelling-scroll-viewer.md` — published article `ScrollStorytellingViewerUnified`, URL params, scroll guards
+- `docs/topic-space-repository-ui.md` — TopicSpace routes, admin tabs (documents, Drive, proposals, history), public graph view
 - `docs/topic-space-drive-sync.md` — Google Drive folder sync into TopicSpace (user OAuth, Cron)
 - `docs/topic-space-node-provenance.md` — SourceDocument ↔ unified graph node/edge tracking
 - `docs/graph-edit-proposal-flow.md` — collaborative graph change proposals (review, merge, rollback)
@@ -281,6 +282,7 @@ supabase/
 - [公開記事のストーリーテリングと URL クエリ](./docs/storytelling-public-viewer-and-urls.md)
 - [公開 Unified ビューのスクロール・ガード・レイアウト詳細](./docs/storytelling-scroll-viewer.md)
 - [MCP 認証（外部クライアント向け API キー）](./docs/mcp-authentication.md)
+- [TopicSpace（リポジトリ）画面ナビゲーション](./docs/topic-space-repository-ui.md)
 - [Google Drive 同期（リポジトリ）](./docs/topic-space-drive-sync.md)
 - [TopicSpace ノード・エッジ provenance](./docs/topic-space-node-provenance.md)
 - [グラフ変更提案（レビュー・マージ・ロールバック）](./docs/graph-edit-proposal-flow.md)
