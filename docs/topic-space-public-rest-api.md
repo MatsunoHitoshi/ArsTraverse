@@ -98,7 +98,7 @@ MCP エンドポイントは [MCP 認証](./mcp-authentication.md) を参照。
 
 **tRPC**: `graphEmbedding.createEmbeddingQueue({ topicSpaceId })`
 
-ノード名埋め込みと TransE 埋め込みのキューを作成。Cron が 1 分ごとに処理:
+ノード名埋め込みと TransE 埋め込みのキューを作成。Cron が 1 分ごとに処理（詳細は [グラフ埋め込みパイプライン](./graph-embedding-pipeline.md)）:
 
 - `/api/cron/node-name-embedding`
 - `/api/cron/trans-e-embedding`
@@ -141,5 +141,6 @@ curl -X POST https://example.com/api/topic-spaces/CLxxx/embeddings
 ## 関連ドキュメント
 
 - [MCP 認証](./mcp-authentication.md) — 書き込み・検索向け MCP ツール
+- [グラフ埋め込みパイプライン](./graph-embedding-pipeline.md) — キュー以降の Cron・Edge Function・トラブルシューティング
 - [TopicSpace ノード・エッジ provenance](./topic-space-node-provenance.md) — グラフ JSON の provenance フィールド
 - [グラフ変更提案](./graph-edit-proposal-flow.md) — 変更履歴のマージ・ロールバック
