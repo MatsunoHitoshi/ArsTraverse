@@ -83,6 +83,8 @@ sequenceDiagram
 | 履歴 | `applyTopicSpaceGraphDiff` で「グラフを追加しました」を記録 |
 | provenance | **書き込まない** — [provenance ドキュメント](./topic-space-node-provenance.md#provenance-を記録しない経路) 参照 |
 
+API 全体（`getRelatedNodes` / `getNodesByIds` 含む）は [KG 統合・近傍取得 API](./kg-integration-api.md) を参照。
+
 `NodePropertiesDetail.onGraphUpdate` は `context-*` を除外したノード・エッジのみ送信する。
 
 ## 執筆ワークスペースとの違い
