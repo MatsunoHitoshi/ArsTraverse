@@ -139,11 +139,22 @@ export async function upsertWorkspaceBySource(input: {
 
   if (existing) {
     if (existing.isDeleted) {
+      const canRevive =
+        existing.userId === input.userId ||
+        (await input.db.workspace.count({
+          where: {
+            id: existing.id,
+            collaborators: { some: { id: input.userId } },
+          },
+        })) > 0;
+      if (!canRevive) {
+        throw new Error("Workspace not found or access denied");
+      }
+
       const revived = await input.db.workspace.update({
         where: { id: existing.id },
         data: {
           isDeleted: false,
-          userId: input.userId,
           name: input.name?.trim()
             ? input.name.trim()
             : (existing.name ?? input.sourceKey),
