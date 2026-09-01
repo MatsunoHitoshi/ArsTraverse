@@ -33,6 +33,12 @@ import {
   getTextCompletionWithGraphFallbackPrompt,
   getTextCompletionWithGraphPrompt,
 } from "@/server/lib/i18n/prompts/workspace";
+import { recordWritingHistoryIfNeeded } from "@/server/services/workspace/writing-history";
+import {
+  listWritingHistory as listWritingHistoryRecords,
+  restoreWritingHistory as restoreWritingHistoryRecord,
+  upsertWorkspaceBySource,
+} from "@/server/services/workspace/external-workspace";
 
 export const TiptapContentSchema = z.object({
   type: z.string(),
@@ -242,7 +248,7 @@ export const workspaceRouter = createTRPCRouter({
           },
           writingHistory: {
             orderBy: { createdAt: "desc" },
-            take: 10,
+            take: 50,
             include: {
               changedBy: {
                 select: PUBLIC_USER_SELECT,
@@ -324,21 +330,15 @@ export const workspaceRouter = createTRPCRouter({
         throw new Error("Workspace not found or access denied");
       }
 
-      // 内容が変更された場合は履歴を記録
-      // if (
-      //   updateData.content &&
-      //   updateData.content !== existingWorkspace.content
-      // ) {
-      //   await ctx.db.writingHistory.create({
-      //     data: {
-      //       workspaceId: id,
-      //       previousContent: existingWorkspace.content ?? undefined,
-      //       currentContent: updateData.content,
-      //       changeDescription: "内容を更新しました",
-      //       changedById: ctx.session.user.id,
-      //     },
-      //   });
-      // }
+      if (updateData.content) {
+        await recordWritingHistoryIfNeeded({
+          db: ctx.db,
+          workspaceId: id,
+          previousContent: existingWorkspace.content,
+          currentContent: updateData.content,
+          changedById: ctx.session.user.id,
+        });
+      }
 
       // ワークスペースを更新
       const { referencedTopicSpaceIds, tags, ...dataToUpdate } = updateData;
@@ -369,6 +369,66 @@ export const workspaceRouter = createTRPCRouter({
       });
 
       return updatedWorkspace;
+    }),
+
+  getWritingHistory: protectedProcedure
+    .input(
+      z.object({
+        workspaceId: z.string(),
+        take: z.number().int().min(1).max(100).optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      return listWritingHistoryRecords({
+        db: ctx.db,
+        workspaceId: input.workspaceId,
+        userId: ctx.session.user.id,
+        take: input.take,
+      });
+    }),
+
+  restoreWritingHistory: protectedProcedure
+    .input(
+      z.object({
+        workspaceId: z.string(),
+        historyId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return restoreWritingHistoryRecord({
+        db: ctx.db,
+        workspaceId: input.workspaceId,
+        historyId: input.historyId,
+        userId: ctx.session.user.id,
+      });
+    }),
+
+  upsertBySource: protectedProcedure
+    .input(
+      z.object({
+        source: z.string().min(1),
+        sourceKey: z.string().min(1),
+        name: z.string().optional(),
+        description: z.string().nullable().optional(),
+        content: TiptapContentSchema.optional(),
+        curatorialContext: CuratorialContextSchema.optional(),
+        status: z.nativeEnum(WorkspaceStatus).optional(),
+        changeDescription: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return upsertWorkspaceBySource({
+        db: ctx.db,
+        userId: ctx.session.user.id,
+        source: input.source,
+        sourceKey: input.sourceKey,
+        name: input.name,
+        description: input.description,
+        content: input.content,
+        curatorialContext: input.curatorialContext,
+        status: input.status,
+        changeDescription: input.changeDescription,
+      });
     }),
 
   addCollaborator: protectedProcedure

@@ -4,6 +4,10 @@ import { getTranslations } from "next-intl/server";
 import { getServerAuthSession } from "@/server/auth";
 import { db } from "@/server/db";
 import { createMcpAccessToken } from "@/server/mcp/mcp-access-token";
+import {
+  buildExternalOAuthRedirectUrl,
+  validateExternalOAuthRedirectUri,
+} from "@/server/mcp/external-oauth-redirect";
 import { env } from "@/env";
 import {
   PLATFORM_MCP_SCOPE,
@@ -15,6 +19,9 @@ export type { IssueMcpTokenResult } from "./types";
 export async function issueMcpAccessToken(input: {
   clientName: string;
   topicSpaceId?: string;
+  redirectUri?: string;
+  state?: string;
+  responseMode?: string;
 }): Promise<IssueMcpTokenResult> {
   const t = await getTranslations("mcpAuthorize");
   const session = await getServerAuthSession();
@@ -24,11 +31,25 @@ export async function issueMcpAccessToken(input: {
 
   const clientName = input.clientName.trim();
   const topicSpaceId = input.topicSpaceId?.trim() ?? "";
+  const redirectUri = input.redirectUri?.trim() ?? "";
+  const state = input.state?.trim() ?? "";
+  const responseMode = input.responseMode?.trim()
+    ? input.responseMode.trim()
+    : "query";
   const isPlatformOnly =
     !topicSpaceId || topicSpaceId === PLATFORM_MCP_SCOPE;
 
   if (!clientName) {
     return { ok: false, error: t("clientNameRequired") };
+  }
+
+  if (redirectUri) {
+    if (responseMode !== "query") {
+      return { ok: false, error: t("unsupportedResponseMode") };
+    }
+    if (!validateExternalOAuthRedirectUri(redirectUri)) {
+      return { ok: false, error: t("redirectUriNotAllowed") };
+    }
   }
 
   let topicSpace: { id: string; name: string } | null = null;
@@ -57,6 +78,7 @@ export async function issueMcpAccessToken(input: {
       topicSpaceIds: topicSpace ? [topicSpace.id] : [],
     });
 
+    const expiresAtIso = expiresAt.toISOString();
     const baseUrl = env.NEXT_PUBLIC_BASE_URL.replace(/\/$/, "");
     const platformMcpUrl = `${baseUrl}/api/mcp`;
     const topicSpaceMcpUrl = topicSpace
@@ -85,17 +107,26 @@ export async function issueMcpAccessToken(input: {
     }
 
     const cursorConfigJson = JSON.stringify({ mcpServers }, null, 2);
+    const redirectUrl = redirectUri
+      ? buildExternalOAuthRedirectUrl({
+          redirectUri,
+          token,
+          expiresAt: expiresAtIso,
+          state: state || undefined,
+        })
+      : undefined;
 
     return {
       ok: true,
       token,
-      expiresAt: expiresAt.toISOString(),
+      expiresAt: expiresAtIso,
       clientName,
       scope: isPlatformOnly ? "platform" : "topic_space",
       topicSpaceId: topicSpace?.id ?? null,
       platformMcpUrl,
       mcpUrl: topicSpaceMcpUrl,
       cursorConfigJson,
+      redirectUrl,
     };
   } catch (error) {
     return {

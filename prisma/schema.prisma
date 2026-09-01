@@ -531,6 +531,10 @@ model Workspace {
   // 執筆中の文章内容
   content     Json?
 
+  // 外部アプリからの識別（例: 外部アプリの執筆 slug）
+  source    String?
+  sourceKey String?
+
   // キュレトリアルコンテキスト（立場、抽出ルール、Negative Archive等）
   curatorialContext Json?
   
@@ -561,6 +565,8 @@ model Workspace {
   @@index([userId])
   @@index([status])
   @@index([isDeleted])
+  @@index([source])
+  @@unique([source, sourceKey])
 }
 
 // ワークスペースの状態

@@ -35,6 +35,8 @@ export const env = createEnv({
     CRON_SECRET: z.string().optional(),
     /** Server-side Storage upload (MCP, scan flow). Local: `supabase status` fallback when URL is 127.0.0.1 */
     SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+    /** Comma-separated allowlist for /mcp/authorize external OAuth redirect_uri */
+    EXTERNAL_OAUTH_REDIRECT_URIS: z.string().optional(),
   },
 
   /**
@@ -74,6 +76,7 @@ export const env = createEnv({
     QUICK_COMMONS_ALLOWED_ORIGIN: process.env.QUICK_COMMONS_ALLOWED_ORIGIN,
     CRON_SECRET: process.env.CRON_SECRET,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    EXTERNAL_OAUTH_REDIRECT_URIS: process.env.EXTERNAL_OAUTH_REDIRECT_URIS,
     NEXT_PUBLIC_GOOGLE_PICKER_API_KEY:
       process.env.NEXT_PUBLIC_GOOGLE_PICKER_API_KEY,
     NEXT_PUBLIC_GOOGLE_APP_ID: process.env.NEXT_PUBLIC_GOOGLE_APP_ID,

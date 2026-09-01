@@ -699,6 +699,12 @@
     "resetLayout": "レイアウトをリセット",
     "addNewDocument": "新しいドキュメントを追加する",
     "clickToEdit": "クリックして編集",
+    "writingHistory": "編集履歴",
+    "writingHistoryTitle": "執筆の編集履歴",
+    "writingHistoryEmpty": "まだ編集履歴はありません。文章を保存するとスナップショットが残ります。",
+    "writingHistoryRestore": "この版に戻す",
+    "writingHistoryRestoring": "復元中...",
+    "writingHistoryRestored": "履歴から復元しました",
     "linkRepositoryForPanel": "リポジトリを紐づけると詳細パネルが表示されます",
     "nodeDetailEmpty": "Editor内でハイライトされたエンティティをクリックすると詳細が表示されます。",
     "referencedRepository": "参照しているリポジトリ",
@@ -1265,6 +1271,11 @@
     "loginRequired": "ログインが必要です。",
     "clientNameRequired": "クライアント名を入力してください。",
     "repositoryNotFound": "リポジトリが見つからないか、アクセス権限がありません。",
-    "issueFailed": "トークンの発行に失敗しました。"
+    "issueFailed": "トークンの発行に失敗しました。",
+    "redirectUriNotAllowed": "redirect_uri が許可リストに含まれていません。管理者に EXTERNAL_OAUTH_REDIRECT_URIS の設定を確認してください。",
+    "unsupportedResponseMode": "response_mode=query のみサポートしています。",
+    "oauthRedirectErrorTitle": "外部 OAuth リダイレクトエラー",
+    "redirectingTitle": "外部アプリへリダイレクト中",
+    "redirectingDescription": "トークンを発行しました。元のアプリへ戻ります…"
   }
 }

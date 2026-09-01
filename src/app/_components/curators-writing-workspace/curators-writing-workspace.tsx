@@ -57,6 +57,7 @@ import { NodeLinkEditModal } from "../modal/node-link-edit-modal";
 import { ProposalCreateModal } from "./proposal-create-modal";
 import { ShareTopicSpaceModal } from "./share-topic-space-modal";
 import { PublishWorkspaceModal } from "./publish-workspace-modal";
+import { WritingHistoryModal } from "./writing-history-modal";
 import { StoryGenerationModeModal } from "./story-generation-mode-modal";
 import { AdditionalGraphExtractionModal } from "./tiptap/tools/additional-graph-extraction-modal";
 import { DirectedLinksToggleButton } from "../view/graph-view/directed-links-toggle-button";
@@ -167,6 +168,8 @@ const CuratorsWritingWorkspace = ({
     [],
   );
   const [isPublishModalOpen, setIsPublishModalOpen] = useState<boolean>(false);
+  const [isWritingHistoryOpen, setIsWritingHistoryOpen] = useState(false);
+  const [editorEpoch, setEditorEpoch] = useState(0);
   /** ストーリーセグメントのテキストをグラフ抽出モーダルに渡す（null のときモーダル非表示） */
   const [segmentGraphExtractionText, setSegmentGraphExtractionText] =
     useState<string | null>(null);
@@ -651,6 +654,7 @@ const CuratorsWritingWorkspace = ({
             onRightPanelToggle={() => setIsRightPanelOpen(!isRightPanelOpen)}
             onPublish={() => setIsPublishModalOpen(true)}
             onShare={() => setIsShareTopicSpaceModalOpen(true)}
+            onWritingHistory={() => setIsWritingHistoryOpen(true)}
             graphDocument={graphDocument}
             isMetaGraphGenerating={metaGraphStory.isLoading}
           />
@@ -736,6 +740,7 @@ const CuratorsWritingWorkspace = ({
                 value={{ tiptapGraphFilterOption, setTiptapGraphFilterOption }}
               >
                 <TipTapEditor
+                  key={editorEpoch}
                   content={editorContent}
                   onUpdate={onEditorContentUpdate}
                   entities={nodes}
@@ -1172,6 +1177,20 @@ const CuratorsWritingWorkspace = ({
           videoExportTriggerRef.current?.openVideoModal()
         }
       />
+
+      {isWritingHistoryOpen && (
+        <WritingHistoryModal
+          workspaceId={workspace.id}
+          onClose={() => setIsWritingHistoryOpen(false)}
+          onRestored={(content) => {
+            setEditorContent(
+              (normalizeTiptapContent(content) as JSONContent) ?? editorContent,
+            );
+            setEditorEpoch((value) => value + 1);
+            void refetch();
+          }}
+        />
+      )}
 
       {/* ストーリーセグメントからグラフ抽出モーダル（ストーリーテリングモードでセグメントの文章を元グラフに反映） */}
       {segmentGraphExtractionText !== null && (
