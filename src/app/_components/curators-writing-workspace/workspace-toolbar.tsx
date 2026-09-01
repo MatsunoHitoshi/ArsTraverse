@@ -30,6 +30,7 @@ interface WorkspaceToolbarProps {
   onRightPanelToggle: () => void;
   onPublish: () => void;
   onShare: () => void;
+  onWritingHistory: () => void;
   graphDocument: GraphDocumentForFrontend | null;
   isMetaGraphGenerating: boolean;
 }
@@ -47,6 +48,7 @@ export const WorkspaceToolbar = ({
   onRightPanelToggle,
   onPublish,
   onShare,
+  onWritingHistory,
   graphDocument,
   isMetaGraphGenerating,
 }: WorkspaceToolbarProps) => {
@@ -70,6 +72,13 @@ export const WorkspaceToolbar = ({
       </div>
 
       <div className="flex items-center gap-1">
+        <Button
+          size="small"
+          onClick={onWritingHistory}
+          className="flex items-center gap-1"
+        >
+          {t("writingHistory")}
+        </Button>
         <Button
           size="small"
           onClick={onPublish}

@@ -11,8 +11,15 @@ export type IssueMcpTokenResult =
       platformMcpUrl: string;
       mcpUrl: string | null;
       cursorConfigJson: string;
+      redirectUrl?: string;
     }
   | { ok: false; error: string };
+
+export type ExternalOAuthParams = {
+  redirectUri: string;
+  state: string;
+  responseMode: "query";
+};
 
 export function resolveInitialScopeSelection(
   initialTopicSpaceId: string,

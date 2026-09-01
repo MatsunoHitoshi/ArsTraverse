@@ -2,7 +2,7 @@
 
 import { signIn } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import type { Locale } from "i18n/routing";
 import { issueMcpAccessToken } from "../actions";
 import {
@@ -22,6 +22,10 @@ type Props = {
   userEmail: string | null;
   initialClientName: string;
   initialTopicSpaceId: string;
+  redirectUri: string;
+  oauthState: string;
+  responseMode: string;
+  redirectUriError: string | null;
   topicSpaces: TopicSpaceOption[];
   callbackUrl: string;
 };
@@ -32,6 +36,10 @@ export function McpAuthorizePanel({
   userEmail,
   initialClientName,
   initialTopicSpaceId,
+  redirectUri,
+  oauthState,
+  responseMode,
+  redirectUriError,
   topicSpaces,
   callbackUrl,
 }: Props) {
@@ -46,6 +54,25 @@ export function McpAuthorizePanel({
   );
   const [result, setResult] = useState<IssueMcpTokenResult | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (result?.ok && result.redirectUrl) {
+      window.location.assign(result.redirectUrl);
+    }
+  }, [result]);
+
+  if (redirectUriError) {
+    return (
+      <div className="w-full max-w-lg rounded-xl border border-red-800/60 bg-slate-800/80 p-8 shadow-xl">
+        <h1 className="text-xl font-semibold text-red-300">
+          {t("oauthRedirectErrorTitle")}
+        </h1>
+        <p className="mt-3 text-sm leading-relaxed text-slate-300">
+          {redirectUriError}
+        </p>
+      </div>
+    );
+  }
 
   if (!isLoggedIn) {
     return (
@@ -66,6 +93,19 @@ export function McpAuthorizePanel({
   }
 
   if (result?.ok) {
+    if (result.redirectUrl) {
+      return (
+        <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-800/80 p-8 shadow-xl">
+          <h1 className="text-xl font-semibold text-white">
+            {t("redirectingTitle")}
+          </h1>
+          <p className="mt-3 text-sm leading-relaxed text-slate-300">
+            {t("redirectingDescription")}
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="w-full max-w-2xl rounded-xl border border-emerald-800/60 bg-slate-800/80 p-8 shadow-xl">
         <h1 className="text-xl font-semibold text-emerald-300">
@@ -141,6 +181,9 @@ export function McpAuthorizePanel({
             const issued = await issueMcpAccessToken({
               clientName,
               topicSpaceId: scopeSelection,
+              redirectUri: redirectUri || undefined,
+              state: oauthState || undefined,
+              responseMode,
             });
             setResult(issued);
           });

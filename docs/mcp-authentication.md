@@ -15,14 +15,14 @@ http://localhost:3000/api/mcp
 | `create_source_document_from_plain_text`   | プレーンテキスト → LLM 抽出 → SourceDocument 作成（本文は Supabase Storage `input-txt` に保存） | 必須 |
 | `get_source_document_graph`                | 既存 SourceDocument のグラフをエクスポート                                                      | 必須 |
 | `create_topic_space_from_source_documents` | 複数 SourceDocument ID → TopicSpace 作成・グラフ統合                                            | 必須 |
-| `attach_documents_to_topic_space`          | 既存 TopicSpace に SourceDocument を追加・グラフ統合（provenance 記録）                          | 必須 |
-| `detach_document_from_topic_space`         | TopicSpace から SourceDocument を 1 件切り離し（provenance 削除・共有ノードは保持）              | 必須 |
-| `get_topic_space_graph`                    | TopicSpace 統合グラフをエクスポート（`provenance` / `sourceDocumentIds` 付き）                     | 必須 |
-| `get_topic_space_change_history`           | TopicSpace のグラフ変更履歴一覧（`mergeOnly` で手動統合のみ）                                      | 必須 |
-| `get_topic_space_change_history_detail`    | 変更履歴 1 件の詳細（`parsedMerge` 付き）                                                         | 必須 |
-| `replay_node_merges_from_history`          | 手動統合履歴を解析して現在のグラフへ再適用（`dryRun` 可）                                          | 必須 |
-| `get_topic_space_drive_sync_status`        | TopicSpace の Drive 同期設定・最終同期状態を取得                                                    | 必須 |
-| `sync_topic_space_drive_folder`            | Drive フォルダを同期し、ファイルを SourceDocument として取り込み・統合（provenance 記録）              | 必須 |
+| `attach_documents_to_topic_space`          | 既存 TopicSpace に SourceDocument を追加・グラフ統合（provenance 記録）                         | 必須 |
+| `detach_document_from_topic_space`         | TopicSpace から SourceDocument を 1 件切り離し（provenance 削除・共有ノードは保持）             | 必須 |
+| `get_topic_space_graph`                    | TopicSpace 統合グラフをエクスポート（`provenance` / `sourceDocumentIds` 付き）                  | 必須 |
+| `get_topic_space_change_history`           | TopicSpace のグラフ変更履歴一覧（`mergeOnly` で手動統合のみ）                                   | 必須 |
+| `get_topic_space_change_history_detail`    | 変更履歴 1 件の詳細（`parsedMerge` 付き）                                                       | 必須 |
+| `replay_node_merges_from_history`          | 手動統合履歴を解析して現在のグラフへ再適用（`dryRun` 可）                                       | 必須 |
+| `get_topic_space_drive_sync_status`        | TopicSpace の Drive 同期設定・最終同期状態を取得                                                | 必須 |
+| `sync_topic_space_drive_folder`            | Drive フォルダを同期し、ファイルを SourceDocument として取り込み・統合（provenance 記録）       | 必須 |
 
 ### Storage（`create_source_document_from_plain_text`）
 
@@ -57,7 +57,26 @@ http://localhost:3000/mcp/authorize?client=client-name
 
 # TopicSpace 作成後（検索・編集も使う場合）
 http://localhost:3000/mcp/authorize?client=client-name&topic_space_id=YOUR_TOPIC_SPACE_ID
+
+# 外部 Web アプリから OAuth 風コールバック（redirect_uri は許可リスト必須）
+http://localhost:3000/mcp/authorize?client=client-name&redirect_uri=http%3A%2F%2Flocalhost%3A3001%2Fapi%2Fauth%2Fars-traverse%2Fcallback&state=RANDOM_STATE
 ```
+
+成功時、`redirect_uri` が指定されていれば `redirect_uri?token=...&expires_at=...&state=...` へリダイレクトします（`response_mode=query`、既定）。コピー UI は `redirect_uri` 未指定時のみ表示されます。
+
+### 外部 OAuth リダイレクト（Web アプリ連携）
+
+ArsTraverse の `.env` に **カンマ区切り**で許可 URI を設定します。
+
+```env
+EXTERNAL_OAUTH_REDIRECT_URIS=http://localhost:3001/api/auth/ars-traverse/callback,https://your-app.example/api/auth/ars-traverse/callback
+```
+
+| クエリ          | 説明                                           |
+| --------------- | ---------------------------------------------- |
+| `redirect_uri`  | トークン発行後の戻り先（許可リストと完全一致） |
+| `state`         | CSRF 用。発行元が生成し、コールバックで検証    |
+| `response_mode` | `query` のみ（既定）。トークンをクエリで返す   |
 
 トークンは `NEXTAUTH_SECRET` で署名された MCP アクセストークン（既定有効期限 90 日）です。発行ユーザー本人として操作できます。
 
@@ -70,6 +89,16 @@ http://localhost:3000/mcp/authorize?client=client-name&topic_space_id=YOUR_TOPIC
 | 1    | アクセストークン | `Authorization: Bearer <mcp1....>`        | 外部クライアント（推奨） |
 | 2    | セッション       | ブラウザ Cookie `next-auth.session-token` | ブラウザログイン済み接続 |
 | 3    | なし             | —                                         | 読み取り専用ツールのみ   |
+
+外部 HTTP API（`/api/external/workspaces` など）も同じトークンで認証します。プロジェクトごとの環境変数は不要です。トークンに紐づくユーザーが Workspace の所有者になります。
+
+### 外部 Workspace API
+
+| メソッド | パス                                     | 説明                                                                            |
+| -------- | ---------------------------------------- | ------------------------------------------------------------------------------- |
+| GET/PUT  | `/api/external/workspaces`               | source / sourceKey による一覧・取得・upsert                                     |
+| GET/POST | `/api/external/workspaces/history`       | 執筆履歴の一覧・復元                                                            |
+| POST     | `/api/external/workspaces/collaborators` | **所有者のみ** collaborator 追加（`workspaceId` + `userId` または `userEmail`） |
 
 ### embedding 検索（任意）
 
@@ -119,7 +148,8 @@ npm run kg:align -- --topic-space-id=YOUR_TOPIC_SPACE_ID --dry-run
 ## 関連ファイル
 
 - `src/app/api/mcp/route.ts` — プラットフォーム MCP（ドキュメント・TopicSpace 作成）
-- `src/app/mcp/authorize/page.tsx` — ブラウザ認証 UI
+- `src/app/mcp/authorize/page.tsx` — ブラウザ認証 UI（外部 OAuth `redirect_uri` 対応）
+- `src/server/mcp/external-oauth-redirect.ts` — リダイレクト URI 許可リスト検証
 - `src/server/mcp/mcp-access-token.ts` — トークン発行・検証
 - `src/server/mcp/resolve-mcp-auth.ts` — 認証解決
 - `src/app/api/topic-spaces/[id]/mcp/route.ts` — MCP エンドポイント

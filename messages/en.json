@@ -699,6 +699,12 @@
     "resetLayout": "Reset layout",
     "addNewDocument": "Add a new document",
     "clickToEdit": "Click to edit",
+    "writingHistory": "Edit history",
+    "writingHistoryTitle": "Writing history",
+    "writingHistoryEmpty": "No snapshots yet. Saving the document will keep a version.",
+    "writingHistoryRestore": "Restore this version",
+    "writingHistoryRestoring": "Restoring...",
+    "writingHistoryRestored": "Restored from history",
     "linkRepositoryForPanel": "Link a repository to show the detail panel",
     "nodeDetailEmpty": "Click a highlighted entity in the editor to see details.",
     "referencedRepository": "Referenced repository",
@@ -1265,6 +1271,11 @@
     "loginRequired": "Sign-in is required.",
     "clientNameRequired": "Please enter a client name.",
     "repositoryNotFound": "Repository was not found or you do not have access.",
-    "issueFailed": "Failed to issue token."
+    "issueFailed": "Failed to issue token.",
+    "redirectUriNotAllowed": "redirect_uri is not on the allowlist. Ask an administrator to configure EXTERNAL_OAUTH_REDIRECT_URIS.",
+    "unsupportedResponseMode": "Only response_mode=query is supported.",
+    "oauthRedirectErrorTitle": "External OAuth redirect error",
+    "redirectingTitle": "Redirecting to external app",
+    "redirectingDescription": "Token issued. Returning to the requesting app…"
   }
 }
