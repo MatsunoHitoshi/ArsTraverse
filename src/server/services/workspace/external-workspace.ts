@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient, WorkspaceStatus } from "@prisma/client";
 import {
   recordWritingHistoryIfNeeded,
+  tiptapPlainText,
   tiptapPlainTextPreview,
 } from "./writing-history";
 import { PUBLIC_USER_SELECT } from "@/server/lib/user-select";
@@ -33,6 +34,8 @@ export type ExternalWritingHistoryDto = {
   changeDescription: string | null;
   preview: string;
   previousPreview: string;
+  previousText: string;
+  currentText: string;
   createdAt: string;
   changedBy: { id: string; name: string | null; image: string | null };
 };
@@ -288,6 +291,8 @@ export async function listWritingHistory(input: {
     changeDescription: history.changeDescription,
     preview: tiptapPlainTextPreview(history.currentContent),
     previousPreview: tiptapPlainTextPreview(history.previousContent),
+    previousText: tiptapPlainText(history.previousContent),
+    currentText: tiptapPlainText(history.currentContent),
     createdAt: toIso(history.createdAt),
     changedBy: {
       id: history.changedBy.id,

@@ -137,7 +137,12 @@ GUI から作成した Workspace は `source` / `sourceKey` が `null` のため
 | ------------- | ---- | ----------------------- |
 | `workspaceId` | はい | Workspace ID            |
 
-最大 **50 件**（`createdAt` 降順）。`preview` / `previousPreview` は TipTap 本文のプレーンテキスト要約（最大 160 文字）。
+最大 **50 件**（`createdAt` 降順）。
+
+| フィールド | 説明 |
+| ---------- | ---- |
+| `preview` / `previousPreview` | TipTap 本文のプレーンテキスト要約（空白正規化、最大 160 文字） |
+| `previousText` / `currentText` | 段落改行を残した全文。差分表示向け |
 
 ```json
 {
@@ -148,6 +153,8 @@ GUI から作成した Workspace は `source` / `sourceKey` が `null` のため
       "changeDescription": "内容を更新しました",
       "preview": "美術大学と美大生 相模原市は…",
       "previousPreview": "",
+      "previousText": "",
+      "currentText": "美術大学と美大生\n相模原市は美大生のまちです。",
       "createdAt": "2026-08-31T12:30:00.000Z",
       "changedBy": { "id": "...", "name": "...", "image": "..." }
     }
