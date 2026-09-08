@@ -204,6 +204,9 @@ Concept and flow diagrams for the writing workspace, story generation, auto-high
 - `docs/topic-space-public-rest-api.md` — public REST endpoints for graph JSON, path, history, embeddings
 - `docs/annotation-collaboration-api.md` — annotation CRUD, threading, clustering, KG preview (annotationRouter)
 - `docs/graph-embedding-pipeline.md` — node-name + TransE embedding queue, Crons, Supabase Edge Functions
+- `docs/workspace-router-api.md` — workspace CRUD, text completion, publish, searchPublishedNodes
+- `docs/assistant-router-api.md` — graph summary/outline streaming, TTS (assistantRouter)
+- `docs/kg-integration-api.md` — kg.integrateGraph, getRelatedNodes, getNodesByIds
 - `docs/external-workspace-api.md` — authenticated REST API for external apps (SOS): workspace upsert, writing history, collaborators
 
 ## Project Structure
@@ -292,6 +295,9 @@ supabase/
 - [TopicSpace 公開 REST API](./docs/topic-space-public-rest-api.md)
 - [注釈コラボレーション API](./docs/annotation-collaboration-api.md)
 - [グラフ埋め込みパイプライン](./docs/graph-embedding-pipeline.md)
+- [執筆ワークスペース API](./docs/workspace-router-api.md)
+- [グラフ執筆アシスタント API](./docs/assistant-router-api.md)
+- [KG 統合・近傍取得 API](./docs/kg-integration-api.md)
 - [外部 Workspace REST API](./docs/external-workspace-api.md)
 
 ## Available Scripts
