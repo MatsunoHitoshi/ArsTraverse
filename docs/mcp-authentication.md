@@ -90,15 +90,7 @@ EXTERNAL_OAUTH_REDIRECT_URIS=http://localhost:3001/api/auth/ars-traverse/callbac
 | 2    | セッション       | ブラウザ Cookie `next-auth.session-token` | ブラウザログイン済み接続 |
 | 3    | なし             | —                                         | 読み取り専用ツールのみ   |
 
-外部 HTTP API（`/api/external/workspaces` など）も同じトークンで認証します。プロジェクトごとの環境変数は不要です。トークンに紐づくユーザーが Workspace の所有者になります。
-
-### 外部 Workspace API
-
-| メソッド | パス                                     | 説明                                                                            |
-| -------- | ---------------------------------------- | ------------------------------------------------------------------------------- |
-| GET/PUT  | `/api/external/workspaces`               | source / sourceKey による一覧・取得・upsert                                     |
-| GET/POST | `/api/external/workspaces/history`       | 執筆履歴の一覧・復元                                                            |
-| POST     | `/api/external/workspaces/collaborators` | **所有者のみ** collaborator 追加（`workspaceId` + `userId` または `userEmail`） |
+外部 HTTP API（`/api/external/*`）も同じトークンで認証します。プロジェクトごとの環境変数は不要です。トークンに紐づくユーザーが Workspace の所有者になります。エンドポイント詳細・執筆履歴スロットル・`source`/`sourceKey` 識別子は [外部 Workspace REST API](./external-workspace-api.md) を参照。
 
 ### embedding 検索（任意）
 
