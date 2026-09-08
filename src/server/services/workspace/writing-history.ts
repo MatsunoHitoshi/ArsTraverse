@@ -15,27 +15,35 @@ export function jsonContentEquals(a: unknown, b: unknown): boolean {
   return plainA === plainB;
 }
 
+function walkTipTapText(node: unknown): string {
+  if (!node || typeof node !== "object") return "";
+  const record = node as { type?: string; text?: string; content?: unknown[] };
+  if (typeof record.text === "string") return record.text;
+  if (!Array.isArray(record.content)) return "";
+  const joiner =
+    record.type === "doc" ||
+    record.type === "bulletList" ||
+    record.type === "orderedList"
+      ? "\n"
+      : record.type === "paragraph" || record.type === "heading"
+        ? "\n"
+        : "";
+  return record.content.map(walkTipTapText).filter(Boolean).join(joiner || "");
+}
+
+/** 段落改行を残した本文。差分表示用 */
+export function tiptapPlainText(content: unknown): string {
+  return walkTipTapText(content)
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export function tiptapPlainTextPreview(
   content: unknown,
   maxLength = 160,
 ): string {
-  const walk = (node: unknown): string => {
-    if (!node || typeof node !== "object") return "";
-    const record = node as { type?: string; text?: string; content?: unknown[] };
-    if (typeof record.text === "string") return record.text;
-    if (!Array.isArray(record.content)) return "";
-    const joiner =
-      record.type === "doc" ||
-      record.type === "bulletList" ||
-      record.type === "orderedList"
-        ? "\n"
-        : record.type === "paragraph" || record.type === "heading"
-          ? "\n"
-          : "";
-    return record.content.map(walk).filter(Boolean).join(joiner || "");
-  };
-
-  const text = walk(content).replace(/\s+/g, " ").trim();
+  const text = tiptapPlainText(content).replace(/\s+/g, " ").trim();
   if (text.length <= maxLength) return text;
   return `${text.slice(0, maxLength)}…`;
 }

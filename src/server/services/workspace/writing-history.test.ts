@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   jsonContentEquals,
   shouldRecordWritingHistory,
+  tiptapPlainText,
   tiptapPlainTextPreview,
 } from "./writing-history";
 
@@ -129,6 +130,9 @@ describe("tiptapPlainTextPreview", () => {
     };
     expect(tiptapPlainTextPreview(doc)).toBe(
       "美術大学と美大生 相模原市は美大生のまちです。",
+    );
+    expect(tiptapPlainText(doc)).toBe(
+      "美術大学と美大生\n相模原市は美大生のまちです。",
     );
   });
 });
