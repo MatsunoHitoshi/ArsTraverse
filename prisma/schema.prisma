@@ -588,6 +588,10 @@ model WritingHistory {
   previousContent Json?
   // 変更後の内容
   currentContent  Json?
+  // 変更前のライブグラフ（curatorialContext 内）
+  previousGraph Json?
+  // 変更後のライブグラフ
+  currentGraph  Json?
   // 変更の説明
   changeDescription String?
   // 変更を行ったユーザー

@@ -60,6 +60,7 @@ export async function PUT(request: NextRequest) {
     status?: WorkspaceStatus;
     changeDescription?: string;
     recordHistory?: boolean;
+    forceHistory?: boolean;
   };
 
   const source = body.source?.trim();
@@ -84,6 +85,7 @@ export async function PUT(request: NextRequest) {
       status: body.status,
       changeDescription: body.changeDescription,
       recordHistory: body.recordHistory,
+      forceHistory: body.forceHistory,
     });
     return NextResponse.json({ workspace });
   } catch (error) {

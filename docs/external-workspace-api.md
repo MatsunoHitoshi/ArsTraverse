@@ -143,6 +143,9 @@ GUI から作成した Workspace は `source` / `sourceKey` が `null` のため
 | ---------- | ---- |
 | `preview` / `previousPreview` | TipTap 本文のプレーンテキスト要約（空白正規化、最大 160 文字） |
 | `previousText` / `currentText` | 段落改行を残した全文。差分表示向け |
+| `hasGraph` | この版にライブグラフのスナップショットがあるか |
+| `graphSummary` | グラフ差分の短い要約（例: `+2ノード · −1関係`） |
+| `graphDiff` | 追加・削除・更新されたノード／関係。変化がなければ `null` |
 
 ```json
 {
@@ -155,6 +158,23 @@ GUI から作成した Workspace は `source` / `sourceKey` が `null` のため
       "previousPreview": "",
       "previousText": "",
       "currentText": "美術大学と美大生\n相模原市は美大生のまちです。",
+      "hasGraph": true,
+      "graphSummary": "+1ノード · +1関係",
+      "graphDiff": {
+        "nodes": [
+          { "change": "added", "id": "n1", "name": "桶屋", "label": "Studio" }
+        ],
+        "relationships": [],
+        "summary": {
+          "addedNodeCount": 1,
+          "removedNodeCount": 0,
+          "updatedNodeCount": 0,
+          "addedRelationshipCount": 0,
+          "removedRelationshipCount": 0,
+          "updatedRelationshipCount": 0,
+          "metaChanged": false
+        }
+      },
       "createdAt": "2026-08-31T12:30:00.000Z",
       "changedBy": { "id": "...", "name": "...", "image": "..." }
     }
@@ -164,7 +184,7 @@ GUI から作成した Workspace は `source` / `sourceKey` が `null` のため
 
 ## POST `/api/external/workspaces/history`
 
-履歴 1 件の `currentContent` を Workspace 本文に復元する。復元操作自体も履歴に記録される（`changeDescription`: 「履歴から復元しました」）。
+履歴 1 件の `currentContent` を Workspace 本文に、`currentGraph` があれば `curatorialContext` 内のライブグラフにも復元する。グラフ欄がない古い履歴は本文のみ戻す。復元操作自体も履歴に記録される（`changeDescription`: 「履歴から復元しました」）。
 
 ### リクエストボディ
 
@@ -204,20 +224,22 @@ GUI から作成した Workspace は `source` / `sourceKey` が `null` のため
 
 ## 執筆履歴の記録ルール
 
-`content` 更新時、`recordWritingHistoryIfNeeded` が呼ばれる（`recordHistory: false` で無効化可能）。
+`content` または `curatorialContext`（ライブグラフ）の更新時、`recordWritingHistoryIfNeeded` が呼ばれる（`recordHistory: false` で無効化可能）。`forceHistory: true` のときは 30 秒スロットルを無視する。
 
 ```mermaid
 flowchart TD
-    A[content 更新] --> B{JSON またはプレーンテキスト<br/>が前回と同一?}
+    A[content またはグラフ更新] --> B{本文とグラフが<br/>前回と同一?}
     B -->|はい| Z[記録しない]
     B -->|いいえ| C{force または<br/>前回から 30 秒以上?}
-    C -->|はい| D[WritingHistory 作成]
+    C -->|はい| D[WritingHistory 作成<br/>本文スナップショット + グラフ差分元]
     C -->|いいえ| Z
 ```
 
 - **スロットル**: 直近の履歴から **30 秒** 以内の連続保存は 1 件にまとめる（`DEFAULT_WRITING_HISTORY_INTERVAL_MS`）
-- **同一判定**: JSON 文字列一致、または TipTap プレーンテキスト一致（`blockId` 等の属性差は無視）
-- **強制記録**: 新規作成・履歴復元は `force: true` で即時記録
+- **同一判定（本文）**: JSON 文字列一致、または TipTap プレーンテキスト一致（`blockId` 等の属性差は無視）
+- **同一判定（グラフ）**: `updatedAt` を除いたライブグラフ JSON 一致
+- **保存内容**: `previousContent` / `currentContent` に加え `previousGraph` / `currentGraph`
+- **強制記録**: 新規作成・履歴復元・抽出完了（`forceHistory`）は即時記録
 - GUI の執筆履歴モーダル（`WritingHistoryModal`）も同じ `writingHistory` テーブルを参照
 
 ## tRPC 相当

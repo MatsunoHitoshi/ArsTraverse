@@ -34,6 +34,7 @@ import {
   getTextCompletionWithGraphPrompt,
 } from "@/server/lib/i18n/prompts/workspace";
 import { recordWritingHistoryIfNeeded } from "@/server/services/workspace/writing-history";
+import { readLiveGraphFromCuratorialContext } from "@/server/services/workspace/workspace-graph-history";
 import {
   listWritingHistory as listWritingHistoryRecords,
   restoreWritingHistory as restoreWritingHistoryRecord,
@@ -330,12 +331,18 @@ export const workspaceRouter = createTRPCRouter({
         throw new Error("Workspace not found or access denied");
       }
 
-      if (updateData.content) {
+      if (updateData.content || updateData.curatorialContext) {
         await recordWritingHistoryIfNeeded({
           db: ctx.db,
           workspaceId: id,
           previousContent: existingWorkspace.content,
-          currentContent: updateData.content,
+          currentContent: updateData.content ?? existingWorkspace.content,
+          previousGraph: readLiveGraphFromCuratorialContext(
+            existingWorkspace.curatorialContext,
+          ),
+          currentGraph: readLiveGraphFromCuratorialContext(
+            updateData.curatorialContext ?? existingWorkspace.curatorialContext,
+          ),
           changedById: ctx.session.user.id,
         });
       }
@@ -414,6 +421,8 @@ export const workspaceRouter = createTRPCRouter({
         curatorialContext: CuratorialContextSchema.optional(),
         status: z.nativeEnum(WorkspaceStatus).optional(),
         changeDescription: z.string().optional(),
+        recordHistory: z.boolean().optional(),
+        forceHistory: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -428,6 +437,8 @@ export const workspaceRouter = createTRPCRouter({
         curatorialContext: input.curatorialContext,
         status: input.status,
         changeDescription: input.changeDescription,
+        recordHistory: input.recordHistory,
+        forceHistory: input.forceHistory,
       });
     }),
 

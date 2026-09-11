@@ -5,6 +5,14 @@ import {
   tiptapPlainTextPreview,
 } from "./writing-history";
 import { PUBLIC_USER_SELECT } from "@/server/lib/user-select";
+import {
+  diffLiveGraphs,
+  graphDiffHasChanges,
+  readLiveGraphFromCuratorialContext,
+  summarizeWorkspaceGraphDiff,
+  withLiveGraphInCuratorialContext,
+  type WorkspaceGraphDiff,
+} from "./workspace-graph-history";
 
 function accessibleByUser(userId: string) {
   return {
@@ -36,6 +44,9 @@ export type ExternalWritingHistoryDto = {
   previousPreview: string;
   previousText: string;
   currentText: string;
+  hasGraph: boolean;
+  graphSummary: string;
+  graphDiff: WorkspaceGraphDiff | null;
   createdAt: string;
   changedBy: { id: string; name: string | null; image: string | null };
 };
@@ -129,6 +140,7 @@ export async function upsertWorkspaceBySource(input: {
   curatorialContext?: unknown;
   status?: WorkspaceStatus;
   recordHistory?: boolean;
+  forceHistory?: boolean;
   changeDescription?: string;
 }): Promise<ExternalWorkspaceDto> {
   const existing = await input.db.workspace.findUnique({
@@ -194,14 +206,25 @@ export async function upsertWorkspaceBySource(input: {
       throw new Error("Workspace not found or access denied");
     }
 
-    if (input.content !== undefined && input.recordHistory !== false) {
+    if (input.recordHistory !== false) {
+      const currentContent =
+        input.content !== undefined ? input.content : existing.content;
       await recordWritingHistoryIfNeeded({
         db: input.db,
         workspaceId: existing.id,
         previousContent: existing.content,
-        currentContent: input.content,
+        currentContent,
+        previousGraph: readLiveGraphFromCuratorialContext(
+          existing.curatorialContext,
+        ),
+        currentGraph: readLiveGraphFromCuratorialContext(
+          input.curatorialContext !== undefined
+            ? input.curatorialContext
+            : existing.curatorialContext,
+        ),
         changedById: input.userId,
         changeDescription: input.changeDescription,
+        force: input.forceHistory,
       });
     }
 
@@ -243,12 +266,14 @@ export async function upsertWorkspaceBySource(input: {
     select: workspaceSelect,
   });
 
-  if (input.content !== undefined && input.recordHistory !== false) {
+  if (input.recordHistory !== false) {
     await recordWritingHistoryIfNeeded({
       db: input.db,
       workspaceId: created.id,
       previousContent: null,
-      currentContent: input.content,
+      currentContent: input.content ?? null,
+      previousGraph: null,
+      currentGraph: readLiveGraphFromCuratorialContext(input.curatorialContext),
       changedById: input.userId,
       changeDescription: input.changeDescription ?? "執筆を作成しました",
       force: true,
@@ -285,21 +310,31 @@ export async function listWritingHistory(input: {
     },
   });
 
-  return histories.map((history) => ({
-    id: history.id,
-    workspaceId: history.workspaceId,
-    changeDescription: history.changeDescription,
-    preview: tiptapPlainTextPreview(history.currentContent),
-    previousPreview: tiptapPlainTextPreview(history.previousContent),
-    previousText: tiptapPlainText(history.previousContent),
-    currentText: tiptapPlainText(history.currentContent),
-    createdAt: toIso(history.createdAt),
-    changedBy: {
-      id: history.changedBy.id,
-      name: history.changedBy.name,
-      image: history.changedBy.image,
-    },
-  }));
+  return histories.map((history) => {
+    const graphDiff = diffLiveGraphs(
+      history.previousGraph,
+      history.currentGraph,
+    );
+    const hasGraph = history.currentGraph != null;
+    return {
+      id: history.id,
+      workspaceId: history.workspaceId,
+      changeDescription: history.changeDescription,
+      preview: tiptapPlainTextPreview(history.currentContent),
+      previousPreview: tiptapPlainTextPreview(history.previousContent),
+      previousText: tiptapPlainText(history.previousContent),
+      currentText: tiptapPlainText(history.currentContent),
+      hasGraph,
+      graphSummary: hasGraph ? summarizeWorkspaceGraphDiff(graphDiff) : "",
+      graphDiff: hasGraph && graphDiffHasChanges(graphDiff) ? graphDiff : null,
+      createdAt: toIso(history.createdAt),
+      changedBy: {
+        id: history.changedBy.id,
+        name: history.changedBy.name,
+        image: history.changedBy.image,
+      },
+    };
+  });
 }
 
 export async function restoreWritingHistory(input: {
@@ -330,20 +365,39 @@ export async function restoreWritingHistory(input: {
   }
 
   const restoredContent = history.currentContent;
+  const restoredGraph = history.currentGraph;
   await recordWritingHistoryIfNeeded({
     db: input.db,
     workspaceId: workspace.id,
     previousContent: workspace.content,
     currentContent: restoredContent,
+    previousGraph: readLiveGraphFromCuratorialContext(
+      workspace.curatorialContext,
+    ),
+    currentGraph:
+      restoredGraph ??
+      readLiveGraphFromCuratorialContext(workspace.curatorialContext),
     changedById: input.userId,
     changeDescription: "履歴から復元しました",
     force: true,
   });
 
+  const nextContext =
+    restoredGraph == null
+      ? undefined
+      : withLiveGraphInCuratorialContext(
+          workspace.curatorialContext,
+          restoredGraph,
+        );
+
   const updated = await input.db.workspace.update({
     where: { id: workspace.id },
     data: {
       content: (restoredContent as Prisma.InputJsonValue) ?? undefined,
+      curatorialContext:
+        nextContext === undefined
+          ? undefined
+          : (nextContext as Prisma.InputJsonValue),
     },
     select: workspaceSelect,
   });
