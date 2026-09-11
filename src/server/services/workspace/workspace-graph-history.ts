@@ -82,10 +82,18 @@ function stableJson(value: unknown): string {
   return JSON.stringify(sortValue(value));
 }
 
+function omitGraphKeys(graph: GraphRecord, keys: string[]): GraphRecord {
+  const next: GraphRecord = {};
+  for (const [key, value] of Object.entries(graph)) {
+    if (keys.includes(key)) continue;
+    next[key] = value;
+  }
+  return next;
+}
+
 function graphForCompare(graph: unknown): unknown {
   if (!isRecord(graph)) return null;
-  const { updatedAt: _updatedAt, ...rest } = graph;
-  return rest;
+  return omitGraphKeys(graph, ["updatedAt"]);
 }
 
 export function liveGraphsEqual(left: unknown, right: unknown): boolean {
@@ -130,7 +138,8 @@ function relationshipEnd(
   entity: GraphRecord,
   key: "sourceId" | "targetId",
 ): string {
-  return typeof entity[key] === "string" ? (entity[key] as string) : "";
+  const value = entity[key];
+  return typeof value === "string" ? value : "";
 }
 
 function nameIndex(
@@ -145,13 +154,7 @@ function lookupName(index: Map<string, string>, id: string): string {
 
 function metaForCompare(graph: unknown): unknown {
   if (!isRecord(graph)) return null;
-  const {
-    updatedAt: _updatedAt,
-    nodes: _nodes,
-    relationships: _relationships,
-    ...rest
-  } = graph;
-  return rest;
+  return omitGraphKeys(graph, ["updatedAt", "nodes", "relationships"]);
 }
 
 export function diffLiveGraphs(

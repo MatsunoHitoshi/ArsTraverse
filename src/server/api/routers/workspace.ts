@@ -331,7 +331,10 @@ export const workspaceRouter = createTRPCRouter({
         throw new Error("Workspace not found or access denied");
       }
 
-      if (updateData.content || updateData.curatorialContext) {
+      if (
+        updateData.content != null ||
+        updateData.curatorialContext != null
+      ) {
         await recordWritingHistoryIfNeeded({
           db: ctx.db,
           workspaceId: id,

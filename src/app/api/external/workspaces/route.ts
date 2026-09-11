@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { WorkspaceStatus } from "@prisma/client";
+import type { WorkspaceStatus } from "@prisma/client";
 import { db } from "@/server/db";
 import { resolveExternalWorkspaceUser } from "@/server/services/workspace/resolve-external-auth";
 import {
