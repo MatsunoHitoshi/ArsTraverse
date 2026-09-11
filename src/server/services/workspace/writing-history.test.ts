@@ -111,6 +111,39 @@ describe("shouldRecordWritingHistory", () => {
       }),
     ).toBe(true);
   });
+
+  it("records graph-only changes", () => {
+    expect(
+      shouldRecordWritingHistory({
+        previousContent: current,
+        currentContent: current,
+        previousGraph: { nodes: [], relationships: [] },
+        currentGraph: {
+          nodes: [{ id: "n1", name: "桶屋", label: "Studio" }],
+          relationships: [],
+        },
+        lastRecordedAt: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("skips identical graphs even when timestamps differ", () => {
+    const graph = {
+      updatedAt: "2026-09-11T00:00:00.000Z",
+      nodes: [{ id: "n1", name: "桶屋", label: "Studio" }],
+      relationships: [],
+    };
+    expect(
+      shouldRecordWritingHistory({
+        previousContent: current,
+        currentContent: current,
+        previousGraph: graph,
+        currentGraph: { ...graph, updatedAt: "2026-09-11T00:01:00.000Z" },
+        lastRecordedAt: null,
+        force: true,
+      }),
+    ).toBe(false);
+  });
 });
 
 describe("tiptapPlainTextPreview", () => {

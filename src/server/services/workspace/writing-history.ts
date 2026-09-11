@@ -1,4 +1,8 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
+import {
+  defaultWritingHistoryDescription,
+  liveGraphsEqual,
+} from "./workspace-graph-history";
 
 export const DEFAULT_WRITING_HISTORY_INTERVAL_MS = 30_000;
 
@@ -51,12 +55,22 @@ export function tiptapPlainTextPreview(
 export function shouldRecordWritingHistory(input: {
   previousContent: unknown;
   currentContent: unknown;
+  previousGraph?: unknown;
+  currentGraph?: unknown;
   lastRecordedAt: Date | null;
   now?: Date;
   intervalMs?: number;
   force?: boolean;
 }): boolean {
-  if (jsonContentEquals(input.previousContent, input.currentContent)) {
+  const contentChanged = !jsonContentEquals(
+    input.previousContent,
+    input.currentContent,
+  );
+  const graphChanged = !liveGraphsEqual(
+    input.previousGraph,
+    input.currentGraph,
+  );
+  if (!contentChanged && !graphChanged) {
     return false;
   }
   if (input.force) return true;
@@ -71,6 +85,8 @@ export async function recordWritingHistoryIfNeeded(input: {
   workspaceId: string;
   previousContent: unknown;
   currentContent: unknown;
+  previousGraph?: unknown;
+  currentGraph?: unknown;
   changedById: string;
   changeDescription?: string;
   force?: boolean;
@@ -82,9 +98,20 @@ export async function recordWritingHistoryIfNeeded(input: {
     select: { createdAt: true },
   });
 
+  const contentChanged = !jsonContentEquals(
+    input.previousContent,
+    input.currentContent,
+  );
+  const graphChanged = !liveGraphsEqual(
+    input.previousGraph,
+    input.currentGraph,
+  );
+
   const shouldRecord = shouldRecordWritingHistory({
     previousContent: input.previousContent,
     currentContent: input.currentContent,
+    previousGraph: input.previousGraph,
+    currentGraph: input.currentGraph,
     lastRecordedAt: latest?.createdAt ?? null,
     force: input.force,
     intervalMs: input.intervalMs,
@@ -101,7 +128,13 @@ export async function recordWritingHistoryIfNeeded(input: {
         (input.previousContent as Prisma.InputJsonValue) ?? undefined,
       currentContent:
         (input.currentContent as Prisma.InputJsonValue) ?? undefined,
-      changeDescription: input.changeDescription ?? "内容を更新しました",
+      previousGraph:
+        (input.previousGraph as Prisma.InputJsonValue) ?? undefined,
+      currentGraph:
+        (input.currentGraph as Prisma.InputJsonValue) ?? undefined,
+      changeDescription:
+        input.changeDescription ??
+        defaultWritingHistoryDescription({ contentChanged, graphChanged }),
       changedById: input.changedById,
     },
     select: { id: true },
