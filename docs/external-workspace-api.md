@@ -321,6 +321,7 @@ curl -s -X POST "$BASE/api/external/workspaces/collaborators" \
 - `src/app/api/external/workspaces/collaborators/route.ts`
 - `src/server/services/workspace/external-workspace.ts` — upsert・履歴・collaborator
 - `src/server/services/workspace/writing-history.ts` — 履歴スロットル・プレビュー
+- `src/server/services/workspace/workspace-graph-history.ts` — ライブグラフ読取・差分・既定説明文
 - `src/server/services/workspace/resolve-external-auth.ts` — 認証解決
 - `src/server/api/routers/workspace.ts` — tRPC `upsertBySource` 等
 - `src/app/_components/curators-writing-workspace/writing-history-modal.tsx` — GUI 履歴 UI
