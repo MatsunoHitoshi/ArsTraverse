@@ -241,6 +241,7 @@ flowchart TD
 - **保存内容**: `previousContent` / `currentContent` に加え `previousGraph` / `currentGraph`
 - **強制記録**: 新規作成・履歴復元・抽出完了（`forceHistory`）は即時記録
 - GUI の執筆履歴モーダル（`WritingHistoryModal`）も同じ `writingHistory` テーブルを参照
+- tRPC 戻り値のフィールド定義・GUI 制約は [執筆ワークスペース API — 執筆履歴](./workspace-router-api.md#執筆履歴)
 
 ## tRPC 相当
 
