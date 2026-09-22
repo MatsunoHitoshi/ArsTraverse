@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  classifyGraphEvents,
   diffLiveGraphs,
   liveGraphsEqual,
   readLiveGraphFromCuratorialContext,
@@ -91,6 +92,163 @@ describe("diffLiveGraphs", () => {
     expect(diff.relationships).toHaveLength(0);
     expect(diff.summary.metaChanged).toBe(true);
     expect(summarizeWorkspaceGraphDiff(diff)).toBe("抽出の紐付けを更新");
+  });
+});
+
+function blankGraph(overrides: Record<string, unknown> = {}) {
+  return {
+    version: "1.0",
+    updatedAt: "2026-09-11T00:00:00.000Z",
+    nodes: [],
+    relationships: [],
+    provenance: { nodes: [], relationships: [] },
+    blockExtractions: {},
+    ...overrides,
+  };
+}
+
+describe("classifyGraphEvents", () => {
+  it("marks a sketch-mode node as sketch", () => {
+    const events = classifyGraphEvents(
+      blankGraph(),
+      blankGraph({
+        nodes: [
+          {
+            id: "s1",
+            name: "仮の語",
+            label: "Concept",
+            properties: { graphEdit: "sketch" },
+          },
+        ],
+        edits: {
+          sketches: {
+            nodes: [{ nodeId: "s1", name: "仮の語", label: "Concept" }],
+            relationships: [],
+          },
+        },
+      }),
+    );
+    expect(events).toEqual([
+      expect.objectContaining({
+        kind: "node",
+        change: "added",
+        origin: "sketch",
+        id: "s1",
+        name: "仮の語",
+      }),
+    ]);
+  });
+
+  it("marks an extraction-backed node as llm", () => {
+    const events = classifyGraphEvents(
+      blankGraph(),
+      blankGraph({
+        nodes: [
+          { id: "l1", name: "相模原", label: "Place", properties: {} },
+        ],
+        provenance: {
+          nodes: [{ nodeId: "l1", blockIds: ["b1"] }],
+          relationships: [],
+        },
+        blockExtractions: {
+          b1: {
+            text: "相模原",
+            nodeIds: ["l1"],
+            relationshipIds: [],
+            extractedAt: "2026-09-11T00:00:00.000Z",
+          },
+        },
+      }),
+    );
+    expect(events).toEqual([
+      expect.objectContaining({
+        kind: "node",
+        change: "added",
+        origin: "llm",
+        id: "l1",
+        name: "相模原",
+      }),
+    ]);
+  });
+
+  it("marks a quote-backed manual node as manual", () => {
+    const events = classifyGraphEvents(
+      blankGraph(),
+      blankGraph({
+        nodes: [
+          {
+            id: "m1",
+            name: "手で足した語",
+            label: "Concept",
+            properties: { graphEdit: "added" },
+          },
+        ],
+        edits: {
+          addedNodes: [
+            {
+              nodeId: "m1",
+              name: "手で足した語",
+              label: "Concept",
+              evidence: { blockId: "b1", quote: "手で足した語" },
+            },
+          ],
+        },
+      }),
+    );
+    expect(events).toEqual([
+      expect.objectContaining({
+        kind: "node",
+        change: "added",
+        origin: "manual",
+        id: "m1",
+      }),
+    ]);
+  });
+
+  it("marks a sketch that gains block evidence as promoted", () => {
+    const sketch = blankGraph({
+      nodes: [
+        {
+          id: "s1",
+          name: "仮の語",
+          label: "Concept",
+          properties: { graphEdit: "sketch" },
+        },
+      ],
+      edits: {
+        sketches: {
+          nodes: [{ nodeId: "s1", name: "仮の語", label: "Concept" }],
+          relationships: [],
+        },
+      },
+    });
+    const clean = blankGraph({
+      nodes: [
+        { id: "s1", name: "仮の語", label: "Concept", properties: {} },
+      ],
+      provenance: {
+        nodes: [{ nodeId: "s1", blockIds: ["b1"] }],
+        relationships: [],
+      },
+      blockExtractions: {
+        b1: {
+          text: "仮の語",
+          nodeIds: ["s1"],
+          relationshipIds: [],
+          extractedAt: "2026-09-11T00:01:00.000Z",
+        },
+      },
+    });
+    const events = classifyGraphEvents(sketch, clean);
+    expect(events).toEqual([
+      expect.objectContaining({
+        kind: "node",
+        change: "promoted",
+        origin: "sketch",
+        id: "s1",
+      }),
+    ]);
+    expect(events.some((event) => event.change === "updated")).toBe(false);
   });
 });
 

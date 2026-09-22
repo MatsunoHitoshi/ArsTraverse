@@ -6,12 +6,14 @@ import {
 } from "./writing-history";
 import { PUBLIC_USER_SELECT } from "@/server/lib/user-select";
 import {
+  classifyGraphEvents,
   diffLiveGraphs,
   graphDiffHasChanges,
   readLiveGraphFromCuratorialContext,
   summarizeWorkspaceGraphDiff,
   withLiveGraphInCuratorialContext,
   type WorkspaceGraphDiff,
+  type WorkspaceGraphEvent,
 } from "./workspace-graph-history";
 
 function accessibleByUser(userId: string) {
@@ -34,6 +36,19 @@ export type ExternalWorkspaceDto = {
   curatorialContext: unknown;
   createdAt: string;
   updatedAt: string;
+};
+
+export const WRITING_USAGE_LOG_MAX = 500;
+
+export type ExternalWritingUsageLogDto = {
+  id: string;
+  workspaceId: string;
+  changeDescription: string | null;
+  previousText: string;
+  currentText: string;
+  graphEvents: WorkspaceGraphEvent[];
+  createdAt: string;
+  changedBy: { id: string; name: string | null; image: string | null };
 };
 
 export type ExternalWritingHistoryDto = {
@@ -373,6 +388,88 @@ export async function listWritingHistory(input: {
       },
     };
   });
+}
+
+function clampUsageLogTake(take: number | undefined): number {
+  if (!Number.isFinite(take)) return WRITING_USAGE_LOG_MAX;
+  return Math.min(WRITING_USAGE_LOG_MAX, Math.max(1, Math.floor(take ?? WRITING_USAGE_LOG_MAX)));
+}
+
+async function assertWritingHistoryAccess(input: {
+  db: PrismaClient;
+  workspaceId: string;
+  userId: string;
+}): Promise<void> {
+  const workspace = await input.db.workspace.findFirst({
+    where: {
+      id: input.workspaceId,
+      isDeleted: false,
+      ...accessibleByUser(input.userId),
+    },
+    select: { id: true },
+  });
+  if (!workspace) {
+    throw new Error("Workspace not found or access denied");
+  }
+}
+
+export async function listWritingUsageLog(input: {
+  db: PrismaClient;
+  workspaceId: string;
+  userId: string;
+  take?: number;
+}): Promise<{ histories: ExternalWritingUsageLogDto[]; truncated: boolean }> {
+  await assertWritingHistoryAccess(input);
+  const take = clampUsageLogTake(input.take);
+  const histories = await input.db.writingHistory.findMany({
+    where: { workspaceId: input.workspaceId },
+    orderBy: { createdAt: "desc" },
+    take: take + 1,
+    include: {
+      changedBy: { select: PUBLIC_USER_SELECT },
+    },
+  });
+  const truncated = histories.length > take;
+  return {
+    truncated,
+    histories: histories.slice(0, take).map((history) => ({
+      id: history.id,
+      workspaceId: history.workspaceId,
+      changeDescription: history.changeDescription,
+      previousText: tiptapPlainText(history.previousContent),
+      currentText: tiptapPlainText(history.currentContent),
+      graphEvents: classifyGraphEvents(
+        history.previousGraph,
+        history.currentGraph,
+      ),
+      createdAt: toIso(history.createdAt),
+      changedBy: {
+        id: history.changedBy.id,
+        name: history.changedBy.name,
+        image: history.changedBy.image,
+      },
+    })),
+  };
+}
+
+export async function getWritingUsageLogGraph(input: {
+  db: PrismaClient;
+  workspaceId: string;
+  historyId: string;
+  userId: string;
+}): Promise<unknown> {
+  await assertWritingHistoryAccess(input);
+  const history = await input.db.writingHistory.findFirst({
+    where: {
+      id: input.historyId,
+      workspaceId: input.workspaceId,
+    },
+    select: { currentGraph: true },
+  });
+  if (!history) {
+    throw new Error("Writing history not found");
+  }
+  return history.currentGraph;
 }
 
 export async function restoreWritingHistory(input: {
