@@ -129,6 +129,44 @@ export async function getWorkspaceBySourceKey(input: {
   return workspace ? toDto(workspace) : null;
 }
 
+export async function deleteWorkspaceBySource(input: {
+  db: PrismaClient;
+  source: string;
+  sourceKey: string;
+  userId: string;
+}): Promise<{ deleted: boolean }> {
+  const existing = await input.db.workspace.findUnique({
+    where: {
+      source_sourceKey: {
+        source: input.source,
+        sourceKey: input.sourceKey,
+      },
+    },
+    select: { id: true, userId: true, isDeleted: true },
+  });
+  if (!existing) return { deleted: false };
+
+  const canWrite =
+    existing.userId === input.userId ||
+    (await input.db.workspace.count({
+      where: {
+        id: existing.id,
+        collaborators: { some: { id: input.userId } },
+      },
+    })) > 0;
+  if (!canWrite) {
+    throw new Error("access denied");
+  }
+
+  if (!existing.isDeleted) {
+    await input.db.workspace.update({
+      where: { id: existing.id },
+      data: { isDeleted: true },
+    });
+  }
+  return { deleted: true };
+}
+
 export async function upsertWorkspaceBySource(input: {
   db: PrismaClient;
   userId: string;
