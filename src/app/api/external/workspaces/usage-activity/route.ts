@@ -9,8 +9,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: auth.message }, { status: auth.status });
   }
 
-  const source =
-    request.nextUrl.searchParams.get("source")?.trim() || "sos-research";
+  const requestedSource = request.nextUrl.searchParams.get("source")?.trim();
+  const source = requestedSource ? requestedSource : "sos-research";
   try {
     const activity = await listWritingUsageActivity({
       db,
