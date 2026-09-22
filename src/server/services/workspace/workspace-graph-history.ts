@@ -313,6 +313,249 @@ export function graphDiffHasChanges(diff: WorkspaceGraphDiff): boolean {
   );
 }
 
+export type GraphEventOrigin = "sketch" | "manual" | "llm" | "unknown";
+
+export type GraphEventChange = "added" | "removed" | "updated" | "promoted";
+
+export type WorkspaceGraphEvent = {
+  kind: "node" | "relationship";
+  change: GraphEventChange;
+  origin: GraphEventOrigin;
+  id: string;
+  name?: string;
+  label?: string;
+  previousName?: string;
+  type?: string;
+  previousType?: string;
+  sourceId?: string;
+  targetId?: string;
+  sourceName?: string;
+  targetName?: string;
+};
+
+const SKETCH_GRAPH_EDIT = "sketch";
+/** sos-research の手入力は properties.graphEdit に "added" を残す。 */
+const MANUAL_GRAPH_EDIT = "added";
+
+function graphEditOf(entity: GraphRecord): string | null {
+  if (!isRecord(entity.properties)) return null;
+  return typeof entity.properties.graphEdit === "string"
+    ? entity.properties.graphEdit
+    : null;
+}
+
+function editIdSet(
+  graph: unknown,
+  group: "sketches" | "added",
+  kind: "node" | "relationship",
+): Set<string> {
+  const ids = new Set<string>();
+  if (!isRecord(graph) || !isRecord(graph.edits)) return ids;
+  const idKey = kind === "node" ? "nodeId" : "relationshipId";
+  let list: unknown;
+  if (group === "sketches") {
+    if (!isRecord(graph.edits.sketches)) return ids;
+    list =
+      kind === "node"
+        ? graph.edits.sketches.nodes
+        : graph.edits.sketches.relationships;
+  } else {
+    list =
+      kind === "node"
+        ? graph.edits.addedNodes
+        : graph.edits.addedRelationships;
+  }
+  if (!Array.isArray(list)) return ids;
+  for (const item of list) {
+    if (isRecord(item) && typeof item[idKey] === "string") {
+      ids.add(item[idKey]);
+    }
+  }
+  return ids;
+}
+
+function hasBlockEvidence(
+  graph: unknown,
+  kind: "node" | "relationship",
+  id: string,
+): boolean {
+  if (!isRecord(graph)) return false;
+  if (isRecord(graph.provenance)) {
+    const rows =
+      kind === "node" ? graph.provenance.nodes : graph.provenance.relationships;
+    const idKey = kind === "node" ? "nodeId" : "relationshipId";
+    if (Array.isArray(rows)) {
+      for (const row of rows) {
+        if (!isRecord(row) || row[idKey] !== id) continue;
+        if (
+          Array.isArray(row.blockIds) &&
+          row.blockIds.some((blockId) => typeof blockId === "string" && blockId)
+        ) {
+          return true;
+        }
+      }
+    }
+  }
+  if (!isRecord(graph.blockExtractions)) return false;
+  const field = kind === "node" ? "nodeIds" : "relationshipIds";
+  for (const extraction of Object.values(graph.blockExtractions)) {
+    if (!isRecord(extraction) || !Array.isArray(extraction[field])) continue;
+    if (extraction[field].includes(id)) return true;
+  }
+  return false;
+}
+
+function isSketchEntity(
+  entity: GraphRecord & { id: string },
+  graph: unknown,
+  kind: "node" | "relationship",
+): boolean {
+  return (
+    graphEditOf(entity) === SKETCH_GRAPH_EDIT ||
+    editIdSet(graph, "sketches", kind).has(entity.id)
+  );
+}
+
+function originOf(
+  entity: GraphRecord & { id: string },
+  graph: unknown,
+  kind: "node" | "relationship",
+): GraphEventOrigin {
+  if (isSketchEntity(entity, graph, kind)) return "sketch";
+  if (
+    graphEditOf(entity) === MANUAL_GRAPH_EDIT ||
+    editIdSet(graph, "added", kind).has(entity.id)
+  ) {
+    return "manual";
+  }
+  if (hasBlockEvidence(graph, kind, entity.id)) return "llm";
+  return "unknown";
+}
+
+export function classifyGraphEvents(
+  previous: unknown,
+  current: unknown,
+): WorkspaceGraphEvent[] {
+  const previousNodes = asEntityList(previous, "nodes");
+  const currentNodes = asEntityList(current, "nodes");
+  const previousRels = asEntityList(previous, "relationships");
+  const currentRels = asEntityList(current, "relationships");
+  const previousNames = nameIndex(previousNodes);
+  const currentNames = nameIndex(currentNodes);
+  const previousNodeMap = new Map(previousNodes.map((node) => [node.id, node]));
+  const currentNodeMap = new Map(currentNodes.map((node) => [node.id, node]));
+  const events: WorkspaceGraphEvent[] = [];
+
+  for (const node of currentNodes) {
+    const before = previousNodeMap.get(node.id);
+    if (!before) {
+      events.push({
+        kind: "node",
+        change: "added",
+        origin: originOf(node, current, "node"),
+        id: node.id,
+        name: nodeName(node),
+        label: nodeLabel(node),
+      });
+      continue;
+    }
+    const promoted =
+      isSketchEntity(before, previous, "node") &&
+      !isSketchEntity(node, current, "node") &&
+      hasBlockEvidence(current, "node", node.id);
+    const changed =
+      stableJson(entitySignature(before, ["id"])) !==
+      stableJson(entitySignature(node, ["id"]));
+    if (!promoted && !changed) continue;
+    events.push({
+      kind: "node",
+      change: promoted ? "promoted" : "updated",
+      origin: promoted ? "sketch" : originOf(node, current, "node"),
+      id: node.id,
+      name: nodeName(node),
+      label: nodeLabel(node),
+      previousName:
+        nodeName(before) !== nodeName(node) ? nodeName(before) : undefined,
+    });
+  }
+  for (const node of previousNodes) {
+    if (currentNodeMap.has(node.id)) continue;
+    events.push({
+      kind: "node",
+      change: "removed",
+      origin: originOf(node, previous, "node"),
+      id: node.id,
+      name: nodeName(node),
+      label: nodeLabel(node),
+    });
+  }
+
+  const previousRelMap = new Map(previousRels.map((rel) => [rel.id, rel]));
+  const currentRelMap = new Map(currentRels.map((rel) => [rel.id, rel]));
+
+  for (const rel of currentRels) {
+    const sourceId = relationshipEnd(rel, "sourceId");
+    const targetId = relationshipEnd(rel, "targetId");
+    const before = previousRelMap.get(rel.id);
+    if (!before) {
+      events.push({
+        kind: "relationship",
+        change: "added",
+        origin: originOf(rel, current, "relationship"),
+        id: rel.id,
+        type: relationshipType(rel),
+        sourceId,
+        targetId,
+        sourceName: lookupName(currentNames, sourceId),
+        targetName: lookupName(currentNames, targetId),
+      });
+      continue;
+    }
+    const promoted =
+      isSketchEntity(before, previous, "relationship") &&
+      !isSketchEntity(rel, current, "relationship") &&
+      hasBlockEvidence(current, "relationship", rel.id);
+    const changed =
+      stableJson(entitySignature(before, ["id"])) !==
+      stableJson(entitySignature(rel, ["id"]));
+    if (!promoted && !changed) continue;
+    const beforeType = relationshipType(before);
+    const nextType = relationshipType(rel);
+    events.push({
+      kind: "relationship",
+      change: promoted ? "promoted" : "updated",
+      origin: promoted
+        ? "sketch"
+        : originOf(rel, current, "relationship"),
+      id: rel.id,
+      type: nextType,
+      previousType: beforeType !== nextType ? beforeType : undefined,
+      sourceId,
+      targetId,
+      sourceName: lookupName(currentNames, sourceId),
+      targetName: lookupName(currentNames, targetId),
+    });
+  }
+  for (const rel of previousRels) {
+    if (currentRelMap.has(rel.id)) continue;
+    const sourceId = relationshipEnd(rel, "sourceId");
+    const targetId = relationshipEnd(rel, "targetId");
+    events.push({
+      kind: "relationship",
+      change: "removed",
+      origin: originOf(rel, previous, "relationship"),
+      id: rel.id,
+      type: relationshipType(rel),
+      sourceId,
+      targetId,
+      sourceName: lookupName(previousNames, sourceId),
+      targetName: lookupName(previousNames, targetId),
+    });
+  }
+
+  return events;
+}
+
 export function defaultWritingHistoryDescription(input: {
   contentChanged: boolean;
   graphChanged: boolean;
