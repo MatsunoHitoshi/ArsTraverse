@@ -3,6 +3,7 @@ import type { WorkspaceStatus } from "@prisma/client";
 import { db } from "@/server/db";
 import { resolveExternalWorkspaceUser } from "@/server/services/workspace/resolve-external-auth";
 import {
+  deleteWorkspaceBySource,
   getWorkspaceBySourceKey,
   listWorkspacesBySource,
   upsertWorkspaceBySource,
@@ -91,6 +92,40 @@ export async function PUT(request: NextRequest) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to upsert workspace";
+    const status = message.includes("access denied") ? 403 : 500;
+    return NextResponse.json({ error: message }, { status });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  const auth = await resolveExternalWorkspaceUser(request);
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.message }, { status: auth.status });
+  }
+
+  const source = request.nextUrl.searchParams.get("source")?.trim();
+  const sourceKey = request.nextUrl.searchParams.get("sourceKey")?.trim();
+  if (!source || !sourceKey) {
+    return NextResponse.json(
+      { error: "source and sourceKey are required" },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const result = await deleteWorkspaceBySource({
+      db,
+      source,
+      sourceKey,
+      userId: auth.userId,
+    });
+    if (!result.deleted) {
+      return NextResponse.json({ error: "not found" }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to delete workspace";
     const status = message.includes("access denied") ? 403 : 500;
     return NextResponse.json({ error: message }, { status });
   }
