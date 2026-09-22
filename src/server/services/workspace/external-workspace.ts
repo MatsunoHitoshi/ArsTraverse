@@ -6,7 +6,6 @@ import {
 } from "./writing-history";
 import { PUBLIC_USER_SELECT } from "@/server/lib/user-select";
 import {
-  classifyGraphEvents,
   diffLiveGraphs,
   graphDiffHasChanges,
   readLiveGraphFromCuratorialContext,
@@ -15,6 +14,10 @@ import {
   type WorkspaceGraphDiff,
   type WorkspaceGraphEvent,
 } from "./workspace-graph-history";
+import {
+  expandUsageLogEntries,
+  parseUnrecordedHistoryId,
+} from "./usage-log-entries";
 
 function accessibleByUser(userId: string) {
   return {
@@ -430,24 +433,48 @@ export async function listWritingUsageLog(input: {
     },
   });
   const truncated = histories.length > take;
-  return {
-    truncated,
-    histories: histories.slice(0, take).map((history) => ({
+  const page = histories.slice(0, take);
+  const workspace = await input.db.workspace.findFirst({
+    where: {
+      id: input.workspaceId,
+      isDeleted: false,
+    },
+    select: {
+      content: true,
+      curatorialContext: true,
+      updatedAt: true,
+    },
+  });
+  const expanded = expandUsageLogEntries({
+    histories: page.map((history) => ({
       id: history.id,
       workspaceId: history.workspaceId,
       changeDescription: history.changeDescription,
-      previousText: tiptapPlainText(history.previousContent),
-      currentText: tiptapPlainText(history.currentContent),
-      graphEvents: classifyGraphEvents(
-        history.previousGraph,
-        history.currentGraph,
-      ),
-      createdAt: toIso(history.createdAt),
+      previousContent: history.previousContent,
+      currentContent: history.currentContent,
+      previousGraph: history.previousGraph,
+      currentGraph: history.currentGraph,
+      createdAt: history.createdAt,
       changedBy: {
         id: history.changedBy.id,
         name: history.changedBy.name,
         image: history.changedBy.image,
       },
+    })),
+    workspace: workspace
+      ? {
+          workspaceId: input.workspaceId,
+          content: workspace.content,
+          graph: readLiveGraphFromCuratorialContext(workspace.curatorialContext),
+          updatedAt: workspace.updatedAt,
+        }
+      : null,
+  });
+  return {
+    truncated,
+    histories: expanded.map((entry) => ({
+      ...entry,
+      createdAt: toIso(entry.createdAt),
     })),
   };
 }
@@ -459,6 +486,33 @@ export async function getWritingUsageLogGraph(input: {
   userId: string;
 }): Promise<unknown> {
   await assertWritingHistoryAccess(input);
+  const unrecorded = parseUnrecordedHistoryId(input.historyId);
+  if (unrecorded?.kind === "workspace") {
+    const workspace = await input.db.workspace.findFirst({
+      where: {
+        id: input.workspaceId,
+        isDeleted: false,
+      },
+      select: { curatorialContext: true },
+    });
+    if (!workspace) {
+      throw new Error("Workspace not found or access denied");
+    }
+    return readLiveGraphFromCuratorialContext(workspace.curatorialContext);
+  }
+  if (unrecorded?.kind === "interval") {
+    const newer = await input.db.writingHistory.findFirst({
+      where: {
+        id: unrecorded.newerId,
+        workspaceId: input.workspaceId,
+      },
+      select: { previousGraph: true },
+    });
+    if (!newer) {
+      throw new Error("Writing history not found");
+    }
+    return newer.previousGraph;
+  }
   const history = await input.db.writingHistory.findFirst({
     where: {
       id: input.historyId,

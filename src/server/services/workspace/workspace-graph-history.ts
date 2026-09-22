@@ -553,7 +553,108 @@ export function classifyGraphEvents(
     });
   }
 
+  appendNewlyMarkedEdits({
+    events,
+    previous,
+    current,
+    currentNodes,
+    currentRels,
+    previousNodeMap,
+    previousRelMap,
+    currentNames,
+  });
+
   return events;
+}
+
+function eventCoversEntity(
+  events: WorkspaceGraphEvent[],
+  kind: "node" | "relationship",
+  id: string,
+): boolean {
+  return events.some(
+    (event) =>
+      event.kind === kind &&
+      event.id === id &&
+      (event.change === "added" ||
+        event.change === "updated" ||
+        event.change === "promoted"),
+  );
+}
+
+function pushMarkedEdit(
+  events: WorkspaceGraphEvent[],
+  kind: "node" | "relationship",
+  entity: GraphRecord & { id: string },
+  origin: GraphEventOrigin,
+  existed: boolean,
+  names: Map<string, string>,
+) {
+  if (kind === "node") {
+    events.push({
+      kind: "node",
+      change: existed ? "updated" : "added",
+      origin,
+      id: entity.id,
+      name: nodeName(entity),
+      label: nodeLabel(entity),
+    });
+    return;
+  }
+  const sourceId = relationshipEnd(entity, "sourceId");
+  const targetId = relationshipEnd(entity, "targetId");
+  events.push({
+    kind: "relationship",
+    change: existed ? "updated" : "added",
+    origin,
+    id: entity.id,
+    type: relationshipType(entity),
+    sourceId,
+    targetId,
+    sourceName: lookupName(names, sourceId),
+    targetName: lookupName(names, targetId),
+  });
+}
+
+/** ノード自体は増えていなくても、手入力・下書きの印が新しく付いた分を出す。 */
+function appendNewlyMarkedEdits(input: {
+  events: WorkspaceGraphEvent[];
+  previous: unknown;
+  current: unknown;
+  currentNodes: Array<GraphRecord & { id: string }>;
+  currentRels: Array<GraphRecord & { id: string }>;
+  previousNodeMap: Map<string, GraphRecord & { id: string }>;
+  previousRelMap: Map<string, GraphRecord & { id: string }>;
+  currentNames: Map<string, string>;
+}) {
+  const kinds = ["node", "relationship"] as const;
+  for (const kind of kinds) {
+    const entities = kind === "node" ? input.currentNodes : input.currentRels;
+    const previousIds =
+      kind === "node" ? input.previousNodeMap : input.previousRelMap;
+    const groups = [
+      { group: "added" as const, origin: "manual" as const },
+      { group: "sketches" as const, origin: "sketch" as const },
+    ];
+    for (const { group, origin } of groups) {
+      const currentIds = editIdSet(input.current, group, kind);
+      const already = editIdSet(input.previous, group, kind);
+      for (const id of currentIds) {
+        if (already.has(id)) continue;
+        if (eventCoversEntity(input.events, kind, id)) continue;
+        const entity = entities.find((item) => item.id === id);
+        if (!entity) continue;
+        pushMarkedEdit(
+          input.events,
+          kind,
+          entity,
+          origin,
+          previousIds.has(id),
+          input.currentNames,
+        );
+      }
+    }
+  }
 }
 
 export function defaultWritingHistoryDescription(input: {

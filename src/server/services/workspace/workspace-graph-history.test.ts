@@ -250,6 +250,43 @@ describe("classifyGraphEvents", () => {
     ]);
     expect(events.some((event) => event.change === "updated")).toBe(false);
   });
+
+  it("marks an existing node when a manual edit is attached", () => {
+    const before = blankGraph({
+      nodes: [{ id: "m1", name: "ギャラリー", label: "Concept", properties: {} }],
+      provenance: {
+        nodes: [{ nodeId: "m1", blockIds: ["b1"] }],
+        relationships: [],
+      },
+    });
+    const after = blankGraph({
+      nodes: [{ id: "m1", name: "ギャラリー", label: "Concept", properties: {} }],
+      provenance: {
+        nodes: [{ nodeId: "m1", blockIds: ["b1"] }],
+        relationships: [],
+      },
+      edits: {
+        addedNodes: [
+          {
+            nodeId: "m1",
+            name: "ギャラリー",
+            label: "Concept",
+            evidence: { blockId: "b1", quote: "ギャラリー" },
+          },
+        ],
+      },
+    });
+    const events = classifyGraphEvents(before, after);
+    expect(events).toEqual([
+      expect.objectContaining({
+        kind: "node",
+        change: "updated",
+        origin: "manual",
+        id: "m1",
+        name: "ギャラリー",
+      }),
+    ]);
+  });
 });
 
 describe("curatorialContext liveGraph", () => {
