@@ -18,6 +18,12 @@ import {
   expandUsageLogEntries,
   parseUnrecordedHistoryId,
 } from "./usage-log-entries";
+import {
+  countGraphAdditions,
+  hasActivity,
+  textAddedLength,
+  type WritingActivityPoint,
+} from "./usage-activity";
 
 function accessibleByUser(userId: string) {
   return {
@@ -477,6 +483,80 @@ export async function listWritingUsageLog(input: {
       createdAt: toIso(entry.createdAt),
     })),
   };
+}
+
+const ACTIVITY_ACTOR = { id: "activity", name: null, image: null };
+
+export async function listWritingUsageActivity(input: {
+  db: PrismaClient;
+  userId: string;
+  source: string;
+}): Promise<{ points: WritingActivityPoint[]; truncated: boolean }> {
+  const workspaces = await input.db.workspace.findMany({
+    where: {
+      source: input.source,
+      isDeleted: false,
+      ...accessibleByUser(input.userId),
+    },
+    select: {
+      id: true,
+      name: true,
+      sourceKey: true,
+      content: true,
+      curatorialContext: true,
+      updatedAt: true,
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+  const take = WRITING_USAGE_LOG_MAX;
+  const points: WritingActivityPoint[] = [];
+  let truncated = false;
+  for (const workspace of workspaces) {
+    const slug = workspace.sourceKey?.trim();
+    if (!slug) continue;
+    const histories = await input.db.writingHistory.findMany({
+      where: { workspaceId: workspace.id },
+      orderBy: { createdAt: "desc" },
+      take: take + 1,
+      select: {
+        id: true,
+        workspaceId: true,
+        changeDescription: true,
+        previousContent: true,
+        currentContent: true,
+        previousGraph: true,
+        currentGraph: true,
+        createdAt: true,
+      },
+    });
+    if (histories.length > take) truncated = true;
+    const expanded = expandUsageLogEntries({
+      histories: histories.slice(0, take).map((history) => ({
+        ...history,
+        changedBy: ACTIVITY_ACTOR,
+      })),
+      workspace: {
+        workspaceId: workspace.id,
+        content: workspace.content,
+        graph: readLiveGraphFromCuratorialContext(workspace.curatorialContext),
+        updatedAt: workspace.updatedAt,
+      },
+    });
+    for (const entry of expanded) {
+      const counts = countGraphAdditions(entry.graphEvents);
+      const textAdded = textAddedLength(entry.previousText, entry.currentText);
+      if (!hasActivity(counts, textAdded)) continue;
+      points.push({
+        at: toIso(entry.createdAt),
+        slug,
+        title: workspace.name,
+        ...counts,
+        textAdded,
+      });
+    }
+  }
+  points.sort((left, right) => right.at.localeCompare(left.at));
+  return { points, truncated };
 }
 
 export async function getWritingUsageLogGraph(input: {
