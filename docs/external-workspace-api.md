@@ -184,7 +184,7 @@ GUI から作成した Workspace は `source` / `sourceKey` が `null` のため
 
 ## POST `/api/external/workspaces/history`
 
-履歴 1 件の `currentContent` を Workspace 本文に、`currentGraph` があれば `curatorialContext` 内のライブグラフにも復元する。グラフ欄がない古い履歴は本文のみ戻す。復元操作自体も履歴に記録される（`changeDescription`: 「履歴から復元しました」）。
+履歴 1 件の保存時点の本文（`currentContent`）とグラフを Workspace に復元する。表示中の差分だけを打ち消すのではなく、その版のスナップショット全体へ巻き戻す。グラフは `currentGraph` を使う。`previousGraph` だけある行は、この版にグラフが残っていないものとして本文のみ戻す。両方無いレガシー行だけ、前後の履歴から当時のグラフを補う。それでもグラフが無い履歴は本文のみ戻す。復元操作自体も履歴に記録される（`changeDescription`: 「履歴から復元しました」）。
 
 ### リクエストボディ
 
