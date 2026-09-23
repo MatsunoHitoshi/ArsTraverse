@@ -1,5 +1,5 @@
 export type WorkspaceGraphNodeChange = {
-  change: "added" | "removed" | "updated";
+  change: "added" | "removed" | "updated" | "property";
   id: string;
   name: string;
   label: string;
@@ -8,7 +8,7 @@ export type WorkspaceGraphNodeChange = {
 };
 
 export type WorkspaceGraphRelationshipChange = {
-  change: "added" | "removed" | "updated";
+  change: "added" | "removed" | "updated" | "property";
   id: string;
   type: string;
   sourceId: string;
@@ -28,6 +28,7 @@ export type WorkspaceGraphDiff = {
     addedRelationshipCount: number;
     removedRelationshipCount: number;
     updatedRelationshipCount: number;
+    propertyChangeCount: number;
     metaChanged: boolean;
   };
 };
@@ -111,6 +112,49 @@ function asEntityList(
   );
 }
 
+type PropertyChangeKind = "updated" | "property";
+
+function sameJson(left: unknown, right: unknown): boolean {
+  return stableJson(left) === stableJson(right);
+}
+
+/** 名前以外（種類と properties）だけが変わったノードは property。 */
+function nodeDiffKind(
+  before: GraphRecord & { id: string },
+  node: GraphRecord & { id: string },
+): PropertyChangeKind | null {
+  if (sameJson(entitySignature(before, ["id"]), entitySignature(node, ["id"]))) {
+    return null;
+  }
+  const nameSame = nodeName(before) === nodeName(node);
+  const restSame = sameJson(
+    entitySignature(before, ["id", "name", "label", "properties"]),
+    entitySignature(node, ["id", "name", "label", "properties"]),
+  );
+  if (nameSame && restSame) return "property";
+  return "updated";
+}
+
+/** タイプと端点以外（properties）だけが変わったエッジは property。 */
+function relationshipDiffKind(
+  before: GraphRecord & { id: string },
+  rel: GraphRecord & { id: string },
+): PropertyChangeKind | null {
+  if (sameJson(entitySignature(before, ["id"]), entitySignature(rel, ["id"]))) {
+    return null;
+  }
+  const structuralSame =
+    relationshipType(before) === relationshipType(rel) &&
+    relationshipEnd(before, "sourceId") === relationshipEnd(rel, "sourceId") &&
+    relationshipEnd(before, "targetId") === relationshipEnd(rel, "targetId");
+  const restSame = sameJson(
+    entitySignature(before, ["id", "type", "sourceId", "targetId", "properties"]),
+    entitySignature(rel, ["id", "type", "sourceId", "targetId", "properties"]),
+  );
+  if (structuralSame && restSame) return "property";
+  return "updated";
+}
+
 function entitySignature(entity: GraphRecord, omit: string[]): unknown {
   const next: GraphRecord = {};
   for (const [key, value] of Object.entries(entity)) {
@@ -183,17 +227,19 @@ export function diffLiveGraphs(
       });
       continue;
     }
-    if (
-      stableJson(entitySignature(before, ["id"])) !==
-      stableJson(entitySignature(node, ["id"]))
-    ) {
+    const kind = nodeDiffKind(before, node);
+    if (kind) {
+      const previousName = nodeName(before);
+      const previousLabel = nodeLabel(before);
       nodes.push({
-        change: "updated",
+        change: kind,
         id: node.id,
         name: nodeName(node),
         label: nodeLabel(node),
-        previousName: nodeName(before),
-        previousLabel: nodeLabel(before),
+        previousName:
+          previousName !== nodeName(node) ? previousName : undefined,
+        previousLabel:
+          previousLabel !== nodeLabel(node) ? previousLabel : undefined,
       });
     }
   }
@@ -227,19 +273,19 @@ export function diffLiveGraphs(
       });
       continue;
     }
-    if (
-      stableJson(entitySignature(before, ["id"])) !==
-      stableJson(entitySignature(rel, ["id"]))
-    ) {
+    const kind = relationshipDiffKind(before, rel);
+    if (kind) {
+      const beforeType = relationshipType(before);
+      const nextType = relationshipType(rel);
       relationships.push({
-        change: "updated",
+        change: kind,
         id: rel.id,
-        type: relationshipType(rel),
+        type: nextType,
         sourceId,
         targetId,
         sourceName: lookupName(currentNames, sourceId),
         targetName: lookupName(currentNames, targetId),
-        previousType: relationshipType(before),
+        previousType: beforeType !== nextType ? beforeType : undefined,
       });
     }
   }
@@ -271,6 +317,9 @@ export function diffLiveGraphs(
     updatedRelationshipCount: relationships.filter(
       (item) => item.change === "updated",
     ).length,
+    propertyChangeCount:
+      nodes.filter((item) => item.change === "property").length +
+      relationships.filter((item) => item.change === "property").length,
     metaChanged:
       stableJson(metaForCompare(previous)) !==
       stableJson(metaForCompare(current)),
@@ -299,6 +348,9 @@ export function summarizeWorkspaceGraphDiff(diff: WorkspaceGraphDiff): string {
   if (diff.summary.updatedRelationshipCount > 0) {
     parts.push(`${diff.summary.updatedRelationshipCount}関係変更`);
   }
+  if (diff.summary.propertyChangeCount > 0) {
+    parts.push(`${diff.summary.propertyChangeCount}件のプロパティ変更`);
+  }
   if (parts.length === 0 && diff.summary.metaChanged) {
     return "抽出の紐付けを更新";
   }
@@ -315,7 +367,12 @@ export function graphDiffHasChanges(diff: WorkspaceGraphDiff): boolean {
 
 export type GraphEventOrigin = "sketch" | "manual" | "llm" | "unknown";
 
-export type GraphEventChange = "added" | "removed" | "updated" | "promoted";
+export type GraphEventChange =
+  | "added"
+  | "removed"
+  | "updated"
+  | "promoted"
+  | "property";
 
 export type WorkspaceGraphEvent = {
   kind: "node" | "relationship";
@@ -324,6 +381,7 @@ export type WorkspaceGraphEvent = {
   id: string;
   name?: string;
   label?: string;
+  previousLabel?: string;
   previousName?: string;
   type?: string;
   previousType?: string;
@@ -463,17 +521,18 @@ export function classifyGraphEvents(
       isSketchEntity(before, previous, "node") &&
       !isSketchEntity(node, current, "node") &&
       hasBlockEvidence(current, "node", node.id);
-    const changed =
-      stableJson(entitySignature(before, ["id"])) !==
-      stableJson(entitySignature(node, ["id"]));
-    if (!promoted && !changed) continue;
+    const kind = nodeDiffKind(before, node);
+    if (!promoted && !kind) continue;
+    const previousLabel = nodeLabel(before);
+    const nextLabel = nodeLabel(node);
     events.push({
       kind: "node",
-      change: promoted ? "promoted" : "updated",
+      change: promoted ? "promoted" : kind!,
       origin: promoted ? "sketch" : originOf(node, current, "node"),
       id: node.id,
       name: nodeName(node),
-      label: nodeLabel(node),
+      label: nextLabel,
+      previousLabel: previousLabel !== nextLabel ? previousLabel : undefined,
       previousName:
         nodeName(before) !== nodeName(node) ? nodeName(before) : undefined,
     });
@@ -515,15 +574,13 @@ export function classifyGraphEvents(
       isSketchEntity(before, previous, "relationship") &&
       !isSketchEntity(rel, current, "relationship") &&
       hasBlockEvidence(current, "relationship", rel.id);
-    const changed =
-      stableJson(entitySignature(before, ["id"])) !==
-      stableJson(entitySignature(rel, ["id"]));
-    if (!promoted && !changed) continue;
+    const kind = relationshipDiffKind(before, rel);
+    if (!promoted && !kind) continue;
     const beforeType = relationshipType(before);
     const nextType = relationshipType(rel);
     events.push({
       kind: "relationship",
-      change: promoted ? "promoted" : "updated",
+      change: promoted ? "promoted" : kind!,
       origin: promoted
         ? "sketch"
         : originOf(rel, current, "relationship"),
@@ -578,6 +635,7 @@ function eventCoversEntity(
       event.id === id &&
       (event.change === "added" ||
         event.change === "updated" ||
+        event.change === "property" ||
         event.change === "promoted"),
   );
 }

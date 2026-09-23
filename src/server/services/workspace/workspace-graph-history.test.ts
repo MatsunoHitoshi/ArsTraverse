@@ -93,6 +93,52 @@ describe("diffLiveGraphs", () => {
     expect(diff.summary.metaChanged).toBe(true);
     expect(summarizeWorkspaceGraphDiff(diff)).toBe("抽出の紐付けを更新");
   });
+
+  it("records label and relationship property edits as one property change", () => {
+    const relabeled = {
+      ...previous,
+      nodes: previous.nodes.map((node) =>
+        node.id === "n1" ? { ...node, label: "Place" } : node,
+      ),
+    };
+    const diff = diffLiveGraphs(previous, relabeled);
+    expect(diff.nodes.find((node) => node.id === "n1")).toMatchObject({
+      change: "property",
+      label: "Place",
+      previousLabel: "Studio",
+    });
+    expect(diff.summary.updatedNodeCount).toBe(0);
+    expect(diff.summary.propertyChangeCount).toBe(1);
+    expect(summarizeWorkspaceGraphDiff(diff)).toBe("1件のプロパティ変更");
+
+    const events = classifyGraphEvents(previous, relabeled);
+    expect(events).toEqual([
+      expect.objectContaining({
+        kind: "node",
+        change: "property",
+        id: "n1",
+        label: "Place",
+        previousLabel: "Studio",
+      }),
+    ]);
+
+    const withNote = {
+      ...previous,
+      relationships: previous.relationships.map((rel) => ({
+        ...rel,
+        properties: { note: "ゲスト" },
+      })),
+    };
+    const relDiff = diffLiveGraphs(previous, withNote);
+    expect(relDiff.relationships[0]?.change).toBe("property");
+    expect(relDiff.summary.updatedRelationshipCount).toBe(0);
+    expect(relDiff.summary.propertyChangeCount).toBe(1);
+    expect(classifyGraphEvents(previous, withNote)[0]).toMatchObject({
+      kind: "relationship",
+      change: "property",
+      id: "r1",
+    });
+  });
 });
 
 function blankGraph(overrides: Record<string, unknown> = {}) {
