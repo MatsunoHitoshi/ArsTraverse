@@ -188,6 +188,56 @@ describe("resolveWritingHistorySnapshot", () => {
     ).toEqual({ content: newer.currentContent, graph: place });
   });
 
+  it("does not treat previousGraph as the saved graph when currentGraph is missing", () => {
+    const cleared = {
+      id: "h2",
+      createdAt: "2026-09-01T00:01:00.000Z",
+      currentContent: { type: "doc", content: [] },
+      previousGraph: studio,
+    };
+
+    expect(
+      resolveWritingHistorySnapshot({
+        history: cleared,
+        timeline: [
+          {
+            id: "h1",
+            createdAt: "2026-09-01T00:00:00.000Z",
+            currentGraph: studio,
+          },
+          cleared,
+        ],
+      }).graph,
+    ).toBeNull();
+  });
+
+  it("does not walk past a previousGraph-only row when filling a legacy snapshot", () => {
+    const legacy = {
+      id: "h3",
+      createdAt: "2026-09-01T00:02:00.000Z",
+      currentContent: { type: "doc", content: [] },
+    };
+
+    expect(
+      resolveWritingHistorySnapshot({
+        history: legacy,
+        timeline: [
+          {
+            id: "h1",
+            createdAt: "2026-09-01T00:00:00.000Z",
+            currentGraph: studio,
+          },
+          {
+            id: "h2",
+            createdAt: "2026-09-01T00:01:00.000Z",
+            previousGraph: studio,
+          },
+          legacy,
+        ],
+      }).graph,
+    ).toBeNull();
+  });
+
   it("fills a missing graph from the nearest snapshot on the timeline", () => {
     const textOnly = {
       id: "h2",

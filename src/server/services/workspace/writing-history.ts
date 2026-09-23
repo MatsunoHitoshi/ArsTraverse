@@ -165,13 +165,15 @@ function compareHistoryOrder(
   return left.id.localeCompare(right.id);
 }
 
-/** その版の保存時点のグラフ。この行に無ければ前後の履歴から補う。 */
+/** その版の保存時点のグラフ。両方 null のレガシー行だけ前後の履歴から補う。 */
 export function resolveWritingHistoryGraph(input: {
   history: WritingHistorySnapshotSource;
   timeline?: WritingHistorySnapshotSource[];
 }): unknown {
   if (input.history.currentGraph != null) return input.history.currentGraph;
-  if (input.history.previousGraph != null) return input.history.previousGraph;
+  // previousGraph だけある行は「変更前はあるが、この版のグラフは残っていない」。
+  // 変更前を採用すると、グラフを消した保存を戻したときに削除が取り消される。
+  if (input.history.previousGraph != null) return null;
 
   const timeline = [...(input.timeline ?? [])].sort(compareHistoryOrder);
   const index = timeline.findIndex((item) => item.id === input.history.id);
@@ -179,7 +181,9 @@ export function resolveWritingHistoryGraph(input: {
 
   for (let i = index - 1; i >= 0; i -= 1) {
     const older = timeline[i];
-    if (older?.currentGraph != null) return older.currentGraph;
+    if (!older) continue;
+    if (older.currentGraph != null) return older.currentGraph;
+    if (older.previousGraph != null) return null;
   }
   for (let i = index + 1; i < timeline.length; i += 1) {
     const newer = timeline[i];
