@@ -142,3 +142,59 @@ export async function recordWritingHistoryIfNeeded(input: {
 
   return { recorded: true, historyId: history.id };
 }
+
+export type WritingHistorySnapshotSource = {
+  id: string;
+  createdAt: Date | string;
+  currentContent?: unknown;
+  previousGraph?: unknown;
+  currentGraph?: unknown;
+};
+
+function historyTime(value: Date | string): number {
+  const time = value instanceof Date ? value.getTime() : Date.parse(String(value));
+  return Number.isFinite(time) ? time : 0;
+}
+
+function compareHistoryOrder(
+  left: WritingHistorySnapshotSource,
+  right: WritingHistorySnapshotSource,
+): number {
+  const delta = historyTime(left.createdAt) - historyTime(right.createdAt);
+  if (delta !== 0) return delta;
+  return left.id.localeCompare(right.id);
+}
+
+/** その版の保存時点のグラフ。この行に無ければ前後の履歴から補う。 */
+export function resolveWritingHistoryGraph(input: {
+  history: WritingHistorySnapshotSource;
+  timeline?: WritingHistorySnapshotSource[];
+}): unknown {
+  if (input.history.currentGraph != null) return input.history.currentGraph;
+  if (input.history.previousGraph != null) return input.history.previousGraph;
+
+  const timeline = [...(input.timeline ?? [])].sort(compareHistoryOrder);
+  const index = timeline.findIndex((item) => item.id === input.history.id);
+  if (index < 0) return null;
+
+  for (let i = index - 1; i >= 0; i -= 1) {
+    const older = timeline[i];
+    if (older?.currentGraph != null) return older.currentGraph;
+  }
+  for (let i = index + 1; i < timeline.length; i += 1) {
+    const newer = timeline[i];
+    if (newer?.previousGraph != null) return newer.previousGraph;
+  }
+  return null;
+}
+
+/** その版の保存時点の本文とグラフ。差分の一部ではなく、その時点の全体。 */
+export function resolveWritingHistorySnapshot(input: {
+  history: WritingHistorySnapshotSource;
+  timeline?: WritingHistorySnapshotSource[];
+}): { content: unknown; graph: unknown } {
+  return {
+    content: input.history.currentContent ?? null,
+    graph: resolveWritingHistoryGraph(input),
+  };
+}

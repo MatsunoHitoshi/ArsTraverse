@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient, WorkspaceStatus } from "@prisma/client";
 import {
   recordWritingHistoryIfNeeded,
+  resolveWritingHistorySnapshot,
   tiptapPlainText,
   tiptapPlainTextPreview,
 } from "./writing-history";
@@ -373,11 +374,15 @@ export async function listWritingHistory(input: {
   });
 
   return histories.map((history) => {
+    const snapshot = resolveWritingHistorySnapshot({
+      history,
+      timeline: histories,
+    });
     const graphDiff = diffLiveGraphs(
       history.previousGraph,
       history.currentGraph,
     );
-    const hasGraph = history.currentGraph != null;
+    const hasGraph = snapshot.graph != null;
     return {
       id: history.id,
       workspaceId: history.workspaceId,
@@ -633,19 +638,32 @@ export async function restoreWritingHistory(input: {
     throw new Error("Writing history not found");
   }
 
-  const restoredContent = history.currentContent;
-  const restoredGraph = history.currentGraph;
+  const timeline = await input.db.writingHistory.findMany({
+    where: { workspaceId: input.workspaceId },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      createdAt: true,
+      previousGraph: true,
+      currentGraph: true,
+    },
+  });
+  const snapshot = resolveWritingHistorySnapshot({
+    history,
+    timeline,
+  });
+  const restoredContent = snapshot.content;
+  const restoredGraph = snapshot.graph;
+  const currentWorkspaceGraph = readLiveGraphFromCuratorialContext(
+    workspace.curatorialContext,
+  );
   await recordWritingHistoryIfNeeded({
     db: input.db,
     workspaceId: workspace.id,
     previousContent: workspace.content,
     currentContent: restoredContent,
-    previousGraph: readLiveGraphFromCuratorialContext(
-      workspace.curatorialContext,
-    ),
-    currentGraph:
-      restoredGraph ??
-      readLiveGraphFromCuratorialContext(workspace.curatorialContext),
+    previousGraph: currentWorkspaceGraph,
+    currentGraph: restoredGraph ?? currentWorkspaceGraph,
     changedById: input.userId,
     changeDescription: "履歴から復元しました",
     force: true,

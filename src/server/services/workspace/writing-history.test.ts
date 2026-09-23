@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   jsonContentEquals,
+  resolveWritingHistorySnapshot,
   shouldRecordWritingHistory,
   tiptapPlainText,
   tiptapPlainTextPreview,
@@ -143,6 +144,80 @@ describe("shouldRecordWritingHistory", () => {
         force: true,
       }),
     ).toBe(false);
+  });
+});
+
+describe("resolveWritingHistorySnapshot", () => {
+  const studio = {
+    nodes: [{ id: "n1", name: "桶屋", label: "Studio" }],
+    relationships: [],
+    edits: { nodeLabels: [{ key: "桶屋", name: "桶屋", label: "Studio" }] },
+  };
+  const place = {
+    nodes: [{ id: "n1", name: "桶屋", label: "Place" }],
+    relationships: [],
+    edits: { nodeLabels: [{ key: "桶屋", name: "桶屋", label: "Place" }] },
+  };
+
+  it("restores the saved graph at that version, including labels", () => {
+    const older = {
+      id: "h1",
+      createdAt: "2026-09-01T00:00:00.000Z",
+      currentContent: { type: "doc", content: [] },
+      currentGraph: studio,
+    };
+    const newer = {
+      id: "h2",
+      createdAt: "2026-09-01T00:01:00.000Z",
+      currentContent: { type: "doc", content: [] },
+      previousGraph: studio,
+      currentGraph: place,
+    };
+
+    expect(
+      resolveWritingHistorySnapshot({
+        history: older,
+        timeline: [newer, older],
+      }),
+    ).toEqual({ content: older.currentContent, graph: studio });
+    expect(
+      resolveWritingHistorySnapshot({
+        history: newer,
+        timeline: [newer, older],
+      }),
+    ).toEqual({ content: newer.currentContent, graph: place });
+  });
+
+  it("fills a missing graph from the nearest snapshot on the timeline", () => {
+    const textOnly = {
+      id: "h2",
+      createdAt: "2026-09-01T00:01:00.000Z",
+      currentContent: { type: "doc", content: [] },
+    };
+    const older = {
+      id: "h1",
+      createdAt: "2026-09-01T00:00:00.000Z",
+      currentGraph: studio,
+    };
+    const newer = {
+      id: "h3",
+      createdAt: "2026-09-01T00:02:00.000Z",
+      previousGraph: place,
+      currentGraph: place,
+    };
+
+    expect(
+      resolveWritingHistorySnapshot({
+        history: textOnly,
+        timeline: [newer, textOnly, older],
+      }).graph,
+    ).toBe(studio);
+    expect(
+      resolveWritingHistorySnapshot({
+        history: { ...textOnly, id: "orphan" },
+        timeline: [newer],
+      }).graph,
+    ).toBeNull();
   });
 });
 
