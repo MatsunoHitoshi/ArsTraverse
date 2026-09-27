@@ -207,7 +207,7 @@ Concept and flow diagrams for the writing workspace, story generation, auto-high
 - `docs/workspace-router-api.md` — workspace CRUD, text completion, publish, searchPublishedNodes
 - `docs/assistant-router-api.md` — graph summary/outline streaming, TTS (assistantRouter)
 - `docs/kg-integration-api.md` — kg.integrateGraph, getRelatedNodes, getNodesByIds
-- `docs/external-workspace-api.md` — authenticated REST API for external apps (SOS): workspace upsert, writing history, collaborators
+- `docs/external-workspace-api.md` — authenticated REST API for external apps (SOS): workspace upsert/delete, writing history, usage log/activity, collaborators
 
 ## Project Structure
 
