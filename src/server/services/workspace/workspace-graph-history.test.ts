@@ -185,6 +185,39 @@ describe("classifyGraphEvents", () => {
     ]);
   });
 
+  it("marks an image-sourced sketch node as image", () => {
+    const events = classifyGraphEvents(
+      blankGraph(),
+      blankGraph({
+        nodes: [
+          {
+            id: "s1",
+            name: "工房",
+            label: "Concept",
+            properties: { graphEdit: "sketch", graphSource: "image" },
+          },
+        ],
+        edits: {
+          sketches: {
+            nodes: [
+              { nodeId: "s1", name: "工房", label: "Concept", source: "image" },
+            ],
+            relationships: [],
+          },
+        },
+      }),
+    );
+    expect(events).toEqual([
+      expect.objectContaining({
+        kind: "node",
+        change: "added",
+        origin: "image",
+        id: "s1",
+        name: "工房",
+      }),
+    ]);
+  });
+
   it("marks an extraction-backed node as llm", () => {
     const events = classifyGraphEvents(
       blankGraph(),

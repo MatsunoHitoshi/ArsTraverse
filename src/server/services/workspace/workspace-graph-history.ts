@@ -365,7 +365,7 @@ export function graphDiffHasChanges(diff: WorkspaceGraphDiff): boolean {
   );
 }
 
-export type GraphEventOrigin = "sketch" | "manual" | "llm" | "unknown";
+export type GraphEventOrigin = "sketch" | "manual" | "llm" | "image" | "unknown";
 
 export type GraphEventChange =
   | "added"
@@ -394,6 +394,8 @@ export type WorkspaceGraphEvent = {
 const SKETCH_GRAPH_EDIT = "sketch";
 /** sos-research の手入力は properties.graphEdit に "added" を残す。 */
 const MANUAL_GRAPH_EDIT = "added";
+/** 画像ストックから作った下書きは properties.graphSource に "image" を残す。 */
+const IMAGE_GRAPH_SOURCE = "image";
 
 function graphEditOf(entity: GraphRecord): string | null {
   if (!isRecord(entity.properties)) return null;
@@ -474,11 +476,23 @@ function isSketchEntity(
   );
 }
 
+function isImageSourced(
+  entity: GraphRecord,
+): boolean {
+  return (
+    isRecord(entity.properties) &&
+    entity.properties.graphSource === IMAGE_GRAPH_SOURCE
+  );
+}
+
 function originOf(
   entity: GraphRecord & { id: string },
   graph: unknown,
   kind: "node" | "relationship",
 ): GraphEventOrigin {
+  if (isSketchEntity(entity, graph, kind) && isImageSourced(entity)) {
+    return "image";
+  }
   if (isSketchEntity(entity, graph, kind)) return "sketch";
   if (
     graphEditOf(entity) === MANUAL_GRAPH_EDIT ||
