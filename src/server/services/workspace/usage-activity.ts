@@ -3,6 +3,7 @@ import type { WorkspaceGraphEvent } from "./workspace-graph-history";
 export type GraphAdditionCounts = {
   manual: number;
   sketch: number;
+  image: number;
   promoted: number;
   llm: number;
   unknown: number;
@@ -18,6 +19,7 @@ export type WritingActivityPoint = GraphAdditionCounts & {
 const EMPTY_COUNTS: GraphAdditionCounts = {
   manual: 0,
   sketch: 0,
+  image: 0,
   promoted: 0,
   llm: 0,
   unknown: 0,
@@ -37,6 +39,7 @@ export function countGraphAdditions(
     if (
       event.origin === "manual" ||
       event.origin === "sketch" ||
+      event.origin === "image" ||
       event.origin === "llm"
     ) {
       counts[event.origin] += 1;
@@ -59,6 +62,7 @@ export function hasActivity(
     textAdded > 0 ||
     counts.manual > 0 ||
     counts.sketch > 0 ||
+    counts.image > 0 ||
     counts.promoted > 0 ||
     counts.llm > 0 ||
     counts.unknown > 0

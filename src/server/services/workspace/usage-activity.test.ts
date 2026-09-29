@@ -21,6 +21,7 @@ describe("countGraphAdditions", () => {
       countGraphAdditions([
         event("added", "manual"),
         event("added", "sketch"),
+        event("added", "image"),
         event("added", "llm"),
         event("added", "unknown"),
         event("promoted", "sketch"),
@@ -30,6 +31,7 @@ describe("countGraphAdditions", () => {
     ).toEqual({
       manual: 1,
       sketch: 1,
+      image: 1,
       promoted: 1,
       llm: 1,
       unknown: 1,
