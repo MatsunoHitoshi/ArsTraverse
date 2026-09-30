@@ -57,6 +57,7 @@ export function shouldRecordWritingHistory(input: {
   currentContent: unknown;
   previousGraph?: unknown;
   currentGraph?: unknown;
+  contextChanged?: boolean;
   lastRecordedAt: Date | null;
   now?: Date;
   intervalMs?: number;
@@ -70,7 +71,7 @@ export function shouldRecordWritingHistory(input: {
     input.previousGraph,
     input.currentGraph,
   );
-  if (!contentChanged && !graphChanged) {
+  if (!contentChanged && !graphChanged && !input.contextChanged) {
     return false;
   }
   if (input.force) return true;
@@ -87,6 +88,7 @@ export async function recordWritingHistoryIfNeeded(input: {
   currentContent: unknown;
   previousGraph?: unknown;
   currentGraph?: unknown;
+  contextChanged?: boolean;
   changedById: string;
   changeDescription?: string;
   force?: boolean;
@@ -112,6 +114,7 @@ export async function recordWritingHistoryIfNeeded(input: {
     currentContent: input.currentContent,
     previousGraph: input.previousGraph,
     currentGraph: input.currentGraph,
+    contextChanged: input.contextChanged,
     lastRecordedAt: latest?.createdAt ?? null,
     force: input.force,
     intervalMs: input.intervalMs,

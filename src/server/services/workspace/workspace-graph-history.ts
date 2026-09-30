@@ -94,7 +94,7 @@ function omitGraphKeys(graph: GraphRecord, keys: string[]): GraphRecord {
 
 function graphForCompare(graph: unknown): unknown {
   if (!isRecord(graph)) return null;
-  return omitGraphKeys(graph, ["updatedAt"]);
+  return omitGraphKeys(graph, ["updatedAt", CONCEPT_REDIRECT_SNAPSHOT_KEY]);
 }
 
 export function liveGraphsEqual(left: unknown, right: unknown): boolean {
@@ -198,7 +198,54 @@ function lookupName(index: Map<string, string>, id: string): string {
 
 function metaForCompare(graph: unknown): unknown {
   if (!isRecord(graph)) return null;
-  return omitGraphKeys(graph, ["updatedAt", "nodes", "relationships"]);
+  return omitGraphKeys(graph, [
+    "updatedAt",
+    "nodes",
+    "relationships",
+    CONCEPT_REDIRECT_SNAPSHOT_KEY,
+  ]);
+}
+
+/** 概念記事のリダイレクトはグラフ本体ではない。履歴のグラフへだけ載せる。 */
+export const CONCEPT_REDIRECT_SNAPSHOT_KEY = "sosRedirectTo";
+
+export function readConceptRedirect(context: unknown): string | null {
+  if (!isRecord(context) || !isRecord(context.sosConcept)) return null;
+  const value = context.sosConcept.redirectTo;
+  return typeof value === "string" && value ? value : null;
+}
+
+export function snapshotGraphForHistory(context: unknown): unknown {
+  const graph = readLiveGraphFromCuratorialContext(context);
+  if (!isRecord(context) || !isRecord(context.sosConcept)) return graph;
+  const base = isRecord(graph) ? { ...graph } : {};
+  base[CONCEPT_REDIRECT_SNAPSHOT_KEY] = readConceptRedirect(context);
+  return base;
+}
+
+export function splitConceptRedirectSnapshot(graph: unknown): {
+  graph: unknown;
+  redirect: string | null | undefined;
+} {
+  if (!isRecord(graph) || !(CONCEPT_REDIRECT_SNAPSHOT_KEY in graph)) {
+    return { graph, redirect: undefined };
+  }
+  const redirectValue = graph[CONCEPT_REDIRECT_SNAPSHOT_KEY];
+  const { [CONCEPT_REDIRECT_SNAPSHOT_KEY]: _redirect, ...rest } = graph;
+  const redirect =
+    typeof redirectValue === "string" && redirectValue ? redirectValue : null;
+  return { graph: rest, redirect };
+}
+
+export function withConceptRedirect(
+  context: unknown,
+  redirect: string | null,
+): unknown {
+  if (!isRecord(context) || !isRecord(context.sosConcept)) return context;
+  const sosConcept = { ...context.sosConcept };
+  if (redirect) sosConcept.redirectTo = redirect;
+  else delete sosConcept.redirectTo;
+  return { ...context, sosConcept };
 }
 
 export function diffLiveGraphs(

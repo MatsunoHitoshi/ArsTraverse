@@ -9,8 +9,12 @@ import { PUBLIC_USER_SELECT } from "@/server/lib/user-select";
 import {
   diffLiveGraphs,
   graphDiffHasChanges,
+  readConceptRedirect,
   readLiveGraphFromCuratorialContext,
+  snapshotGraphForHistory,
+  splitConceptRedirectSnapshot,
   summarizeWorkspaceGraphDiff,
+  withConceptRedirect,
   withLiveGraphInCuratorialContext,
   type WorkspaceGraphDiff,
   type WorkspaceGraphEvent,
@@ -272,19 +276,20 @@ export async function upsertWorkspaceBySource(input: {
     if (input.recordHistory !== false) {
       const currentContent =
         input.content !== undefined ? input.content : existing.content;
+      const nextContext =
+        input.curatorialContext !== undefined
+          ? input.curatorialContext
+          : existing.curatorialContext;
       await recordWritingHistoryIfNeeded({
         db: input.db,
         workspaceId: existing.id,
         previousContent: existing.content,
         currentContent,
-        previousGraph: readLiveGraphFromCuratorialContext(
-          existing.curatorialContext,
-        ),
-        currentGraph: readLiveGraphFromCuratorialContext(
-          input.curatorialContext !== undefined
-            ? input.curatorialContext
-            : existing.curatorialContext,
-        ),
+        previousGraph: snapshotGraphForHistory(existing.curatorialContext),
+        currentGraph: snapshotGraphForHistory(nextContext),
+        contextChanged:
+          readConceptRedirect(existing.curatorialContext) !==
+          readConceptRedirect(nextContext),
         changedById: input.userId,
         changeDescription: input.changeDescription,
         force: input.forceHistory,
@@ -336,7 +341,7 @@ export async function upsertWorkspaceBySource(input: {
       previousContent: null,
       currentContent: input.content ?? null,
       previousGraph: null,
-      currentGraph: readLiveGraphFromCuratorialContext(input.curatorialContext),
+      currentGraph: snapshotGraphForHistory(input.curatorialContext),
       changedById: input.userId,
       changeDescription: input.changeDescription ?? "執筆を作成しました",
       force: true,
@@ -689,6 +694,183 @@ export async function restoreWritingHistory(input: {
     select: workspaceSelect,
   });
   return toDto(updated);
+}
+
+const CURATION_HISTORY_PREFIX = "グラフ整備";
+
+export type CurationHistoryItem = {
+  id: string;
+  workspaceId: string;
+  source: string;
+  sourceKey: string;
+  title: string;
+  changeDescription: string;
+  graphSummary: string;
+  createdAt: string;
+  changedByName: string | null;
+  latestHistoryId: string;
+  latestChangeDescription: string | null;
+};
+
+export async function listCurationHistories(input: {
+  db: PrismaClient;
+  userId: string;
+  sources: string[];
+  take?: number;
+}): Promise<CurationHistoryItem[]> {
+  const take = Math.min(200, Math.max(1, input.take ?? 80));
+  const histories = await input.db.writingHistory.findMany({
+    where: {
+      changeDescription: { startsWith: CURATION_HISTORY_PREFIX },
+      workspace: {
+        isDeleted: false,
+        source: { in: input.sources },
+        ...accessibleByUser(input.userId),
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take,
+    include: {
+      changedBy: { select: PUBLIC_USER_SELECT },
+      workspace: {
+        select: { id: true, source: true, sourceKey: true, name: true },
+      },
+    },
+  });
+  const workspaceIds = [...new Set(histories.map((item) => item.workspaceId))];
+  const latestRows =
+    workspaceIds.length === 0
+      ? []
+      : await input.db.writingHistory.findMany({
+          where: { workspaceId: { in: workspaceIds } },
+          orderBy: [{ workspaceId: "asc" }, { createdAt: "desc" }, { id: "desc" }],
+          distinct: ["workspaceId"],
+          select: { id: true, workspaceId: true, changeDescription: true },
+        });
+  const latestByWorkspace = new Map(
+    latestRows.map((item) => [item.workspaceId, item]),
+  );
+  return histories.flatMap((history) => {
+    const source = history.workspace.source;
+    const sourceKey = history.workspace.sourceKey?.trim();
+    if (!source || !sourceKey) return [];
+    const graphDiff = diffLiveGraphs(history.previousGraph, history.currentGraph);
+    return [
+      {
+        id: history.id,
+        workspaceId: history.workspaceId,
+        source,
+        sourceKey,
+        title: history.workspace.name,
+        changeDescription: history.changeDescription ?? CURATION_HISTORY_PREFIX,
+        graphSummary: graphDiffHasChanges(graphDiff)
+          ? summarizeWorkspaceGraphDiff(graphDiff)
+          : "",
+        createdAt: toIso(history.createdAt),
+        changedByName: history.changedBy.name,
+        latestHistoryId:
+          latestByWorkspace.get(history.workspaceId)?.id ?? history.id,
+        latestChangeDescription:
+          latestByWorkspace.get(history.workspaceId)?.changeDescription ?? null,
+      },
+    ];
+  });
+}
+
+export async function undoCurationHistories(input: {
+  db: PrismaClient;
+  userId: string;
+  historyIds: string[];
+}): Promise<{ undone: number }> {
+  const ids = [...new Set(input.historyIds.map((id) => id.trim()).filter(Boolean))];
+  if (ids.length === 0) {
+    throw new Error("取り消す履歴がありません");
+  }
+  const histories = await input.db.writingHistory.findMany({
+    where: { id: { in: ids } },
+    include: { workspace: true },
+  });
+  if (histories.length !== ids.length) {
+    throw new Error("履歴が見つかりません");
+  }
+  for (const history of histories) {
+    const workspace = history.workspace;
+    if (workspace.isDeleted) throw new Error("Workspace not found or access denied");
+    const allowed = await input.db.workspace.count({
+      where: { id: workspace.id, ...accessibleByUser(input.userId) },
+    });
+    if (!allowed) throw new Error("Workspace not found or access denied");
+    if (!history.changeDescription?.startsWith(CURATION_HISTORY_PREFIX)) {
+      throw new Error("整備以外の履歴は取り消せません");
+    }
+  }
+
+  const byWorkspace = new Map<string, typeof histories>();
+  for (const history of histories) {
+    const list = byWorkspace.get(history.workspaceId) ?? [];
+    list.push(history);
+    byWorkspace.set(history.workspaceId, list);
+  }
+
+  await input.db.$transaction(async (tx) => {
+    for (const [workspaceId, rows] of byWorkspace) {
+      const latest = await tx.writingHistory.findFirst({
+        where: { workspaceId },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        select: { id: true },
+      });
+      if (!latest || !rows.some((row) => row.id === latest.id)) {
+        throw new Error("このあとに別の保存があるため、まとめては戻せません");
+      }
+      const earliest = [...rows].sort((left, right) => {
+        const delta = left.createdAt.getTime() - right.createdAt.getTime();
+        if (delta !== 0) return delta;
+        return left.id.localeCompare(right.id);
+      })[0];
+      if (!earliest) continue;
+      const workspace = earliest.workspace;
+      const split = splitConceptRedirectSnapshot(earliest.previousGraph);
+      const restoredGraph =
+        split.graph ??
+        readLiveGraphFromCuratorialContext(workspace.curatorialContext);
+      let nextContext = withLiveGraphInCuratorialContext(
+        workspace.curatorialContext,
+        restoredGraph,
+      );
+      if (split.redirect !== undefined) {
+        const redirected = withConceptRedirect(nextContext, split.redirect);
+        if (redirected && typeof redirected === "object") {
+          nextContext = redirected as typeof nextContext;
+        }
+      }
+      await recordWritingHistoryIfNeeded({
+        db: tx as unknown as PrismaClient,
+        workspaceId,
+        previousContent: workspace.content,
+        currentContent: earliest.previousContent,
+        previousGraph: snapshotGraphForHistory(workspace.curatorialContext),
+        currentGraph: snapshotGraphForHistory(nextContext),
+        contextChanged:
+          readConceptRedirect(workspace.curatorialContext) !==
+          readConceptRedirect(nextContext),
+        changedById: input.userId,
+        changeDescription: "整備の変更を取り消しました",
+        force: true,
+      });
+      await tx.workspace.update({
+        where: { id: workspaceId },
+        data: {
+          content:
+            earliest.previousContent === null
+              ? Prisma.DbNull
+              : (earliest.previousContent as Prisma.InputJsonValue),
+          curatorialContext: nextContext as Prisma.InputJsonValue,
+        },
+      });
+    }
+  });
+
+  return { undone: byWorkspace.size };
 }
 
 export async function resolveCollaboratorUserId(input: {
