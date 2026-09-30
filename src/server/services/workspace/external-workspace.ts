@@ -1,4 +1,8 @@
-import type { Prisma, PrismaClient, WorkspaceStatus } from "@prisma/client";
+import {
+  Prisma,
+  type PrismaClient,
+  type WorkspaceStatus,
+} from "@prisma/client";
 import {
   recordWritingHistoryIfNeeded,
   resolveWritingHistorySnapshot,
