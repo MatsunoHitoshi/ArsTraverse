@@ -234,7 +234,7 @@ export function splitConceptRedirectSnapshot(graph: unknown): {
   const { [CONCEPT_REDIRECT_SNAPSHOT_KEY]: _redirect, ...rest } = graph;
   const redirect =
     typeof redirectValue === "string" && redirectValue ? redirectValue : null;
-  return { graph: rest, redirect };
+  return { graph: Object.keys(rest).length === 0 ? null : rest, redirect };
 }
 
 export function withConceptRedirect(

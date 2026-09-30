@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
       db,
       userId: auth.userId,
       historyIds: body.historyIds.filter((id) => typeof id === "string"),
+      sources: SOURCES,
     });
     return NextResponse.json(result);
   } catch (error) {

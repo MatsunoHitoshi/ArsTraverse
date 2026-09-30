@@ -658,29 +658,38 @@ export async function restoreWritingHistory(input: {
     timeline,
   });
   const restoredContent = snapshot.content;
-  const restoredGraph = snapshot.graph;
-  const currentWorkspaceGraph = readLiveGraphFromCuratorialContext(
-    workspace.curatorialContext,
-  );
+  const split = splitConceptRedirectSnapshot(snapshot.graph);
+  const restoredGraph = split.redirect === undefined ? snapshot.graph : split.graph;
   await recordWritingHistoryIfNeeded({
     db: input.db,
     workspaceId: workspace.id,
     previousContent: workspace.content,
     currentContent: restoredContent,
-    previousGraph: currentWorkspaceGraph,
-    currentGraph: restoredGraph ?? currentWorkspaceGraph,
+    previousGraph: snapshotGraphForHistory(workspace.curatorialContext),
+    currentGraph:
+      restoredGraph ??
+      readLiveGraphFromCuratorialContext(workspace.curatorialContext),
     changedById: input.userId,
     changeDescription: "履歴から復元しました",
     force: true,
   });
 
-  const nextContext =
+  let nextContext =
     restoredGraph == null
       ? undefined
       : withLiveGraphInCuratorialContext(
           workspace.curatorialContext,
           restoredGraph,
         );
+  if (split.redirect !== undefined) {
+    const redirected = withConceptRedirect(
+      nextContext ?? workspace.curatorialContext,
+      split.redirect,
+    );
+    if (redirected && typeof redirected === "object") {
+      nextContext = redirected as typeof nextContext;
+    }
+  }
 
   const updated = await input.db.workspace.update({
     where: { id: workspace.id },
@@ -781,6 +790,7 @@ export async function undoCurationHistories(input: {
   db: PrismaClient;
   userId: string;
   historyIds: string[];
+  sources: string[];
 }): Promise<{ undone: number }> {
   const ids = [...new Set(input.historyIds.map((id) => id.trim()).filter(Boolean))];
   if (ids.length === 0) {
@@ -800,6 +810,9 @@ export async function undoCurationHistories(input: {
       where: { id: workspace.id, ...accessibleByUser(input.userId) },
     });
     if (!allowed) throw new Error("Workspace not found or access denied");
+    if (!workspace.source || !input.sources.includes(workspace.source)) {
+      throw new Error("Workspace not found or access denied");
+    }
     if (!history.changeDescription?.startsWith(CURATION_HISTORY_PREFIX)) {
       throw new Error("整備以外の履歴は取り消せません");
     }
