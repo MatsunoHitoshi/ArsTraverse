@@ -34,14 +34,10 @@ import {
   type WritingActivityPoint,
 } from "./usage-activity";
 
-function accessibleByUser(userId: string) {
-  return {
-    OR: [
-      { userId },
-      { collaborators: { some: { id: userId } } },
-    ],
-  };
-}
+/**
+ * この API を通る Workspace は、認証済みユーザーなら読んで書き換えられる。
+ * 未認証は各ルートが 401 を返す。所有者や共同編集者かどうかでは拒まない。
+ */
 
 export type ExternalWorkspaceDto = {
   id: string;
@@ -136,7 +132,6 @@ export async function listWorkspacesBySource(input: {
     where: {
       source: input.source,
       isDeleted: false,
-      ...accessibleByUser(input.userId),
     },
     select: workspaceSelect,
     orderBy: { updatedAt: "desc" },
@@ -155,7 +150,6 @@ export async function getWorkspaceBySourceKey(input: {
       source: input.source,
       sourceKey: input.sourceKey,
       isDeleted: false,
-      ...accessibleByUser(input.userId),
     },
     select: workspaceSelect,
   });
@@ -175,21 +169,9 @@ export async function deleteWorkspaceBySource(input: {
         sourceKey: input.sourceKey,
       },
     },
-    select: { id: true, userId: true, isDeleted: true },
+    select: { id: true, isDeleted: true },
   });
   if (!existing) return { deleted: false };
-
-  const canWrite =
-    existing.userId === input.userId ||
-    (await input.db.workspace.count({
-      where: {
-        id: existing.id,
-        collaborators: { some: { id: input.userId } },
-      },
-    })) > 0;
-  if (!canWrite) {
-    throw new Error("access denied");
-  }
 
   if (!existing.isDeleted) {
     await input.db.workspace.update({
@@ -225,18 +207,6 @@ export async function upsertWorkspaceBySource(input: {
 
   if (existing) {
     if (existing.isDeleted) {
-      const canRevive =
-        existing.userId === input.userId ||
-        (await input.db.workspace.count({
-          where: {
-            id: existing.id,
-            collaborators: { some: { id: input.userId } },
-          },
-        })) > 0;
-      if (!canRevive) {
-        throw new Error("Workspace not found or access denied");
-      }
-
       const revived = await input.db.workspace.update({
         where: { id: existing.id },
         data: {
@@ -263,18 +233,6 @@ export async function upsertWorkspaceBySource(input: {
         select: workspaceSelect,
       });
       return toDto(revived);
-    }
-
-    const canWrite =
-      existing.userId === input.userId ||
-      (await input.db.workspace.count({
-        where: {
-          id: existing.id,
-          collaborators: { some: { id: input.userId } },
-        },
-      })) > 0;
-    if (!canWrite) {
-      throw new Error("Workspace not found or access denied");
     }
 
     if (input.recordHistory !== false) {
@@ -365,7 +323,6 @@ export async function listWritingHistory(input: {
     where: {
       id: input.workspaceId,
       isDeleted: false,
-      ...accessibleByUser(input.userId),
     },
     select: { id: true },
   });
@@ -427,7 +384,6 @@ async function assertWritingHistoryAccess(input: {
     where: {
       id: input.workspaceId,
       isDeleted: false,
-      ...accessibleByUser(input.userId),
     },
     select: { id: true },
   });
@@ -510,7 +466,6 @@ export async function listWritingUsageActivity(input: {
     where: {
       source: input.source,
       isDeleted: false,
-      ...accessibleByUser(input.userId),
     },
     select: {
       id: true,
@@ -630,7 +585,6 @@ export async function restoreWritingHistory(input: {
     where: {
       id: input.workspaceId,
       isDeleted: false,
-      ...accessibleByUser(input.userId),
     },
   });
   if (!workspace) {
@@ -738,7 +692,6 @@ export async function listCurationHistories(input: {
       workspace: {
         isDeleted: false,
         source: { in: input.sources },
-        ...accessibleByUser(input.userId),
       },
     },
     orderBy: { createdAt: "desc" },
@@ -810,10 +763,6 @@ export async function undoCurationHistories(input: {
   for (const history of histories) {
     const workspace = history.workspace;
     if (workspace.isDeleted) throw new Error("Workspace not found or access denied");
-    const allowed = await input.db.workspace.count({
-      where: { id: workspace.id, ...accessibleByUser(input.userId) },
-    });
-    if (!allowed) throw new Error("Workspace not found or access denied");
     if (!workspace.source || !input.sources.includes(workspace.source)) {
       throw new Error("Workspace not found or access denied");
     }
@@ -969,6 +918,7 @@ export type ExternalUserDto = {
   id: string;
   name: string | null;
   image: string | null;
+  email: string | null;
 };
 
 export async function getExternalAuthenticatedUser(input: {
@@ -977,7 +927,12 @@ export async function getExternalAuthenticatedUser(input: {
 }): Promise<ExternalUserDto> {
   const user = await input.db.user.findUnique({
     where: { id: input.userId },
-    select: PUBLIC_USER_SELECT,
+    select: {
+      id: true,
+      name: true,
+      image: true,
+      email: true,
+    },
   });
   if (!user) {
     throw new Error("User not found");
