@@ -15,7 +15,7 @@ MCP（`/api/mcp`）や TopicSpace 公開 REST API（`/api/topic-spaces/{id}`）�
 
 トークンは `/mcp/authorize` で発行（**プラットフォーム** スコープで十分。TopicSpace 未作成でも Workspace API は利用可能）。外部 Web アプリ連携では `redirect_uri` + `EXTERNAL_OAUTH_REDIRECT_URIS` による OAuth 風コールバックも利用できる（詳細は [MCP 認証 — 外部 OAuth リダイレクト](./mcp-authentication.md#外部-oauth-リダイレクトweb-アプリ連携)）。
 
-新規作成時、トークンに紐づくユーザーが Workspace の **所有者** になる。
+新規作成時、トークンに紐づくユーザーが Workspace の **所有者** になる。読み書きは、ログイン済み（有効なトークンまたはセッション）であれば所有者や共同編集者でなくてもできる。未認証は `401`。
 
 ## 識別子: `source` + `sourceKey`
 
@@ -27,8 +27,8 @@ MCP（`/api/mcp`）や TopicSpace 公開 REST API（`/api/topic-spaces/{id}`）�
 DB 上は `@@unique([source, sourceKey])`。同一ペアは 1 Workspace にマップされる。
 
 - **作成**: `PUT` で存在しなければ新規作成（所有者 = 認証ユーザー）
-- **更新**: 所有者または **collaborator** が `content` 等を更新可能
-- **論理削除後の復活**: 削除済み（`isDeleted: true`）の同一 `source`/`sourceKey` を `PUT` すると復活する。**所有者または collaborator のみ** 可能。それ以外は `403`
+- **更新**: 認証済みユーザーが `content` 等を更新できる
+- **論理削除後の復活**: 削除済み（`isDeleted: true`）の同一 `source`/`sourceKey` を `PUT` すると、認証済みユーザーが復活できる
 
 GUI から作成した Workspace は `source` / `sourceKey` が `null` のため、この API の upsert キーには使えない。
 
@@ -52,10 +52,13 @@ GUI から作成した Workspace は `source` / `sourceKey` が `null` のため
   "user": {
     "id": "clxxx...",
     "name": "Curator Name",
+    "email": "curator@example.com",
     "image": "https://..."
   }
 }
 ```
+
+`email` は認証した本人のアドレスだけ返す。履歴の `changedBy` など、他のユーザーを含む応答には含めない。
 
 ## GET `/api/external/workspaces`
 
@@ -66,7 +69,7 @@ GUI から作成した Workspace は `source` / `sourceKey` が `null` のため
 | `source`    | はい | 外部アプリ識別子                                             |
 | `sourceKey` | 任意 | 指定時は 1 件取得。未指定時は `source` に属する一覧（`updatedAt` 降順） |
 
-アクセス可能な Workspace は **所有者または collaborator** のみ。該当なしは `404`（単件）または空配列（一覧）。
+認証済みユーザーは、指定した `source` の Workspace を一覧・取得できる。該当なしは `404`（単件）または空配列（一覧）。
 
 ### レスポンス（単件）
 
@@ -126,8 +129,7 @@ GUI から作成した Workspace は `source` / `sourceKey` が `null` のため
 | HTTP | 条件                                                         |
 | ---- | ------------------------------------------------------------ |
 | 400  | `source` / `sourceKey` 欠落                                  |
-| 403  | 既存 Workspace への書き込み権限なし、または削除済みの復活不可 |
-| 401  | トークン・セッション無効                                     |
+| 401  | トークン・セッション無効。認証済みなら所有者でなくても更新できる |
 
 ## GET `/api/external/workspaces/history`
 
@@ -203,7 +205,7 @@ GUI から作成した Workspace は `source` / `sourceKey` が `null` のため
 
 ## POST `/api/external/workspaces/collaborators`
 
-**Workspace 所有者のみ** が共同編集者を追加できる。
+共同編集者でなくても、認証済みユーザーは Workspace を読み書きできる。このエンドポイントで共同編集者を追加できるのは、これまでどおり **Workspace 所有者のみ**。
 
 ### リクエストボディ
 
