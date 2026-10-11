@@ -207,6 +207,7 @@ Concept and flow diagrams for the writing workspace, story generation, auto-high
 - `docs/workspace-router-api.md` — workspace CRUD, text completion, publish, searchPublishedNodes
 - `docs/assistant-router-api.md` — graph summary/outline streaming, TTS (assistantRouter)
 - `docs/kg-integration-api.md` — kg.integrateGraph, getRelatedNodes, getNodesByIds
+- `docs/kg-router-api.md` — kgRouter 全体索引（extract / integrate / copilot 手続き一覧）
 - `docs/external-workspace-api.md` — authenticated REST API for external apps (SOS): workspace upsert/delete, writing history, usage log/activity, curation undo, Drive image browse, collaborators
 
 ## Project Structure
@@ -298,6 +299,7 @@ supabase/
 - [執筆ワークスペース API](./docs/workspace-router-api.md)
 - [グラフ執筆アシスタント API](./docs/assistant-router-api.md)
 - [KG 統合・近傍取得 API](./docs/kg-integration-api.md)
+- [kgRouter 手続き一覧](./docs/kg-router-api.md)
 - [外部 Workspace REST API](./docs/external-workspace-api.md)
 
 ## Available Scripts
