@@ -11,6 +11,7 @@ import {
 } from "./writing-history";
 import { PUBLIC_USER_SELECT } from "@/server/lib/user-select";
 import {
+  classifyGraphEvents,
   diffLiveGraphs,
   graphDiffHasChanges,
   readConceptRedirect,
@@ -53,6 +54,8 @@ export type ExternalWorkspaceDto = {
 };
 
 export const WRITING_USAGE_LOG_MAX = 500;
+export const WRITING_USAGE_LOG_ALL_DEFAULT = 2000;
+export const WRITING_USAGE_LOG_ALL_MAX = 5000;
 
 export type ExternalWritingUsageLogDto = {
   id: string;
@@ -64,6 +67,35 @@ export type ExternalWritingUsageLogDto = {
   createdAt: string;
   changedBy: { id: string; name: string | null; image: string | null };
 };
+
+export type ExternalWritingUsageLogAllDto = ExternalWritingUsageLogDto & {
+  source: string;
+  sourceKey: string;
+  title: string;
+};
+
+/** Cursor for pages older than the previous page (exclusive). */
+export type UsageLogAllCursor = {
+  createdAt: string;
+  id: string;
+};
+
+export function parseUsageLogAllCursor(input: {
+  createdAt: string | null | undefined;
+  id: string | null | undefined;
+}): UsageLogAllCursor | null {
+  const createdAt = input.createdAt?.trim() ?? "";
+  const id = input.id?.trim() ?? "";
+  if (!createdAt && !id) return null;
+  if (!createdAt || !id) {
+    throw new Error("beforeCreatedAt and beforeId are both required");
+  }
+  const at = Date.parse(createdAt);
+  if (!Number.isFinite(at)) {
+    throw new Error("beforeCreatedAt is invalid");
+  }
+  return { createdAt: new Date(at).toISOString(), id };
+}
 
 export type ExternalWritingHistoryDto = {
   id: string;
@@ -375,6 +407,23 @@ function clampUsageLogTake(take: number | undefined): number {
   return Math.min(WRITING_USAGE_LOG_MAX, Math.max(1, Math.floor(take ?? WRITING_USAGE_LOG_MAX)));
 }
 
+export function clampUsageLogAllTake(take: number | undefined): number {
+  if (!Number.isFinite(take)) return WRITING_USAGE_LOG_ALL_DEFAULT;
+  return Math.min(
+    WRITING_USAGE_LOG_ALL_MAX,
+    Math.max(1, Math.floor(take ?? WRITING_USAGE_LOG_ALL_DEFAULT)),
+  );
+}
+
+/** Comma-separated sources → unique trimmed list (empty parts dropped). */
+export function parseUsageLogAllSources(raw: string | null | undefined): string[] {
+  const parts = (raw ?? "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return [...new Set(parts)];
+}
+
 async function assertWritingHistoryAccess(input: {
   db: PrismaClient;
   workspaceId: string;
@@ -453,6 +502,98 @@ export async function listWritingUsageLog(input: {
       createdAt: toIso(entry.createdAt),
     })),
   };
+}
+
+export async function listWritingUsageLogBySources(input: {
+  db: PrismaClient;
+  userId: string;
+  sources: string[];
+  take?: number;
+  before?: UsageLogAllCursor | null;
+}): Promise<{
+  histories: ExternalWritingUsageLogAllDto[];
+  truncated: boolean;
+  nextBefore: UsageLogAllCursor | null;
+}> {
+  if (input.sources.length === 0) {
+    throw new Error("sources query is required");
+  }
+  const take = clampUsageLogAllTake(input.take);
+  const beforeAt = input.before
+    ? new Date(input.before.createdAt)
+    : null;
+  const beforeId = input.before?.id?.trim() || null;
+  if (input.before && (!beforeAt || !Number.isFinite(beforeAt.getTime()) || !beforeId)) {
+    throw new Error("before cursor is invalid");
+  }
+
+  const histories = await input.db.writingHistory.findMany({
+    where: {
+      workspace: {
+        isDeleted: false,
+        source: { in: input.sources },
+      },
+      ...(beforeAt && beforeId
+        ? {
+            OR: [
+              { createdAt: { lt: beforeAt } },
+              { AND: [{ createdAt: beforeAt }, { id: { lt: beforeId } }] },
+            ],
+          }
+        : {}),
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: take + 1,
+    include: {
+      changedBy: { select: PUBLIC_USER_SELECT },
+      workspace: {
+        select: {
+          id: true,
+          source: true,
+          sourceKey: true,
+          name: true,
+        },
+      },
+    },
+  });
+  const truncated = histories.length > take;
+  const page = histories.slice(0, take);
+  const oldest = page[page.length - 1];
+  const nextBefore =
+    truncated && oldest
+      ? { createdAt: toIso(oldest.createdAt), id: oldest.id }
+      : null;
+
+  // Recorded WritingHistory rows only. Interval / current-save synthesis is
+  // skipped so cursor paging stays complete across pages (no boundary gaps).
+  const combined: ExternalWritingUsageLogAllDto[] = [];
+  for (const history of page) {
+    const source = history.workspace.source;
+    const sourceKey = history.workspace.sourceKey?.trim();
+    if (!source || !sourceKey) continue;
+    combined.push({
+      id: history.id,
+      workspaceId: history.workspaceId,
+      changeDescription: history.changeDescription,
+      previousText: tiptapPlainText(history.previousContent),
+      currentText: tiptapPlainText(history.currentContent),
+      graphEvents: classifyGraphEvents(
+        history.previousGraph,
+        history.currentGraph,
+      ),
+      createdAt: toIso(history.createdAt),
+      changedBy: {
+        id: history.changedBy.id,
+        name: history.changedBy.name,
+        image: history.changedBy.image,
+      },
+      source,
+      sourceKey,
+      title: history.workspace.name,
+    });
+  }
+
+  return { histories: combined, truncated, nextBefore };
 }
 
 const ACTIVITY_ACTOR = { id: "activity", name: null, image: null };
