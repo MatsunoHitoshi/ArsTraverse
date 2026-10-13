@@ -64,7 +64,7 @@ export const dragEditorExtension = ({
     return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
   };
 
-  // ドラッグ元イベントの DOM ターゲットから data-node-id を辿り、対象ノードを特定する。
+  // ドラッグ元イベントの DOM ターゲットから data-node-id をたどり、対象ノードを特定する。
   // 座標距離での判定はノード端クリックやズーム倍率でズレるため、DOM 由来で確実に解決する。
   const resolveNodeFromEvent = (
     event: D3DragEvent<SVGCircleElement, CustomNodeType, CustomNodeType>,
