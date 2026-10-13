@@ -11,6 +11,7 @@ import {
 } from "./writing-history";
 import { PUBLIC_USER_SELECT } from "@/server/lib/user-select";
 import {
+  classifyGraphEvents,
   diffLiveGraphs,
   graphDiffHasChanges,
   readConceptRedirect,
@@ -551,9 +552,6 @@ export async function listWritingUsageLogBySources(input: {
           source: true,
           sourceKey: true,
           name: true,
-          content: true,
-          curatorialContext: true,
-          updatedAt: true,
         },
       },
     },
@@ -565,67 +563,36 @@ export async function listWritingUsageLogBySources(input: {
     truncated && oldest
       ? { createdAt: toIso(oldest.createdAt), id: oldest.id }
       : null;
-  // Current-save gaps only on the newest page; older pages would duplicate them.
-  const includeCurrentSave = !input.before;
 
-  const byWorkspace = new Map<string, typeof page>();
-  for (const history of page) {
-    const list = byWorkspace.get(history.workspaceId) ?? [];
-    list.push(history);
-    byWorkspace.set(history.workspaceId, list);
-  }
-
+  // Recorded WritingHistory rows only. Interval / current-save synthesis is
+  // skipped so cursor paging stays complete across pages (no boundary gaps).
   const combined: ExternalWritingUsageLogAllDto[] = [];
-  for (const [workspaceId, workspaceHistories] of byWorkspace) {
-    const sample = workspaceHistories[0];
-    if (!sample) continue;
-    const source = sample.workspace.source;
-    const sourceKey = sample.workspace.sourceKey?.trim();
+  for (const history of page) {
+    const source = history.workspace.source;
+    const sourceKey = history.workspace.sourceKey?.trim();
     if (!source || !sourceKey) continue;
-
-    const expanded = expandUsageLogEntries({
-      histories: workspaceHistories.map((history) => ({
-        id: history.id,
-        workspaceId: history.workspaceId,
-        changeDescription: history.changeDescription,
-        previousContent: history.previousContent,
-        currentContent: history.currentContent,
-        previousGraph: history.previousGraph,
-        currentGraph: history.currentGraph,
-        createdAt: history.createdAt,
-        changedBy: {
-          id: history.changedBy.id,
-          name: history.changedBy.name,
-          image: history.changedBy.image,
-        },
-      })),
-      workspace: includeCurrentSave
-        ? {
-            workspaceId,
-            content: sample.workspace.content,
-            graph: readLiveGraphFromCuratorialContext(
-              sample.workspace.curatorialContext,
-            ),
-            updatedAt: sample.workspace.updatedAt,
-          }
-        : null,
+    combined.push({
+      id: history.id,
+      workspaceId: history.workspaceId,
+      changeDescription: history.changeDescription,
+      previousText: tiptapPlainText(history.previousContent),
+      currentText: tiptapPlainText(history.currentContent),
+      graphEvents: classifyGraphEvents(
+        history.previousGraph,
+        history.currentGraph,
+      ),
+      createdAt: toIso(history.createdAt),
+      changedBy: {
+        id: history.changedBy.id,
+        name: history.changedBy.name,
+        image: history.changedBy.image,
+      },
+      source,
+      sourceKey,
+      title: history.workspace.name,
     });
-    for (const entry of expanded) {
-      combined.push({
-        ...entry,
-        createdAt: toIso(entry.createdAt),
-        source,
-        sourceKey,
-        title: sample.workspace.name,
-      });
-    }
   }
 
-  combined.sort((left, right) => {
-    const byTime = right.createdAt.localeCompare(left.createdAt);
-    if (byTime !== 0) return byTime;
-    return right.id.localeCompare(left.id);
-  });
   return { histories: combined, truncated, nextBefore };
 }
 

@@ -89,9 +89,6 @@ function historyRow(input: {
       source: input.source,
       sourceKey: input.sourceKey,
       name: input.title,
-      content: doc("ab"),
-      curatorialContext: null,
-      updatedAt: new Date(input.createdAt),
     },
   };
 }
@@ -148,7 +145,7 @@ describe("listWritingUsageLogBySources", () => {
     expect(result.histories[0]?.source).toBe("sos-research");
   });
 
-  it("passes before cursor into the query and omits current-save on later pages", async () => {
+  it("passes before cursor into the query and returns recorded rows only", async () => {
     const captured: unknown[] = [];
     const row = historyRow({
       id: "h9",
@@ -177,9 +174,10 @@ describe("listWritingUsageLogBySources", () => {
 
     expect(result.truncated).toBe(false);
     expect(result.nextBefore).toBeNull();
-    expect(result.histories.every((item) => !item.id.startsWith("unrecorded:"))).toBe(
-      true,
-    );
+    expect(result.histories).toHaveLength(1);
+    expect(result.histories[0]?.id).toBe("h9");
+    expect(result.histories[0]?.previousText).toBe("a");
+    expect(result.histories[0]?.currentText).toBe("ab");
     const where = (captured[0] as { where: { OR?: unknown } }).where;
     expect(where.OR).toBeTruthy();
   });
