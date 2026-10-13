@@ -522,7 +522,7 @@ export async function listWritingUsageLogBySources(input: {
   const beforeAt = input.before
     ? new Date(input.before.createdAt)
     : null;
-  const beforeId = input.before?.id?.trim() || null;
+  const beforeId = input.before?.id?.trim() ?? null;
   if (input.before && (!beforeAt || !Number.isFinite(beforeAt.getTime()) || !beforeId)) {
     throw new Error("before cursor is invalid");
   }
