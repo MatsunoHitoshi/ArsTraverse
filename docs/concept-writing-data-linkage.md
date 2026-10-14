@@ -36,6 +36,8 @@ flowchart TB
     G1 -.->|"entities ＝ nodes としてエディタに渡す<br/>自動ハイライトの候補"| T3
 ```
 
+執筆 UI で **参照 TopicSpace とは別に** 編集する部分グラフ（ライブグラフ）は `Workspace.curatorialContext` 内の `liveGraph`（または `sosWriting` / `sosConcept` ネスト）に保持される。`workspace.update` や外部 REST の upsert と同時に `WritingHistory` に `previousGraph` / `currentGraph` が保存され、復元時は本文（TipTap）とセットで戻せる。API の差分表示・記録ルールは [外部 Workspace REST API — 執筆履歴](./external-workspace-api.md#執筆履歴の記録ルール)、tRPC 手続きは [workspaceRouter](./workspace-router-api.md#執筆履歴外部キー-upsert) を参照。
+
 ## 連携の説明
 
 | 連携 | 内容 |
