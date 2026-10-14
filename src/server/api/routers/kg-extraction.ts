@@ -8,6 +8,7 @@ import { dataDisambiguation } from "@/server/domain/kg/data-disambiguation";
 import type {
   CustomMappingRules,
   Extractor,
+  TransformerSchema,
 } from "@/server/lib/extractors/base";
 import { AssistantsApiExtractor } from "@/server/lib/extractors/assistants";
 import { LangChainExtractor } from "@/server/lib/extractors/langchain";
@@ -27,6 +28,14 @@ import {
   ExtractPhase2InputSchema,
   FinalizeGraphInputSchema,
 } from "../schemas/knowledge-graph";
+
+function extractorSchemaFromInput(
+  schema?: { allowedNodes: string[]; allowedRelationships: string[] },
+): TransformerSchema {
+  const allowedNodes = schema?.allowedNodes.filter(Boolean) ?? [];
+  const allowedRelationships = schema?.allowedRelationships.filter(Boolean) ?? [];
+  return { allowedNodes, allowedRelationships };
+}
 
 export const extractionProcedures = {
   finalizeGraph: publicProcedure
@@ -408,16 +417,13 @@ Output:`;
   extractKGFromPlainText: publicProcedure
     .input(ExtractKGFromPlainTextInputSchema)
     .mutation(async ({ input }) => {
-      const { plainText, customMappingRules } = input;
+      const { plainText, customMappingRules, additionalPrompt } = input;
       if (!plainText.trim()) {
         return {
           data: { graph: { nodes: [], relationships: [] }, error: null },
         };
       }
-      const schema = {
-        allowedNodes: [],
-        allowedRelationships: [],
-      };
+      const schema = extractorSchemaFromInput(input.schema);
       const tmpPath = path.join(
         os.tmpdir(),
         `kg-plain-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`,
@@ -429,6 +435,7 @@ Output:`;
           localFilePath: tmpPath,
           isPlaneTextMode: true,
           schema,
+          additionalPrompt,
           customMappingRules,
         });
         if (!nodesAndRelationships) {
@@ -509,12 +516,16 @@ Output:`;
 };
 
 /**
- * プレーンテキストからKGを抽出するサーバ用ヘルパー。
- * generateMetaGraphFromText などから直接呼ぶ。
+ * Server helper: extract a knowledge graph from plain text.
+ * Used by generateMetaGraphFromText and similar callers.
  */
 export async function runExtractKGFromPlainText(
   plainText: string,
   customMappingRules?: CustomMappingRules,
+  options?: {
+    schema?: { allowedNodes: string[]; allowedRelationships: string[] };
+    additionalPrompt?: string;
+  },
 ): Promise<{
   nodes: Array<{
     id: string;
@@ -531,10 +542,7 @@ export async function runExtractKGFromPlainText(
   }>;
 } | null> {
   if (!plainText.trim()) return { nodes: [], relationships: [] };
-  const schema = {
-    allowedNodes: [] as string[],
-    allowedRelationships: [] as string[],
-  };
+  const schema = extractorSchemaFromInput(options?.schema);
   const tmpPath = path.join(
     os.tmpdir(),
     `kg-plain-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`,
@@ -546,6 +554,7 @@ export async function runExtractKGFromPlainText(
       localFilePath: tmpPath,
       isPlaneTextMode: true,
       schema,
+      additionalPrompt: options?.additionalPrompt,
       customMappingRules,
     });
     if (!nodesAndRelationships) return null;
