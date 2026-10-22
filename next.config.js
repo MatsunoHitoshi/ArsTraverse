@@ -15,6 +15,23 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import("next").NextConfig} */
 const config = {
+  eslint: {
+    // `next build` runs type-aware ESLint and `tsc` at the same time, after
+    // webpack. ESLint here uses `parserOptions.project`, so that is a second
+    // full TypeScript program. On the 8 GB Vercel builder that pair is what
+    // gets SIGKILL during "Linting and checking validity of types".
+    // `npm run lint` still runs the same checks outside the production build.
+    // The build script also caps each Node process at 4096 MB so the
+    // remaining `tsc` worker cannot grow until the 8 GB builder is killed.
+    ignoreDuringBuilds: true,
+  },
+  experimental: {
+    // A custom `webpack` function disables the build worker unless this is
+    // set. Without the worker, the compile heap is still in the parent
+    // process when typecheck starts. The worker exits before typecheck.
+    webpackBuildWorker: true,
+    webpackMemoryOptimizations: true,
+  },
   serverExternalPackages: [
     "onnxruntime-node",
     "@napi-rs/canvas",
