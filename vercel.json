@@ -8,11 +8,11 @@
   "crons": [
     {
       "path": "/api/cron/node-name-embedding",
-      "schedule": "*/1 * * * *"
+      "schedule": "*/15 * * * *"
     },
     {
       "path": "/api/cron/trans-e-embedding",
-      "schedule": "*/1 * * * *"
+      "schedule": "*/15 * * * *"
     },
     {
       "path": "/api/cron/topic-space-drive-sync",

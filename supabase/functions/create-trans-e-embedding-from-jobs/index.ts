@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { TransE, createTransEConfig, Triplet } from "../_shared/trans-e.ts";
+import type { Triplet } from "../_shared/trans-e.ts";
 import { supabaseAdmin } from "../_shared/pg-client.ts";
 
 const corsHeaders = {
@@ -155,6 +154,10 @@ async function getJobToProcess(supabaseAdmin: any) {
 }
 
 async function processJob(supabaseAdmin: any, job: any) {
+  // ジョブがあるときだけ読む。アイドル時（ジョブなし）は processJob まで来ない。
+  // 読み込み失敗でジョブを FAILED にしないよう、PROCESSING 更新より前に行う。
+  const { TransE, createTransEConfig } = await import("../_shared/trans-e.ts");
+
   const jobId = job.id;
   const topicSpaceId = job.topicSpaceId;
   const processedEpochs = job.processedEpochs || 0;

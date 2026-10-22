@@ -5,7 +5,6 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { supabaseAdmin } from "../_shared/pg-client.ts";
-import { getEmbedding } from "../_shared/get-embedding.ts";
 
 console.log("loading function...");
 
@@ -43,6 +42,9 @@ Deno.serve(async (req) => {
   const firstChunkNodes = nodes.slice(0, chunkSize);
 
   console.log(`Processing ${firstChunkNodes.length} nodes...`);
+
+  // HuggingFace クライアントはノードがあるときだけ読む。アイドル時は存在確認だけで返す。
+  const { getEmbedding } = await import("../_shared/get-embedding.ts");
 
   const results = [];
   let processedCount = 0;
