@@ -98,7 +98,7 @@ MCP エンドポイントは [MCP 認証](./mcp-authentication.md) を参照。
 
 **tRPC**: `graphEmbedding.createEmbeddingQueue({ topicSpaceId })`
 
-ノード名埋め込みと TransE 埋め込みのキューを作成。Cron が 1 分ごとに処理（詳細は [グラフ埋め込みパイプライン](./graph-embedding-pipeline.md)）:
+ノード名埋め込みと TransE 埋め込みのキューを作成。Cron が 15 分ごとに処理（詳細は [グラフ埋め込みパイプライン](./graph-embedding-pipeline.md)）:
 
 - `/api/cron/node-name-embedding`
 - `/api/cron/trans-e-embedding`

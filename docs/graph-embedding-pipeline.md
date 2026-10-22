@@ -9,8 +9,8 @@ TopicSpace のノード名セマンティック検索と TransE グラフ埋め�
 ```mermaid
 flowchart LR
     A[POST /embeddings または tRPC createEmbeddingQueue] --> B[GraphEmbeddingQueue PENDING]
-    C[Cron node-name-embedding 毎分] --> D[nameEmbedding 未設定ノードを 50 件ずつ処理]
-    E[Cron trans-e-embedding 毎分] --> F[キューから 1 ジョブ取得]
+    C[Cron node-name-embedding 15分ごと] --> D[nameEmbedding 未設定ノードを 50 件ずつ処理]
+    E[Cron trans-e-embedding 15分ごと] --> F[キューから 1 ジョブ取得]
     F --> G[TransE 学習 20 epoch / バッチ]
     G --> H{200 epoch 完了?}
     H -->|いいえ| I[modelStatePath に中間状態保存]
@@ -62,14 +62,24 @@ TopicSpace あたり **1 ジョブのみ** 許可。
 
 ## Cron スケジュール
 
-`vercel.json`（いずれも **毎分** `*/1 * * * *`）:
+`vercel.json`:
 
-| パス | 呼び出し先 |
-|------|-----------|
-| `/api/cron/node-name-embedding` | Supabase `bulk-create-node-name-embedding` |
-| `/api/cron/trans-e-embedding` | Supabase `create-trans-e-embedding-from-jobs` |
+| パス | スケジュール | 呼び出し先 |
+|------|----------------|-----------|
+| `/api/cron/node-name-embedding` | `*/15 * * * *`（15 分ごと） | Supabase `bulk-create-node-name-embedding` |
+| `/api/cron/trans-e-embedding` | `*/15 * * * *`（15 分ごと） | Supabase `create-trans-e-embedding-from-jobs` |
 
-両 Cron ルートは `maxDuration: 60`（秒）。
+以前はいずれも **毎分** `*/1 * * * *`。アイドル実行（「処理するジョブがない」「全ノード処理済み」）が大半だったため、15 分間隔に落とした。着手までの待ちは最大約 15 分。
+
+1 回あたりの処理量は変えていない（ノード名は最大 50 件、TransE は 20 epoch）。どちらもルートの `maxDuration: 60`（秒）に収める上限であり、分間隔には依存しない。間隔だけ延ばすと、仕事があるときの実時間スループットは下がる。
+
+- 新しいノードの `nameEmbedding` は次の Cron まで最大約 15 分待つ。未処理が 50 件を超える場合は 15 分ごとに 50 件ずつ進む。
+- TransE は 200 epoch を 20 epoch ずつ進めるため、1 ジョブの完了は最大 10 回の Cron（約 2.5 時間）。最初の着手は最大約 15 分。
+- stale 判定は **35 秒**のまま。実行中ジョブを奪わないロックで、Cron 間隔とは独立。クラッシュしたジョブは次の 15 分 Cron で再取得される。
+
+`SUPABASE_SERVICE_ROLE_KEY` があるときは、Cron ルートが Edge Function の前に PostgREST で未処理の有無だけを見る。0 件なら Edge Function を呼ばず返す。キーが無い、または確認に失敗したときは従来どおり Edge Function を呼ぶ。
+
+pdf-extraction / kg-extraction など他の Cron は毎分のまま。
 
 ## Edge Function 詳細
 
@@ -98,6 +108,7 @@ TopicSpace あたり **1 ジョブのみ** 許可。
 |-----------------|------|
 | `NEXT_PUBLIC_SUPABASE_URL` | Cron → Edge Function 呼び出し |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 同上（Bearer 認証） |
+| `SUPABASE_SERVICE_ROLE_KEY` | 任意。あるとき Cron のアイドル判定（PostgREST）に使う。無ければ Edge Function を直接呼ぶ |
 | `HUGGINGFACE_API_KEY` | Edge Function（Deno）でのノード名埋め込み |
 | Supabase Storage `embedding-models` | TransE 中間モデル保存 |
 | pgvector | `nameEmbedding vector(384)`, `transEEmbedding vector(50)` |
@@ -122,8 +133,8 @@ embedding 検索が使えない場合（認証・URL 未設定等）は文字列
 | `Embedding job already exists` | 同一 TopicSpace に未完了ジョブあり。`COMPLETED` / `FAILED` 後に再作成 |
 | `No nodes or edges found` | TransE 開始前にグラフが空。ノード・エッジを追加してからキュー再作成 |
 | nameEmbedding が進まない | HuggingFace API キー未設定、または全ノード処理済み |
-| TransE が途中で止まる | Cron 1 分間隔で 20 epoch ずつ継続。`processedEpochs` を確認 |
-| `PROCESSING` が固まる | 35 秒後に stale 回復。それでも失敗なら `FAILED` を確認 |
+| TransE が途中で止まる | 15 分間隔で 20 epoch ずつ継続。`processedEpochs` を確認。完了まで最大約 10 回（約 2.5 時間） |
+| `PROCESSING` が固まる | 35 秒で stale になるが、再取得は次の 15 分 Cron。それでも失敗なら `FAILED` を確認 |
 | Cron タイムアウト | `maxDuration: 60`。大規模グラフは複数 Cron 実行に分割される設計 |
 
 ## 関連ファイル
@@ -132,6 +143,7 @@ embedding 検索が使えない場合（認証・URL 未設定等）は文字列
 - `src/app/api/topic-spaces/[id]/embeddings/route.ts` — REST ラッパー
 - `src/app/api/cron/node-name-embedding/route.ts`
 - `src/app/api/cron/trans-e-embedding/route.ts`
+- `src/server/cron/embedding-idle-probe.ts` — アイドル時の存在確認
 - `supabase/functions/bulk-create-node-name-embedding/index.ts`
 - `supabase/functions/create-trans-e-embedding-from-jobs/index.ts`
 - `supabase/functions/_shared/get-embedding.ts`, `_shared/trans-e.ts`
