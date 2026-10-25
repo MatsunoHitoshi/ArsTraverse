@@ -34,14 +34,23 @@ GUI から作成した Workspace は `source` / `sourceKey` が `null` のため
 
 ## エンドポイント一覧
 
-| メソッド | パス                                     | 説明                                      |
-| -------- | ---------------------------------------- | ----------------------------------------- |
-| `GET`    | `/api/external/me`                       | 認証ユーザー情報                          |
-| `GET`    | `/api/external/workspaces`               | `source` 単位の一覧、または 1 件取得      |
-| `PUT`    | `/api/external/workspaces`               | `source` + `sourceKey` による upsert      |
-| `GET`    | `/api/external/workspaces/history`       | 執筆履歴一覧                              |
-| `POST`   | `/api/external/workspaces/history`       | 履歴から本文を復元                        |
-| `POST`   | `/api/external/workspaces/collaborators` | **所有者のみ** collaborator 追加            |
+| メソッド | パス                                         | 説明                                              |
+| -------- | -------------------------------------------- | ------------------------------------------------- |
+| `GET`    | `/api/external/me`                           | 認証ユーザー情報                                  |
+| `GET`    | `/api/external/workspaces`                   | `source` 単位の一覧、または 1 件取得              |
+| `PUT`    | `/api/external/workspaces`                   | `source` + `sourceKey` による upsert              |
+| `DELETE` | `/api/external/workspaces`                   | `source` + `sourceKey` で論理削除                 |
+| `GET`    | `/api/external/workspaces/history`           | 執筆履歴一覧（GUI 向けプレビュー・グラフ差分）    |
+| `POST`   | `/api/external/workspaces/history`           | 履歴から本文・グラフを復元                        |
+| `POST`   | `/api/external/workspaces/collaborators`     | **所有者のみ** collaborator 追加                  |
+| `GET`    | `/api/external/workspaces/usage-log`         | 1 Workspace の利用ログ（合成行あり）              |
+| `GET`    | `/api/external/workspaces/usage-log-all`   | 複数 `source` 横断の利用ログ（カーソルページング） |
+| `GET`    | `/api/external/workspaces/usage-activity`    | `source` 単位の活動タイムライン（集計用）         |
+| `GET`    | `/api/external/workspaces/curation-history`  | グラフ整備履歴一覧（SOS 系 `source` 限定）        |
+| `POST`   | `/api/external/workspaces/curation-history`  | 整備履歴の取り消し（最新保存が対象行のときのみ）  |
+| `GET`    | `/api/external/drive/browse`                 | 連携 Drive フォルダの 1 階層一覧                  |
+| `GET`    | `/api/external/drive/files`                  | フォルダ内の画像ファイル一覧                      |
+| `GET`    | `/api/external/drive/files/{fileId}/content` | 画像バイナリ（`image/*` のみ）                    |
 
 ## GET `/api/external/me`
 
@@ -130,6 +139,23 @@ GUI から作成した Workspace は `source` / `sourceKey` が `null` のため
 | ---- | ------------------------------------------------------------ |
 | 400  | `source` / `sourceKey` 欠落                                  |
 | 401  | トークン・セッション無効。認証済みなら所有者でなくても更新できる |
+
+## DELETE `/api/external/workspaces`
+
+`source` + `sourceKey` で Workspace を **論理削除**（`isDeleted: true`）。既に削除済みでも `{ "ok": true }` を返す。該当ペアが一度も無い場合は `404`。
+
+### クエリパラメータ
+
+| パラメータ  | 必須 | 説明           |
+| ----------- | ---- | -------------- |
+| `source`    | はい | 外部アプリ識別子 |
+| `sourceKey` | はい | アプリ内一意キー |
+
+```json
+{ "ok": true }
+```
+
+`PUT` で同一 `source` / `sourceKey` を送れば復活できる（上記「識別子」）。
 
 ## GET `/api/external/workspaces/history`
 
@@ -224,6 +250,116 @@ GUI から作成した Workspace は `source` / `sourceKey` が `null` のため
 }
 ```
 
+## 利用ログ・活動分析（SOS 等）
+
+執筆履歴 API（`/history`）はプレビューと `graphDiff` 向け。外部アプリの **利用状況ダッシュボード** 向けには、本文の前後テキストと `graphEvents` を返す別系統のエンドポイントがある。
+
+### GET `/api/external/workspaces/usage-log`
+
+1 Workspace 分。`WritingHistory` 行に加え、30 秒スロットルで DB に残らなかった差分を **合成行** として挿入する（`expandUsageLogEntries`）。配列は **新しい順**。
+
+| クエリ | 必須 | 説明 |
+| ------ | ---- | ---- |
+| `workspaceId` | はい | 対象 Workspace |
+| `take` | 任意 | 1〜500（既定 500）。`truncated: true` でさらに古い行あり |
+| `historyId` | 任意 | 指定時は一覧ではなく `{ "currentGraph": ... }` のみ（下記） |
+
+**一覧レスポンス**（各 `histories[]` 要素）:
+
+| フィールド | 説明 |
+| ---------- | ---- |
+| `previousText` / `currentText` | TipTap 本文のプレーンテキスト |
+| `graphEvents` | ノード・関係の追加/更新/削除と `origin`（`manual` / `sketch` / `image` / `llm` 等） |
+| `changedBy` | 実ユーザー。合成行は `id: "unrecorded"` または `id: "activity"`（活動 API 内部用） |
+
+合成行の `id` 例:
+
+| `id` | 意味 |
+| ---- | ---- |
+| `unrecorded:{olderId}:{newerId}` | 2 つの履歴行の間に残っていた変更 |
+| `unrecorded:workspace` | 最後の履歴から現在の保存までの差分 |
+
+`historyId` 付き GET は、その行の **変更後グラフ** を返す。合成行 ID も解釈する（`unrecorded:workspace` → ライブグラフ、`unrecorded:older:newer` → 新しい側行の `previousGraph`）。
+
+### GET `/api/external/workspaces/usage-log-all`
+
+複数 `source` をまたいで `WritingHistory` を **新しい順** にページング。エクスポート・横断レポート向け。
+
+| クエリ | 必須 | 説明 |
+| ------ | ---- | ---- |
+| `sources` | はい | カンマ区切り（例: `sos,sos-research`）。重複は除去 |
+| `take` | 任意 | 1〜5000（既定 2000） |
+| `beforeCreatedAt` | 任意 | 次ページ用カーソル（`beforeId` と **セット** で指定） |
+| `beforeId` | 任意 | 前ページ最古行の `id` |
+
+**`usage-log` との違い**: 合成行（間隔・現在保存）は **含めない**。DB に記録された行だけなので、カーソルをまたいでも欠落しない。
+
+```json
+{
+  "histories": [
+    {
+      "id": "clhist...",
+      "workspaceId": "clxxx...",
+      "source": "sos",
+      "sourceKey": "article-42",
+      "title": "記事タイトル",
+      "changeDescription": "内容を更新しました",
+      "previousText": "...",
+      "currentText": "...",
+      "graphEvents": [ { "kind": "node", "change": "added", "origin": "image", "id": "n1", "name": "..." } ],
+      "createdAt": "2026-10-20T12:00:00.000Z",
+      "changedBy": { "id": "...", "name": "...", "image": "..." }
+    }
+  ],
+  "truncated": true,
+  "nextBefore": { "createdAt": "2026-10-19T08:00:00.000Z", "id": "clhist-older" }
+}
+```
+
+`truncated: true` のとき、次ページは `beforeCreatedAt` + `beforeId` に `nextBefore` を渡す。
+
+### GET `/api/external/workspaces/usage-activity`
+
+`source` に属する全 Workspace の利用ログを展開し、**活動がある行だけ** を時系列（新しい順）で返す。グラフは **追加** と `promoted` のみカウント（更新・削除は含めない）。
+
+| クエリ | 必須 | 説明 |
+| ------ | ---- | ---- |
+| `source` | 任意 | 既定 `sos-research` |
+
+各 `points[]`: `at`, `slug`（`sourceKey`）, `title`, `textAdded`, `manual`, `sketch`, `image`, `promoted`, `llm`, `unknown`。
+
+## グラフ整備履歴（curation）
+
+変更説明が **`グラフ整備` で始まる** `WritingHistory` のみ。ルート実装は `source` を `sos-research` と `sos-research-concept` に固定。
+
+### GET `/api/external/workspaces/curation-history`
+
+最大 80 件（サービス層の既定）。各要素に `graphSummary`（例: `+2ノード · −1関係`）、その Workspace の最新履歴 ID（`latestHistoryId`）を含む。
+
+### POST `/api/external/workspaces/curation-history`
+
+```json
+{ "historyIds": ["clhist...", "clhist-2"] }
+```
+
+- 対象は整備履歴かつ上記 `source` の Workspace のみ
+- **各 Workspace で、指定 ID がいまの最新履歴であること**（その後に別保存がある場合は `409`）
+- 複数 ID は同一 Workspace 内の連続した整備バッチをまとめて 1 回で戻す用途。`previousGraph` からライブグラフと concept redirect を復元
+
+## Google Drive（外部 API）
+
+認証ユーザーの **Google Drive 連携**（リポジトリ画面で OAuth）が前提。未連携は `409` と `connected: false`。
+
+| エンドポイント | 用途 |
+| -------------- | ---- |
+| `GET .../drive/browse?within=FOLDER_ID` | `within` 直下の子フォルダ・ファイル一覧（`folderId` 省略時は `within` 自体） |
+| `GET .../drive/browse?within=...&folderId=...` | サブフォルダを 1 階層だけ開く（`folderId` が `within` の子でないとき `404`） |
+| `GET .../drive/browse?within=...&fileId=...` | ファイルが `within` 配下か `{ "inside": true/false }` |
+| `GET .../drive/files?folderId=...` | フォルダ内の画像メタデータ一覧 |
+| `GET .../drive/files/{fileId}/content` | 画像本体（`Content-Type: image/*`） |
+
+Drive 同期のサーバー側 Cron や TopicSpace 連携の詳細は [Google Drive 同期](./topic-space-drive-sync.md)。
+
 ## 執筆履歴の記録ルール
 
 `content` または `curatorialContext`（ライブグラフ）の更新時、`recordWritingHistoryIfNeeded` が呼ばれる（`recordHistory: false` で無効化可能）。`forceHistory: true` のときは 30 秒スロットルを無視する。
@@ -305,6 +441,18 @@ curl -s -X POST "$BASE/api/external/workspaces/collaborators" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"workspaceId":"WORKSPACE_ID","userEmail":"collaborator@example.com"}'
+
+# 論理削除
+curl -s -X DELETE -H "Authorization: Bearer $TOKEN" \
+  "$BASE/api/external/workspaces?source=sos&sourceKey=article-42"
+
+# 利用ログ（1 Workspace）
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "$BASE/api/external/workspaces/usage-log?workspaceId=WORKSPACE_ID&take=100"
+
+# 横断利用ログ（2 ページ目は nextBefore をクエリに渡す）
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "$BASE/api/external/workspaces/usage-log-all?sources=sos,sos-research&take=500"
 ```
 
 ### Web アプリ OAuth 連携（概要）
@@ -320,8 +468,17 @@ curl -s -X POST "$BASE/api/external/workspaces/collaborators" \
 - `src/app/api/external/me/route.ts`
 - `src/app/api/external/workspaces/route.ts`
 - `src/app/api/external/workspaces/history/route.ts`
+- `src/app/api/external/workspaces/usage-log/route.ts`
+- `src/app/api/external/workspaces/usage-log-all/route.ts`
+- `src/app/api/external/workspaces/usage-activity/route.ts`
+- `src/app/api/external/workspaces/curation-history/route.ts`
 - `src/app/api/external/workspaces/collaborators/route.ts`
-- `src/server/services/workspace/external-workspace.ts` — upsert・履歴・collaborator
+- `src/app/api/external/drive/browse/route.ts`
+- `src/app/api/external/drive/files/route.ts`
+- `src/app/api/external/drive/files/[fileId]/content/route.ts`
+- `src/server/services/workspace/external-workspace.ts` — upsert・履歴・利用ログ・整備 undo
+- `src/server/services/workspace/usage-log-entries.ts` — 合成利用ログ行
+- `src/server/services/workspace/usage-activity.ts` — 活動ポイント集計
 - `src/server/services/workspace/writing-history.ts` — 履歴スロットル・プレビュー
 - `src/server/services/workspace/resolve-external-auth.ts` — 認証解決
 - `src/server/api/routers/workspace.ts` — tRPC `upsertBySource` 等
