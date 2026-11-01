@@ -90,6 +90,19 @@ MCP 失敗時は `getTextCompletionFallbackPrompt` で基本補完にフォー�
 
 ノード注釈は `annotationRouter` を使用。
 
+### 執筆履歴・利用ログ（tRPC と外部 REST）
+
+ブラウザ UI の執筆履歴モーダルは tRPC `workspace.getWritingHistory` / `restoreWritingHistory` を使用。SOS 等の外部アプリ向け HTTP は [外部 Workspace REST API](./external-workspace-api.md) が同じ `WritingHistory` テーブルを参照する。
+
+| 用途 | tRPC（ArsTraverse UI） | 外部 REST（SOS） |
+|------|------------------------|------------------|
+| 履歴一覧（プレビュー・graphDiff） | `getWritingHistory` | `GET .../history` |
+| 復元 | `restoreWritingHistory` | `POST .../history` |
+| ダッシュボード用イベントログ | — | `GET .../usage-log`, `usage-log-all`, `usage-activity` |
+| グラフ整備の undo | — | `GET/POST .../curation-history` |
+
+GUI は `graphSummary` / `graphDiff` を API から受け取れるが、モーダルではまだテキスト中心の表示（`WritingHistoryModal`）。
+
 ### 公開
 
 | 手続き | 認証 | 説明 |
@@ -153,3 +166,4 @@ MCP 失敗時は `getTextCompletionFallbackPrompt` で基本補完にフォー�
 - [TopicSpace グラフ拡張](./topic-space-graph-extension.md) — 執筆中の追加 KG 抽出
 - [公開記事のストーリーテリングと URL クエリ](./storytelling-public-viewer-and-urls.md)
 - [注釈コラボレーション API](./annotation-collaboration-api.md)
+- [外部 Workspace REST API](./external-workspace-api.md) — SOS 連携・usage log・Drive
