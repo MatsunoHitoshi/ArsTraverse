@@ -12,9 +12,10 @@ flowchart TB
         T3[entityHighlight マーク<br/>＝グラフのノード名と同一文字列]
     end
 
-    subgraph Graph["知識グラフ（ワークスペース参照）"]
-        G1[ノード<br/>id, name, label]
-        G2[リレーションシップ<br/>sourceId, targetId, type]
+    subgraph Graph["知識グラフ"]
+        G1[TopicSpace 参照グラフ<br/>referencedTopicSpaces]
+        G2[リレーションシップ]
+        LG[ライブグラフ liveGraph<br/>curatorialContext 内<br/>外部同期・執筆中の部分 KG]
     end
 
     subgraph Story["ストーリー構造"]
@@ -43,5 +44,6 @@ flowchart TB
 | **執筆テキスト ↔ 知識グラフ** | 本文中の「ノード名」が entityHighlight でマークされ、その名前はグラフのノードと一致。クリックでグラフ側のノードをフォーカス。逆に、グラフの nodes をエディタに entities として渡すことで、同じ名前の語が自動でハイライトされる。 |
 | **執筆テキスト → ストーリー構造** | 見出し2が「章」、段落が「セグメント」としてパースされ、章タイトル・セグメント本文がストーリー構造の土台になる。 |
 | **ストーリー構造 ↔ 知識グラフ** | 章は「コミュニティ」（ノード集合）に対応。各セグメントには LLM で segmentNodeIds / segmentEdgeIds が付き、その段落が言及するノード・エッジと紐づく。ストーリーボードで段落をクリックすると、グラフの該当ノード・エッジがハイライトされる。 |
+| **執筆テキスト / liveGraph → 執筆履歴** | `content` と `curatorialContext` 内の **liveGraph** の変更は `WritingHistory` にスナップショットされる。復元時は本文と liveGraph をセットで戻せる（GUI は本文のみ即時反映 — [執筆ワークスペース API](./workspace-router-api.md#執筆履歴)）。 |
 
-外部 Web アプリから Workspace の `content`（上記執筆テキスト）を同期する REST API は [外部 Workspace REST API](./external-workspace-api.md)。MCP トークン認証・`source`/`sourceKey` による upsert・執筆履歴の取得・復元を提供する。
+外部 Web アプリから Workspace の `content` と **liveGraph** を同期する REST API は [外部 Workspace REST API](./external-workspace-api.md)。MCP トークン認証・`source`/`sourceKey` による upsert・執筆履歴（本文 + グラフ差分）の取得・復元を提供する。ブラウザ内 tRPC の対応手続きは [執筆ワークスペース API](./workspace-router-api.md) を参照。

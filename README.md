@@ -204,7 +204,8 @@ Concept and flow diagrams for the writing workspace, story generation, auto-high
 - `docs/topic-space-public-rest-api.md` — public REST endpoints for graph JSON, path, history, embeddings
 - `docs/annotation-collaboration-api.md` — annotation CRUD, threading, clustering, KG preview (annotationRouter)
 - `docs/graph-embedding-pipeline.md` — node-name + TransE embedding queue, Crons, Supabase Edge Functions
-- `docs/workspace-router-api.md` — workspace CRUD, text completion, publish, searchPublishedNodes
+- `docs/workspace-router-api.md` — workspace CRUD, writing history, liveGraph, upsertBySource, text completion, publish
+- `docs/print-router-api.md` — server-side PDF via Puppeteer (`print.generatePdf`)
 - `docs/assistant-router-api.md` — graph summary/outline streaming, TTS (assistantRouter)
 - `docs/kg-integration-api.md` — kg.integrateGraph, getRelatedNodes, getNodesByIds
 - `docs/external-workspace-api.md` — authenticated REST API for external apps (SOS): workspace upsert, writing history, collaborators
