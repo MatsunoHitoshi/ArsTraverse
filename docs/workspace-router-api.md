@@ -17,6 +17,29 @@
 | `collaborators` | 共同編集者 |
 | `story` | 1 対 1 の `Story`（メタグラフ） |
 | `isDeleted` | 論理削除 |
+| `source` / `sourceKey` | 外部アプリ連携用の一意キー（`upsertBySource` / [外部 REST](./external-workspace-api.md)） |
+| `writingHistory` | 本文・ライブグラフのスナップショット列（`WritingHistory`） |
+
+`curatorialContext` 内の **ライブグラフ**（執筆中にエディタ横で編集する部分グラフ）は、次のいずれかに格納される（`readLiveGraphFromCuratorialContext` の解決順）:
+
+| パス | 用途 |
+|------|------|
+| `curatorialContext.sosWriting.liveGraph` | SOS 執筆連携向け |
+| `curatorialContext.sosConcept.liveGraph` | SOS 概念連携向け |
+| `curatorialContext.liveGraph` | 上記が無い場合のデフォルト |
+
+参照 TopicSpace の `graphDocument` とは別。履歴復元時は `withLiveGraphInCuratorialContext` で同じネスト規則を維持する。
+
+### WritingHistory（執筆履歴）
+
+| フィールド | 説明 |
+|------------|------|
+| `previousContent` / `currentContent` | 変更前後の TipTap JSON |
+| `previousGraph` / `currentGraph` | 変更前後のライブグラフ JSON |
+| `changeDescription` | 人間向けラベル（例: 「本文とグラフを更新しました」） |
+| `changedBy` | 変更ユーザー |
+
+記録ルール・REST レスポンス形（`previousText` / `currentText` / `graphDiff` 等）の詳細は [外部 Workspace REST API — 執筆履歴](./external-workspace-api.md#執筆履歴の記録ルール) を参照（tRPC と REST は同一サービス層）。
 
 ## アクセス制御
 
@@ -54,6 +77,18 @@ flowchart LR
 | `delete` | 要 | `{ id }` | **所有者のみ**。論理削除 |
 
 `getById` の `graphDocument` は参照 TopicSpace 全ノード・エッジを `sourceId`/`targetId` 形式で結合する（`formGraphDataForFrontend` 未使用）。
+
+`update` で `content` または `curatorialContext` が渡された場合、更新前に `recordWritingHistoryIfNeeded` が実行される（本文・ライブグラフのいずれかが前回と異なり、かつ 30 秒スロットルを満たすときのみ `WritingHistory` 行を追加）。グラフのみの変更でも履歴が残る。
+
+### 執筆履歴・外部キー upsert
+
+| 手続き | 認証 | 説明 |
+|--------|------|------|
+| `getWritingHistory` | 要 | `{ workspaceId, take? }`（1–100、既定 50）。`listWritingHistory` と同じ DTO（プレビュー・全文プレーンテキスト・`graphSummary` / `graphDiff`） |
+| `restoreWritingHistory` | 要 | `{ workspaceId, historyId }`。`currentContent` と `currentGraph`（あれば）を Workspace に書き戻し、復元操作自体も `force` 付きで履歴に残す |
+| `upsertBySource` | 要 | `source` + `sourceKey` で作成/更新。`recordHistory` / `forceHistory` は [外部 REST `PUT`](./external-workspace-api.md#put-apiexternalworkspaces) と同等 |
+
+実装: `src/server/services/workspace/writing-history.ts`（スロットル・TipTap プレーンテキスト）、`workspace-graph-history.ts`（ライブグラフ比較・差分）。
 
 ### 共同編集
 
@@ -118,11 +153,14 @@ MCP 失敗時は `getTextCompletionFallbackPrompt` で基本補完にフォー�
 | ワークスペース一覧 | `/[locale]/workspaces` | `getMyWorkspaces` |
 | 新規作成 | `/[locale]/workspaces/new` | `create` |
 | 執筆エディタ | `/[locale]/workspaces/[id]` | `getById`, `update` |
+| 執筆履歴モーダル | 執筆 UI ツールバー | `getWritingHistory`, `restoreWritingHistory` |
 | レイアウト編集 | `/[locale]/workspaces/[id]/layout-edit` | `getById` |
 | 印刷プレビュー | `/[locale]/workspaces/[id]/print-preview` | `getById` + ブラウザ `window.print()` |
 | 公開モーダル | 執筆 UI | `publish` |
 | テキスト補完 | Tiptap `use-text-completion` | `textCompletion`, `textCompletionWithGraph` |
 | オンボーディング | 初回フロー | `createEmpty` |
+
+`WritingHistoryModal` は一覧で `preview`（160 文字要約）のみ表示。`previousText` / `currentText` や `graphSummary` は API には含まれるが、現行 GUI では未使用。復元後は `refetch()` でサーバー側の `curatorialContext`（ライブグラフ含む）を再取得する。
 
 ### 印刷・PDF
 
@@ -140,7 +178,10 @@ MCP 失敗時は `getTextCompletionFallbackPrompt` で基本補完にフォー�
 
 ## 関連ファイル
 
-- `src/server/api/routers/workspace.ts` — tRPC ルーター（17 手続き）
+- `src/server/api/routers/workspace.ts` — tRPC ルーター（執筆履歴・`upsertBySource` 含む）
+- `src/server/services/workspace/writing-history.ts` — 履歴記録・TipTap プレーンテキスト
+- `src/server/services/workspace/workspace-graph-history.ts` — ライブグラフ差分
+- `src/server/services/workspace/external-workspace.ts` — 履歴一覧・復元（REST / tRPC 共有）
 - `src/server/services/workspace/search-published-nodes.service.ts` — 公開ノード検索
 - `src/server/lib/i18n/prompts/workspace.ts` — テキスト補完プロンプト
 - `src/app/_constants/workspace-default-content.ts` — 空ワークスペース Tiptap テンプレート
@@ -153,3 +194,4 @@ MCP 失敗時は `getTextCompletionFallbackPrompt` で基本補完にフォー�
 - [TopicSpace グラフ拡張](./topic-space-graph-extension.md) — 執筆中の追加 KG 抽出
 - [公開記事のストーリーテリングと URL クエリ](./storytelling-public-viewer-and-urls.md)
 - [注釈コラボレーション API](./annotation-collaboration-api.md)
+- [外部 Workspace REST API](./external-workspace-api.md) — 執筆履歴の記録ルール・HTTP 統合
