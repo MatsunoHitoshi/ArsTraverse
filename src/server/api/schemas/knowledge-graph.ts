@@ -291,8 +291,15 @@ export const TestInspectInputSchema = z.object({
   isPlaneTextMode: z.boolean(),
 });
 
+export const TransformerSchemaInput = z.object({
+  allowedNodes: z.array(z.string()),
+  allowedRelationships: z.array(z.string()),
+});
+
 export const ExtractKGFromPlainTextInputSchema = z.object({
   plainText: z.string(),
+  schema: TransformerSchemaInput.optional(),
+  additionalPrompt: z.string().optional(),
   customMappingRules: ExtractInputSchema.shape.customMappingRules,
 });
 
@@ -318,12 +325,7 @@ export const DocumentSchema = z.object({
 
 export const ExtractPhase1InputSchema = z.object({
   documents: z.array(DocumentSchema),
-  schema: z
-    .object({
-      allowedNodes: z.array(z.string()),
-      allowedRelationships: z.array(z.string()),
-    })
-    .optional(),
+  schema: TransformerSchemaInput.optional(),
   additionalPrompt: z.string().optional(),
   customMappingRules: ExtractInputSchema.shape.customMappingRules,
 });
