@@ -204,10 +204,11 @@ Concept and flow diagrams for the writing workspace, story generation, auto-high
 - `docs/topic-space-public-rest-api.md` — public REST endpoints for graph JSON, path, history, embeddings
 - `docs/annotation-collaboration-api.md` — annotation CRUD, threading, clustering, KG preview (annotationRouter)
 - `docs/graph-embedding-pipeline.md` — node-name + TransE embedding queue, Crons, Supabase Edge Functions
+- `docs/vercel-production-build.md` — Vercel 8 GB builder, eslint.ignoreDuringBuilds, npm run lint vs build
 - `docs/workspace-router-api.md` — workspace CRUD, text completion, publish, searchPublishedNodes
 - `docs/assistant-router-api.md` — graph summary/outline streaming, TTS (assistantRouter)
 - `docs/kg-integration-api.md` — kg.integrateGraph, getRelatedNodes, getNodesByIds
-- `docs/external-workspace-api.md` — authenticated REST API for external apps (SOS): workspace upsert, writing history, collaborators
+- `docs/external-workspace-api.md` — authenticated REST API for external apps (SOS): workspace upsert, writing history, usage log, Drive browse, collaborators
 
 ## Project Structure
 
@@ -299,15 +300,16 @@ supabase/
 - [グラフ執筆アシスタント API](./docs/assistant-router-api.md)
 - [KG 統合・近傍取得 API](./docs/kg-integration-api.md)
 - [外部 Workspace REST API](./docs/external-workspace-api.md)
+- [Vercel 本番ビルド（メモリ・Lint）](./docs/vercel-production-build.md)
 
 ## Available Scripts
 
 ```bash
 # Development
 npm run dev              # Start development server
-npm run build            # Build for production
+npm run build            # Production build (heap cap; eslint skipped in build — see docs/vercel-production-build.md)
 npm run start            # Start production server
-npm run lint             # Run ESLint
+npm run lint             # ESLint (local/CI; not run inside `next build`)
 
 # Database
 npm run db:generate      # prisma migrate dev (dev migrations; client via postinstall)
