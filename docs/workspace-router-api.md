@@ -4,6 +4,19 @@
 
 執筆体験とデータの概念関係は [執筆体験とデータの関係（概念図）](./concept-writing-experience.md) / [データ連携の概念](./concept-writing-data-linkage.md) を参照。注釈 CRUD は [注釈コラボレーション API](./annotation-collaboration-api.md) が対象（エッジ注釈の取得のみ本ルーター）。
 
+外部アプリ（SOS 等）向け HTTP は [外部 Workspace REST API](./external-workspace-api.md)。執筆履歴の読み書きは次の対応がある。
+
+| 用途 | tRPC（本ルーター） | 外部 REST |
+|------|-------------------|-----------|
+| 履歴一覧（プレビュー・`graphDiff`） | `getWritingHistory` | `GET /api/external/workspaces/history` |
+| 履歴から復元 | `restoreWritingHistory` | `POST /api/external/workspaces/history` |
+| 利用ログ・イベント列 | — | `GET .../usage-log` |
+| 複数ソース横断エクスポート | — | `GET .../usage-log-all` |
+| 活動ダッシュボード | — | `GET .../usage-activity` |
+| グラフ整備の一覧・巻き戻し | — | `GET/POST .../curation-history` |
+
+GUI の `WritingHistoryModal` は tRPC `getWritingHistory` を使用。`graphSummary` / `graphDiff` は API 応答に含まれるが、モーダル UI は現状プレビュー中心（差分の全面表示は未接続）。
+
 ## データモデル
 
 `prisma/schema.prisma` の `Workspace`:
