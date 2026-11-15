@@ -2,6 +2,8 @@
 
 `kg-integration.ts` が export する手続きは `kgRouter` にマージされる。TopicSpace / DocumentGraph へのグラフ統合と、ノード近傍の部分グラフ取得を担う。
 
+**kgRouter 全体の索引**（抽出・コパイロット手続き含む）は [kgRouter API 索引](./kg-router-api.md)。
+
 `kg.extractKG` 等の抽出手続きは [TopicSpace グラフ拡張](./topic-space-graph-extension.md) / [KG バッチ抽出パイプライン](./kg-batched-extraction-pipeline.md) を参照。
 
 ## 手続き一覧
