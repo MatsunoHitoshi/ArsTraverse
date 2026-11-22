@@ -207,7 +207,9 @@ Concept and flow diagrams for the writing workspace, story generation, auto-high
 - `docs/workspace-router-api.md` — workspace CRUD, text completion, publish, searchPublishedNodes
 - `docs/assistant-router-api.md` — graph summary/outline streaming, TTS (assistantRouter)
 - `docs/kg-integration-api.md` — kg.integrateGraph, getRelatedNodes, getNodesByIds
-- `docs/external-workspace-api.md` — authenticated REST API for external apps (SOS): workspace upsert, writing history, collaborators
+- `docs/external-workspace-api.md` — authenticated REST API for external apps (SOS): workspace upsert, usage logs, Drive browse, curation undo
+- `docs/vercel-production-build.md` — Vercel 8 GB builder OOM mitigations (`lint` vs `build`, heap cap)
+- `docs/cursor-agent-commands.md` — Cursor slash commands for GitHub Issues (`.cursor/commands/`)
 
 ## Project Structure
 
@@ -299,15 +301,17 @@ supabase/
 - [グラフ執筆アシスタント API](./docs/assistant-router-api.md)
 - [KG 統合・近傍取得 API](./docs/kg-integration-api.md)
 - [外部 Workspace REST API](./docs/external-workspace-api.md)
+- [Vercel 本番ビルドとメモリ制約](./docs/vercel-production-build.md)
+- [Cursor エージェント向け GitHub Issue コマンド](./docs/cursor-agent-commands.md)
 
 ## Available Scripts
 
 ```bash
 # Development
 npm run dev              # Start development server
-npm run build            # Build for production
+npm run build            # Build for production (ESLint skipped; run lint separately — see docs/vercel-production-build.md)
 npm run start            # Start production server
-npm run lint             # Run ESLint
+npm run lint             # Run ESLint (type-aware; not part of production build)
 
 # Database
 npm run db:generate      # prisma migrate dev (dev migrations; client via postinstall)
